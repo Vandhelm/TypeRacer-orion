@@ -16,6 +16,7 @@
   "type": "module",
   "scripts": {
     "dev": "bun ./index.html",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build": "bun run build.ts"
   }
 }
