@@ -1,8 +1,9 @@
-/* Button hanging from two wires (e.g. "Back") */
+/* Button hanging from two wires (e.g. "Back").
+   Set --hang-from to the y position it hangs from (default: top of the screen). */
 .hanging-button{
     position: fixed;
     z-index: 20;
-    top: 30px;
+    top: calc(var(--hang-from, 0px) + 30px);
     left: 24px;
     min-height: 42px;
     display: flex;
@@ -34,7 +35,7 @@
 .hanging-button:focus-visible{ outline: 1px solid #fff; outline-offset: 4px; }
 
 @media (max-width: 760px){
-    .hanging-button{ top: 24px; left: 12px; min-height: 40px; padding: 0 12px; font-size: 11px; }
+    .hanging-button{ top: calc(var(--hang-from, 0px) + 24px); left: 12px; min-height: 40px; padding: 0 12px; font-size: 11px; }
     .hanging-button::before, .hanging-button::after{ height: 24px; }
 }
 @media (prefers-reduced-motion: reduce){

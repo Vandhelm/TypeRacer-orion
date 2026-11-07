@@ -48,5 +48,10 @@
     "take": "TAKE",
     "reserved": "RESERVED",
     "takeLabel": "Take the coupon for table {{n}} — {{guests}} guests"
+  },
+  "nav": {
+    "main": "Main navigation",
+    "home": "O.R.I.O.N, home",
+    "profile": "Profile"
   }
 }

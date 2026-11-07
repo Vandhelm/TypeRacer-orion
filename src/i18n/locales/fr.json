@@ -48,5 +48,10 @@
     "take": "PRENDRE",
     "reserved": "RÉSERVÉ",
     "takeLabel": "Prendre le coupon de la table {{n}} — {{guests}} convives"
+  },
+  "nav": {
+    "main": "Navigation principale",
+    "home": "O.R.I.O.N, accueil",
+    "profile": "Profil"
   }
 }

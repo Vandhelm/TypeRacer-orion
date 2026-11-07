@@ -15,6 +15,7 @@
 @import "./home.css";
 @import "./rooms.css";
 
+@import "../../components/navigation/navbar.css";
 @import "../../components/tabs/hanging-tabs.css";
 @import "../../components/buttons/hanging-button.css";
 @import "../../components/brand/logo-title.css";
@@ -24,6 +25,9 @@
 @import "../../components/buttons/flip-button.css";
 @import "../../components/stamp.css";
 @import "../../components/cards/ticket.css";
+
+/* The "Back" sign hangs from the navbar */
+:root{ --hang-from: var(--navbar-height); }
 
 /* Two views in one page: html.rooms-view (set by JS) switches Home ↔ Rooms */
 .rooms, .hanging-button{ visibility: hidden; }
