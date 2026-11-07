@@ -1,0 +1,36 @@
+/* Confirmation stamp: red diamond centered over its parent */
+.stamp{
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    z-index: 5;
+    width: 15vh;
+    height: 15vh;
+    min-width: 110px;
+    min-height: 110px;
+    display: grid;
+    place-items: center;
+    pointer-events: none;
+    opacity: 0;
+    transform: translate(-50%, -50%);
+}
+.stamp::before{
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,.6);
+    border: 4px double var(--color-red-hover);
+    transform: rotate(45deg);
+}
+.stamp span{
+    position: relative;
+    color: var(--color-red-text);
+    font: 600 max(16px, 2.6vh)/1 var(--font-mono);
+    letter-spacing: .15em;
+    padding-left: .15em;
+}
+.stamp.on{ animation: stamp-hit 1.6s cubic-bezier(.2,.9,.3,1) both; }
+
+@media (prefers-reduced-motion: reduce){
+    .stamp.on{ animation: none; opacity: 1; }
+}

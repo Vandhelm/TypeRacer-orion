@@ -1,778 +1,92 @@
-<!doctype html><html lang="fr"><head><meta charset=utf8><title>O.R.I.O.N — Accueil</title><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<!doctype html><html lang="fr"><head><meta charset=utf8><title>O.R.I.O.N — Accueil</title><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><link rel="stylesheet" href="./src/styles/pages/home/index.css"></head><body>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<style>
-:root{
-    color-scheme: dark;
-    --line: rgba(255,255,255,.75);
-    --line-soft: rgba(255,255,255,.35);
-    --line-faint: rgba(255,255,255,.14);
-    --red: rgba(140,26,20,.88);
-    --red-dark: rgba(105,18,14,.88);
-    --red-solid: #9e1f17;
-    --red-hover: #b4261c;
-    --red-text: #e0574a;
-
-    --face-front-a: #070707;
-    --face-front-b: #141414;
-    --face-side: #2a2a2a;
-
-    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-    --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-
-}
-*{ margin: 0; padding: 0; box-sizing: border-box; }
-html, body{ height: 100%; }
-body{
-    background: #000;
-    color: #fff;
-    font-family: var(--sans);
-    overflow: hidden;
-}
-
-/* ================= Scène géométrique (canvas, vraie perspective) ================= */
-.scene{
-    position: fixed;
-    inset: 0;
-    background: #000;
-}
-.scene canvas{ position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
-
-/* ================= Onglets de langue ================= */
-.langues{
-    position: fixed;
-    top: 0;
-    right: 24px;
-    z-index: 20;
-    display: flex;
-    gap: 8px;
-    align-items: flex-start;
-}
-.onglet{
-    all: unset;
-    box-sizing: border-box;
-    cursor: pointer;
-    width: 48px;
-    height: 64px;
-    padding-bottom: 10px;
-    background: #000;
-    border: 1px solid var(--line-soft);
-    border-top: none;
-    color: var(--line-soft);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: flex-end;
-    font: 500 12px/1 var(--mono);
-    letter-spacing: .15em;
-    padding-left: .15em;
-    transition: height .25s ease, color .2s, border-color .2s;
-    animation: tombe .6s .7s cubic-bezier(.2,.9,.3,1.25) both;
-}
-.onglet + .onglet{ animation-delay: .82s; }
-.onglet:not(.actif):hover{ height: 72px; color: #fff; border-color: var(--line); }
-.onglet.actif{
-    height: 84px;
-    color: #fff;
-    border-color: var(--line);
-    box-shadow: inset 0 -3px 0 var(--red-solid);
-    cursor: default;
-}
-.onglet:focus-visible{ outline: 1px solid #fff; outline-offset: 4px; }
-
-/* ================= Panneau d'accueil ================= */
-.accueil{
-    position: fixed;
-    inset: 0;
-    z-index: 10;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    padding: 3.5vh 16px;
-    pointer-events: none;
-}
-.panneau{
-    pointer-events: auto;
-    position: relative;
-    width: 100%;
-    max-width: min(520px, 58vh);
-    max-height: 100%;
-    background: #000;
-    border: 1px solid var(--line);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 3.2vh;
-    padding: 6vh 3vh 4vh;
-    animation: monte .8s .2s cubic-bezier(.2,.8,.2,1) both;
-}
-/* repères d'angle façon plan technique */
-.panneau::before,
-.panneau::after{
-    content: '';
-    position: absolute;
-    width: 16px;
-    height: 16px;
-    border: 1px solid #fff;
-}
-.panneau::before{ top: -7px; left: -7px; border-right: none; border-bottom: none; }
-.panneau::after{ bottom: -7px; right: -7px; border-left: none; border-top: none; }
-
-/* En-tête : losange rouge (rappel de la pyramide) + nom */
-.entete{
-    display: flex;
-    align-items: center;
-    gap: 2.4vh;
-    animation: monte .7s .35s cubic-bezier(.2,.8,.2,1) both;
-}
-.marque{
-    position: relative;
-    flex: none;
-    width: 9vh;
-    height: 9vh;
-    min-width: 60px;
-    min-height: 60px;
-}
-.marque svg{ width: 100%; height: 100%; overflow: visible; }
-.marque .losange{ fill: var(--red); stroke: rgba(255,140,120,.4); stroke-width: 1; }
-.marque .arete{
-    fill: none;
-    stroke: #fff;
-    stroke-width: 1;
-    stroke-dasharray: 260;
-    stroke-dashoffset: 260;
-    animation: trace 1.2s .6s cubic-bezier(.6,0,.2,1) forwards;
-}
-.surtitre{
-    font: 400 max(10px, 1.25vh)/1 var(--mono);
-    letter-spacing: .3em;
-    color: var(--line-soft);
-    margin-bottom: .9vh;
-}
-.nom-resto{
-    font: 300 max(26px, 5vh)/1.1 var(--sans);
-    letter-spacing: .12em;
-}
-
-.corps{
-    width: 100%;
-    max-width: 45vh;
-    min-width: min(100%, 300px);
-    display: flex;
-    flex-direction: column;
-    gap: 2.6vh;
-}
-
-/* Onglets Jouer / Compte */
-.vues{
-    display: flex;
-    border: 1px solid var(--line);
-    animation: monte .7s .5s cubic-bezier(.2,.8,.2,1) both;
-}
-.vue{
-    all: unset;
-    box-sizing: border-box;
-    cursor: pointer;
-    flex: 1 1 0;
-    height: 5.2vh;
-    min-height: 44px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 1.2vh;
-    color: var(--line-soft);
-    font: 500 max(11px, 1.3vh)/1 var(--sans);
-    letter-spacing: .26em;
-    transition: background .2s, color .2s;
-}
-.vue + .vue{ border-left: 1px solid var(--line); }
-.vue .n{ font-family: var(--mono); letter-spacing: 0; opacity: .7; }
-.vue:not(.actif):hover{ color: #fff; background: rgba(255,255,255,.06); }
-.vue.actif{ background: #f2f2f2; color: #000; cursor: default; }
-.vue:focus-visible{ outline: 1px solid #fff; outline-offset: 4px; }
-
-/* Volets */
-.volets{
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    animation: monte .7s .65s cubic-bezier(.2,.8,.2,1) both;
-}
-.volets > form{ grid-area: 1 / 1; align-self: start; }
-.cache{ visibility: hidden; pointer-events: none; }
-.pile{ display: flex; flex-direction: column; gap: 2.1vh; }
-
-.champ{ display: flex; flex-direction: column; gap: .6vh; }
-.etiq{
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font: 400 max(10px, 1.2vh)/1 var(--mono);
-    letter-spacing: .2em;
-    text-transform: uppercase;
-    color: var(--line-soft);
-}
-.etiq .num{ color: #fff; }
-.etiq::after{ content: ''; flex: 1; border-top: 1px dashed var(--line-faint); }
-
-.saisie{
-    position: relative;
-    display: flex;
-    align-items: center;
-    border-bottom: 1px solid var(--line-soft);
-}
-.saisie::after{
-    content: '';
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: -1px;
-    height: 1px;
-    background: #fff;
-    transform: scaleX(0);
-    transform-origin: left;
-    transition: transform .35s cubic-bezier(.2,.8,.2,1);
-}
-.saisie:focus-within::after{ transform: scaleX(1); }
-.saisie input{
-    all: unset;
-    flex-grow: 1;
-    min-width: 0;
-    height: 4.4vh;
-    min-height: 36px;
-    font: 400 max(15px, 1.8vh)/1 var(--sans);
-    letter-spacing: .04em;
-    color: #fff;
-    caret-color: var(--red-text);
-}
-.saisie input::placeholder{ color: rgba(255,255,255,.3); }
-.voir{
-    all: unset;
-    cursor: pointer;
-    min-height: 36px;
-    padding-left: 12px;
-    font: 400 max(10px, 1.1vh)/1 var(--mono);
-    letter-spacing: .2em;
-    color: var(--line-soft);
-}
-.voir:hover{ color: #fff; }
-.voir:focus-visible{ outline: 1px solid #fff; outline-offset: 2px; }
-
-.boutons{ display: flex; flex-direction: column; gap: 1.3vh; }
-
-/* Bouton principal : un bloc 3D qui bascule vers le bas au survol */
-.cube{
-    all: unset;
-    --h: max(46px, 6.2vh);
-    box-sizing: border-box;
-    cursor: pointer;
-    position: relative;
-    display: block;
-    height: var(--h);
-    perspective: 900px;
-    font: 500 max(13px, 1.65vh)/1 var(--sans);
-    letter-spacing: .3em;
-    transition: transform .1s;
-}
-.cube:active{ transform: translateY(2px); }
-.cube:focus-visible{ outline: 1px solid #fff; outline-offset: 4px; }
-.cube-int{
-    position: absolute;
-    inset: 0;
-    transform-style: preserve-3d;
-    transform: translateZ(calc(var(--h) / -2)) rotateX(0deg);
-    transition: transform .4s cubic-bezier(.3,.7,.3,1);
-}
-.cube:hover .cube-int,
-.cube:focus-visible .cube-int{ transform: translateZ(calc(var(--h) / -2)) rotateX(90deg); }
-.face{
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 2.4vh 0 2.8vh;
-    backface-visibility: hidden;
-    -webkit-backface-visibility: hidden;
-}
-.avant{
-    transform: translateZ(calc(var(--h) / 2));
-    background: var(--red-solid);
-    border: 1px solid rgba(255,140,120,.45);
-    color: #fff;
-}
-.dessous{
-    transform: rotateX(-90deg) translateZ(calc(var(--h) / 2));
-    background: linear-gradient(90deg, var(--face-front-a), var(--face-side));
-    border: 1px solid var(--line);
-    color: var(--red-text);
-}
-
-/* Boutons secondaires */
-.btn{
-    all: unset;
-    box-sizing: border-box;
-    cursor: pointer;
-    height: 4.8vh;
-    min-height: 44px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid var(--line-soft);
-    color: #fff;
-    font: 500 max(11px, 1.3vh)/1 var(--sans);
-    letter-spacing: .3em;
-    padding-left: .3em;
-    background: linear-gradient(#f2f2f2, #f2f2f2) no-repeat left center / 0% 100%;
-    transition: background-size .3s cubic-bezier(.2,.8,.2,1), color .2s, border-color .2s;
-}
-.btn:hover{ background-size: 100% 100%; color: #000; border-color: #f2f2f2; }
-.btn:focus-visible{ outline: 1px solid #fff; outline-offset: 4px; }
-
-.code{ display: flex; gap: 1.6vh; align-items: flex-end; }
-.code .saisie{ flex-grow: 1; min-width: 0; }
-.code input{ font-family: var(--mono); text-transform: uppercase; letter-spacing: .5em; }
-.code .btn{ height: 4.4vh; min-height: 40px; padding: 0 1.8vh 0 2.1vh; }
-
-/* Tampon de confirmation : losange rouge */
-.tampon{
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    z-index: 5;
-    width: 15vh;
-    height: 15vh;
-    min-width: 110px;
-    min-height: 110px;
-    display: grid;
-    place-items: center;
-    pointer-events: none;
-    opacity: 0;
-    transform: translate(-50%, -50%);
-}
-.tampon::before{
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: rgba(0,0,0,.6);
-    border: 4px double var(--red-hover);
-    transform: rotate(45deg);
-}
-.tampon span{
-    position: relative;
-    color: var(--red-text);
-    font: 600 max(16px, 2.6vh)/1 var(--mono);
-    letter-spacing: .15em;
-    padding-left: .15em;
-}
-.tampon.on{ animation: frappe 1.6s cubic-bezier(.2,.9,.3,1) both; }
-
-/* ================= Retour ================= */
-.retour{
-    position: fixed;
-    z-index: 20;
-    top: 30px;
-    left: 24px;
-    min-height: 42px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 0 16px;
-    background: #000;
-    border: 1px solid var(--line);
-    box-shadow: inset 0 0 0 4px #000, inset 0 0 0 5px var(--line-faint);
-    color: #fff;
-    text-decoration: none;
-    font: 500 12px/1 var(--mono);
-    letter-spacing: .22em;
-    text-transform: uppercase;
-    transition: background .2s, color .2s;
-    animation: tombe .6s .5s cubic-bezier(.2,.9,.3,1.25) both;
-}
-/* les deux fils qui le suspendent */
-.retour::before, .retour::after{
-    content: '';
-    position: absolute;
-    bottom: 100%;
-    width: 1px;
-    height: 30px;
-    background: var(--line-soft);
-}
-.retour::before{ left: 18%; }
-.retour::after{ right: 18%; }
-.retour:hover{ background: #f2f2f2; color: #000; }
-.retour:focus-visible{ outline: 1px solid #fff; outline-offset: 4px; }
-.langues{ left: auto; right: 24px; }
-
-/* ================= Le kiosque ================= */
-.kiosque{
-    position: fixed;
-    inset: 0;
-    z-index: 10;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 72px 24px 16px;
-    pointer-events: none;
-}
-.yatai{
-    pointer-events: auto;
-    position: relative;
-    container-type: inline-size;
-    width: min(100%, 1150px, calc((100vh - 120px) / .56));
-    animation: monte 1s .15s cubic-bezier(.2,.8,.2,1) both;
-}
-
-/* coupons de réservation suspendus */
-.coupons{
-    --hang: 24px;
-    --u: .32cqw;
-    padding-top: var(--hang);
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 2.6cqw;
-    align-items: start;
-}
-@container (min-width: 460px){ .coupons{ --u: .235cqw; grid-template-columns: repeat(4, minmax(0, 1fr)); } }
-@container (max-width: 420px){ .coupons{ --u: calc((100cqw - 12px) / 200); grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; } }
-
-.coupon{
-    position: relative;
-    transform-origin: 50% calc(-1 * var(--hang));
-}
-/* le fil */
-.coupon::before{
-    content: '';
-    position: absolute;
-    z-index: 3;
-    left: 50%;
-    bottom: calc(100% - 12px);
-    width: 1px;
-    height: calc(var(--hang) + 12px);
-    transform: translateX(-50%);
-    background: var(--line-soft);
-}
-.papier{
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    gap: calc(7 * var(--u));
-    padding: calc(15 * var(--u)) calc(10 * var(--u)) 0;
-    background: #060606;
-    border: 1px solid var(--line);
-    transform-origin: 50% 0;
-}
-.papier::after{
-    content: '';
-    position: absolute;
-    inset: calc(3 * var(--u)) calc(3 * var(--u)) 0;
-    border: 1px solid var(--line-faint);
-    border-bottom: 0;
-    pointer-events: none;
-}
-/* survol : mouvement calculé en JS (ressort amorti) */
-.papier{ will-change: transform; transition: box-shadow .4s; }
-.coupon:hover .papier{ box-shadow: 0 1.2cqw 2.4cqw rgba(0,0,0,.65); }
-
-.trou{
-    position: absolute;
-    z-index: 2;
-    left: 50%;
-    top: calc(4 * var(--u));
-    width: calc(6 * var(--u));
-    height: calc(6 * var(--u));
-    transform: translateX(-50%);
-    border-radius: 50%;
-    background: #000;
-    border: 1px solid var(--line);
-}
-.c-tete{
-    text-align: center;
-    font: 500 max(9px, calc(3.6 * var(--u)))/1 var(--mono);
-    letter-spacing: .26em;
-    padding-left: .26em;
-    color: var(--line-soft);
-}
-.c-num{
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: calc(3.6 * var(--u));
-    padding: calc(7 * var(--u)) 0 calc(7 * var(--u));
-    border-top: 1px solid var(--line-soft);
-    border-bottom: 1px solid var(--line-soft);
-    box-shadow: 0 calc(-1.4 * var(--u)) 0 -1px var(--line-faint), 0 calc(1.4 * var(--u)) 0 -1px var(--line-faint);
-}
-.c-chiffre{ font: 200 calc(26 * var(--u))/1 var(--sans); letter-spacing: .02em; color: #fff; }
-.c-table{ font: 500 calc(4.6 * var(--u))/1 var(--sans); letter-spacing: .34em; padding-left: .34em; }
-.c-serie{ font: 400 max(9px, calc(3.4 * var(--u)))/1 var(--mono); letter-spacing: .2em; color: rgba(255,255,255,.5); }
-.c-lignes{ display: flex; flex-direction: column; gap: calc(5.5 * var(--u)); padding: calc(1 * var(--u)) 0; }
-.c-ligne{ display: flex; align-items: center; gap: calc(2 * var(--u)); min-width: 0; }
-.c-ligne::after{ min-width: calc(2 * var(--u)); }
-.c-lab{ font: 400 max(10px, calc(4 * var(--u)))/1 var(--mono); letter-spacing: .12em; color: rgba(255,255,255,.6); text-transform: uppercase; white-space: nowrap; }
-.c-ligne::after{ content: ''; order: 1; flex: 1; border-top: 1px dotted rgba(255,255,255,.22); }
-.c-val{ order: 2; font: 500 max(11px, calc(4.8 * var(--u)))/1 var(--mono); letter-spacing: .04em; color: #fff; white-space: nowrap; flex: none; }
-.c-val.oui{ color: var(--red-text); }
-/* perforation */
-.perfo{ position: relative; z-index: 3; margin: calc(1 * var(--u)) calc(-10 * var(--u)) 0; border-top: 1px dashed var(--line-soft); }
-.perfo::before, .perfo::after{
-    content: '';
-    position: absolute;
-    top: calc(-4.5 * var(--u));
-    width: calc(9 * var(--u));
-    height: calc(9 * var(--u));
-    border-radius: 50%;
-    background: #000;
-    border: 1px solid var(--line);
-}
-.perfo::before{ left: calc(-4.5 * var(--u) - 1px); clip-path: inset(-2px -2px -2px calc(50% - 2px)); }
-.perfo::after{ right: calc(-4.5 * var(--u) - 1px); clip-path: inset(-2px calc(50% - 2px) -2px -2px); }
-.talon{ display: flex; flex-direction: column; gap: calc(5 * var(--u)); padding: calc(2 * var(--u)) 0 calc(10 * var(--u)); }
-.talon-tete{
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font: 400 max(9px, calc(3.2 * var(--u)))/1 var(--mono);
-    letter-spacing: .24em;
-    color: var(--line-soft);
-}
-.talon-tete .puce{ width: calc(3 * var(--u)); height: calc(3 * var(--u)); background: var(--red-solid); transform: rotate(45deg); }
-.prendre{
-    all: unset;
-    box-sizing: border-box;
-    cursor: pointer;
-    height: max(30px, calc(9.5 * var(--u)));
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0 calc(4 * var(--u)) 0 calc(4 * var(--u) + .3em);
-    background: var(--red-solid);
-    border: 1px solid rgba(255,140,120,.45);
-    color: #fff;
-    font: 500 max(10px, calc(3.8 * var(--u)))/1 var(--sans);
-    letter-spacing: .3em;
-    transition: background .2s, color .2s, border-color .2s;
-}
-.prendre:hover{ background: var(--red-hover); }
-.prendre:focus-visible{ outline: 1px solid #fff; outline-offset: 3px; }
-.coupon.pris .talon{ visibility: hidden; }
-.coupon.pris .perfo{ border-top: 1px solid var(--line); }   /* bord net de la découpe */
-/* le talon détaché qui s'envole (copie posée par-dessus la page) */
-.talon-vol{
-    position: fixed;
-    z-index: 30;
-    margin: 0;
-    padding: calc(1 * var(--u)) calc(8 * var(--u)) calc(8 * var(--u));
-    background: #060606;
-    border: 1px solid var(--line);
-    border-top: 1px dashed var(--line-soft);
-    pointer-events: none;
-    transform-origin: 20% 0;
-    animation: envole 1.2s cubic-bezier(.4,0,.6,1) forwards;
-}
-.coupons.parti .prendre{ pointer-events: none; }
-/* tampon : losange rouge */
-.c-tampon{
-    position: absolute;
-    z-index: 4;
-    left: 50%;
-    top: 34%;
-    width: calc(38 * var(--u));
-    height: calc(38 * var(--u));
-    display: grid;
-    place-items: center;
-    opacity: 0;
-    pointer-events: none;
-    transform: translate(-50%, -50%);
-}
-.c-tampon::before{
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: rgba(6,6,6,.94);
-    border: calc(1.2 * var(--u)) double var(--red-hover);
-    transform: rotate(45deg);
-}
-.c-tampon span{
-    position: relative;
-    color: var(--red-text);
-    font: 600 max(10px, calc(4.4 * var(--u)))/1 var(--mono);
-    letter-spacing: .14em;
-    padding-left: .14em;
-    transform: rotate(-12deg);
-}
-.coupon.pris .c-tampon{ animation: frappe-reste .7s .35s cubic-bezier(.2,.9,.3,1) both; }
-
-.sr-only{ position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-
-/* ================= Tickets suspendus au centre de la salle ================= */
-.kiosque{ align-items: flex-start; padding: 0 16px; }
-.yatai{
-    width: min(100%, 940px, calc((100vh - 36vh - 40px) / .42));
-    margin-top: 36vh;
-    filter: none;
-}
-
-.coupons{ --hang: 34px; margin: 0 4cqw; padding-top: 0; }
-.coupon{ animation: none; }
-html.vue-salons .coupon.descend{ animation: glisse 1.3s cubic-bezier(.25,.8,.3,1) both; }
-.coupon:nth-child(1){ animation-delay: .25s; }
-.coupon:nth-child(2){ animation-delay: .33s; }
-.coupon:nth-child(3){ animation-delay: .41s; }
-.coupon:nth-child(4){ animation-delay: .49s; }
-@keyframes glisse{
-    0%  { transform: translateY(-75vh) rotate(0deg); }
-    70% { transform: translateY(.8cqw) rotate(1.6deg); }
-    84% { transform: translateY(-.2cqw) rotate(-1deg); }
-    100%{ transform: none; }
-}
-.coupon::before{ height: 120vh; bottom: calc(100% - 12px); background: var(--line-soft); }
-.papier{ background: #070707; box-shadow: 0 1cqw 2cqw rgba(0,0,0,.55); }
-@media (max-width: 760px){
-    .yatai{ margin-top: 30vh; }
-    .coupons{ margin: 0; }
-    .coupon:nth-child(n+3)::before{ height: calc(var(--hang) + 1cqw + 12px); }
-}
-
-@keyframes frappe-reste{ 0%{ opacity: 0; transform: translate(-50%,-50%) scale(2.2) rotate(-20deg); } 50%{ opacity: 1; transform: translate(-50%,-50%) scale(.9) rotate(0deg); } 70%{ transform: translate(-50%,-50%) scale(1.05); } 100%{ opacity: 1; transform: translate(-50%,-50%) scale(1); } }
-@keyframes envole{ 0%{ transform: none; opacity: 1; } 15%{ transform: translateY(calc(3 * var(--u))) rotate(4deg); } 45%{ transform: translate(14%, -20%) rotate(-14deg) scale(.94); opacity: 1; } 100%{ transform: translate(70%, -260%) rotate(-38deg) scale(.55); opacity: 0; } }
-/* ================= Deux vues dans la même page ================= */
-.kiosque, .retour{ visibility: hidden; }
-html.vue-salons .kiosque, html.vue-salons .retour{ visibility: visible; }
-html.vue-salons .accueil{ visibility: hidden; }
-html.vue-salons .accueil.en-sortie{ visibility: visible; }
-@media (max-width: 760px){
-    .kiosque{ min-height: 100vh; padding: 110px 8px 24px; align-items: flex-start; }
-    html:not(.vue-salons) .kiosque{ position: fixed; }
-    html.vue-salons .accueil{ display: none; }
-    html.vue-salons .kiosque{ position: relative; }
-    .retour{ top: 24px; left: 12px; min-height: 40px; padding: 0 12px; font-size: 11px; }
-    .retour::before, .retour::after{ height: 24px; }
-}
-@media (prefers-reduced-motion: reduce){
-    .retour, .yatai, .coupon, .coupon:hover .papier{ animation: none !important; }
-    .coupon.pris .c-tampon{ animation: none; opacity: 1; }
-    .coupon.pris .talon{ visibility: hidden; }
-}
-
-/* ================= Animations ================= */
-@keyframes monte{ from{ opacity: 0; transform: translateY(2.4vh); } to{ opacity: 1; transform: none; } }
-@keyframes tombe{ from{ transform: translateY(-110%); } to{ transform: none; } }
-@keyframes trace{ to{ stroke-dashoffset: 0; } }
-@keyframes frappe{
-    0%  { opacity: 0; transform: translate(-50%,-50%) scale(2.2) rotate(-14deg); }
-    45% { opacity: 1; transform: translate(-50%,-50%) scale(.9)  rotate(0deg); }
-    60% { transform: translate(-50%,-50%) scale(1.05) rotate(0deg); }
-    72% { transform: translate(-50%,-50%) scale(1)    rotate(0deg); }
-    88% { opacity: 1; }
-    100%{ opacity: 0; transform: translate(-50%,-50%) scale(1) rotate(0deg); }
-}
-
-@media (prefers-reduced-motion: reduce){
-    .onglet, .panneau, .entete, .vues, .volets{ animation: none; }
-    .marque .arete{ animation: none; stroke-dashoffset: 0; }
-    .tampon.on{ animation: none; opacity: 1; }
-    .cube-int, .btn, .saisie::after{ transition: none; }
-    .cube:hover .cube-int, .cube:focus-visible .cube-int{ transform: translateZ(calc(var(--h) / -2)); }
-    .cube:hover .avant, .cube:focus-visible .avant{ background: var(--red-hover); }
-}
-
-/* ================= Téléphone ================= */
-@media (max-width: 700px){
-    body{ overflow: auto; }
-    .accueil{ position: relative; min-height: 100vh; padding: 104px 16px 40px; }
-    .panneau{ max-width: 460px; gap: 28px; padding: 40px 20px 32px; }
-    .corps{ max-width: none; gap: 22px; }
-    .marque{ width: 60px; height: 60px; }
-    .langues{ right: 16px; }
-}
-</style>
     <!-- Décor géométrique, dessiné en JS -->
-    <div class="scene" aria-hidden="true"><canvas id="decor"></canvas><canvas id="glaces"></canvas><canvas id="devant"></canvas></div>
+    <div class="fixed inset-0 bg-black" aria-hidden="true"><canvas id="decor" class="absolute inset-0 block size-full"></canvas><canvas id="ice-cream" class="absolute inset-0 block size-full"></canvas><canvas id="front-layer" class="absolute inset-0 block size-full"></canvas></div>
 
-    <a class="retour" href="#accueil" data-i18n-s="retour">← Retour</a>
+    <a class="hanging-button" href="#home" data-i18n-s="back">← Retour</a>
 
-    <main class="kiosque">
-        <h1 class="sr-only" data-i18n-s="titrePage">Le kiosque — O.R.I.O.N</h1>
-        <div class="yatai">
+    <main class="rooms pointer-events-none fixed inset-0 z-10 flex items-start justify-center px-4 narrow:min-h-screen narrow:items-start narrow:px-2 narrow:pt-[110px] narrow:pb-6">
+        <h1 class="sr-only" data-i18n-s="pageTitle">Le kiosque — O.R.I.O.N</h1>
+        <div class="rooms-stall">
 
-            <div class="coupons" id="coupons"></div>
+            <div class="tickets" id="tickets"></div>
         </div>
     </main>
 
-    <div class="langues" role="group" data-i18n-aria="choixLangue">
-        <button class="onglet" type="button" data-lang="fr" aria-label="Français">FR</button>
-        <button class="onglet" type="button" data-lang="en" aria-label="English">EN</button>
+    <div class="hanging-tabs fixed top-0 right-6 z-20 flex items-start gap-2 phone:right-4" role="group" data-i18n-aria="langChoice">
+        <button class="hanging-tab" type="button" data-lang="fr" aria-label="Français">FR</button>
+        <button class="hanging-tab" type="button" data-lang="en" aria-label="English">EN</button>
     </div>
 
-    <main class="accueil">
-        <section class="panneau">
-            <div class="tampon" aria-hidden="true"><span></span></div>
+    <main class="home pointer-events-none fixed inset-0 z-10 flex items-center justify-center px-4 py-[3.5vh] phone:relative phone:min-h-screen phone:px-4 phone:pt-[104px] phone:pb-10">
+        <section class="panel">
+            <div class="stamp" aria-hidden="true"><span></span></div>
 
-            <header class="entete">
-                <div class="marque" aria-hidden="true">
+            <header class="logo-title">
+                <div class="logo-title-mark" aria-hidden="true">
                     <svg viewBox="0 0 100 100">
-                        <polygon class="losange" points="50,4 96,50 50,96 4,50"/>
-                        <polygon class="arete" points="50,12 92,46 50,88 8,54"/>
+                        <polygon class="logo-title-diamond" points="50,4 96,50 50,96 4,50"/>
+                        <polygon class="logo-title-edge" points="50,12 92,46 50,88 8,54"/>
                     </svg>
                 </div>
                 <div>
-                    <p class="surtitre" data-i18n="surtitre">RESTAURANT DE SUSHI</p>
-                    <h1 class="nom-resto">O.R.I.O.N</h1>
+                    <p class="logo-title-overline" data-i18n="overline">RESTAURANT DE SUSHI</p>
+                    <h1 class="logo-title-name">O.R.I.O.N</h1>
                 </div>
             </header>
 
-            <div class="corps">
-                <div class="vues" role="group" data-i18n-aria="choixVue">
-                    <button class="vue actif" type="button" data-vue="jouer" aria-pressed="true"><span class="n">01</span><span data-i18n="vueJouer">JOUER</span></button>
-                    <button class="vue" type="button" data-vue="compte" aria-pressed="false"><span class="n">02</span><span data-i18n="vueCompte">COMPTE</span></button>
+            <div class="flex w-full max-w-[45vh] min-w-[min(100%,300px)] flex-col gap-[2.6vh] phone:max-w-none phone:gap-[22px]">
+                <div class="view-tabs" role="group" data-i18n-aria="viewChoice">
+                    <button class="view-tab active" type="button" data-view="play" aria-pressed="true"><span class="n">01</span><span data-i18n="viewPlay">JOUER</span></button>
+                    <button class="view-tab" type="button" data-view="account" aria-pressed="false"><span class="n">02</span><span data-i18n="viewAccount">COMPTE</span></button>
                 </div>
 
-                <div class="volets">
+                <div class="panes grid grid-cols-[minmax(0,1fr)]">
                     <!-- Volet Jouer -->
-                    <form class="pile" id="volet-jouer" aria-hidden="false">
-                        <div class="champ">
-                            <label class="etiq" for="surnom"><span class="num">01</span><span data-i18n="surnom">Surnom</span></label>
-                            <div class="saisie"><input id="surnom" name="surnom" type="text" autocomplete="nickname" spellcheck="false" maxlength="20" placeholder="Corail_418"></div>
+                    <form class="col-start-1 row-start-1 flex flex-col gap-[2.1vh] [align-self:start]" id="pane-play" aria-hidden="false">
+                        <div class="text-field">
+                            <label class="text-field-label" for="nickname"><span class="num">01</span><span data-i18n="nickname">Surnom</span></label>
+                            <div class="text-field-input"><input id="nickname" name="nickname" type="text" autocomplete="nickname" spellcheck="false" maxlength="20" placeholder="Corail_418"></div>
                         </div>
 
-                        <div class="boutons">
-                            <button class="cube" type="submit">
-                                <span class="cube-int">
-                                    <span class="face avant"><span data-i18n="jouer">JOUER</span><svg aria-hidden="true" width="24" height="14" viewBox="0 0 24 14"><path d="M0 7h22M16 1l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2"/></svg></span>
-                                    <span class="face dessous" aria-hidden="true"><span data-i18n="jouerDessous">C'EST PARTI</span><svg width="24" height="14" viewBox="0 0 24 14"><path d="M0 7h22M16 1l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2"/></svg></span>
+                        <div class="flex flex-col gap-[1.3vh]">
+                            <button class="flip-button" type="submit">
+                                <span class="flip-button-inner">
+                                    <span class="flip-button-face flip-button-front"><span data-i18n="play">JOUER</span><svg aria-hidden="true" width="24" height="14" viewBox="0 0 24 14"><path d="M0 7h22M16 1l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2"/></svg></span>
+                                    <span class="flip-button-face flip-button-bottom" aria-hidden="true"><span data-i18n="playBack">C'EST PARTI</span><svg width="24" height="14" viewBox="0 0 24 14"><path d="M0 7h22M16 1l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2"/></svg></span>
                                 </span>
                             </button>
-                            <a class="btn" href="salon.html?nouveau" data-i18n="creerSalon">CRÉER UN SALON</a>
-                            <a class="btn" href="#salons" data-i18n="salons">SALONS</a>
+                            <a class="outline-button" href="room.html?new" data-i18n="createRoom">CRÉER UN SALON</a>
+                            <a class="outline-button" href="#rooms" data-i18n="rooms">SALONS</a>
                         </div>
 
-                        <div class="champ">
-                            <label class="etiq" for="code"><span class="num">02</span><span data-i18n="code">Tu as un code ?</span></label>
-                            <div class="code">
-                                <div class="saisie"><input id="code" name="code" type="text" autocomplete="off" spellcheck="false" maxlength="6" placeholder="K7Q2M9"></div>
-                                <button class="btn" type="button" id="entrer-code" data-i18n="entrerCode">ENTRER</button>
+                        <div class="text-field">
+                            <label class="text-field-label" for="code"><span class="num">02</span><span data-i18n="code">Tu as un code ?</span></label>
+                            <div class="code-field">
+                                <div class="text-field-input"><input id="code" name="code" type="text" autocomplete="off" spellcheck="false" maxlength="6" placeholder="K7Q2M9"></div>
+                                <button class="outline-button" type="button" id="enter-code" data-i18n="enterCode">ENTRER</button>
                             </div>
                         </div>
                     </form>
 
                     <!-- Volet Compte -->
-                    <form class="pile cache" id="volet-compte" aria-hidden="true">
-                        <div class="champ">
-                            <label class="etiq" for="pseudo"><span class="num">01</span><span data-i18n="pseudo">Pseudo</span></label>
-                            <div class="saisie"><input id="pseudo" name="pseudo" type="text" autocomplete="username" spellcheck="false"></div>
+                    <form class="is-hidden col-start-1 row-start-1 flex flex-col gap-[2.1vh] [align-self:start]" id="pane-account" aria-hidden="true">
+                        <div class="text-field">
+                            <label class="text-field-label" for="username"><span class="num">01</span><span data-i18n="username">Pseudo</span></label>
+                            <div class="text-field-input"><input id="username" name="username" type="text" autocomplete="username" spellcheck="false"></div>
                         </div>
-                        <div class="champ">
-                            <label class="etiq" for="mdp"><span class="num">02</span><span data-i18n="mdp">Mot de passe</span></label>
-                            <div class="saisie"><input id="mdp" name="mdp" type="password" autocomplete="current-password"><button class="voir" type="button" id="voir" aria-pressed="false" data-i18n="afficher">AFFICHER</button></div>
+                        <div class="text-field">
+                            <label class="text-field-label" for="password"><span class="num">02</span><span data-i18n="password">Mot de passe</span></label>
+                            <div class="text-field-input"><input id="password" name="password" type="password" autocomplete="current-password"><button class="text-field-action" type="button" id="reveal-password" aria-pressed="false" data-i18n="show">AFFICHER</button></div>
                         </div>
-                        <div class="boutons">
-                            <button class="cube" type="submit">
-                                <span class="cube-int">
-                                    <span class="face avant"><span data-i18n="connecter">SE CONNECTER</span><svg aria-hidden="true" width="24" height="14" viewBox="0 0 24 14"><path d="M0 7h22M16 1l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2"/></svg></span>
-                                    <span class="face dessous" aria-hidden="true"><span data-i18n="connecterDessous">BIENVENUE</span><svg width="24" height="14" viewBox="0 0 24 14"><path d="M0 7h22M16 1l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2"/></svg></span>
+                        <div class="flex flex-col gap-[1.3vh]">
+                            <button class="flip-button" type="submit">
+                                <span class="flip-button-inner">
+                                    <span class="flip-button-face flip-button-front"><span data-i18n="logIn">SE CONNECTER</span><svg aria-hidden="true" width="24" height="14" viewBox="0 0 24 14"><path d="M0 7h22M16 1l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2"/></svg></span>
+                                    <span class="flip-button-face flip-button-bottom" aria-hidden="true"><span data-i18n="logInBack">BIENVENUE</span><svg width="24" height="14" viewBox="0 0 24 14"><path d="M0 7h22M16 1l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2"/></svg></span>
                                 </span>
                             </button>
-                            <button class="btn" type="button" data-i18n="creer">CRÉER UN COMPTE</button>
+                            <button class="outline-button" type="button" data-i18n="createAccount">CRÉER UN COMPTE</button>
                         </div>
                     </form>
                 </div>
@@ -782,81 +96,81 @@ html.vue-salons .accueil.en-sortie{ visibility: visible; }
 
 <script>
 // ---------- Textes FR / EN ----------
-const textes = {
+const texts = {
     fr: {
-        choixLangue: 'Choix de la langue', choixVue: 'Jouer ou compte',
-        surtitre: 'RESTAURANT DE SUSHI',
-        vueJouer: 'JOUER', vueCompte: 'COMPTE',
-        surnom: 'Surnom', jouer: 'JOUER', jouerDessous: "C'EST PARTI",
-        creerSalon: 'CRÉER UN SALON', salons: 'SALONS',
-        code: 'Tu as un code ?', entrerCode: 'ENTRER',
-        pseudo: 'Pseudo', mdp: 'Mot de passe', afficher: 'AFFICHER', masquer: 'MASQUER',
-        connecter: 'SE CONNECTER', connecterDessous: 'BIENVENUE', creer: 'CRÉER UN COMPTE',
-        tamponJouer: 'GO', tamponCompte: 'OK', tamponCode: 'CODE'
+        langChoice: 'Choix de la langue', viewChoice: 'Jouer ou compte',
+        overline: 'RESTAURANT DE SUSHI',
+        viewPlay: 'JOUER', viewAccount: 'COMPTE',
+        nickname: 'Surnom', play: 'JOUER', playBack: "C'EST PARTI",
+        createRoom: 'CRÉER UN SALON', rooms: 'SALONS',
+        code: 'Tu as un code ?', enterCode: 'ENTRER',
+        username: 'Pseudo', password: 'Mot de passe', show: 'AFFICHER', hide: 'MASQUER',
+        logIn: 'SE CONNECTER', logInBack: 'BIENVENUE', createAccount: 'CRÉER UN COMPTE',
+        stampPlay: 'GO', stampAccount: 'OK', stampCode: 'CODE'
     },
     en: {
-        choixLangue: 'Language', choixVue: 'Play or account',
-        surtitre: 'SUSHI RESTAURANT',
-        vueJouer: 'PLAY', vueCompte: 'ACCOUNT',
-        surnom: 'Nickname', jouer: 'PLAY', jouerDessous: "LET'S GO",
-        creerSalon: 'CREATE A ROOM', salons: 'ROOMS',
-        code: 'Got a code?', entrerCode: 'ENTER',
-        pseudo: 'Username', mdp: 'Password', afficher: 'SHOW', masquer: 'HIDE',
-        connecter: 'LOG IN', connecterDessous: 'WELCOME', creer: 'CREATE AN ACCOUNT',
-        tamponJouer: 'GO', tamponCompte: 'OK', tamponCode: 'CODE'
+        langChoice: 'Language', viewChoice: 'Play or account',
+        overline: 'SUSHI RESTAURANT',
+        viewPlay: 'PLAY', viewAccount: 'ACCOUNT',
+        nickname: 'Nickname', play: 'PLAY', playBack: "LET'S GO",
+        createRoom: 'CREATE A ROOM', rooms: 'ROOMS',
+        code: 'Got a code?', enterCode: 'ENTER',
+        username: 'Username', password: 'Password', show: 'SHOW', hide: 'HIDE',
+        logIn: 'LOG IN', logInBack: 'WELCOME', createAccount: 'CREATE AN ACCOUNT',
+        stampPlay: 'GO', stampAccount: 'OK', stampCode: 'CODE'
     }
 };
 
 let lang = 'fr';
 try {
-    const memo = localStorage.getItem('orion-langue');
-    if (memo === 'fr' || memo === 'en') lang = memo;
+    const saved = localStorage.getItem('orion-lang');
+    if (saved === 'fr' || saved === 'en') lang = saved;
 } catch (e) {}
 
-const mdp  = document.getElementById('mdp');
-const voir = document.getElementById('voir');
+const password  = document.getElementById('password');
+const revealBtn = document.getElementById('reveal-password');
 
-function appliquerLangue(){
-    const t = textes[lang];
+function applyLanguage(){
+    const t = texts[lang];
     document.documentElement.lang = lang;
     document.querySelectorAll('[data-i18n]').forEach(el => {
         const k = el.dataset.i18n;
-        if (k === 'afficher') return;                 // géré par le bouton voir
+        if (k === 'show') return;                 // géré par le bouton voir
         el.textContent = t[k];
     });
     document.querySelectorAll('[data-i18n-aria]').forEach(el => el.setAttribute('aria-label', t[el.dataset.i18nAria]));
-    voir.textContent = mdp.type === 'text' ? t.masquer : t.afficher;
-    document.querySelectorAll('.onglet').forEach(b => {
+    revealBtn.textContent = password.type === 'text' ? t.hide : t.show;
+    document.querySelectorAll('.hanging-tab').forEach(b => {
         const on = b.dataset.lang === lang;
-        b.classList.toggle('actif', on);
+        b.classList.toggle('active', on);
         b.setAttribute('aria-pressed', on);
     });
 }
-document.querySelectorAll('.onglet').forEach(b => b.addEventListener('click', () => {
+document.querySelectorAll('.hanging-tab').forEach(b => b.addEventListener('click', () => {
     if (b.dataset.lang === lang) return;
     lang = b.dataset.lang;
-    try { localStorage.setItem('orion-langue', lang); } catch (e) {}
-    appliquerLangue();
+    try { localStorage.setItem('orion-lang', lang); } catch (e) {}
+    applyLanguage();
 }));
 
 // ---------- Jouer / Compte ----------
-const volets = { jouer: document.getElementById('volet-jouer'), compte: document.getElementById('volet-compte') };
-document.querySelectorAll('.vue').forEach(b => b.addEventListener('click', () => {
-    document.querySelectorAll('.vue').forEach(v => {
+const panes = { play: document.getElementById('pane-play'), account: document.getElementById('pane-account') };
+document.querySelectorAll('.view-tab').forEach(b => b.addEventListener('click', () => {
+    document.querySelectorAll('.view-tab').forEach(v => {
         const on = v === b;
-        v.classList.toggle('actif', on);
+        v.classList.toggle('active', on);
         v.setAttribute('aria-pressed', on);
-        volets[v.dataset.vue].classList.toggle('cache', !on);
-        volets[v.dataset.vue].setAttribute('aria-hidden', !on);
+        panes[v.dataset.view].classList.toggle('is-hidden', !on);
+        panes[v.dataset.view].setAttribute('aria-hidden', !on);
     });
 }));
 
 // ---------- Mot de passe ----------
-voir.addEventListener('click', () => {
-    const visible = mdp.type === 'password';
-    mdp.type = visible ? 'text' : 'password';
-    voir.setAttribute('aria-pressed', visible);
-    voir.textContent = visible ? textes[lang].masquer : textes[lang].afficher;
+revealBtn.addEventListener('click', () => {
+    const visible = password.type === 'password';
+    password.type = visible ? 'text' : 'password';
+    revealBtn.setAttribute('aria-pressed', visible);
+    revealBtn.textContent = visible ? texts[lang].hide : texts[lang].show;
 });
 
 // ---------- Code en majuscules ----------
@@ -864,31 +178,31 @@ const code = document.getElementById('code');
 code.addEventListener('input', () => { code.value = code.value.toUpperCase().replace(/[^A-Z0-9]/g, ''); });
 
 // ---------- Tampon de confirmation ----------
-const tampon = document.querySelector('.tampon');
-let minuteur = null;
-function tamponner(cle){
-    clearTimeout(minuteur);
-    tampon.classList.remove('on');
-    tampon.querySelector('span').textContent = textes[lang][cle];
-    void tampon.offsetWidth;                          // relance l'animation
-    tampon.classList.add('on');
-    minuteur = setTimeout(() => tampon.classList.remove('on'), 1700);
+const stamp = document.querySelector('.stamp');
+let stampTimer = null;
+function showStamp(key){
+    clearTimeout(stampTimer);
+    stamp.classList.remove('on');
+    stamp.querySelector('span').textContent = texts[lang][key];
+    void stamp.offsetWidth;                          // relance l'animation
+    stamp.classList.add('on');
+    stampTimer = setTimeout(() => stamp.classList.remove('on'), 1700);
 }
-volets.jouer.addEventListener('submit', e => { e.preventDefault(); tamponner('tamponJouer'); });
-volets.compte.addEventListener('submit', e => { e.preventDefault(); tamponner('tamponCompte'); });
+panes.play.addEventListener('submit', e => { e.preventDefault(); showStamp('stampPlay'); });
+panes.account.addEventListener('submit', e => { e.preventDefault(); showStamp('stampAccount'); });
 // code saisi : on rejoint le kiosque avec le code déjà inscrit
-function entrerCode(){
+function enterCode(){
     const c = code.value;
-    tamponner('tamponCode');
-    if (c.length === 6) setTimeout(() => { location.href = 'salon.html?code=' + c; }, 900);
+    showStamp('stampCode');
+    if (c.length === 6) setTimeout(() => { location.href = 'room.html?code=' + c; }, 900);
     else code.focus();
 }
-document.getElementById('entrer-code').addEventListener('click', entrerCode);
-code.addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); entrerCode(); } });
+document.getElementById('enter-code').addEventListener('click', enterCode);
+code.addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); enterCode(); } });
 
-appliquerLangue();
+applyLanguage();
 
-window.VUE_INITIALE = location.hash === '#salons' ? 'salons' : 'accueil';
+window.INITIAL_VIEW = location.hash === '#rooms' ? 'rooms' : 'home';
 // ================= Décor : comptoir de sushi en formes géométriques =================
 // Tout est placé dans un espace 3D (x à droite, y en haut, z vers le fond)
 // et projeté depuis la caméra : on est assis au comptoir, un tapis roulant
@@ -899,7 +213,7 @@ const canvas = document.getElementById('decor');
 let ctx = canvas.getContext('2d');
 const ctxBack = ctx;
 // couche de premier plan (couverts du comptoir), au-dessus de la crème glacée 3D
-const canvasFront = document.getElementById('devant');
+const canvasFront = document.getElementById('front-layer');
 const ctxFront = canvasFront.getContext('2d');
 
 const line = a => `rgba(255,255,255,${a})`;
@@ -924,7 +238,7 @@ function resize(){
     ctxFront.setTransform(dpr, 0, 0, dpr, 0, 0);
     F = Math.max(Math.min(W * .62, H * 1.05), Math.min(H * .7, W * 1.6));   // focale (plus serrée sur téléphone)
     CX = W / 2; CY = H / 2;
-    if (typeof GLACES !== 'undefined' && GLACES) GLACES.resize();
+    if (typeof ICE_CREAM !== 'undefined' && ICE_CREAM) ICE_CREAM.resize();
 }
 const NEAR = .3;
 function P(x, y, z){
@@ -1277,7 +591,7 @@ function drawCounter(t){
     // tapis
     box({ x: 0, y: BELT.y, z: (BELT.z0 + BELT.z1) / 2, w: 60, h: .16, d: BELT.z1 - BELT.z0 },
         { front: ['#0e0e0e', '#161616'], side: '#262626', cap: '#101010' });
-    const yt = BELT.y + .08, step = .7, off = reduce ? 0 : (beltPos(t) + DECALAGE_T) % step;
+    const yt = BELT.y + .08, step = .7, off = reduce ? 0 : (beltPos(t) + BELT_OFFSET) % step;
     for (let x = -16 + off; x < 16; x += step) seg([x, yt, BELT.z0], [x, yt, BELT.z1], line(.13));
     seg([-30, yt, BELT.z0], [30, yt, BELT.z0], line(.5));
     seg([-30, yt, BELT.z1], [30, yt, BELT.z1], line(.35));
@@ -1568,7 +882,7 @@ function drawPlates(t){
     const z = (BELT.z0 + BELT.z1) / 2;
     const items = [];
     for (let i = 0; i < PLATES; i++){
-        const x = ((i * GAP + (reduce ? 0 : beltPos(t) + DECALAGE_T)) % LOOP) - LOOP / 2;
+        const x = ((i * GAP + (reduce ? 0 : beltPos(t) + BELT_OFFSET)) % LOOP) - LOOP / 2;
         items.push({ x, i });
     }
     // du bord vers le centre : les faces latérales se recouvrent correctement
@@ -1598,7 +912,7 @@ function drawTableware(){
 }
 
 // ---------- Rendu ----------
-let DECALAGE_T = 0;
+let BELT_OFFSET = 0;
 function render(t){
     LAST_T = t;
     ctx.clearRect(0, 0, W, H);
@@ -1608,15 +922,15 @@ function render(t){
     for (const L of lanterns.filter(l => l.z > NOREN.z)) drawLantern(L, t);
     drawNoren(t);
     for (const L of lanterns.filter(l => l.z <= NOREN.z)) drawLantern(L, t);
-    ctx.save(); ctx.globalAlpha = COMPTOIR;
-    if (COMPTOIR > 0) drawCounter(t);
+    ctx.save(); ctx.globalAlpha = COUNTER_SHOW;
+    if (COUNTER_SHOW > 0) drawCounter(t);
     // assiettes et crème glacée : en 3D si possible, sinon dessin 2D de secours
-    if (typeof GLACES !== 'undefined' && GLACES){ if (COMPTOIR > 0) GLACES.render(t); }
-    else if (typeof THREE === 'undefined' && COMPTOIR > 0) drawPlates(t);
+    if (typeof ICE_CREAM !== 'undefined' && ICE_CREAM){ if (COUNTER_SHOW > 0) ICE_CREAM.render(t); }
+    else if (typeof THREE === 'undefined' && COUNTER_SHOW > 0) drawPlates(t);
     ctx.restore();
     ctx = ctxFront;
     ctx.clearRect(0, 0, W, H);
-    if (COMPTOIR > 0){ ctx.save(); ctx.globalAlpha = COMPTOIR; drawTableware(); ctx.restore(); }
+    if (COUNTER_SHOW > 0){ ctx.save(); ctx.globalAlpha = COUNTER_SHOW; drawTableware(); ctx.restore(); }
     ctx = ctxBack;
 }
 
@@ -1627,39 +941,39 @@ const DURATION = 2500;
 const ease = t => t < .5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2;
 
 // ---------- Comptoir et tapis pilotables (passage accueil <-> salons) ----------
-let BELT_D = null, LAST_T = 0, COMPTOIR = window.VUE_INITIALE === 'salons' ? 0 : 1;
+let BELT_D = null, LAST_T = 0, COUNTER_SHOW = window.INITIAL_VIEW === 'rooms' ? 0 : 1;
 const beltPos = t => BELT_D === null ? t * BELT.speed : BELT_D;
-const TAPIS_ACC = 32;
-const distTapis = s => BELT.speed * (s + TAPIS_ACC * s * s * s / 3);
+const BELT_ACC = 32;
+const beltDistance = s => BELT.speed * (s + BELT_ACC * s * s * s / 3);
 // le tapis s'élance (vers la droite) en accélérant
-window.SCENE_TAPIS_PART = (ms, chaque, fini) => {
-    const D0 = beltPos(LAST_T) + DECALAGE_T, t0 = performance.now();
-    DECALAGE_T = 0;
-    const pas = now => {
+window.SCENE_BELT_LEAVE = (ms, onStep, onDone) => {
+    const D0 = beltPos(LAST_T) + BELT_OFFSET, t0 = performance.now();
+    BELT_OFFSET = 0;
+    const step = now => {
         const s = Math.min(ms, now - t0) / 1000;
-        BELT_D = D0 + distTapis(s);
-        chaque && chaque((now - t0) / ms);
-        if (now - t0 < ms) requestAnimationFrame(pas); else fini && fini();
+        BELT_D = D0 + beltDistance(s);
+        onStep && onStep((now - t0) / ms);
+        if (now - t0 < ms) requestAnimationFrame(step); else onDone && onDone();
     };
-    requestAnimationFrame(pas);
+    requestAnimationFrame(step);
 };
 // le tapis arrive lancé (dist < 0 : vers la gauche) et ralentit jusqu'à reprendre son rythme
-window.SCENE_TAPIS_ARRIVE = (dist, ms, chaque, fini) => {
-    const t0 = performance.now(), D1 = beltPos(LAST_T) + DECALAGE_T + dist;
-    DECALAGE_T = 0;
-    const pas = now => {
-        const k = Math.min(1, (now - t0) / ms), reste = dist * (1 - k) * (1 - k);
-        BELT_D = D1 - reste;
-        chaque && chaque(k);
-        if (k < 1) requestAnimationFrame(pas);
-        else { const fin = BELT_D; BELT_D = null; DECALAGE_T = fin - LAST_T * BELT.speed; fini && fini(); }
+window.SCENE_BELT_ARRIVE = (dist, ms, onStep, onDone) => {
+    const t0 = performance.now(), D1 = beltPos(LAST_T) + BELT_OFFSET + dist;
+    BELT_OFFSET = 0;
+    const step = now => {
+        const k = Math.min(1, (now - t0) / ms), remaining = dist * (1 - k) * (1 - k);
+        BELT_D = D1 - remaining;
+        onStep && onStep(k);
+        if (k < 1) requestAnimationFrame(step);
+        else { const end = BELT_D; BELT_D = null; BELT_OFFSET = end - LAST_T * BELT.speed; onDone && onDone(); }
     };
-    requestAnimationFrame(pas);
+    requestAnimationFrame(step);
 };
-window.SCENE_COMPTOIR = (cible, ms) => {
-    const c0 = COMPTOIR, t0 = performance.now();
-    const pas = now => { const k = Math.min(1, (now - t0) / ms); COMPTOIR = c0 + (cible - c0) * k * k * (3 - 2 * k); if (k < 1) requestAnimationFrame(pas); };
-    requestAnimationFrame(pas);
+window.SCENE_COUNTER = (targetLevel, ms) => {
+    const c0 = COUNTER_SHOW, t0 = performance.now();
+    const step = now => { const k = Math.min(1, (now - t0) / ms); COUNTER_SHOW = c0 + (targetLevel - c0) * k * k * (3 - 2 * k); if (k < 1) requestAnimationFrame(step); };
+    requestAnimationFrame(step);
 };
 
 resize();
@@ -1670,7 +984,7 @@ if (reduce){
 } else {
     let t0 = null;
     const frame = now => {
-        if (t0 === null) t0 = window.VUE_INITIALE === 'salons' ? now - DURATION : now + DELAY;
+        if (t0 === null) t0 = window.INITIAL_VIEW === 'rooms' ? now - DURATION : now + DELAY;
         const s = (now - t0) / 1000;
         const k = ease(Math.min(1, Math.max(0, s * 1000 / DURATION)));
         const idle = Math.max(0, s - DURATION / 1000);
@@ -1681,7 +995,7 @@ if (reduce){
         render(Math.max(0, s));
         requestAnimationFrame(frame);
     };
-    cam.z = window.VUE_INITIALE === 'salons' ? 0 : START_Z;
+    cam.z = window.INITIAL_VIEW === 'rooms' ? 0 : START_Z;
     render(0);
     requestAnimationFrame(frame);
 }
@@ -1693,10 +1007,10 @@ if (reduce){
 // éclairés en cel-shading (aplats de lumière et d'ombre, trame de points dans
 // l'ombre, reflet) avec un contour noir ; celles qui fondent se déforment
 // réellement image par image.
-var GLACES = null;
+var ICE_CREAM = null;
 (function(){
     if (typeof THREE === 'undefined') return;                 // repli : dessin 2D
-    const glCanvas = document.getElementById('glaces');
+    const glCanvas = document.getElementById('ice-cream');
     let renderer;
     try {
         renderer = new THREE.WebGLRenderer({ canvas: glCanvas, alpha: true, antialias: true });
@@ -1970,7 +1284,7 @@ var GLACES = null;
     function render3d(t){
         camera.position.set(cam.x, cam.y, -cam.z);
         for (const { g, i } of plates){
-            const x = ((i * GAP + (reduce ? 0 : beltPos(t) + DECALAGE_T)) % LOOP) - LOOP / 2;
+            const x = ((i * GAP + (reduce ? 0 : beltPos(t) + BELT_OFFSET)) % LOOP) - LOOP / 2;
             g.position.set(x, 0, -beltZ);
             g.visible = Math.abs(x - cam.x) < 22;
         }
@@ -1983,253 +1297,253 @@ var GLACES = null;
         renderer.render(scene, camera);
     }
     resize3d();
-    GLACES = { render: render3d, resize: resize3d };
+    ICE_CREAM = { render: render3d, resize: resize3d };
     if (reduce) render(0);
 })();
 
 // ================= Vue des salons =================
-const SALONS = (() => {
+const ROOMS = (() => {
 // ---------- Textes FR / EN ----------
-const textes = {
+const texts = {
     fr: {
-        titrePage: 'Le kiosque — O.R.I.O.N', retour: '← Retour',
-        reservation: 'RÉSERVATION', table: 'TABLE', serie: 'N°', langue: 'Langue', convives: 'Convives', bots: 'Bots',
-        oui: 'OUI', non: 'NON', codeFr: 'FR', codeEn: 'AN', talon: 'TALON', prendre: 'PRENDRE', reserve: 'RÉSERVÉ',
-        libelle: 'Prendre le coupon de la table {n} — {c} convives'
+        pageTitle: 'Le kiosque — O.R.I.O.N', back: '← Retour',
+        reservation: 'RÉSERVATION', table: 'TABLE', serial: 'N°', lang: 'Langue', guests: 'Convives', bots: 'Bots',
+        yes: 'OUI', no: 'NON', codeFr: 'FR', codeEn: 'AN', stub: 'TALON', take: 'PRENDRE', reserved: 'RÉSERVÉ',
+        takeLabel: 'Prendre le coupon de la table {n} — {c} convives'
     },
     en: {
-        titrePage: 'The kiosk — O.R.I.O.N', retour: '← Back',
-        reservation: 'RESERVATION', table: 'TABLE', serie: 'NO.', langue: 'Language', convives: 'Guests', bots: 'Bots',
-        oui: 'YES', non: 'NO', codeFr: 'FR', codeEn: 'EN', talon: 'STUB', prendre: 'TAKE', reserve: 'RESERVED',
-        libelle: 'Take the coupon for table {n} — {c} guests'
+        pageTitle: 'The kiosk — O.R.I.O.N', back: '← Back',
+        reservation: 'RESERVATION', table: 'TABLE', serial: 'NO.', lang: 'Language', guests: 'Guests', bots: 'Bots',
+        yes: 'YES', no: 'NO', codeFr: 'FR', codeEn: 'EN', stub: 'STUB', take: 'TAKE', reserved: 'RESERVED',
+        takeLabel: 'Take the coupon for table {n} — {c} guests'
     }
 };
-const salons = [
-    { n: 1, serie: '1305', langue: 'fr', convives: '2 / 4', bots: true },
-    { n: 2, serie: '1305', langue: 'en', convives: '5 / 6', bots: false },
-    { n: 3, serie: '1305', langue: 'fr', convives: '1 / 2', bots: true },
-    { n: 4, serie: '1305', langue: 'en', convives: '3 / 8', bots: false },
+const rooms = [
+    { n: 1, serial: '1305', lang: 'fr', guests: '2 / 4', bots: true },
+    { n: 2, serial: '1305', lang: 'en', guests: '5 / 6', bots: false },
+    { n: 3, serial: '1305', lang: 'fr', guests: '1 / 2', bots: true },
+    { n: 4, serial: '1305', lang: 'en', guests: '3 / 8', bots: false },
 ];
 
 let lang = 'fr';
 try {
-    const memo = localStorage.getItem('orion-langue');
-    if (memo === 'fr' || memo === 'en') lang = memo;
+    const saved = localStorage.getItem('orion-lang');
+    if (saved === 'fr' || saved === 'en') lang = saved;
 } catch (e) {}
-let pris = -1;
+let taken = -1;
 
 // ---------- Coupons ----------
-const zone = document.getElementById('coupons');
-zone.innerHTML = salons.map((r, i) => `
-    <div class="coupon" data-i="${i}">
-        <div class="papier">
-            <span class="trou" aria-hidden="true"></span>
-            <span class="c-tampon" aria-hidden="true"><span></span></span>
-            <div class="c-tete" data-k="reservation"></div>
-            <div class="c-num">
-                <span class="c-chiffre" aria-hidden="true">${String(r.n).padStart(2, '0')}</span>
-                <span class="c-table"></span>
-                <span class="c-serie"></span>
+const zone = document.getElementById('tickets');
+zone.innerHTML = rooms.map((r, i) => `
+    <div class="ticket" data-i="${i}">
+        <div class="ticket-paper">
+            <span class="ticket-hole" aria-hidden="true"></span>
+            <span class="ticket-stamp" aria-hidden="true"><span></span></span>
+            <div class="ticket-header" data-k="reservation"></div>
+            <div class="ticket-num">
+                <span class="ticket-number" aria-hidden="true">${String(r.n).padStart(2, '0')}</span>
+                <span class="ticket-table"></span>
+                <span class="ticket-serial"></span>
             </div>
-            <div class="c-lignes">
-                <div class="c-ligne"><span class="c-lab" data-k="langue"></span><span class="c-val v-langue"></span></div>
-                <div class="c-ligne"><span class="c-lab" data-k="convives"></span><span class="c-val">${r.convives}</span></div>
-                <div class="c-ligne"><span class="c-lab" data-k="bots"></span><span class="c-val v-bots${r.bots ? ' oui' : ''}"></span></div>
+            <div class="ticket-rows">
+                <div class="ticket-row"><span class="ticket-label" data-k="lang"></span><span class="ticket-value v-lang"></span></div>
+                <div class="ticket-row"><span class="ticket-label" data-k="guests"></span><span class="ticket-value">${r.guests}</span></div>
+                <div class="ticket-row"><span class="ticket-label" data-k="bots"></span><span class="ticket-value v-bots${r.bots ? ' yes' : ''}"></span></div>
             </div>
-            <div class="perfo" aria-hidden="true"></div>
-            <div class="talon">
-                <div class="talon-tete"><span data-k="talon"></span><span class="puce" aria-hidden="true"></span></div>
-                <button class="prendre" type="button"><span class="b-txt"></span></button>
+            <div class="ticket-perforation" aria-hidden="true"></div>
+            <div class="ticket-stub">
+                <div class="ticket-stub-header"><span data-k="stub"></span><span class="ticket-dot" aria-hidden="true"></span></div>
+                <button class="ticket-button" type="button"><span class="ticket-button-text"></span></button>
             </div>
         </div>
     </div>`).join('');
 
-function majCoupons(){
-    const t = textes[lang];
-    zone.querySelectorAll('.coupon').forEach(el => {
-        const i = +el.dataset.i, r = salons[i], on = pris === i;
+function updateCoupons(){
+    const t = texts[lang];
+    zone.querySelectorAll('.ticket').forEach(el => {
+        const i = +el.dataset.i, r = rooms[i], on = taken === i;
         el.querySelectorAll('[data-k]').forEach(n => n.textContent = t[n.dataset.k]);
-        el.querySelector('.c-table').textContent = t.table + ' ' + r.n;
-        el.querySelector('.c-serie').textContent = t.serie + ' ' + r.serie;
-        el.querySelector('.v-langue').textContent = r.langue === 'fr' ? t.codeFr : t.codeEn;
-        el.querySelector('.v-bots').textContent = r.bots ? t.oui : t.non;
-        el.querySelector('.c-tampon span').textContent = t.reserve;
-        el.classList.toggle('pris', on);
-        const b = el.querySelector('.prendre');
-        b.setAttribute('aria-label', t.libelle.replace('{n}', r.n).replace('{c}', r.convives));
-        b.querySelector('.b-txt').textContent = t.prendre;
+        el.querySelector('.ticket-table').textContent = t.table + ' ' + r.n;
+        el.querySelector('.ticket-serial').textContent = t.serial + ' ' + r.serial;
+        el.querySelector('.v-lang').textContent = r.lang === 'fr' ? t.codeFr : t.codeEn;
+        el.querySelector('.v-bots').textContent = r.bots ? t.yes : t.no;
+        el.querySelector('.ticket-stamp span').textContent = t.reserved;
+        el.classList.toggle('taken', on);
+        const b = el.querySelector('.ticket-button');
+        b.setAttribute('aria-label', t.takeLabel.replace('{n}', r.n).replace('{c}', r.guests));
+        b.querySelector('.ticket-button-text').textContent = t.take;
     });
 }
 // ---------- Survol des tickets : ressort amorti qui suit la souris ----------
 (() => {
     if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    const corps = [...zone.querySelectorAll('.coupon')].map(el => ({
-        el, p: el.querySelector('.papier'),
+    const bodies = [...zone.querySelectorAll('.ticket')].map(el => ({
+        el, p: el.querySelector('.ticket-paper'),
         th: 0, w: 0,            // balancement (radians) et sa vitesse
         ry: 0, vry: 0,          // légère rotation 3D du papier
-        lift: 0, survol: false,
+        lift: 0, hovered: false,
     }));
-    let derX = null, derT = 0;
+    let lastX = null, lastT = 0;
     zone.addEventListener('pointermove', e => {
         const now = performance.now();
-        if (derX !== null && now - derT < 80){
-            const vx = (e.clientX - derX) / Math.max(8, now - derT);   // px / ms
-            const el = e.target.closest('.coupon');
-            const c = el && corps[+el.dataset.i];
+        if (lastX !== null && now - lastT < 80){
+            const vx = (e.clientX - lastX) / Math.max(8, now - lastT);   // px / ms
+            const el = e.target.closest('.ticket');
+            const c = el && bodies[+el.dataset.i];
             if (c){
                 c.w += Math.max(-1.2, Math.min(1.2, vx)) * .09;
                 c.vry += Math.max(-1.2, Math.min(1.2, vx)) * 7;
             }
         }
-        derX = e.clientX; derT = now;
+        lastX = e.clientX; lastT = now;
     });
-    zone.addEventListener('pointerleave', () => { derX = null; });
-    corps.forEach(c => {
-        c.el.addEventListener('pointerenter', () => { c.survol = true; });
-        c.el.addEventListener('pointerleave', () => { c.survol = false; });
+    zone.addEventListener('pointerleave', () => { lastX = null; });
+    bodies.forEach(c => {
+        c.el.addEventListener('pointerenter', () => { c.hovered = true; });
+        c.el.addEventListener('pointerleave', () => { c.hovered = false; });
     });
-    let prec = performance.now();
-    const pas = now => {
-        const dt = Math.min(.033, (now - prec) / 1000);
-        prec = now;
-        for (const c of corps){
+    let prev = performance.now();
+    const step = now => {
+        const dt = Math.min(.033, (now - prev) / 1000);
+        prev = now;
+        for (const c of bodies){
             // ressort souple et bien amorti : quelques oscillations qui s'éteignent
             c.w += (-14 * c.th - 2.6 * c.w) * dt;
             c.th = Math.max(-.12, Math.min(.12, c.th + c.w * dt));
             c.vry += (-22 * c.ry - 4.2 * c.vry) * dt;
             c.ry = Math.max(-14, Math.min(14, c.ry + c.vry * dt));
-            c.lift += ((c.survol ? -4 : 0) - c.lift) * Math.min(1, dt * 7);
+            c.lift += ((c.hovered ? -4 : 0) - c.lift) * Math.min(1, dt * 7);
             if (Math.abs(c.th) + Math.abs(c.w) + Math.abs(c.ry) + Math.abs(c.vry) + Math.abs(c.lift) > .002){
                 c.p.style.transform = `translateY(${c.lift.toFixed(2)}px) rotate(${c.th.toFixed(4)}rad) rotateY(${c.ry.toFixed(2)}deg)`;
             } else if (c.p.style.transform){
                 c.p.style.transform = '';
             }
         }
-        requestAnimationFrame(pas);
+        requestAnimationFrame(step);
     };
-    requestAnimationFrame(pas);
+    requestAnimationFrame(step);
 })();
 
 // ---------- Prendre un ticket : le talon s'envole, puis salle d'attente ----------
-const PAGE_ATTENTE = 'salon.html';
-const reduireMouvement = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const WAITING_PAGE = 'room.html';
+const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 zone.addEventListener('click', e => {
-    const b = e.target.closest('.prendre');
-    if (!b || pris >= 0) return;
-    const i = +b.closest('.coupon').dataset.i;
-    pris = i;
-    zone.classList.add('parti');
-    const el = b.closest('.coupon'), papier = el.querySelector('.papier'), talon = el.querySelector('.talon');
+    const b = e.target.closest('.ticket-button');
+    if (!b || taken >= 0) return;
+    const i = +b.closest('.ticket').dataset.i;
+    taken = i;
+    zone.classList.add('locked');
+    const el = b.closest('.ticket'), paper = el.querySelector('.ticket-paper'), stub = el.querySelector('.ticket-stub');
     // copie du talon, posée exactement au même endroit, qui va s'envoler
-    const u = el.querySelector('.trou').offsetWidth / 6;
-    const box = talon.getBoundingClientRect(), pr = papier.getBoundingClientRect();
-    const vol = talon.cloneNode(true);
-    vol.className = 'talon talon-vol';
-    vol.style.setProperty('--u', u + 'px');
-    Object.assign(vol.style, { left: pr.left + 'px', top: box.top + 'px', width: pr.width + 'px' });
-    if (reduireMouvement) vol.style.animation = 'none', vol.style.opacity = 0;
-    document.body.appendChild(vol);
+    const u = el.querySelector('.ticket-hole').offsetWidth / 6;
+    const box = stub.getBoundingClientRect(), pr = paper.getBoundingClientRect();
+    const flyingStub = stub.cloneNode(true);
+    flyingStub.className = 'ticket-stub ticket-stub-flying';
+    flyingStub.style.setProperty('--u', u + 'px');
+    Object.assign(flyingStub.style, { left: pr.left + 'px', top: box.top + 'px', width: pr.width + 'px' });
+    if (reducedMotion) flyingStub.style.animation = 'none', flyingStub.style.opacity = 0;
+    document.body.appendChild(flyingStub);
     // le ticket est coupé net à la perforation
-    papier.style.clipPath = `inset(-20px -20px ${papier.offsetHeight - talon.offsetTop}px -20px)`;
-    majCoupons();
-    const r = salons[i];
+    paper.style.clipPath = `inset(-20px -20px ${paper.offsetHeight - stub.offsetTop}px -20px)`;
+    updateCoupons();
+    const r = rooms[i];
     setTimeout(() => {
-        const [presents, max] = r.convives.split(' / ');
-        location.href = `${PAGE_ATTENTE}?table=${r.n}&serie=${r.serie}&langue=${r.langue}&convives=${max}&presents=${presents}&bots=${r.bots ? 1 : 0}`;
-    }, reduireMouvement ? 500 : 1700);
+        const [present, max] = r.guests.split(' / ');
+        location.href = `${WAITING_PAGE}?table=${r.n}&serial=${r.serial}&lang=${r.lang}&guests=${max}&present=${present}&bots=${r.bots ? 1 : 0}`;
+    }, reducedMotion ? 500 : 1700);
 });
 
 // ---------- Langue ----------
-function appliquerLangue(){
-    const t = textes[lang];
+function applyLanguage(){
+    const t = texts[lang];
     document.querySelectorAll('[data-i18n-s]').forEach(el => el.textContent = t[el.dataset.i18nS]);
-    majCoupons();
+    updateCoupons();
 }
-document.querySelectorAll('.onglet').forEach(b => b.addEventListener('click', () => {
+document.querySelectorAll('.hanging-tab').forEach(b => b.addEventListener('click', () => {
     if (b.dataset.lang === lang) return;
     lang = b.dataset.lang;
-    try { localStorage.setItem('orion-langue', lang); } catch (e) {}
-    appliquerLangue();
+    try { localStorage.setItem('orion-lang', lang); } catch (e) {}
+    applyLanguage();
 }));
-appliquerLangue();
+applyLanguage();
 
 
-return { coupons: () => [...document.querySelectorAll('.coupon')] };
+return { coupons: () => [...document.querySelectorAll('.ticket')] };
 })();
 
 // ================= Passage accueil <-> salons, dans la même page =================
 // Le tapis emporte la crème glacée vers la droite pendant que les tickets descendent
 // du plafond ; au retour, les tickets remontent et le tapis ramène la crème glacée
 // en roulant vers la gauche. Pas de changement de page : rien ne fige ni ne clignote.
-const racine = document.documentElement, accueilEl = document.querySelector('.accueil'), panneauEl = document.querySelector('.panneau');
-const ongletsEl = document.querySelector('.langues'), retourEl = document.querySelector('.retour');
-const reduitNav = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
-let vue = 'accueil', enCours = null;
-function glacesOpacite(o){ const g = document.getElementById('glaces'); if (g) g.style.opacity = o; }
-function versSalons(anime){
-    if (vue === 'salons') return; vue = 'salons';
-    clearTimeout(enCours);
-    const coupons = SALONS.coupons();
+const root = document.documentElement, homeEl = document.querySelector('.home'), panelEl = document.querySelector('.panel');
+const langTabsEl = document.querySelector('.hanging-tabs'), backEl = document.querySelector('.hanging-button');
+const prefersReducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+let view = 'home', pendingTimer = null;
+function setIceCreamOpacity(o){ const g = document.getElementById('ice-cream'); if (g) g.style.opacity = o; }
+function showRooms(animate){
+    if (view === 'rooms') return; view = 'rooms';
+    clearTimeout(pendingTimer);
+    const coupons = ROOMS.coupons();
     coupons.forEach(c => { c.style.transition = ''; c.style.transform = ''; c.style.opacity = ''; c.classList.remove('descend'); });
-    if (!anime || reduitNav()){
-        racine.classList.add('vue-salons');
-        if (window.SCENE_COMPTOIR) { window.SCENE_COMPTOIR(0, 1); } glacesOpacite(0);
-        panneauEl.style.opacity = '0';
+    if (!animate || prefersReducedMotion()){
+        root.classList.add('rooms-view');
+        if (window.SCENE_COUNTER) { window.SCENE_COUNTER(0, 1); } setIceCreamOpacity(0);
+        panelEl.style.opacity = '0';
         return;
     }
     // le menu s'efface
-    panneauEl.style.animation = 'none';
-    panneauEl.style.transition = 'opacity .3s ease-in, transform .35s ease-in';
-    panneauEl.style.opacity = '0'; panneauEl.style.transform = 'translateY(2vh) scale(.98)';
-    accueilEl.classList.add('en-sortie');
-    racine.classList.add('vue-salons');
-    void racine.offsetWidth;
+    panelEl.style.animation = 'none';
+    panelEl.style.transition = 'opacity .3s ease-in, transform .35s ease-in';
+    panelEl.style.opacity = '0'; panelEl.style.transform = 'translateY(2vh) scale(.98)';
+    homeEl.classList.add('leaving');
+    root.classList.add('rooms-view');
+    void root.offsetWidth;
     // les tickets descendent du plafond, en même temps que le tapis emporte la crème glacée
     coupons.forEach(c => c.classList.add('descend'));
-    retourEl.style.opacity = '0'; retourEl.style.transition = 'opacity .4s .6s';
-    requestAnimationFrame(() => { retourEl.style.opacity = ''; });
-    window.SCENE_TAPIS_PART(800, k => glacesOpacite(Math.max(0, 1 - Math.max(0, k - .3) / .6)), () => {
-        const v = BELT.speed * (1 + TAPIS_ACC * .64), FREIN = 500;
-        window.SCENE_TAPIS_ARRIVE(v * FREIN / 1000 / 2, FREIN, null, null);
+    backEl.style.opacity = '0'; backEl.style.transition = 'opacity .4s .6s';
+    requestAnimationFrame(() => { backEl.style.opacity = ''; });
+    window.SCENE_BELT_LEAVE(800, k => setIceCreamOpacity(Math.max(0, 1 - Math.max(0, k - .3) / .6)), () => {
+        const v = BELT.speed * (1 + BELT_ACC * .64), BRAKE_MS = 500;
+        window.SCENE_BELT_ARRIVE(v * BRAKE_MS / 1000 / 2, BRAKE_MS, null, null);
     });
-    enCours = setTimeout(() => { window.SCENE_COMPTOIR(0, 600); }, 500);
-    setTimeout(() => accueilEl.classList.remove('en-sortie'), 400);
+    pendingTimer = setTimeout(() => { window.SCENE_COUNTER(0, 600); }, 500);
+    setTimeout(() => homeEl.classList.remove('leaving'), 400);
 }
-function versAccueil(anime){
-    if (vue === 'accueil') return; vue = 'accueil';
-    clearTimeout(enCours);
-    const coupons = SALONS.coupons();
-    const finir = () => {
-        racine.classList.remove('vue-salons');
+function showHome(animate){
+    if (view === 'home') return; view = 'home';
+    clearTimeout(pendingTimer);
+    const coupons = ROOMS.coupons();
+    const finish = () => {
+        root.classList.remove('rooms-view');
         coupons.forEach(c => { c.style.transition = ''; c.style.transform = ''; c.style.opacity = ''; c.classList.remove('descend'); });
     };
-    if (!anime || reduitNav()){
-        finir(); window.SCENE_COMPTOIR(1, 1); glacesOpacite(1);
-        panneauEl.style.opacity = ''; panneauEl.style.transform = '';
+    if (!animate || prefersReducedMotion()){
+        finish(); window.SCENE_COUNTER(1, 1); setIceCreamOpacity(1);
+        panelEl.style.opacity = ''; panelEl.style.transform = '';
         return;
     }
     // les tickets remontent le long de leurs fils
-    retourEl.style.transition = 'opacity .25s'; retourEl.style.opacity = '0';
+    backEl.style.transition = 'opacity .25s'; backEl.style.opacity = '0';
     coupons.forEach((c, i) => {
         c.classList.remove('descend');
         c.style.transition = `transform .6s ${(3 - i) * .05}s cubic-bezier(.55,0,.75,.4), opacity .2s ${.4 + (3 - i) * .05}s`;
         requestAnimationFrame(() => { c.style.transform = 'translateY(-90vh)'; c.style.opacity = '0'; });
     });
     // le comptoir revient, et le tapis ramène la crème glacée en roulant vers la gauche
-    window.SCENE_COMPTOIR(1, 500);
-    glacesOpacite(0);
-    setTimeout(() => window.SCENE_TAPIS_ARRIVE(-14, 950, k => glacesOpacite(Math.min(1, k / .35)), null), 150);
+    window.SCENE_COUNTER(1, 500);
+    setIceCreamOpacity(0);
+    setTimeout(() => window.SCENE_BELT_ARRIVE(-14, 950, k => setIceCreamOpacity(Math.min(1, k / .35)), null), 150);
     // puis le menu réapparaît
     setTimeout(() => {
-        accueilEl.classList.add('en-sortie');
-        panneauEl.style.transition = 'opacity .45s ease-out, transform .5s cubic-bezier(.2,.8,.2,1)';
-        panneauEl.style.opacity = ''; panneauEl.style.transform = '';
+        homeEl.classList.add('leaving');
+        panelEl.style.transition = 'opacity .45s ease-out, transform .5s cubic-bezier(.2,.8,.2,1)';
+        panelEl.style.opacity = ''; panelEl.style.transform = '';
     }, 650);
-    enCours = setTimeout(() => { finir(); accueilEl.classList.remove('en-sortie'); retourEl.style.opacity = ''; retourEl.style.transition = ''; }, 900);
+    pendingTimer = setTimeout(() => { finish(); homeEl.classList.remove('leaving'); backEl.style.opacity = ''; backEl.style.transition = ''; }, 900);
 }
-function suivreAdresse(anime){ (location.hash === '#salons' ? versSalons : versAccueil)(anime); }
-addEventListener('hashchange', () => suivreAdresse(true));
-if (window.VUE_INITIALE === 'salons') versSalons(false);
+function syncWithHash(animate){ (location.hash === '#rooms' ? showRooms : showHome)(animate); }
+addEventListener('hashchange', () => syncWithHash(true));
+if (window.INITIAL_VIEW === 'rooms') showRooms(false);
 </script>
 
 </body></html>

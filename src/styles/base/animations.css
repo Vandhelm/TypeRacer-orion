@@ -1,0 +1,15 @@
+/* Shared keyframes. Component-specific ones live in their component file. */
+@keyframes rise{ from{ opacity: 0; transform: translateY(2.4vh); } to{ opacity: 1; transform: none; } }
+
+@keyframes drop{ from{ transform: translateY(-110%); } to{ transform: none; } }
+
+@keyframes trace{ to{ stroke-dashoffset: 0; } }
+
+@keyframes stamp-hit{
+    0%  { opacity: 0; transform: translate(-50%,-50%) scale(2.2) rotate(-14deg); }
+    45% { opacity: 1; transform: translate(-50%,-50%) scale(.9)  rotate(0deg); }
+    60% { transform: translate(-50%,-50%) scale(1.05) rotate(0deg); }
+    72% { transform: translate(-50%,-50%) scale(1)    rotate(0deg); }
+    88% { opacity: 1; }
+    100%{ opacity: 0; transform: translate(-50%,-50%) scale(1) rotate(0deg); }
+}

@@ -1,0 +1,53 @@
+/* Primary button: a 3D block that flips down on hover */
+.flip-button{
+    all: unset;
+    --h: max(46px, 6.2vh);
+    box-sizing: border-box;
+    cursor: pointer;
+    position: relative;
+    display: block;
+    height: var(--h);
+    perspective: 900px;
+    font: 500 max(13px, 1.65vh)/1 var(--font-sans);
+    letter-spacing: .3em;
+    transition: transform .1s;
+}
+.flip-button:active{ transform: translateY(2px); }
+.flip-button:focus-visible{ outline: 1px solid #fff; outline-offset: 4px; }
+.flip-button-inner{
+    position: absolute;
+    inset: 0;
+    transform-style: preserve-3d;
+    transform: translateZ(calc(var(--h) / -2)) rotateX(0deg);
+    transition: transform .4s cubic-bezier(.3,.7,.3,1);
+}
+.flip-button:hover .flip-button-inner,
+.flip-button:focus-visible .flip-button-inner{ transform: translateZ(calc(var(--h) / -2)) rotateX(90deg); }
+.flip-button-face{
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 2.4vh 0 2.8vh;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+}
+.flip-button-front{
+    transform: translateZ(calc(var(--h) / 2));
+    background: var(--color-red-solid);
+    border: 1px solid rgba(255,140,120,.45);
+    color: #fff;
+}
+.flip-button-bottom{
+    transform: rotateX(-90deg) translateZ(calc(var(--h) / 2));
+    background: linear-gradient(90deg, var(--color-face-front-a), var(--color-face-side));
+    border: 1px solid var(--color-line);
+    color: var(--color-red-text);
+}
+
+@media (prefers-reduced-motion: reduce){
+    .flip-button-inner{ transition: none; }
+    .flip-button:hover .flip-button-inner, .flip-button:focus-visible .flip-button-inner{ transform: translateZ(calc(var(--h) / -2)); }
+    .flip-button:hover .flip-button-front, .flip-button:focus-visible .flip-button-front{ background: var(--color-red-hover); }
+}

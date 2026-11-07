@@ -1,0 +1,68 @@
+/* Labeled text input with animated underline */
+.text-field{ display: flex; flex-direction: column; gap: .6vh; }
+.text-field-label{
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font: 400 max(10px, 1.2vh)/1 var(--font-mono);
+    letter-spacing: .2em;
+    text-transform: uppercase;
+    color: var(--color-line-soft);
+}
+.text-field-label .num{ color: #fff; }
+.text-field-label::after{ content: ''; flex: 1; border-top: 1px dashed var(--color-line-faint); }
+
+.text-field-input{
+    position: relative;
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid var(--color-line-soft);
+}
+.text-field-input::after{
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -1px;
+    height: 1px;
+    background: #fff;
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform .35s cubic-bezier(.2,.8,.2,1);
+}
+.text-field-input:focus-within::after{ transform: scaleX(1); }
+.text-field-input input{
+    all: unset;
+    flex-grow: 1;
+    min-width: 0;
+    height: 4.4vh;
+    min-height: 36px;
+    font: 400 max(15px, 1.8vh)/1 var(--font-sans);
+    letter-spacing: .04em;
+    color: #fff;
+    caret-color: var(--color-red-text);
+}
+.text-field-input input::placeholder{ color: rgba(255,255,255,.3); }
+
+/* show / hide password toggle */
+.text-field-action{
+    all: unset;
+    cursor: pointer;
+    min-height: 36px;
+    padding-left: 12px;
+    font: 400 max(10px, 1.1vh)/1 var(--font-mono);
+    letter-spacing: .2em;
+    color: var(--color-line-soft);
+}
+.text-field-action:hover{ color: #fff; }
+.text-field-action:focus-visible{ outline: 1px solid #fff; outline-offset: 2px; }
+
+/* room code: input + button on one row (must stay after .saisie) */
+.code-field{ display: flex; gap: 1.6vh; align-items: flex-end; }
+.code-field .text-field-input{ flex-grow: 1; min-width: 0; }
+.code-field input{ font-family: var(--font-mono); text-transform: uppercase; letter-spacing: .5em; }
+.code-field .outline-button{ height: 4.4vh; min-height: 40px; padding: 0 1.8vh 0 2.1vh; }
+
+@media (prefers-reduced-motion: reduce){
+    .text-field-input::after{ transition: none; }
+}
