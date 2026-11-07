@@ -26,7 +26,10 @@
     "createAccount": "CREATE AN ACCOUNT",
     "stampPlay": "GO",
     "stampAccount": "OK",
-    "stampCode": "CODE"
+    "stampCode": "CODE",
+    "or": "OR",
+    "withGoogle": "Continue with Google",
+    "withGithub": "Continue with GitHub"
   },
   "rooms": {
     "pageTitle": "The kiosk — O.R.I.O.N",

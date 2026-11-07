@@ -26,7 +26,10 @@
     "createAccount": "CRÉER UN COMPTE",
     "stampPlay": "GO",
     "stampAccount": "OK",
-    "stampCode": "CODE"
+    "stampCode": "CODE",
+    "or": "OU",
+    "withGoogle": "Continuer avec Google",
+    "withGithub": "Continuer avec GitHub"
   },
   "rooms": {
     "pageTitle": "Le kiosque — O.R.I.O.N",
