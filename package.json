@@ -18,7 +18,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun ./index.html",
+    "dev": "bun ./index.html ./home.html",
     "typecheck": "tsc --noEmit",
     "build": "bun run build.ts"
   }
