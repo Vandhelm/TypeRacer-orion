@@ -1,111 +1,13 @@
-<!doctype html><html lang="fr"><head><meta charset=utf8><title>O.R.I.O.N — Accueil</title><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><link rel="stylesheet" href="./src/styles/pages/home/index.css"></head><body>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <!-- Décor géométrique, dessiné en JS -->
-    <div class="fixed inset-0 bg-black" aria-hidden="true"><canvas id="decor" class="absolute inset-0 block size-full"></canvas><canvas id="ice-cream" class="absolute inset-0 block size-full"></canvas><canvas id="front-layer" class="absolute inset-0 block size-full"></canvas></div>
-
-    <header class="navbar fixed inset-x-0 top-0 z-20">
-        <a class="navbar-brand" href="#home" data-i18n-aria="nav.home"><svg viewBox="0 0 100 100" aria-hidden="true"><polygon points="50,4 96,50 50,96 4,50"/></svg>O.R.I.O.N</a>
-        <nav class="navbar-links" data-i18n-aria="nav.main">
-            <a class="navbar-link" href="profile.html"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="5.5" r="3"/><path d="M2 15c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"/></svg><span class="navbar-link-label" data-i18n="nav.profile">Profil</span></a>
-        </nav>
-        <div class="hanging-tabs flex items-start gap-2" role="group" data-i18n-aria="home.langChoice">
-            <button class="hanging-tab" type="button" data-lang="fr" aria-label="Français">FR</button>
-            <button class="hanging-tab" type="button" data-lang="en" aria-label="English">EN</button>
-        </div>
-    </header>
-
-    <a class="hanging-button" href="#home" data-i18n="rooms.back">← Retour</a>
-
-    <main class="rooms pointer-events-none fixed inset-0 z-10 flex items-start justify-center px-4 narrow:min-h-screen narrow:items-start narrow:px-2 narrow:pt-[110px] narrow:pb-6">
-        <h1 class="sr-only" data-i18n="rooms.pageTitle">Le kiosque — O.R.I.O.N</h1>
-        <div class="rooms-stall">
-
-            <div class="tickets" id="tickets"></div>
-        </div>
-    </main>
-
-    <main class="home pointer-events-none fixed inset-0 z-10 flex items-center justify-center px-4 py-[3.5vh] pt-[calc(var(--navbar-height)+3.5vh)] phone:relative phone:min-h-screen phone:px-4 phone:pt-[104px] phone:pb-10">
-        <section class="panel">
-            <div class="stamp" aria-hidden="true"><span></span></div>
-
-            <header class="logo-title">
-                <div class="logo-title-mark" aria-hidden="true">
-                    <svg viewBox="0 0 100 100">
-                        <polygon class="logo-title-diamond" points="50,4 96,50 50,96 4,50"/>
-                        <polygon class="logo-title-edge" points="50,12 92,46 50,88 8,54"/>
-                    </svg>
-                </div>
-                <div>
-                    <p class="logo-title-overline" data-i18n="home.overline">RESTAURANT DE SUSHI</p>
-                    <h1 class="logo-title-name">O.R.I.O.N</h1>
-                </div>
-            </header>
-
-            <div class="flex w-full max-w-[45vh] min-w-[min(100%,300px)] flex-col gap-[2.6vh] phone:max-w-none phone:gap-[22px]">
-                <div class="view-tabs" role="group" data-i18n-aria="home.viewChoice">
-                    <button class="view-tab active" type="button" data-view="play" aria-pressed="true"><span class="n">01</span><span data-i18n="home.viewPlay">JOUER</span></button>
-                    <button class="view-tab" type="button" data-view="account" aria-pressed="false"><span class="n">02</span><span data-i18n="home.viewAccount">COMPTE</span></button>
-                </div>
-
-                <div class="panes grid grid-cols-[minmax(0,1fr)]">
-                    <!-- Volet Jouer -->
-                    <form class="col-start-1 row-start-1 flex flex-col gap-[2.1vh] [align-self:start]" id="pane-play" aria-hidden="false">
-                        <div class="text-field">
-                            <label class="text-field-label" for="nickname"><span class="num">01</span><span data-i18n="home.nickname">Surnom</span></label>
-                            <div class="text-field-input"><input id="nickname" name="nickname" type="text" autocomplete="nickname" spellcheck="false" maxlength="20" placeholder="Corail_418"></div>
-                        </div>
-
-                        <div class="flex flex-col gap-[1.3vh]">
-                            <button class="flip-button" type="submit">
-                                <span class="flip-button-inner">
-                                    <span class="flip-button-face flip-button-front"><span data-i18n="home.play">JOUER</span><svg aria-hidden="true" width="24" height="14" viewBox="0 0 24 14"><path d="M0 7h22M16 1l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2"/></svg></span>
-                                    <span class="flip-button-face flip-button-bottom" aria-hidden="true"><span data-i18n="home.playBack">C'EST PARTI</span><svg width="24" height="14" viewBox="0 0 24 14"><path d="M0 7h22M16 1l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2"/></svg></span>
-                                </span>
-                            </button>
-                            <a class="outline-button" href="room.html?new" data-i18n="home.createRoom">CRÉER UN SALON</a>
-                            <a class="outline-button" href="#rooms" data-i18n="home.rooms">SALONS</a>
-                        </div>
-
-                        <div class="text-field">
-                            <label class="text-field-label" for="code"><span class="num">02</span><span data-i18n="home.code">Tu as un code ?</span></label>
-                            <div class="code-field">
-                                <div class="text-field-input"><input id="code" name="code" type="text" autocomplete="off" spellcheck="false" maxlength="6" placeholder="K7Q2M9"></div>
-                                <button class="outline-button" type="button" id="enter-code" data-i18n="home.enterCode">ENTRER</button>
-                            </div>
-                        </div>
-                    </form>
-
-                    <!-- Volet Compte -->
-                    <form class="is-hidden col-start-1 row-start-1 flex flex-col gap-[2.1vh] [align-self:start]" id="pane-account" aria-hidden="true">
-                        <div class="text-field">
-                            <label class="text-field-label" for="username"><span class="num">01</span><span data-i18n="home.username">Pseudo</span></label>
-                            <div class="text-field-input"><input id="username" name="username" type="text" autocomplete="username" spellcheck="false"></div>
-                        </div>
-                        <div class="text-field">
-                            <label class="text-field-label" for="password"><span class="num">02</span><span data-i18n="home.password">Mot de passe</span></label>
-                            <div class="text-field-input"><input id="password" name="password" type="password" autocomplete="current-password"><button class="text-field-action" type="button" id="reveal-password" aria-pressed="false">AFFICHER</button></div>
-                        </div>
-                        <div class="flex flex-col gap-[1.3vh]">
-                            <button class="flip-button" type="submit">
-                                <span class="flip-button-inner">
-                                    <span class="flip-button-face flip-button-front"><span data-i18n="home.logIn">SE CONNECTER</span><svg aria-hidden="true" width="24" height="14" viewBox="0 0 24 14"><path d="M0 7h22M16 1l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2"/></svg></span>
-                                    <span class="flip-button-face flip-button-bottom" aria-hidden="true"><span data-i18n="home.logInBack">BIENVENUE</span><svg width="24" height="14" viewBox="0 0 24 14"><path d="M0 7h22M16 1l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2"/></svg></span>
-                                </span>
-                            </button>
-                            <button class="outline-button" type="button" data-i18n="home.createAccount">CRÉER UN COMPTE</button>
-                        </div>
-                        <!-- Connexion via un fournisseur externe (OAuth : à brancher sur le serveur) -->
-                        <div class="flex items-center gap-[1.2vh] font-mono text-[max(10px,1.2vh)] leading-none tracking-[.2em] text-line-soft uppercase before:flex-1 before:border-t before:border-dashed before:border-line-faint after:flex-1 after:border-t after:border-dashed after:border-line-faint" data-i18n="home.or">OU</div>
-                        <div class="grid grid-cols-2 gap-[1.3vh]">
-                            <button class="outline-button" type="button" id="login-google" data-provider="google" data-i18n-aria="home.withGoogle"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z"/></svg><span>GOOGLE</span></button>
-                            <button class="outline-button" type="button" id="login-github" data-provider="github" data-i18n-aria="home.withGithub"><svg aria-hidden="true" viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg><span>GITHUB</span></button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        </section>
-    </main>
-
-<script type="module" src="./src/pages/home/main.js"></script>
-
-</body></html>
+<!doctype html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+    <title>O.R.I.O.N — Accueil</title>
+    <link rel="stylesheet" href="./src/styles/pages/home/index.css">
+</head>
+<body>
+    <div id="root"></div>
+    <script type="module" src="./src/pages/home/main.tsx"></script>
+</body>
+</html>

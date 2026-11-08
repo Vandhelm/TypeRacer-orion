@@ -6,6 +6,8 @@
 @import "tailwindcss/theme.css" layer(theme);
 @import "tailwindcss/utilities.css" layer(utilities);
 @source "../../../../home.html";
+@source "../../../pages/home";
+@source "../../../components";
 
 @import "../../base/tokens.css";
 @import "../../base/reset.css" layer(base);   /* layered so Tailwind utilities can override it */
