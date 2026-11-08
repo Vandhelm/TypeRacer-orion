@@ -28,14 +28,4 @@ const syncHtmlLang = (lng: string) => {
 syncHtmlLang(i18n.resolvedLanguage ?? "en");
 i18n.on("languageChanged", syncHtmlLang);
 
-/** Fill every element marked with data-i18n / data-i18n-aria under `root`. */
-export function translateDom(root: ParentNode = document) {
-  root.querySelectorAll<HTMLElement>("[data-i18n]").forEach((el) => {
-    el.textContent = i18n.t(el.dataset.i18n!);
-  });
-  root.querySelectorAll<HTMLElement>("[data-i18n-aria]").forEach((el) => {
-    el.setAttribute("aria-label", i18n.t(el.dataset.i18nAria!));
-  });
-}
-
 export default i18n;

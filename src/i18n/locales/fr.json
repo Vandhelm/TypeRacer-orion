@@ -1,9 +1,4 @@
 {
-  "title": "TypeRacer Orion",
-  "subtitle": "Testez votre vitesse de frappe et affrontez d'autres joueurs.",
-  "description": "Tapez le texte aussi vite et précisément que possible. Vos mots par minute et votre précision s'affichent à la fin de chaque course.",
-  "start": "Lancer une course",
-  "switchLanguage": "Switch to English",
   "home": {
     "langChoice": "Choix de la langue",
     "viewChoice": "Jouer ou compte",
