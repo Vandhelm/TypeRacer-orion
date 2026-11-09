@@ -151,6 +151,21 @@ export function myAccuracy(race: Race) {
   return Math.max(0, Math.round((100 * (race.keystrokes - race.wrongChars - race.extraChars)) / race.keystrokes));
 }
 
+/** Temps passé en course dans ce couloir, en millisecondes. */
+export function laneElapsedMs(race: Race, lane: number) {
+  if (lane === race.myLane) return elapsedMs(race);
+  const bot = race.bots.find((candidate) => candidate.lane === lane);
+  return bot && race.startedAt ? Math.max(0, (bot.finishedAt || race.now) - race.startedAt) : 0;
+}
+
+/** Vitesse finale de ce couloir, en mots par minute. */
+export function laneWpm(race: Race, lane: number) {
+  if (lane === race.myLane) return myWpm(race);
+  const bot = race.bots.find((candidate) => candidate.lane === lane);
+  const minutes = laneElapsedMs(race, lane) / 60000;
+  return bot && minutes > 0.02 ? Math.round((race.course.marks[Math.floor(bot.words)] ?? 0) / CHARS_PER_WORD / minutes) : 0;
+}
+
 /** Part du texte faite dans ce couloir, de 0 à 1. */
 export function laneProgress(race: Race, lane: number) {
   const words = lane === race.myLane ? race.wordIndex : (race.bots.find((bot) => bot.lane === lane)?.words ?? 0);
