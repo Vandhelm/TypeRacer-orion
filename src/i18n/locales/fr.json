@@ -176,5 +176,33 @@
     "startBack": "À TABLE",
     "notEnough": "Il faut au moins 2 joueurs, ou des bots.",
     "waiting": "En attente de l'hôte"
+  },
+  "game": {
+    "pageTitle": "O.R.I.O.N — L'épreuve",
+    "wpm": "MPM",
+    "accuracy": "PRÉCISION",
+    "time": "Temps",
+    "typingArea": "Zone de saisie",
+    "typeHere": "Tapez ici",
+    "done": "Terminé",
+    "out": "Éliminé",
+    "go": "C'EST PARTI",
+    "poolLabel": "Course : {{count}} poissons, un par joueur. La progression de chacun est indiquée sous son couloir.",
+    "result": "RÉSULTAT",
+    "playAgain": "REJOUER",
+    "backToRoom": "RETOUR AU SALON",
+    "rankTitle": "Tu termines {{rank}}",
+    "timeUpTitle": "Temps écoulé · {{percent}} % du texte",
+    "outTitle": "Éliminé · {{percent}} % du texte",
+    "ranks": [
+      "1er",
+      "2e",
+      "3e",
+      "4e",
+      "5e",
+      "6e",
+      "7e",
+      "8e"
+    ]
   }
 }

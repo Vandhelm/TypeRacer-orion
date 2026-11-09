@@ -176,5 +176,33 @@
     "startBack": "LET'S EAT",
     "notEnough": "At least 2 players are needed, or bots.",
     "waiting": "Waiting for the host"
+  },
+  "game": {
+    "pageTitle": "O.R.I.O.N — The race",
+    "wpm": "WPM",
+    "accuracy": "ACCURACY",
+    "time": "Time",
+    "typingArea": "Typing area",
+    "typeHere": "Type here",
+    "done": "Done",
+    "out": "Out",
+    "go": "GO",
+    "poolLabel": "Race: {{count}} fish, one per player. Progress for each player is shown under their lane.",
+    "result": "RESULT",
+    "playAgain": "PLAY AGAIN",
+    "backToRoom": "BACK TO THE ROOM",
+    "rankTitle": "You finish {{rank}}",
+    "timeUpTitle": "Time's up · {{percent}} % of the text",
+    "outTitle": "Out · {{percent}} % of the text",
+    "ranks": [
+      "1st",
+      "2nd",
+      "3rd",
+      "4th",
+      "5th",
+      "6th",
+      "7th",
+      "8th"
+    ]
   }
 }
