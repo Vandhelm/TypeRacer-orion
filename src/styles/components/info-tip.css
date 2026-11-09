@@ -1,0 +1,19 @@
+/* Custom tooltip: any element with data-tip="…" shows it on hover or keyboard focus */
+[data-tip]{ position: relative; }
+[data-tip]::after{
+    content: attr(data-tip); position: absolute; z-index: 20; left: 50%; bottom: calc(100% + 10px);
+    width: max-content; max-width: 260px; padding: 8px 10px; transform: translate(-50%, 4px);
+    background: #000; border: 1px solid var(--color-line); color: #fff;
+    font: 400 12px/1.45 var(--font-mono); letter-spacing: .02em; text-transform: none; text-align: left; white-space: normal;
+    opacity: 0; pointer-events: none; transition: opacity .15s, transform .15s;
+}
+[data-tip]:hover::after, [data-tip]:focus-visible::after{ opacity: 1; transform: translate(-50%, 0); }
+
+.info-tip{ all: unset; box-sizing: border-box; cursor: help; position: relative; flex: none; width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--color-line-soft); border-radius: 50%; color: var(--color-muted); font: 500 10px/1 var(--font-mono); font-style: italic; transition: color .2s, border-color .2s; }
+.info-tip:hover, .info-tip:focus-visible{ color: #fff; border-color: #fff; outline: none; }
+.info-tip[data-tip]::after{ left: 0; transform: translate(0, 4px); }
+.info-tip[data-tip]:hover::after, .info-tip[data-tip]:focus-visible::after{ transform: none; }
+
+@media (max-width: 760px){
+    [data-tip]::after{ max-width: min(260px, calc(100vw - 48px)); }
+}

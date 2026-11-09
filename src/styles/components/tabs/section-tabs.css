@@ -1,0 +1,20 @@
+/* Tablist of numbered sections */
+.section-tabs{ display: flex; border: 1px solid var(--color-line); background: #000; }
+.section-tab{ all: unset; box-sizing: border-box; cursor: pointer; display: flex; align-items: center; gap: 10px; min-height: 42px; padding: 0 clamp(12px, 1.6vw, 22px); color: var(--color-muted); font: 500 max(11px, 1.3vh)/1 var(--font-sans); letter-spacing: .24em; transition: background .2s, color .2s; }
+.section-tab + .section-tab{ border-left: 1px solid var(--color-line); }
+.section-tab .n{ font-family: var(--font-mono); letter-spacing: 0; opacity: .7; }
+.section-tab:hover:not([aria-selected="true"]){ color: #fff; background: rgba(255,255,255,.06); }
+.section-tab[aria-selected="true"]{ background: #f2f2f2; color: #000; cursor: default; }
+.section-tab:focus-visible{ outline: 1px solid #fff; outline-offset: 3px; }
+
+@media (max-width: 700px){
+    .section-tabs{ width: 100%; }
+    .section-tab{ flex: 1; padding: 0 6px; }
+}
+@media (max-width: 760px){
+    .section-tabs{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .section-tab{ justify-content: center; min-height: 44px; letter-spacing: .14em; }
+    .section-tab + .section-tab{ border-left: 0; }
+    .section-tab:nth-child(2n){ border-left: 1px solid var(--color-line); }
+    .section-tab:nth-child(n+3){ border-top: 1px solid var(--color-line); }
+}

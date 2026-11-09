@@ -6,6 +6,7 @@
     --color-line: rgba(255,255,255,.75);
     --color-line-soft: rgba(255,255,255,.35);
     --color-line-faint: rgba(255,255,255,.14);
+    --color-muted: rgba(255,255,255,.55);
 
     --color-red: rgba(140,26,20,.88);
     --color-red-dark: rgba(105,18,14,.88);

@@ -1,0 +1,7 @@
+/* Small square icon button. Pairs with the [data-tip] tooltip (components/info-tip.css). */
+.icon-button{ all: unset; box-sizing: border-box; cursor: pointer; position: relative; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; color: var(--color-muted); border: 1px solid transparent; transition: color .2s, border-color .2s; }
+.icon-button svg{ width: 14px; height: 14px; }
+.icon-button:hover:not(:disabled){ color: #fff; border-color: var(--color-line-soft); }
+.icon-button:disabled{ opacity: .25; cursor: default; }
+.icon-button:focus-visible{ outline: 1px solid #fff; outline-offset: 2px; }
+.icon-button.confirmed{ color: var(--color-red-text); }

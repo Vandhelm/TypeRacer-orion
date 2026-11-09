@@ -32,3 +32,44 @@ export function GithubIcon() {
     </svg>
   );
 }
+
+export function PlusIcon() {
+  return (
+    <svg viewBox="0 0 12 12" aria-hidden="true">
+      <path d="M1 6h10M6 1v10" stroke="currentColor" strokeWidth="1.3" />
+    </svg>
+  );
+}
+
+export function MinusIcon() {
+  return (
+    <svg viewBox="0 0 12 12" aria-hidden="true">
+      <path d="M1 6h10" stroke="currentColor" strokeWidth="1.3" />
+    </svg>
+  );
+}
+
+export function CopyIcon() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <rect x="5.5" y="5.5" width="8" height="8" fill="none" stroke="currentColor" strokeWidth="1.2" />
+      <path d="M10.5 3.5v-1h-8v8h1" fill="none" stroke="currentColor" strokeWidth="1.2" />
+    </svg>
+  );
+}
+
+export function CheckIcon() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <path d="M3 8.5l3 3 7-7" fill="none" stroke="currentColor" strokeWidth="1.4" />
+    </svg>
+  );
+}
+
+export function ChevronIcon({ direction }: { direction: "up" | "down" }) {
+  return (
+    <svg viewBox="0 0 12 12">
+      <path d={direction === "up" ? "M2 7l4-4 4 4" : "M2 5l4 4 4-4"} fill="none" stroke="currentColor" strokeWidth="1.4" />
+    </svg>
+  );
+}
