@@ -1,7 +1,7 @@
 import tailwind from "bun-plugin-tailwind";
 
 const result = await Bun.build({
-  entrypoints: ["./home.html"],
+  entrypoints: ["./home.html", "./room.html"],
   outdir: "./dist",
   minify: true,
   plugins: [tailwind],

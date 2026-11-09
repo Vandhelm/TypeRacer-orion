@@ -1,0 +1,94 @@
+/* Unlike the home page, this page scrolls. */
+html{ height: auto; background: #000; }
+body{ height: auto; min-height: 100vh; overflow: visible; font-size: 16px; padding: 30px clamp(16px, 4vw, 56px) 32px; }
+
+.hanging-tab{ animation: none; }
+
+/* The "Leave" sign sits in the header instead of floating over the page */
+.hanging-button.room-leave{ position: relative; z-index: auto; top: auto; left: auto; display: inline-flex; gap: normal; min-height: 42px; padding: 0 16px; font-size: 12px; animation: none; }
+.hanging-button.room-leave::before, .hanging-button.room-leave::after{ height: 30px; }
+
+.stamp.room-stamp{ position: fixed; z-index: 40; width: 130px; height: 130px; min-width: 0; min-height: 0; }
+.room-stamp::before{ background: rgba(0,0,0,.7); }
+.room-stamp span{ font: 600 22px/1 var(--font-mono); }
+.stamp.room-stamp.on{ animation: room-stamp-hit 1.6s cubic-bezier(.2,.9,.3,1) both; }
+@keyframes room-stamp-hit{
+    0%{ opacity: 0; transform: translate(-50%, -50%) scale(2.2) rotate(-16deg); }
+    25%{ opacity: 1; transform: translate(-50%, -50%) scale(.92) rotate(-8deg); }
+    35%{ transform: translate(-50%, -50%) scale(1.04) rotate(-8deg); }
+    45%, 80%{ opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(-8deg); }
+    100%{ opacity: 0; transform: translate(-50%, -50%) scale(1) rotate(-8deg); }
+}
+
+.room-title{ font: 300 clamp(20px, 3.4vh, 32px)/1.1 var(--font-sans); letter-spacing: .1em; }
+.room-subtitle{ margin-top: 8px; font: 400 max(11px, 1.3vh)/1 var(--font-mono); letter-spacing: .2em; text-transform: uppercase; color: var(--color-muted); }
+
+/* Une ombre douce derrière chaque groupe de texte : le poisson s'y enfonce et s'estompe, sans jamais être coupé net */
+.room-shade{ position: relative; }
+.room-shade::before, .room-panel::before{ content: ''; position: absolute; inset: -18px -22px; z-index: -1; background: rgba(0,0,0,.94); border-radius: 30px; filter: blur(14px); pointer-events: none; }
+
+.room-form{ display: grid; grid-template-columns: minmax(0, 1fr) minmax(240px, 280px); grid-template-rows: auto 1fr; grid-template-areas: 'left preview' 'settings preview'; column-gap: clamp(20px, 3vw, 48px); align-items: start; }
+
+.room-label{ display: block; font: 400 max(11px, 1.3vh)/1.2 var(--font-mono); letter-spacing: .2em; text-transform: uppercase; color: var(--color-muted); }
+.room-value{ display: block; margin-top: 8px; font-weight: 300; font-variant-numeric: tabular-nums; }
+.room-value-row{ display: flex; align-items: center; gap: 12px; margin-top: 8px; }
+.room-value-row .room-value{ margin-top: 0; }
+
+.room-hero{ display: flex; flex-wrap: wrap; gap: clamp(16px, 3vh, 28px) clamp(32px, 5vw, 72px); }
+.room-hero .room-value{ font-size: clamp(48px, 10vh, 92px); line-height: 1; }
+.room-hero .room-code{ letter-spacing: .04em; }
+
+.room-name{ margin-top: clamp(20px, 4vh, 36px); max-width: 640px; }
+.room-name-box{ position: relative; display: flex; margin-top: 4px; border-bottom: 1px dashed var(--color-line-soft); }
+.room-name-box::after{ content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px; background: #fff; transform: scaleX(0); transform-origin: left; transition: transform .35s cubic-bezier(.2,.8,.2,1); }
+.room-name-box:focus-within::after{ transform: scaleX(1); }
+.room-name-box input{ all: unset; flex: 1; min-width: 0; height: 52px; font: 300 clamp(22px, 3.4vh, 32px)/1.1 var(--font-sans); color: #fff; caret-color: var(--color-red-text); }
+.room-name-box input::placeholder{ color: rgba(255,255,255,.3); }
+.room-guest .room-name-box{ border-bottom-color: transparent; }
+.room-guest .room-name-box::after{ display: none; }
+.room-guest .room-name-box input{ cursor: default; }
+.room-guest .text-choice span{ border-bottom-color: transparent; }
+
+.room-settings{ grid-area: settings; position: relative; margin-top: clamp(20px, 3.4vh, 36px); padding-top: clamp(16px, 2.6vh, 24px); border-top: 1px dashed var(--color-line-soft); }
+.room-toolbar{ display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px 24px; margin-bottom: clamp(12px, 2vh, 20px); }
+.room-panel{ position: relative; display: grid; row-gap: 4px; }
+
+/* chaque réglage sur une ligne : le nom à gauche, les choix alignés à droite */
+.room-row{ display: grid; grid-template-columns: minmax(150px, 200px) minmax(0, 1fr); align-items: center; column-gap: 24px; min-height: 42px; }
+.room-row > .room-label{ align-self: center; }
+.room-row.inactive .room-choices, .room-row.inactive .room-short-input{ opacity: .35; }
+.room-row-name{ display: inline-flex; align-items: center; gap: 10px; }
+.room-choices{ display: flex; flex-wrap: wrap; align-items: center; gap: 2px 16px; padding-top: 2px; }
+.room-plain-value{ display: flex; align-items: center; min-height: 40px; font: 300 clamp(17px, 2.6vh, 24px)/1.1 var(--font-sans); }
+.room-short-input{ all: unset; box-sizing: border-box; width: 9em; height: 34px; border-bottom: 1px dashed var(--color-line-soft); font: 400 max(15px, 1.9vh)/1 var(--font-mono); letter-spacing: .3em; color: #fff; caret-color: var(--color-red-text); }
+.room-short-input:focus{ border-bottom: 1px solid #fff; }
+.room-short-input::placeholder{ letter-spacing: .04em; color: rgba(255,255,255,.35); }
+
+/* Lancer, ou attendre l'hôte */
+.room-action{ position: fixed; z-index: 5; right: clamp(16px, 4vw, 56px); bottom: clamp(16px, 3vh, 28px); width: min(300px, calc(100vw - 32px)); }
+.room-action .flip-button{ width: 100%; letter-spacing: .24em; }
+.room-action .flip-button-face{ gap: 12px; padding: 0 18px 0 20px; white-space: nowrap; }
+.room-missing{ margin-top: 8px; font: 400 max(11px, 1.2vh)/1.5 var(--font-mono); color: var(--color-muted); background: #000; }
+.room-waiting{ display: flex; align-items: center; justify-content: center; text-align: center; min-height: max(46px, 6.2vh); padding: 8px 12px; border: 1px dashed var(--color-line-soft); font: 400 max(12px, 1.4vh)/1.3 var(--font-mono); letter-spacing: .1em; color: var(--color-muted); background: #000; }
+
+@media (prefers-reduced-motion: reduce){
+    .room-name-box::after{ transition: none; }
+    .room-action .flip-button:hover .flip-button-inner, .room-action .flip-button:focus-visible .flip-button-inner{ transform: translateZ(calc(var(--h) / -2)) rotateX(0deg); }
+    .room-action .flip-button:hover .flip-button-front, .room-action .flip-button:focus-visible .flip-button-front{ background: var(--color-red-solid); }
+}
+@media (max-width: 700px){
+    .room-form{ grid-template-columns: minmax(0, 1fr); grid-template-rows: none; grid-template-areas: 'left' 'settings' 'preview'; }
+    .room-toolbar{ flex-direction: column-reverse; align-items: stretch; }
+    .room-name{ margin-top: 12px; }
+    .room-action{ margin-top: 2px; }
+    .room-hero .room-value{ font-size: clamp(40px, 12vw, 64px); }
+}
+@media (max-width: 760px){
+    body{ padding-bottom: 104px; }
+    .room-action{ left: 16px; right: 16px; width: auto; bottom: 14px; }
+    .room-panel{ row-gap: 18px; }
+    .room-row{ grid-template-columns: minmax(0, 1fr); row-gap: 8px; padding: 4px 0; min-height: 0; }
+    .room-choices{ gap: 6px 22px; }
+    .room-settings{ margin-top: 26px; padding-top: 22px; }
+    .room-toolbar{ margin-bottom: 22px; }
+}

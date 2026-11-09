@@ -1,0 +1,28 @@
+/* Room page entry (room.html). Components come before the page sections here:
+   the page overrides some of them with selectors of equal specificity. */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+@source "../../../../room.html";
+@source "../../../pages/room";
+@source "../../../components";
+
+@import "../../base/tokens.css";
+@import "../../base/reset.css" layer(base);
+@import "../../base/animations.css";
+@import "../../base/utilities.css";
+
+@import "../../components/tabs/hanging-tabs.css";
+@import "../../components/tabs/section-tabs.css";
+@import "../../components/buttons/hanging-button.css";
+@import "../../components/buttons/flip-button.css";
+@import "../../components/buttons/icon-button.css";
+@import "../../components/buttons/small-button.css";
+@import "../../components/forms/text-choice.css";
+@import "../../components/forms/number-field.css";
+@import "../../components/info-tip.css";
+@import "../../components/stamp.css";
+
+@import "./room.css";
+@import "./ticket.css";
+@import "./text-editor.css";

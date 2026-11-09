@@ -19,7 +19,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun ./home.html",
+    "dev": "bun ./home.html ./room.html",
     "typecheck": "tsc --noEmit",
     "build": "bun run build.ts"
   }
