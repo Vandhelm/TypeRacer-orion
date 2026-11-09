@@ -26,7 +26,27 @@ describe("buildResults", () => {
 
   test("measures a bot from its own finish time", () => {
     const race = finished({ arrivals: [1], bots: [{ lane: 1, wpm: 60, words: 3, finishedAt: 31000 }, { lane: 2, wpm: 30, words: 0, finishedAt: 0 }] });
-    expect(buildResults(race, PLAYERS, "high", () => 0)[0]).toEqual({ name: "fast", me: false, wpm: 6, accuracy: 96, seconds: 30 });
+    expect(buildResults(race, PLAYERS, "high", () => 0)[0]).toMatchObject({ name: "fast", me: false, wpm: 6, accuracy: 96, seconds: 30, finished: true });
+  });
+});
+
+describe("series", () => {
+  test("turns my per-second totals into speed and error series", () => {
+    const race = finished({
+      arrivals: [0],
+      wordIndex: 3,
+      keystrokes: 15,
+      wrongChars: 1,
+      finishedAt: 3000,
+      samples: [[{ chars: 5, typed: 5, errors: 0 }, { chars: 5, typed: 5, errors: 1 }], [], []],
+    });
+    expect(buildResults(race, PLAYERS, "high", () => 0)[0]).toMatchObject({
+      wpmSeries: [60, 30],
+      rawSeries: [60, 0],
+      errorSeries: [0, 1],
+      chars: [14, 1, 0, 0],
+      idle: 50,
+    });
   });
 });
 
@@ -38,6 +58,7 @@ describe("parseResults", () => {
   });
 
   test("coerces stored values", () => {
-    expect(parseResults('[{"name":7,"wpm":"68"}]')).toEqual([{ name: "7", me: false, wpm: 68, accuracy: 0, seconds: 0 }]);
+    const parsed = parseResults('{"summary":{},"players":[{"name":7,"wpm":"68","wpmSeries":["1",2]}]}');
+    expect(parsed?.players[0]).toMatchObject({ name: "7", me: false, wpm: 68, chars: [0, 0, 0, 0], wpmSeries: [1, 2], errorSeries: [] });
   });
 });

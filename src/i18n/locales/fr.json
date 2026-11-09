@@ -207,6 +207,55 @@
       "6e",
       "7e",
       "8e"
-    ]
+    ],
+    "viewStats": "Voir les stats de {{name}}"
+  },
+  "profile": {
+    "pageTitle": "O.R.I.O.N — {{name}}",
+    "back": "← Podium",
+    "place": "{{rank}} place",
+    "accuracy": "Précision",
+    "raw": "Brut",
+    "errors": "Erreurs",
+    "second": "Seconde",
+    "testType": "Type d'épreuve",
+    "other": "Autre",
+    "characters": "Caractères",
+    "charsDetail": "justes / faux / en trop / manqués",
+    "consistency": "Régularité",
+    "time": "Temps",
+    "idle": "inactif",
+    "session": "session",
+    "finished": "texte terminé",
+    "notFinished": "non terminé",
+    "out": "éliminé",
+    "idleDetected": "inactivité détectée",
+    "words": "{{words}} mots",
+    "timed": "temps {{duration}} · {{language}}",
+    "languages": {
+      "fr": "français",
+      "en": "anglais"
+    },
+    "textTypes": {
+      "coherent": "texte cohérent",
+      "quote": "citation",
+      "words": "mots désordonnés",
+      "custom": "texte perso"
+    },
+    "levels": {
+      "common": "courant",
+      "rich": "riche",
+      "expert": "expert"
+    },
+    "punctuation": "ponctuation",
+    "numbers": "chiffres",
+    "specials": "caractères spéciaux",
+    "noAccents": "sans accents",
+    "without": "sans {{chars}}",
+    "mistakes": {
+      "fix": "corriger",
+      "carry-on": "continuer",
+      "fatal": "erreur fatale"
+    }
   }
 }

@@ -120,8 +120,18 @@
     text-overflow: ellipsis;
     white-space: nowrap;
 }
+.podium-name{ text-decoration: none; }
+.podium-name::before{ content: ''; position: absolute; inset: 0; z-index: 3; }   /* the whole block opens the profile */
+.podium-block:hover{ border-color: #fff; }
+.podium-block:hover .podium-name{ text-decoration: underline; text-underline-offset: .2em; }
+.podium-name:focus-visible{ outline: 1px solid #fff; outline-offset: 2px; }
 .podium-speed{ color: var(--color-line-soft); font: 300 .8vw/1 var(--font-mono); }
-.podium-block--1 .podium-speed{ color: var(--color-red-text); }
+.podium-block--1 .podium-name{ text-decoration: none; }
+.podium-name::before{ content: ''; position: absolute; inset: 0; z-index: 3; }   /* the whole block opens the profile */
+.podium-block:hover{ border-color: #fff; }
+.podium-block:hover .podium-name{ text-decoration: underline; text-underline-offset: .2em; }
+.podium-name:focus-visible{ outline: 1px solid #fff; outline-offset: 2px; }
+.podium-speed{ color: var(--color-red-text); }
 
 /* Sizes before the camera's 1.5 zoom */
 .podium-actions{
@@ -176,6 +186,7 @@
     /* thin white edge so the black outlines stand out from the black background */
     filter: drop-shadow(0 0 1px rgba(255,255,255,.9)) drop-shadow(0 0 1px rgba(255,255,255,.6));
 }
+.podium-avatar{ pointer-events: auto; cursor: pointer; }
 .podium-avatar--1{ left: 50vw; bottom: 42vh; height: 15vh; }
 .podium-avatar--2{ left: 33vw; bottom: 34vh; height: 12vh; }
 .podium-avatar--3{ left: 67vw; bottom: 29vh; height: 10vh; }

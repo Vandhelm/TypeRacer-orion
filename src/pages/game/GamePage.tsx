@@ -1,7 +1,7 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import { HangingButton } from "../../components/buttons/HangingButton";
-import { buildResults, saveResults } from "../podium/results";
+import { buildResults, buildSummary, markSessionStart, saveResults, sessionSeconds } from "../podium/results";
 import { useRoom } from "../room/hooks/useRoom";
 import { useRace } from "./hooks/useRace";
 import { loadRacePoolImages, type RacePoolImages } from "./pool/createRacePool";
@@ -16,6 +16,8 @@ export function GamePage() {
   const [images, setImages] = useState<RacePoolImages | null>(null);
   const { race, onInput, showResults } = useRace(room, players, images !== null);
 
+  useEffect(markSessionStart, []);
+
   useEffect(() => {
     document.title = t("game.pageTitle");
   }, [t]);
@@ -28,9 +30,9 @@ export function GamePage() {
 
   useEffect(() => {
     if (!showResults) return;
-    saveResults(buildResults(race, players, room.botAccuracy));
+    saveResults({ players: buildResults(race, players, room.botAccuracy), summary: buildSummary(race, room, sessionSeconds()) });
     location.replace("podium.html"); // le retour arrière ne relance pas une course
-  }, [showResults, race, players, room.botAccuracy]);
+  }, [showResults, race, players, room]);
 
   return (
     <div className="game-root" style={{ "--lanes": players.length } as CSSProperties}>

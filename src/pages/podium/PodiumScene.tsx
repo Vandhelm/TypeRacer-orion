@@ -1,7 +1,7 @@
 import { useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useCameraTravel } from "./hooks/useCameraTravel";
-import type { PlayerResult } from "./results";
+import { oneDecimal, profileHref, type PlayerResult } from "./results";
 import { SideFace } from "./SideFace";
 
 const RANKS = [1, 2, 3] as const;
@@ -13,13 +13,12 @@ const SIDE_FACES: Partial<Record<(typeof RANKS)[number], string>> = {
 };
 
 /** The 3D set: pyramid, floor, columns, and the top three players on the podium. */
-export function PodiumScene({ players }: { players: PlayerResult[] }) {
+export function PodiumScene({ players, arrived }: { players: PlayerResult[]; arrived: boolean }) {
   const { t, i18n } = useTranslation();
   const scene = useRef<HTMLDivElement>(null);
-  useCameraTravel(scene);
+  useCameraTravel(scene, arrived);
 
-  const speed = new Intl.NumberFormat(i18n.language === "en" ? "en-CA" : "fr-CA", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-  const wordsPerSecond = (player: PlayerResult) => speed.format(player.wpm / 60);
+  const wordsPerSecond = (player: PlayerResult) => oneDecimal(i18n.language, player.wpm / 60);
 
   return (
     <div ref={scene} className="podium-scene">
@@ -37,7 +36,7 @@ export function PodiumScene({ players }: { players: PlayerResult[] }) {
             return (
               <div key={rank} className={`podium-block podium-block--${rank}${player ? "" : " is-hidden"}`}>
                 <span>{rank}</span>
-                <span className="podium-name">{player?.name}</span>
+                {player && <a className="podium-name" href={profileHref(rank - 1)} aria-label={t("podium.viewStats", { name: player.name })}>{player.name}</a>}
                 <span className="podium-speed">{player && `${wordsPerSecond(player)} ${t("podium.wordsPerSecond")}`}</span>
                 {side && <SideFace points={side} />}
                 {rank === 1 && (
@@ -54,7 +53,7 @@ export function PodiumScene({ players }: { players: PlayerResult[] }) {
           const player = players[rank - 1];
           if (!player) return null;
           const label = t("podium.avatar", { name: player.name, rank: t(`podium.ranks.${rank - 1}`), speed: wordsPerSecond(player) });
-          return <div key={rank} className={`podium-avatar podium-avatar--${rank}`} role="img" aria-label={label} />;
+          return <a key={rank} className={`podium-avatar podium-avatar--${rank}`} href={profileHref(rank - 1)} tabIndex={-1} aria-label={label} />;
         })}
         <div className="podium-reflection" aria-hidden="true"><div /><div /><div /></div>
       </div>

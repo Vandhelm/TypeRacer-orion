@@ -1,4 +1,4 @@
-import { useEffect, type RefObject } from "react";
+import { useLayoutEffect, type RefObject } from "react";
 
 const MAX_TRAVEL = 1.55; // s'arrête devant le podium
 const DELAY_MS = 400;
@@ -7,8 +7,8 @@ const DURATION_MS = 2500;
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 
 /** Moves the camera through the scene's [data-depth] layers (depth = distance to the camera). */
-export function useCameraTravel(scene: RefObject<HTMLElement | null>) {
-  useEffect(() => {
+export function useCameraTravel(scene: RefObject<HTMLElement | null>, arrived: boolean) {
+  useLayoutEffect(() => {
     const root = scene.current;
     if (!root) return;
     const layers = [...root.querySelectorAll<HTMLElement>("[data-depth]")];
@@ -25,7 +25,7 @@ export function useCameraTravel(scene: RefObject<HTMLElement | null>) {
       root.style.setProperty("--travel", String(travel));
     };
 
-    if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    if (arrived || matchMedia("(prefers-reduced-motion: reduce)").matches) {
       apply(MAX_TRAVEL);
       return;
     }
@@ -40,5 +40,5 @@ export function useCameraTravel(scene: RefObject<HTMLElement | null>) {
     apply(0);
     frame = requestAnimationFrame(step);
     return () => cancelAnimationFrame(frame);
-  }, [scene]);
+  }, [scene, arrived]);
 }

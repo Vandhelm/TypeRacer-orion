@@ -64,9 +64,14 @@
     font: 400 max(12px, 1.4vh)/1.2 var(--font-mono);
     letter-spacing: .04em;
 }
+.podium-row{ text-decoration: none; }
+.podium-row:hover{ background: rgba(255,255,255,.08); color: #fff; }
+.podium-row:focus-visible{ outline: 1px solid #fff; outline-offset: -2px; }
 .podium-row.is-me{ color: #fff; font-weight: 500; }
 .podium-row-name{ overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .podium-row-value{ color: var(--color-muted); font-size: .9em; white-space: nowrap; }
+
+.podium-board.is-arrived{ animation: none; }
 
 @media (min-width: 900px){
     .podium-list{
