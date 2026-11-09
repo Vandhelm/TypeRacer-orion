@@ -188,12 +188,16 @@
     "out": "Out",
     "go": "GO",
     "poolLabel": "Race: {{count}} fish, one per player. Progress for each player is shown under their lane.",
-    "result": "RESULT",
     "playAgain": "PLAY AGAIN",
-    "backToRoom": "BACK TO THE ROOM",
-    "rankTitle": "You finish {{rank}}",
-    "timeUpTitle": "Time's up · {{percent}} % of the text",
-    "outTitle": "Out · {{percent}} % of the text",
+    "backToRoom": "BACK TO THE ROOM"
+  },
+  "podium": {
+    "pageTitle": "O.R.I.O.N — The podium",
+    "label": "Podium",
+    "wordsPerSecond": "words/s",
+    "avatar": "{{name}}, {{rank}} place, {{speed}} words per second",
+    "yourPlace": "Your place",
+    "allPlayers": "All players ({{count}})",
     "ranks": [
       "1st",
       "2nd",
