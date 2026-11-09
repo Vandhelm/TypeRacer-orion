@@ -2,11 +2,13 @@
 import type { BotSpeed, MistakeMode, Player } from "../room/room";
 
 const BOT_WPM: Record<BotSpeed, [number, number]> = { slow: [25, 40], medium: [40, 65], fast: [65, 100], mixed: [25, 100] };
-const CHARS_PER_WORD = 5;
+export const CHARS_PER_WORD = 5;
 export const TICK_MS = 200;
 
 export type Course = { words: string[]; /** Caractères cumulés (espaces comprises) après chaque mot. */ marks: number[]; durationMs: number; mistakes: MistakeMode };
 export type Bot = { lane: number; wpm: number; words: number; finishedAt: number };
+/** Cumuls de fin de seconde : caractères validés, caractères tapés, fautes. */
+export type Sample = { chars: number; typed: number; errors: number };
 export type Race = {
   course: Course;
   phase: "countdown" | "racing" | "done";
@@ -26,6 +28,8 @@ export type Race = {
   bots: Bot[];
   /** Les couloirs, dans l'ordre d'arrivée. */
   arrivals: number[];
+  /** Une mesure par seconde et par couloir. */
+  samples: Sample[][];
 };
 
 export function createCourse(words: string[], durationSeconds: number, mistakes: MistakeMode): Course {
@@ -58,6 +62,7 @@ export function createRace(course: Course, players: Player[], botSpeed: BotSpeed
     eliminated: false,
     bots,
     arrivals: [],
+    samples: players.map(() => []),
   };
 }
 
@@ -126,7 +131,40 @@ export function advanceBots(race: Race, now: number, jitters: number[]): Race {
     arrivals.push(bot.lane);
     return { ...bot, words: progress, finishedAt: now };
   });
-  return { ...race, bots, arrivals, now, phase: now - race.startedAt >= durationMs ? "done" : "racing" };
+  const moved: Race = { ...race, bots, arrivals, now, phase: now - race.startedAt >= durationMs ? "done" : "racing" };
+  return { ...moved, samples: recordSamples(moved) };
+}
+
+function myValidChars(race: Race) {
+  return Math.max(0, race.course.marks[race.wordIndex]! - race.missedChars);
+}
+
+function botChars(race: Race, bot: Bot) {
+  const { marks } = race.course;
+  const whole = Math.floor(bot.words);
+  const start = marks[whole] ?? 0;
+  const next = marks[whole + 1];
+  return next === undefined ? start : start + (bot.words - whole) * (next - start);
+}
+
+function sampleOf(race: Race, lane: number): Sample | null {
+  if (lane === race.myLane) {
+    return race.finishedAt ? null : { chars: myValidChars(race), typed: race.keystrokes, errors: race.wrongChars + race.extraChars };
+  }
+  const bot = race.bots.find((candidate) => candidate.lane === lane);
+  if (!bot || bot.finishedAt) return null;
+  const chars = botChars(race, bot);
+  return { chars, typed: chars, errors: 0 };
+}
+
+function recordSamples(race: Race) {
+  const second = Math.floor((race.now - race.startedAt) / 1000);
+  return race.samples.map((samples, lane) => {
+    const sample = samples.length < second ? sampleOf(race, lane) : null;
+    if (!sample) return samples;
+    // un onglet en arrière-plan peut sauter des secondes
+    return [...samples, ...Array.from({ length: second - samples.length }, () => sample)];
+  });
 }
 
 export const everyoneDone = (race: Race) => race.finishedAt > 0 && race.bots.every((bot) => bot.finishedAt > 0);
@@ -142,8 +180,7 @@ export function secondsLeft(race: Race) {
 /** Vitesse en mots par minute : seuls comptent les caractères des mots réussis. */
 export function myWpm(race: Race) {
   const minutes = elapsedMs(race) / 60000;
-  const validChars = Math.max(0, race.course.marks[race.wordIndex]! - race.missedChars);
-  return minutes > 0.02 ? Math.round(validChars / CHARS_PER_WORD / minutes) : 0;
+  return minutes > 0.02 ? Math.round(myValidChars(race) / CHARS_PER_WORD / minutes) : 0;
 }
 
 export function myAccuracy(race: Race) {
