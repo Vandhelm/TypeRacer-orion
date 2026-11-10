@@ -1,20 +1,22 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import { HangingButton } from "../../components/buttons/HangingButton";
+import { buildResults, buildSummary, markSessionStart, saveResults, sessionSeconds } from "../podium/results";
 import { useRoom } from "../room/hooks/useRoom";
 import { useRace } from "./hooks/useRace";
 import { loadRacePoolImages, type RacePoolImages } from "./pool/createRacePool";
 import { laneProgress } from "./race";
 import { RacePool } from "./RacePool";
-import { RaceResults } from "./RaceResults";
 import { TypingPanel } from "./TypingPanel";
 
-/** The race: one lane per player, the shared text, and the end-of-race result. */
+/** The race: one lane per player and the shared text. It hands over to the podium at the end. */
 export function GamePage() {
   const { t } = useTranslation();
   const { room, players, displayName } = useRoom();
   const [images, setImages] = useState<RacePoolImages | null>(null);
   const { race, onInput, showResults } = useRace(room, players, images !== null);
+
+  useEffect(markSessionStart, []);
 
   useEffect(() => {
     document.title = t("game.pageTitle");
@@ -25,6 +27,12 @@ export function GamePage() {
     loadRacePoolImages().then((loaded) => { if (!cancelled) setImages(loaded); });
     return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => {
+    if (!showResults) return;
+    saveResults({ players: buildResults(race, players, room.botAccuracy), summary: buildSummary(race, room, sessionSeconds()) });
+    location.replace("/podium"); // le retour arrière ne relance pas une course
+  }, [showResults, race, players, room]);
 
   return (
     <div className="game-root" style={{ "--lanes": players.length } as CSSProperties}>
@@ -54,7 +62,6 @@ export function GamePage() {
           {race.count <= 0 && <p className="game-count-label">{t("game.go")}</p>}
         </div>
       )}
-      {showResults && <RaceResults race={race} />}
     </div>
   );
 }

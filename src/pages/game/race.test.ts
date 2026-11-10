@@ -84,3 +84,16 @@ test("stats follow valid characters and keystrokes", () => {
   expect(myAccuracy(race)).toBe(67); // 6 frappes, dont 2 fausses
   expect(secondsLeft(race)).toBe(0);
 });
+
+describe("samples", () => {
+  test("records one measure per second for each running lane", () => {
+    const race = advanceBots(type(racing("fix"), "l", "le", "le "), 3200, [0.5]);
+    expect(race.samples[0]!.map((sample) => sample.typed)).toEqual([3, 3]);
+    expect(race.samples[1]).toHaveLength(2);
+  });
+
+  test("stops measuring a lane once it is done", () => {
+    const race = { ...racing("fix"), finishedAt: 1500 };
+    expect(advanceBots(race, 3200, [0.5]).samples[0]).toEqual([]);
+  });
+});

@@ -25,7 +25,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun ./home.html ./room.html ./game.html",
+    "dev": "bun ./home.html ./room.html ./game.html ./podium.html ./profile.html",
     "typecheck": "tsc --noEmit",
     "build": "bun run build.ts",
     "db:up": "docker compose up -d --wait",

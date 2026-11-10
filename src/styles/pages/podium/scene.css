@@ -1,0 +1,204 @@
+/* The scene stays still: each layer is a depth plane that the camera zooms into. */
+.podium-scene{
+    --travel: 0;   /* updated by useCameraTravel */
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+    background: #000;
+}
+.podium-layer{
+    position: absolute;
+    inset: 0;
+    transform-origin: 50% 70%;
+    will-change: transform, opacity;
+    pointer-events: none;
+}
+.podium-layer--pyramid{ display: flex; justify-content: center; }
+.podium-layer--stand{ transform-origin: 50% 100%; }
+
+.podium-pyramid{
+    margin-top: -49.5vmax;   /* -0.707 x size */
+    width: 70vmax;
+    height: 70vmax;
+    background: linear-gradient(135deg, var(--color-red) 50%, var(--color-red-dark) 100%);
+    border: 1px solid rgba(255,140,120,.25);
+    transform: rotate(45deg);
+}
+.podium-pyramid::after{
+    content: '';
+    position: absolute;
+    width: 64.4vmax;
+    height: 64.4vmax;
+    border: 1px solid var(--color-line);
+    transform: skew(10deg, 10deg);
+}
+
+/* Perspective floor whose grid scrolls with the camera */
+.podium-floor{
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100vw;
+    height: 30vh;
+    border-top: 1px solid var(--color-line-soft);
+    perspective: 220px;
+    perspective-origin: 50% 0%;
+    overflow: hidden;
+}
+.podium-floor::before{
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 300%;
+    height: 400%;
+    transform-origin: 50% 0%;
+    transform: rotateX(72deg);
+    background:
+        repeating-linear-gradient(90deg, var(--color-line-faint) 0 1px, transparent 1px 5vw),
+        repeating-linear-gradient(0deg, var(--color-line-faint) 0 1px, transparent 1px 6vh);
+    background-position: 0 calc(var(--travel) * 40vh);
+    -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 25%);
+            mask-image: linear-gradient(180deg, transparent 0%, #000 25%);
+}
+
+/* A side face, drawn by SideFace.tsx and placed by the rules below */
+.podium-side{ position: absolute; display: block; }
+.podium-side polygon{
+    fill: var(--color-face-side);
+    stroke: #fff;
+    stroke-opacity: .5;
+    stroke-width: 2;
+    vector-effect: non-scaling-stroke;
+}
+
+.podium-column{
+    position: absolute;
+    background: linear-gradient(90deg, var(--color-face-front-a) 0%, var(--color-face-front-b) 100%);
+    border: 1px solid var(--color-line);
+}
+.podium-column--near{ bottom: 0; right: 0; width: 20vw; height: 70vh; }
+.podium-column--near .podium-side{ top: -1px; right: 20vw; width: 10vw; height: 70vh; }
+.podium-column--far{ bottom: 20vh; left: 0; width: 10vw; height: 40vh; }
+.podium-column--far .podium-side{ top: -1px; left: 10vw; width: 5vw; height: 40vh; }
+
+.podium-stand{
+    position: absolute;
+    bottom: 20vh;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: flex-end;
+    gap: 3vw;
+}
+.podium-block{
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: .7vh;
+    padding: 1.4vh .6vw 0;
+    background: linear-gradient(90deg, var(--color-face-front-a) 0%, var(--color-face-front-b) 100%);
+    border: 1px solid var(--color-line);
+    color: var(--color-line-soft);
+    font: 300 1.2vw/1 var(--font-mono);
+    text-align: center;
+    pointer-events: auto;
+}
+.podium-block .podium-side{ top: -1px; bottom: -1px; width: 3vw; height: calc(100% + 2px); }
+.podium-block--1{ order: 2; z-index: 2; width: 16vw; height: 22vh; padding-bottom: .7vw; }
+.podium-block--2{ order: 1; width: 12vw; height: 14vh; }
+.podium-block--2 .podium-side{ left: 100%; }
+.podium-block--3{ order: 3; width: 12vw; height: 9vh; }
+.podium-block--3 .podium-side{ right: 100%; }
+
+.podium-name{
+    max-width: 100%;
+    overflow: hidden;
+    color: #fff;
+    font: 400 .95vw/1.1 var(--font-sans);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.podium-name{ text-decoration: none; }
+.podium-name::before{ content: ''; position: absolute; inset: 0; z-index: 3; }   /* the whole block opens the profile */
+.podium-block:hover{ border-color: #fff; }
+.podium-block:hover .podium-name{ text-decoration: underline; text-underline-offset: .2em; }
+.podium-name:focus-visible{ outline: 1px solid #fff; outline-offset: 2px; }
+.podium-speed{ color: var(--color-line-soft); font: 300 .8vw/1 var(--font-mono); }
+.podium-block--1 .podium-name{ text-decoration: none; }
+.podium-name::before{ content: ''; position: absolute; inset: 0; z-index: 3; }   /* the whole block opens the profile */
+.podium-block:hover{ border-color: #fff; }
+.podium-block:hover .podium-name{ text-decoration: underline; text-underline-offset: .2em; }
+.podium-name:focus-visible{ outline: 1px solid #fff; outline-offset: 2px; }
+.podium-speed{ color: var(--color-red-text); }
+
+/* Sizes before the camera's 1.5 zoom */
+.podium-actions{
+    position: relative;
+    z-index: 4;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 100%;
+    margin-top: auto;
+    padding: 0 .5vw;
+}
+.podium-play, .podium-back{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 28px;
+    padding: 2px 4px;
+    color: #fff;
+    font: 500 max(8px, .55vw)/1.15 var(--font-sans);
+    letter-spacing: .18em;
+    text-align: center;
+    text-decoration: none;
+    transition: background .2s, color .2s, border-color .2s;
+}
+.podium-play{ background: var(--color-red-solid); border: 1px solid rgba(255,140,120,.45); }
+.podium-play:hover{ background: var(--color-red-hover); }
+.podium-back{ background: #000; border: 1px solid var(--color-line-soft); }
+.podium-back:hover{ background: #f2f2f2; border-color: #f2f2f2; color: #000; }
+.podium-actions a:focus-visible{ outline: 1px solid #fff; outline-offset: 1px; }
+
+.podium-reflection{
+    position: absolute;
+    top: 80vh;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: flex-start;
+    gap: 3vw;
+    opacity: .6;
+}
+.podium-reflection div{ border: 1px dashed var(--color-line-soft); border-top: none; }
+.podium-reflection div:nth-child(1){ width: 12vw; height: 14vh; }
+.podium-reflection div:nth-child(2){ width: 16vw; height: 20vh; }
+.podium-reflection div:nth-child(3){ width: 12vw; height: 9vh; }
+
+.podium-avatar{
+    position: absolute;
+    transform: translateX(-50%);
+    aspect-ratio: 300 / 379;
+    background: url("../../../assets/podium/avatar.webp") no-repeat center bottom / contain;
+    /* thin white edge so the black outlines stand out from the black background */
+    filter: drop-shadow(0 0 1px rgba(255,255,255,.9)) drop-shadow(0 0 1px rgba(255,255,255,.6));
+}
+.podium-avatar{ pointer-events: auto; cursor: pointer; }
+.podium-avatar--1{ left: 50vw; bottom: 42vh; height: 15vh; }
+.podium-avatar--2{ left: 33vw; bottom: 34vh; height: 12vh; }
+.podium-avatar--3{ left: 67vw; bottom: 29vh; height: 10vh; }
+
+@media (max-width: 700px){
+    .podium-block--2, .podium-block--3{ width: 17vw; }
+    .podium-block--1{ width: 23vw; }
+    .podium-block{ font-size: 7px; padding-left: 2px; padding-right: 2px; }
+    .podium-name{ font-size: 7px; }
+    .podium-speed{ font-size: 5.5px; }
+    .podium-avatar--2{ left: 27vw; }
+    .podium-avatar--3{ left: 73vw; }
+    .podium-actions{ padding: 0 2px; gap: 3px; }
+    .podium-play, .podium-back{ min-height: 29px; font-size: 7px; letter-spacing: .08em; }
+}

@@ -188,12 +188,16 @@
     "out": "Out",
     "go": "GO",
     "poolLabel": "Race: {{count}} fish, one per player. Progress for each player is shown under their lane.",
-    "result": "RESULT",
     "playAgain": "PLAY AGAIN",
-    "backToRoom": "BACK TO THE ROOM",
-    "rankTitle": "You finish {{rank}}",
-    "timeUpTitle": "Time's up · {{percent}} % of the text",
-    "outTitle": "Out · {{percent}} % of the text",
+    "backToRoom": "BACK TO THE ROOM"
+  },
+  "podium": {
+    "pageTitle": "O.R.I.O.N — The podium",
+    "label": "Podium",
+    "wordsPerSecond": "words/s",
+    "avatar": "{{name}}, {{rank}} place, {{speed}} words per second",
+    "yourPlace": "Your place",
+    "allPlayers": "All players ({{count}})",
     "ranks": [
       "1st",
       "2nd",
@@ -203,6 +207,55 @@
       "6th",
       "7th",
       "8th"
-    ]
+    ],
+    "viewStats": "See stats for {{name}}"
+  },
+  "profile": {
+    "pageTitle": "O.R.I.O.N — {{name}}",
+    "back": "← Podium",
+    "place": "{{rank}} place",
+    "accuracy": "Accuracy",
+    "raw": "Raw",
+    "errors": "Errors",
+    "second": "Second",
+    "testType": "Test type",
+    "other": "Other",
+    "characters": "Characters",
+    "charsDetail": "correct / wrong / extra / missed",
+    "consistency": "Consistency",
+    "time": "Time",
+    "idle": "idle",
+    "session": "session",
+    "finished": "text completed",
+    "notFinished": "not finished",
+    "out": "out",
+    "idleDetected": "idle detected",
+    "words": "{{words}} words",
+    "timed": "time {{duration}} · {{language}}",
+    "languages": {
+      "fr": "french",
+      "en": "english"
+    },
+    "textTypes": {
+      "coherent": "coherent text",
+      "quote": "quote",
+      "words": "scrambled words",
+      "custom": "custom text"
+    },
+    "levels": {
+      "common": "common",
+      "rich": "rich",
+      "expert": "expert"
+    },
+    "punctuation": "punctuation",
+    "numbers": "numbers",
+    "specials": "special characters",
+    "noAccents": "no accents",
+    "without": "without {{chars}}",
+    "mistakes": {
+      "fix": "fix",
+      "carry-on": "carry on",
+      "fatal": "fatal mistakes"
+    }
   }
 }
