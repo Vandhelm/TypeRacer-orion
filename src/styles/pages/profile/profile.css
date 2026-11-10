@@ -16,7 +16,7 @@
     margin-bottom: clamp(20px, 4vh, 40px);
 }
 .hanging-button.profile-back{ position: relative; top: auto; left: auto; animation: none; }
-.profile-title{ text-align: right; }
+.profile-title{ margin-left: auto; text-align: right; }
 .profile-name{ font: 300 clamp(20px, 3.4vh, 32px)/1.1 var(--font-sans); letter-spacing: .1em; overflow-wrap: anywhere; }
 .profile-rank{ margin-top: 8px; color: var(--color-muted); font: 400 max(11px, 1.3vh)/1 var(--font-mono); letter-spacing: .2em; text-transform: uppercase; }
 
