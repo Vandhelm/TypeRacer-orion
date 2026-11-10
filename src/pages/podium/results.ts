@@ -146,7 +146,7 @@ export function sessionSeconds() {
   try { return Math.round((Date.now() - Number(sessionStorage.getItem(SESSION_KEY))) / 1000) || 0; } catch { return 0; }
 }
 
-export const profileHref = (index: number) => `profile.html?player=${index}`;
+export const profileHref = (index: number) => `/profile?player=${index}`;
 
 export const oneDecimal = (language: string, value: number) =>
   new Intl.NumberFormat(language === "en" ? "en-CA" : "fr-CA", { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(value);

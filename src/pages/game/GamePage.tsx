@@ -31,7 +31,7 @@ export function GamePage() {
   useEffect(() => {
     if (!showResults) return;
     saveResults({ players: buildResults(race, players, room.botAccuracy), summary: buildSummary(race, room, sessionSeconds()) });
-    location.replace("podium.html"); // le retour arrière ne relance pas une course
+    location.replace("/podium"); // le retour arrière ne relance pas une course
   }, [showResults, race, players, room]);
 
   return (

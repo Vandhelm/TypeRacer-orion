@@ -41,8 +41,8 @@ export function PodiumScene({ players, arrived }: { players: PlayerResult[]; arr
                 {side && <SideFace points={side} />}
                 {rank === 1 && (
                   <div className="podium-actions">
-                    <a className="podium-play" href="game.html">{t("game.playAgain")}</a>
-                    <a className="podium-back" href="room.html">{t("game.backToRoom")}</a>
+                    <a className="podium-play" href="/game">{t("game.playAgain")}</a>
+                    <a className="podium-back" href="/room">{t("game.backToRoom")}</a>
                   </div>
                 )}
               </div>

@@ -6,7 +6,7 @@ import { ProfileDetails } from "./ProfileDetails";
 import { SpeedChart } from "./SpeedChart";
 import { StatBlock } from "./StatBlock";
 
-const PODIUM_HREF = "podium.html#arrived";
+const PODIUM_HREF = "/podium#arrived";
 
 /** Le podium ouvre la page avec ?player=N pour montrer un joueur ; sans ce paramètre, c'est mon profil, une page à part. */
 function requestedIndex(players: { me: boolean }[]) {
