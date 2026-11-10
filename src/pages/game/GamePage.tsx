@@ -28,7 +28,7 @@ export function GamePage() {
 
   return (
     <div className="game-root" style={{ "--lanes": players.length } as CSSProperties}>
-      <HangingButton className="game-leave" href="room.html">{t("room.leave")}</HangingButton>
+      <HangingButton className="game-leave" href="/room">{t("room.leave")}</HangingButton>
       <header className="game-header">
         <h1 className="game-title">{displayName}</h1>
       </header>

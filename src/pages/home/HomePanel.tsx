@@ -37,7 +37,7 @@ export function HomePanel({ ref }: { ref?: Ref<HTMLElement> }) {
   // code saisi : on rejoint le salon avec le code déjà inscrit
   function enterCode() {
     showStamp("stampCode");
-    if (code.length === 6) setTimeout(() => { location.href = "room.html?code=" + code; }, 900);
+    if (code.length === 6) setTimeout(() => { location.href = "/room?code=" + code; }, 900);
     else codeInput.current?.focus();
   }
 
@@ -69,7 +69,7 @@ export function HomePanel({ ref }: { ref?: Ref<HTMLElement> }) {
 
             <div className="flex flex-col gap-[1.3vh]">
               <FlipButton type="submit" label={t("home.play")} backLabel={t("home.playBack")} />
-              <OutlineButton href="room.html?new">{t("home.createRoom")}</OutlineButton>
+              <OutlineButton href="/room?new">{t("home.createRoom")}</OutlineButton>
               <OutlineButton href="#rooms">{t("home.rooms")}</OutlineButton>
             </div>
 

@@ -24,8 +24,8 @@ export function RaceResults({ race }: { race: Race }) {
         <h2 id="game-results-title" className="game-results-title">{title}</h2>
         <p className="game-results-stats">{`${myWpm(race)} ${t("game.wpm")} · ${myAccuracy(race)} % ${t("game.accuracy")}`}</p>
         <div className="game-results-actions">
-          <OutlineButton href="game.html">{t("game.playAgain")}</OutlineButton>
-          <OutlineButton href="room.html">{t("game.backToRoom")}</OutlineButton>
+          <OutlineButton href="/game">{t("game.playAgain")}</OutlineButton>
+          <OutlineButton href="/room">{t("game.backToRoom")}</OutlineButton>
         </div>
       </section>
     </div>

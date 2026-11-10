@@ -14,7 +14,7 @@ import { RoomTicket } from "./RoomTicket";
 import { TextEditorDialog, type TextEditorHandle } from "./TextEditorDialog";
 
 const LANGUAGE_TABS = (["fr", "en"] as const).map((code) => ({ value: code, label: code.toUpperCase(), ariaLabel: languages[code] }));
-const GAME_PAGE = "game.html";
+const GAME_PAGE = "/game";
 const VISIBILITY_KEY = { private: "private", semi: "semiPrivate", public: "public" } as const;
 
 /** Waiting room: the host sets up the race, a guest sees the settings read-only. */
@@ -55,7 +55,7 @@ export function RoomPage() {
       <Stamp className="room-stamp" label={t("home.stampPlay")} visible={stampOn} playKey={0} />
 
       <header className="relative z-1 isolate mb-[clamp(20px,4vh,40px)] flex flex-wrap items-center justify-between gap-x-6 gap-y-3 pr-[124px] phone:mb-[14px] phone:pr-0">
-        <HangingButton className="room-leave" href={host ? "home.html" : "home.html#rooms"} onClick={host ? forgetRoom : undefined}>
+        <HangingButton className="room-leave" href={host ? "/home" : "/home#rooms"} onClick={host ? forgetRoom : undefined}>
           {t("room.leave")}
         </HangingButton>
         <div className="room-shade text-right phone:w-full">

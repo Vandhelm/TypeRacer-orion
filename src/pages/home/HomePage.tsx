@@ -47,7 +47,7 @@ export function HomePage() {
         brand="O.R.I.O.N"
         brandHref="#home"
         brandLabel={t("nav.home")}
-        links={[{ href: "profile.html", label: t("nav.profile"), icon: <UserIcon /> }]}
+        links={[{ href: "/profile", label: t("nav.profile"), icon: <UserIcon /> }]}
         linksLabel={t("nav.main")}
       >
         <HangingTabs

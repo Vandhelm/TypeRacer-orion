@@ -8,4 +8,4 @@ export const ROOMS: Room[] = [
   { n: 4, serial: "1305", lang: "en", guests: "3 / 8", bots: false },
 ];
 
-export const WAITING_PAGE = "room.html";
+export const WAITING_PAGE = "/room";
