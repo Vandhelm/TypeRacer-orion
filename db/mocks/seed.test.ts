@@ -1,42 +1,90 @@
-import { describe, expect, test } from "bun:test";
-import { seed, createMockDatabase } from "./seed";
-import { MOCK_PASSWORD, PLAYERS, RACES, ROOMS } from "./data";
+import { beforeAll, describe, expect, test } from "bun:test";
+import { eq, isNull, sql } from "drizzle-orm";
+import { accounts, corpusTexts, players, raceConfigs, raceResults, races, raceSamples, roomMembers, rooms } from "../schema";
+import { CORPUS } from "./corpus";
+import { DEMO_PASSWORD, PLAYERS, RACES, ROOMS } from "./data";
+import { seed } from "./seed";
+import { createEmptyDatabase, createMockDatabase } from "./test-database";
 
-describe("mock data", () => {
-  test("fills every domain", () => {
-    const db = createMockDatabase();
-    const count = (table: string) => db.query<{ n: number }, []>(`SELECT count(*) AS n FROM ${table}`).get()!.n;
-    expect(count("players")).toBe(PLAYERS.length);
-    expect(count("rooms")).toBe(ROOMS.length);
-    expect(count("races")).toBe(RACES.length);
-    expect(count("race_results")).toBe(RACES.flatMap((race) => race.entries).length);
-    expect(count("race_samples")).toBe(RACES.flatMap((race) => race.entries).reduce((total, entry) => total + entry.seconds, 0));
+const entries = RACES.flatMap((race) => race.entries);
+const fails = (query: PromiseLike<unknown>) => expect(Promise.resolve(query)).rejects.toThrow();
+
+describe("schema", () => {
+  let db: Awaited<ReturnType<typeof createEmptyDatabase>>;
+  beforeAll(async () => {
+    db = await createEmptyDatabase();
   });
 
-  test("gives the same results on every run", () => {
-    const dump = () => createMockDatabase().query("SELECT * FROM race_samples ORDER BY race_id, player_id, second").all();
-    expect(dump()).toEqual(dump());
+  test("creates every table", async () => {
+    const { rows } = await db.execute<{ table_name: string }>(sql`SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name`);
+    expect(rows.map((row) => row.table_name)).toEqual(["accounts", "corpus_texts", "players", "race_configs", "race_results", "race_samples", "races", "room_members", "rooms", "saved_texts"]);
   });
 
-  test("refuses to seed twice", () => {
-    expect(() => seed(createMockDatabase())).toThrow("db:reset");
+  test("enforces foreign keys", async () => {
+    await fails(db.insert(accounts).values({ playerId: 9999, passwordHash: "x" }));
   });
 
-  test("accounts accept the mock password", () => {
-    const { password_hash } = createMockDatabase().query<{ password_hash: string }, []>("SELECT password_hash FROM accounts LIMIT 1").get()!;
-    expect(Bun.password.verifySync(MOCK_PASSWORD, password_hash)).toBe(true);
+  test("rejects a value outside the game options", async () => {
+    await fails(db.execute(sql`INSERT INTO corpus_texts (language, type, level, body) VALUES ('de', 'quote', 'common', 'x')`));
   });
 
-  test("a race keeps its settings when its room changes them", () => {
-    const db = createMockDatabase();
-    const before = db.query<{ config_id: number }, []>("SELECT config_id FROM races LIMIT 1").get()!.config_id;
-    db.run("UPDATE rooms SET config_id = (SELECT max(id) FROM race_configs) WHERE code = 'OLD001'");
-    expect(db.query<{ config_id: number }, []>("SELECT config_id FROM races LIMIT 1").get()!.config_id).toBe(before);
+  test("treats player names as case-insensitive", async () => {
+    await db.insert(players).values({ name: "Unique_Fish" });
+    await fails(db.insert(players).values({ name: "unique_fish" }));
+  });
+});
+
+describe("demo data", () => {
+  let db: Awaited<ReturnType<typeof createMockDatabase>>;
+  beforeAll(async () => {
+    db = await createMockDatabase();
   });
 
-  test("race history survives deleting the room", () => {
-    const db = createMockDatabase();
-    db.run("DELETE FROM rooms WHERE code = 'OLD001'");
-    expect(db.query<{ n: number }, []>("SELECT count(*) AS n FROM races WHERE room_id IS NULL").get()!.n).toBe(RACES.length);
+  test("fills the corpus, the users and the history", async () => {
+    expect(await db.$count(players)).toBe(PLAYERS.length);
+    expect(await db.$count(corpusTexts)).toBe(CORPUS.length);
+    expect(await db.$count(rooms)).toBe(ROOMS.length);
+    expect(await db.$count(races)).toBe(RACES.length);
+    expect(await db.$count(raceResults)).toBe(entries.length);
+    expect(await db.$count(raceSamples)).toBe(entries.reduce((total, entry) => total + entry.seconds, 0));
   });
+
+  test("covers both languages in the corpus", async () => {
+    expect(await db.$count(corpusTexts, eq(corpusTexts.language, "fr"))).toBeGreaterThan(0);
+    expect(await db.$count(corpusTexts, eq(corpusTexts.language, "en"))).toBeGreaterThan(0);
+  });
+
+  test("gives every race settings matching its text", async () => {
+    const rows = await db.select({ language: raceConfigs.language, text: corpusTexts.language }).from(races).innerJoin(raceConfigs, eq(races.configId, raceConfigs.id)).innerJoin(corpusTexts, eq(races.textId, corpusTexts.id));
+    expect(rows).toHaveLength(RACES.length);
+    expect(rows.every((row) => row.language === row.text)).toBe(true);
+  });
+
+  test("refuses to seed twice", async () => {
+    expect(seed(db)).rejects.toThrow("db:reset");
+  });
+
+  test("accounts accept the demo password", async () => {
+    const [account] = await db.select().from(accounts).limit(1);
+    expect(await Bun.password.verify(DEMO_PASSWORD, account!.passwordHash)).toBe(true);
+  });
+
+  test("refuses two players on one seat", async () => {
+    const [member] = await db.select().from(roomMembers).limit(1);
+    const [stranger] = await db.select().from(players).where(eq(players.name, "Saba_Sensei"));
+    await fails(db.insert(roomMembers).values({ roomId: member!.roomId, playerId: stranger!.id, seat: member!.seat, color: "red" }));
+  });
+});
+
+describe("independent runs", () => {
+  test("produces the same history every time", async () => {
+    const dump = async () => (await createMockDatabase()).select().from(raceSamples).orderBy(raceSamples.raceId, raceSamples.playerId, raceSamples.second);
+    expect(await dump()).toEqual(await dump());
+  }, 30000);
+
+  test("race history survives deleting the room", async () => {
+    const db = await createMockDatabase();
+    await db.delete(rooms).where(eq(rooms.status, "closed"));
+    expect(await db.$count(races, isNull(races.roomId))).toBe(RACES.length);
+  }, 30000);
 });

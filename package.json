@@ -1,20 +1,24 @@
 {
   "name": "typeracer-orion",
   "dependencies": {
+    "drizzle-orm": "^0.45.4",
     "i18next": "^26.7.2",
     "i18next-browser-languagedetector": "^8.3.0",
     "matter-js": "0.19.0",
+    "postgres": "^4.1.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "react-i18next": "^17.1.13",
     "three": "0.128.0"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.16",
     "@types/bun": "latest",
     "@types/matter-js": "^0.20.2",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "bun-plugin-tailwind": "^0.1.2",
+    "drizzle-kit": "^0.31.11",
     "tailwindcss": "^4.3.5",
     "typescript": "^7"
   },
@@ -24,6 +28,8 @@
     "dev": "bun ./home.html ./room.html ./game.html",
     "typecheck": "tsc --noEmit",
     "build": "bun run build.ts",
+    "db:up": "docker compose up -d --wait",
+    "db:generate": "drizzle-kit generate",
     "db:migrate": "bun db/cli.ts migrate",
     "db:seed": "bun db/cli.ts seed",
     "db:reset": "bun db/cli.ts reset"

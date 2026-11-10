@@ -1,6 +1,7 @@
-import type { Database } from "bun:sqlite";
-import { openDatabase } from "../database";
-import { DEFAULT_CONFIG, MOCK_PASSWORD, PLAYERS, RACES, ROOMS, SAVED_TEXTS, seatColor, type Config, type PlayerName } from "./data";
+import type { Db } from "../client";
+import { accounts, corpusTexts, players, raceConfigs, raceResults, races, raceSamples, roomMembers, rooms, savedTexts } from "../schema";
+import { CORPUS } from "./corpus";
+import { DEFAULT_CONFIG, DEMO_PASSWORD, PLAYERS, RACES, ROOMS, SAVED_TEXTS, seatColor, type PlayerName } from "./data";
 
 const CHARS_PER_WORD = 5;
 
@@ -30,82 +31,67 @@ function consistencyOf(raw: number[]) {
   return Math.max(0, Math.round(100 * (1 - deviation / mean)));
 }
 
-/** Fills a database with the mock data. Refuses a database that already holds players. */
-export function seed(db: Database) {
-  const { count } = db.query<{ count: number }, []>("SELECT count(*) AS count FROM players").get()!;
-  if (count > 0) throw new Error("Database already holds players: run db:reset first.");
-
-  const insertConfig = (config: Config) =>
-    db
-      .query<{ id: number }, Config>(
-        `INSERT INTO race_configs (language, bot_speed, bot_accuracy, text_type, length, word_count, duration, level, punctuation, numbers, specials, accents, mistakes, excluded, custom_text)
-         VALUES ($language, $bot_speed, $bot_accuracy, $text_type, $length, $word_count, $duration, $level, $punctuation, $numbers, $specials, $accents, $mistakes, $excluded, $custom_text)
-         RETURNING id`,
-      )
-      .get(config)!.id;
+/** Fills a migrated database with the demo data. Refuses a database that already holds players. */
+export async function seed(db: Db) {
+  if ((await db.$count(players)) > 0) throw new Error("Database already holds players: run db:reset first.");
 
   // Coût bcrypt minimal : le vrai format de hash, sans ralentir les tests.
-  const passwordHash = Bun.password.hashSync(MOCK_PASSWORD, { algorithm: "bcrypt", cost: 4 });
+  const passwordHash = await Bun.password.hash(DEMO_PASSWORD, { algorithm: "bcrypt", cost: 4 });
 
-  db.transaction(() => {
-    const players = new Map<PlayerName, number>();
-    for (const { name, account, bot } of PLAYERS) {
-      const { id } = db.query<{ id: number }, [string, number]>("INSERT INTO players (name, is_bot) VALUES (?, ?) RETURNING id").get(name, bot ? 1 : 0)!;
-      players.set(name, id);
-      if (account) db.run("INSERT INTO accounts (player_id, password_hash) VALUES (?, ?)", [id, passwordHash]);
-    }
-    const idOf = (name: PlayerName) => players.get(name)!;
+  await db.transaction(async (tx) => {
+    const insertConfig = async (config: typeof raceConfigs.$inferInsert) => (await tx.insert(raceConfigs).values(config).returning({ id: raceConfigs.id }))[0]!.id;
 
-    for (const { owner, name, body } of SAVED_TEXTS) {
-      db.run("INSERT INTO saved_texts (player_id, name, body) VALUES (?, ?, ?)", [idOf(owner), name, body]);
-    }
+    const playerRows = await tx.insert(players).values(PLAYERS.map(({ name, bot }) => ({ name, isBot: bot }))).returning({ id: players.id, name: players.name });
+    const idOf = (name: PlayerName) => playerRows.find((row) => row.name === name)!.id;
 
-    const rooms = new Map<string, { id: number; configId: number }>();
+    await tx.insert(accounts).values(PLAYERS.filter((player) => player.account).map(({ name }) => ({ playerId: idOf(name), passwordHash })));
+    await tx.insert(savedTexts).values(SAVED_TEXTS.map(({ owner, name, body }) => ({ playerId: idOf(owner), name, body })));
+    const corpusIds = (await tx.insert(corpusTexts).values(CORPUS).returning({ id: corpusTexts.id })).map((row) => row.id);
+
+    const roomIds = new Map<string, number>();
     for (const room of ROOMS) {
-      const configId = insertConfig({ ...DEFAULT_CONFIG, ...room.config });
-      const { id } = db
-        .query<{ id: number }, [string, string, string, number, number, string, number, number]>(
-          "INSERT INTO rooms (code, name, visibility, guests, bots, status, host_id, config_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
-        )
-        .get(room.code, room.name, room.visibility, room.guests, room.bots ? 1 : 0, room.status, idOf(room.members[0]!), configId)!;
-      rooms.set(room.code, { id, configId });
-      room.members.forEach((member, seat) => {
-        db.run("INSERT INTO room_members (room_id, player_id, seat, color) VALUES (?, ?, ?, ?)", [id, idOf(member), seat, seatColor(seat)]);
-      });
+      const configId = await insertConfig({ ...DEFAULT_CONFIG, ...room.config });
+      const [row] = await tx
+        .insert(rooms)
+        .values({ code: room.code, name: room.name, visibility: room.visibility, guests: room.guests, bots: room.bots, status: room.status, hostId: idOf(room.members[0]!), configId })
+        .returning({ id: rooms.id });
+      roomIds.set(room.code, row!.id);
+      await tx.insert(roomMembers).values(room.members.map((member, seat) => ({ roomId: row!.id, playerId: idOf(member), seat, color: seatColor(seat) })));
     }
 
     const random = seededRandom(418);
     for (const race of RACES) {
-      const room = rooms.get(race.room)!;
-      const duration = Math.max(...race.entries.map((entry) => entry.seconds));
-      const { id: raceId } = db
-        .query<{ id: number }, [number, number, string, string, number]>(
-          "INSERT INTO races (room_id, config_id, content, started_at, finished_at) VALUES (?1, ?2, ?3, ?4, datetime(?4, '+' || ?5 || ' seconds')) RETURNING id",
-        )
-        .get(room.id, room.configId, race.content, race.startedAt, duration)!;
+      const text = CORPUS[race.corpusIndex]!;
+      const configId = await insertConfig({ ...DEFAULT_CONFIG, language: text.language, textType: text.type, level: text.level, wordCount: text.body.split(/\s+/).length });
+      const longest = Math.max(...race.entries.map((entry) => entry.seconds));
+      const [row] = await tx
+        .insert(races)
+        .values({ roomId: roomIds.get(race.room)!, configId, textId: corpusIds[race.corpusIndex]!, content: text.body, startedAt: race.startedAt, finishedAt: new Date(race.startedAt.getTime() + longest * 1000) })
+        .returning({ id: races.id });
+      const raceId = row!.id;
 
-      race.entries.forEach((entry, index) => {
+      for (const [index, entry] of race.entries.entries()) {
         const samples = series(entry.wpm, entry.accuracy, entry.seconds, random);
+        const playerId = idOf(entry.player);
         const wpm = Math.round(average(samples.map((sample) => sample.wpm)));
-        const raw = Math.round(average(samples.map((sample) => sample.raw)));
-        const wrong = samples.reduce((total, sample) => total + sample.errors, 0);
-        const correct = Math.round((wpm * CHARS_PER_WORD * entry.seconds) / 60);
-        db.run(
-          `INSERT INTO race_results (race_id, player_id, rank, wpm, raw, accuracy, seconds, correct_chars, wrong_chars, consistency, idle, finished, eliminated, session_seconds)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)`,
-          [raceId, idOf(entry.player), index + 1, wpm, raw, entry.accuracy, entry.seconds, correct, wrong, consistencyOf(samples.map((sample) => sample.raw)), entry.finished === false ? 0 : 1, entry.eliminated ? 1 : 0, entry.seconds + 300],
-        );
-        samples.forEach((sample, second) => {
-          db.run("INSERT INTO race_samples (race_id, player_id, second, wpm, raw, errors) VALUES (?, ?, ?, ?, ?, ?)", [raceId, idOf(entry.player), second, sample.wpm, sample.raw, sample.errors]);
+        await tx.insert(raceResults).values({
+          raceId,
+          playerId,
+          rank: index + 1,
+          wpm,
+          raw: Math.round(average(samples.map((sample) => sample.raw))),
+          accuracy: entry.accuracy,
+          seconds: entry.seconds,
+          correctChars: Math.round((wpm * CHARS_PER_WORD * entry.seconds) / 60),
+          wrongChars: samples.reduce((total, sample) => total + sample.errors, 0),
+          consistency: consistencyOf(samples.map((sample) => sample.raw)),
+          idle: 0,
+          finished: entry.finished,
+          eliminated: entry.eliminated,
+          sessionSeconds: entry.seconds + 300,
         });
-      });
+        await tx.insert(raceSamples).values(samples.map((sample, second) => ({ raceId, playerId, second, ...sample })));
+      }
     }
-  })();
-}
-
-/** A fresh in-memory database filled with the mocks, one per test. */
-export function createMockDatabase() {
-  const db = openDatabase(":memory:");
-  seed(db);
-  return db;
+  });
 }

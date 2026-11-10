@@ -1,18 +1,21 @@
-// Jeu de données fictif, uniquement pour le développement et les tests. Toujours identique d'un lancement à l'autre.
-export const MOCK_PASSWORD = "orion";
+// Données de démonstration, pour le développement et les tests. Toujours identiques d'un lancement à l'autre.
+import type { raceConfigs } from "../schema";
+import { CORPUS } from "./corpus";
+
+export const DEMO_PASSWORD = "orion";
 
 const SEAT_COLORS = ["hsl(6, 71%, 58%)", "hsl(266, 85%, 59%)", "hsl(54, 100%, 74%)", "hsl(25, 100%, 63%)", "hsl(326, 47%, 47%)", "hsl(161, 65%, 60%)", "hsl(220, 85%, 65%)", "hsl(0, 0%, 72%)"];
 export const seatColor = (seat: number) => SEAT_COLORS[seat]!;
 
-/** account: false pour un invité. */
+/** account: false pour un invité. wpm et accuracy : le niveau du joueur dans l'historique. */
 export const PLAYERS = [
-  { name: "Corail_418", account: true, bot: false },
-  { name: "Maki_77", account: true, bot: false },
-  { name: "Ikura_21", account: true, bot: false },
-  { name: "Tamago_8", account: false, bot: false },
-  { name: "Thon_Rouge", account: false, bot: true },
-  { name: "Wasabi99", account: false, bot: true },
-  { name: "Saba_Sensei", account: false, bot: true },
+  { name: "Corail_418", account: true, bot: false, wpm: 78, accuracy: 96 },
+  { name: "Maki_77", account: true, bot: false, wpm: 92, accuracy: 98 },
+  { name: "Ikura_21", account: true, bot: false, wpm: 58, accuracy: 94 },
+  { name: "Tamago_8", account: false, bot: false, wpm: 44, accuracy: 90 },
+  { name: "Thon_Rouge", account: false, bot: true, wpm: 65, accuracy: 93 },
+  { name: "Wasabi99", account: false, bot: true, wpm: 50, accuracy: 91 },
+  { name: "Saba_Sensei", account: false, bot: true, wpm: 84, accuracy: 97 },
 ] as const;
 
 export type PlayerName = (typeof PLAYERS)[number]["name"];
@@ -25,22 +28,19 @@ export const SAVED_TEXTS: { owner: PlayerName; name: string; body: string }[] = 
 
 export const DEFAULT_CONFIG = {
   language: "fr",
-  bot_speed: "medium",
-  bot_accuracy: "decent",
-  text_type: "coherent",
+  botSpeed: "medium",
+  botAccuracy: "decent",
+  textType: "coherent",
   length: "medium",
-  word_count: 50,
+  wordCount: 50,
   duration: 120,
   level: "common",
-  punctuation: 0,
-  numbers: 0,
-  specials: 0,
-  accents: 1,
+  punctuation: false,
+  numbers: false,
+  specials: false,
+  accents: true,
   mistakes: "fix",
-  excluded: "",
-  custom_text: "",
-};
-export type Config = typeof DEFAULT_CONFIG;
+} satisfies typeof raceConfigs.$inferInsert;
 
 type MockRoom = {
   code: string;
@@ -49,7 +49,7 @@ type MockRoom = {
   guests: number;
   bots: boolean;
   status: "waiting" | "racing" | "closed";
-  config?: Partial<Config>;
+  config?: Partial<typeof raceConfigs.$inferInsert>;
   /** Le premier est l'hôte ; l'indice est la place. */
   members: PlayerName[];
 };
@@ -57,38 +57,35 @@ type MockRoom = {
 export const ROOMS: MockRoom[] = [
   { code: "CORAIL", name: "Le bassin du matin", visibility: "public", guests: 4, bots: true, status: "waiting", members: ["Corail_418", "Thon_Rouge"] },
   { code: "NORI42", name: "Fast fingers", visibility: "public", guests: 6, bots: false, status: "waiting", config: { language: "en", length: "short" }, members: ["Maki_77", "Ikura_21", "Tamago_8"] },
-  { code: "SECRET", name: "Entre amis", visibility: "private", guests: 2, bots: false, status: "waiting", config: { punctuation: 1, mistakes: "fatal" }, members: ["Ikura_21"] },
+  { code: "SECRET", name: "Entre amis", visibility: "private", guests: 2, bots: false, status: "waiting", config: { punctuation: true, mistakes: "fatal" }, members: ["Ikura_21"] },
   { code: "RACE88", name: "Course en cours", visibility: "semi", guests: 3, bots: true, status: "racing", members: ["Maki_77", "Wasabi99", "Saba_Sensei"] },
-  { code: "OLD001", name: "Salon fermé", visibility: "public", guests: 4, bots: true, status: "closed", members: ["Corail_418", "Maki_77", "Thon_Rouge", "Wasabi99"] },
+  { code: "OLD001", name: "Salon du soir", visibility: "public", guests: 4, bots: true, status: "closed", members: ["Corail_418", "Maki_77", "Thon_Rouge", "Wasabi99"] },
+  { code: "OLD002", name: "Le grand large", visibility: "public", guests: 4, bots: true, status: "closed", members: ["Corail_418", "Ikura_21", "Tamago_8", "Saba_Sensei"] },
 ];
 
-type MockEntry = { player: PlayerName; wpm: number; accuracy: number; seconds: number; finished?: boolean; eliminated?: boolean };
-type MockRace = { room: string; content: string; startedAt: string; entries: MockEntry[] };
+export type MockEntry = { player: PlayerName; wpm: number; accuracy: number; seconds: number; finished: boolean; eliminated: boolean };
+export type MockRace = { room: string; corpusIndex: number; startedAt: Date; entries: MockEntry[] };
 
-const FR_TEXT = "Le vent pousse les vagues vers la jetée pendant que les mouettes tournent au-dessus du port.";
-const EN_TEXT = "A small boat drifts past the harbour while the gulls circle over the old wooden pier.";
+const HISTORY_SIZE = 16;
+const CLOSED_ROOMS = ROOMS.filter((room) => room.status === "closed");
+const skillOf = (name: PlayerName) => PLAYERS.find((player) => player.name === name)!;
 
-/** Dans l'ordre d'arrivée. */
-export const RACES: MockRace[] = [
-  {
-    room: "OLD001",
-    content: FR_TEXT,
-    startedAt: "2026-11-01 18:00:00",
-    entries: [
-      { player: "Maki_77", wpm: 92, accuracy: 98.4, seconds: 42 },
-      { player: "Corail_418", wpm: 78, accuracy: 96.1, seconds: 50 },
-      { player: "Thon_Rouge", wpm: 64, accuracy: 93.5, seconds: 60 },
-      { player: "Wasabi99", wpm: 41, accuracy: 88, seconds: 60, finished: false },
-    ],
-  },
-  {
-    room: "OLD001",
-    content: EN_TEXT,
-    startedAt: "2026-11-01 18:05:00",
-    entries: [
-      { player: "Corail_418", wpm: 85, accuracy: 97.2, seconds: 45 },
-      { player: "Thon_Rouge", wpm: 67, accuracy: 94, seconds: 57 },
-      { player: "Maki_77", wpm: 30, accuracy: 71, seconds: 18, finished: false, eliminated: true },
-    ],
-  },
-];
+/** Une course passée : les joueurs progressent un peu au fil des jours, et le dernier abandonne parfois. */
+function pastRace(index: number): MockRace {
+  const room = CLOSED_ROOMS[index % CLOSED_ROOMS.length]!;
+  const corpusIndex = index % CORPUS.length;
+  const words = CORPUS[corpusIndex]!.body.length / 5;
+  const entries = room.members
+    .map((player, seat) => {
+      const skill = skillOf(player);
+      const wpm = skill.wpm + Math.floor(index / 2) + (((index * 7 + seat * 5) % 13) - 6);
+      return { player, wpm, accuracy: Math.min(99.5, skill.accuracy + (((index + seat) % 5) - 2) * 0.4), seconds: Math.max(3, Math.ceil((words * 60) / wpm)), finished: true, eliminated: false };
+    })
+    .sort((a, b) => b.wpm - a.wpm);
+
+  if (index % 4 === 3) entries.at(-1)!.finished = false;
+  if (index % 8 === 7) entries.at(-1)!.eliminated = true;
+  return { room: room.code, corpusIndex, startedAt: new Date(Date.UTC(2026, 9, 15 + index, 18, index * 3)), entries };
+}
+
+export const RACES = Array.from({ length: HISTORY_SIZE }, (_, index) => pastRace(index));
