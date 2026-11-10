@@ -1,6 +1,26 @@
 # Schéma de la base de données
 
-PostgreSQL, géré avec Drizzle. Source de vérité : [db/schema/](../../db/schema/). Ce diagramme est à mettre à jour avec chaque nouvelle migration.
+PostgreSQL, géré avec Drizzle. Source de vérité : [db/schema/](../../db/schema/). Ces diagrammes sont à mettre à jour avec chaque nouvelle migration.
+
+## Vue d'ensemble
+
+```mermaid
+flowchart LR
+  players --> accounts
+  players --> saved_texts
+  players -- héberge --> rooms
+  players --> room_members
+  rooms --> room_members
+  race_configs --> rooms
+  rooms --> races
+  race_configs --> races
+  corpus_texts --> races
+  races --> race_results
+  players --> race_results
+  race_results --> race_samples
+```
+
+## Détail des colonnes
 
 ```mermaid
 erDiagram
