@@ -1,11 +1,15 @@
 import { useTranslation } from "react-i18next";
 import { oneDecimal } from "../podium/results";
 import type { StatsState } from "./hooks/usePlayerStats";
+import type { Layout } from "./keyboard";
+import { KeyboardHeatmap } from "./KeyboardHeatmap";
 import { ProgressChart } from "./ProgressChart";
 import { StatBlock } from "./StatBlock";
 
 /** Toutes les courses du joueur (AUTH-06). Pour un invité : celles de sa session seulement (AUTH-03). */
-export function CareerStats({ state, guest }: { state: StatsState; guest: boolean }) {
+type Props = { state: StatsState; guest: boolean; layout: Layout; onLayout: (layout: Layout) => void };
+
+export function CareerStats({ state, guest, layout, onLayout }: Props) {
   const { t, i18n } = useTranslation();
 
   let body;
@@ -24,6 +28,7 @@ export function CareerStats({ state, guest }: { state: StatsState; guest: boolea
           <StatBlock label={t("profile.wins")} value={String(stats.wins)} />
         </div>
         <ProgressChart progress={stats.progress} />
+        <KeyboardHeatmap keys={stats.keys} layout={layout} onLayout={onLayout} />
         {guest && <p className="profile-note">{t("profile.guestSession")}</p>}
       </>
     );

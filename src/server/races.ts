@@ -2,6 +2,7 @@
 // À BRANCHER : le navigateur envoie lui-même les résultats ; le serveur de jeu devra les produire pour qu'on ne puisse pas les inventer.
 import { avg, count, desc, eq, max, sql } from "drizzle-orm";
 import type { Db } from "../../db/client";
+import { parseKeys, type KeyCounts } from "../players/keys";
 import { players, raceConfigs, raceResults, races, raceSamples } from "../../db/schema";
 
 const LANGUAGES = ["fr", "en"] as const;
@@ -77,6 +78,7 @@ export function parseRace(body: unknown) {
       wpmSeries: series(p.wpmSeries, "wpmSeries"),
       rawSeries: series(p.rawSeries, "rawSeries"),
       errorSeries: series(p.errorSeries, "errorSeries"),
+      keys: parseKeys(p.keys),
     };
   });
   return { config, content: String(b.content ?? "").slice(0, 10_000), sessionSeconds: int(s.sessionSeconds ?? 0, "sessionSeconds", 0, 10_000_000), results };
@@ -136,6 +138,13 @@ export async function playerStats(db: Db, name: string) {
     .where(eq(raceResults.playerId, player.id))
     .orderBy(desc(races.startedAt))
     .limit(PROGRESS_LIMIT);
+  // frappes et fautes par touche, cumulées sur toutes ses courses
+  const keyRows = await db.execute<{ key: string; typed: number; errors: number }>(sql`
+    SELECT k.key, sum((k.value->>0)::real) AS typed, sum((k.value->>1)::real) AS errors
+    FROM ${raceResults}, jsonb_each(${raceResults.keys}) AS k
+    WHERE ${raceResults.playerId} = ${player.id}
+    GROUP BY k.key`);
+  const keys: KeyCounts = Object.fromEntries((keyRows.rows as { key: string; typed: number; errors: number }[]).map((row) => [row.key, [Number(Number(row.typed).toFixed(1)), Number(Number(row.errors).toFixed(1))]]));
   const round = (value: string | number | null | undefined, digits = 0) => (value == null ? null : Number(Number(value).toFixed(digits)));
   return {
     name: player.name,
@@ -145,6 +154,7 @@ export async function playerStats(db: Db, name: string) {
     bestWpm: totals?.best ?? null,
     averageWpm: round(totals?.averageWpm),
     averageAccuracy: round(totals?.averageAccuracy, 1),
+    keys,
     progress: recent.reverse().map((point) => ({ at: point.at.toISOString(), wpm: point.wpm, accuracy: point.accuracy })),
   };
 }

@@ -286,6 +286,14 @@
     "noRaces": "Aucune course enregistrée pour l'instant.",
     "empty": "Joue une course pour voir des statistiques.",
     "home": "Accueil",
+    "keys": {
+      "title": "Erreurs par touche",
+      "layout": "Disposition du clavier",
+      "space": "Espace",
+      "detail": "{{key}} : {{rate}} d'erreurs ({{errors}} sur {{typed}} frappes)",
+      "weakest": "Touches les plus ratées :",
+      "clean": "Pas assez de fautes pour repérer une touche faible."
+    },
     "sessionRaces": "Courses de cette session",
     "guestSession": "Invité : ces statistiques disparaissent à la fermeture de l'onglet. Crée un compte pour les garder."
   }

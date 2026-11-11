@@ -1,5 +1,6 @@
 // Résultats d'une course, confiés par le jeu au podium et aux profils : tout vient de ce que chaque couloir a vraiment tapé pendant la course.
 import { CHARS_PER_WORD, laneElapsedMs, laneProgress, laneWpm, myAccuracy, type Race, type Sample } from "../game/race";
+import { parseKeys, roundKeys, type KeyCounts } from "../../players/keys";
 import type { Player, Room } from "../room/room";
 
 export type PlayerResult = {
@@ -21,6 +22,8 @@ export type PlayerResult = {
   wpmSeries: number[];
   rawSeries: number[];
   errorSeries: number[];
+  /** Frappes et fautes par touche (heatmap du clavier). */
+  keys: KeyCounts;
 };
 export type RaceSummary = Pick<Room, "textType" | "language" | "duration" | "level" | "punctuation" | "numbers" | "specials" | "accents" | "excluded" | "mistakes" | "botSpeed" | "botAccuracy" | "length"> & {
   wordCount: number;
@@ -68,6 +71,7 @@ function detailOf(race: Race, lane: number) {
     wpmSeries: samples.map((sample, i) => Math.round((sample.chars / CHARS_PER_WORD) * (60 / (i + 1)))),
     rawSeries: typedPerSecond.map((value) => Math.round((value * 60) / CHARS_PER_WORD)),
     errorSeries: deltas(samples, (sample) => sample.errors).map(Math.round),
+    keys: roundKeys(lane === race.myLane ? race.keys : (race.bots.find((bot) => bot.lane === lane)?.keys ?? {})),
   };
 }
 
@@ -122,6 +126,7 @@ export function parseResults(raw: string | null): RaceResults | null {
         wpmSeries: numbersOf(p.wpmSeries),
         rawSeries: numbersOf(p.rawSeries),
         errorSeries: numbersOf(p.errorSeries),
+        keys: parseKeys(p.keys),
       };
     });
     return { players, summary: stored.summary as RaceSummary };

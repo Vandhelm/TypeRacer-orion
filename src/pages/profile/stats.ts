@@ -1,4 +1,6 @@
 // Statistiques globales d'un joueur (AUTH-06) : lues sur le serveur, ou tirées de la session pour un invité.
+import { mergeKeys, parseKeys, type KeyCounts } from "../../players/keys";
+
 /** Points du graphique de progression : les dernières courses (comme le serveur). */
 const PROGRESS_POINTS = 50;
 export type ProgressPoint = { at: string; wpm: number; accuracy: number };
@@ -11,6 +13,8 @@ export type PlayerStats = {
   averageWpm: number | null;
   averageAccuracy: number | null;
   progress: ProgressPoint[];
+  /** Frappes et fautes par touche, sur toutes ses courses. */
+  keys: KeyCounts;
 };
 
 /** null : ce joueur n'a encore aucune course enregistrée. */
@@ -18,12 +22,13 @@ export async function fetchStats(name: string, signal?: AbortSignal): Promise<Pl
   const response = await fetch(`/api/players/${encodeURIComponent(name)}/stats`, { signal });
   if (response.status === 404) return null;
   if (!response.ok) throw new Error(`stats ${response.status}`);
-  return response.json();
+  const stats = await response.json();
+  return { ...stats, keys: parseKeys(stats.keys) };
 }
 
 const GUEST_KEY = "orion-guest-races";
 const MAX_GUEST_RACES = 200;
-type GuestRace = { at: string; wpm: number; accuracy: number; rank: number };
+type GuestRace = { at: string; wpm: number; accuracy: number; rank: number; keys?: KeyCounts };
 
 /** Les courses d'un invité, gardées le temps de sa session (cet onglet) : rien n'est enregistré sur le serveur (AUTH-03). */
 export function rememberGuestRace(race: GuestRace) {
@@ -56,6 +61,7 @@ export function guestStats(name: string): PlayerStats {
     bestWpm: races.length ? Math.max(...wpms) : null,
     averageWpm: races.length ? Math.round(average(wpms)!) : null,
     averageAccuracy: accuracy === null ? null : Math.round(accuracy * 10) / 10,
+    keys: mergeKeys(...races.map((race) => parseKeys(race.keys))),
     progress: races.slice(-PROGRESS_POINTS).map(({ at, wpm, accuracy: acc }) => ({ at, wpm, accuracy: acc })),
   };
 }

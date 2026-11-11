@@ -19,13 +19,13 @@ describe("buildResults", () => {
     const race = finished({
       arrivals: [1],
       wordIndex: 1,
-      bots: [{ lane: 1, wpm: 60, accuracy: 93, words: 3, typed: 15, errors: 1, finishedAt: 31000 }, { lane: 2, wpm: 30, accuracy: 90, words: 2, typed: 7, errors: 0, finishedAt: 0 }],
+      bots: [{ lane: 1, wpm: 60, accuracy: 93, words: 3, typed: 15, errors: 1, keys: {}, finishedAt: 31000 }, { lane: 2, wpm: 30, accuracy: 90, words: 2, typed: 7, errors: 0, keys: {}, finishedAt: 0 }],
     });
     expect(buildResults(race, PLAYERS).map((p) => p.name)).toEqual(["fast", "slow", "me"]);
   });
 
   test("measures a bot from its own finish time", () => {
-    const race = finished({ arrivals: [1], bots: [{ lane: 1, wpm: 60, accuracy: 93, words: 3, typed: 15, errors: 1, finishedAt: 31000 }, { lane: 2, wpm: 30, accuracy: 90, words: 0, typed: 0, errors: 0, finishedAt: 0 }] });
+    const race = finished({ arrivals: [1], bots: [{ lane: 1, wpm: 60, accuracy: 93, words: 3, typed: 15, errors: 1, keys: {}, finishedAt: 31000 }, { lane: 2, wpm: 30, accuracy: 90, words: 0, typed: 0, errors: 0, keys: {}, finishedAt: 0 }] });
     expect(buildResults(race, PLAYERS)[0]).toMatchObject({ name: "fast", me: false, wpm: 6, accuracy: 93, seconds: 30, finished: true, chars: [14, 1, 0, 0] });
   });
 });

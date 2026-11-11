@@ -35,7 +35,7 @@ export function GamePage() {
     saveResults(results);
     const rank = results.players.findIndex((player) => player.me);
     const me = results.players[rank];
-    if (me) rememberGuestRace({ at: new Date().toISOString(), wpm: me.wpm, accuracy: me.accuracy, rank: rank + 1 });
+    if (me) rememberGuestRace({ at: new Date().toISOString(), wpm: me.wpm, accuracy: me.accuracy, rank: rank + 1, keys: me.keys });
     submitRace(results, race.course.words.join(" "));
     location.replace("/podium"); // le retour arrière ne relance pas une course
   }, [showResults, race, players, room]);

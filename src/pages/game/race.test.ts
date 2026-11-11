@@ -109,3 +109,18 @@ describe("bot mistakes", () => {
     expect(race.samples[1]!.at(-1)!.errors).toBeGreaterThan(0);
   });
 });
+
+describe("keys", () => {
+  test("each typed letter counts on the key the text expected", () => {
+    const race = type(racing("fix"), "x", "", "l", "le", "le ");
+    expect(race.keys).toEqual({ l: [2, 1], e: [1, 0], " ": [1, 0] });
+  });
+
+  test("a bot's keys follow the text it typed", () => {
+    let race = racing("fix", [ME, BOT], ["Le", "riz,"]);
+    for (let t = 1200; t <= 20000; t += 200) race = advanceBots(race, t, [0.5]);
+    const keys = race.bots[0]!.keys;
+    expect(Object.keys(keys).sort()).toEqual([" ", ",", "e", "i", "l", "r", "z"]);
+    expect(keys[","]![1] / keys[","]![0]).toBeGreaterThan(keys.r![1] / keys.r![0]);
+  });
+});

@@ -84,3 +84,34 @@
 .profile-section-title{ margin-bottom: clamp(16px, 3vh, 24px); color: var(--color-muted); font: 400 max(11px, 1.3vh)/1.2 var(--font-mono); letter-spacing: .2em; text-transform: uppercase; }
 .profile-note{ color: var(--color-muted); font: 400 max(12px, 1.4vh)/1.6 var(--font-mono); }
 .profile-grid--career{ margin-top: 0; margin-bottom: clamp(20px, 3vh, 28px); padding-top: 0; border-top: 0; }
+
+/* Heatmap du clavier : la couleur d'une touche suit son taux d'erreur (--heat, de 0 à 100 %) */
+.keymap{ margin-top: clamp(20px, 3vh, 28px); }
+.keymap-head{ display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 20px; margin-bottom: 14px; }
+.keymap-title{ color: var(--color-muted); font: 400 max(11px, 1.2vh)/1 var(--font-mono); letter-spacing: .08em; }
+.keymap-head .view-tabs{ animation: none; }
+.keymap-head .view-tab{ height: 32px; min-height: 32px; padding: 0 14px; font-size: 11px; letter-spacing: .2em; }
+.keymap-board{ display: grid; gap: 4px; max-width: 640px; }
+.keymap-row{ display: flex; gap: 4px; }
+.keymap-row:nth-child(2){ padding-left: 3%; }
+.keymap-row:nth-child(3){ padding-left: 5%; }
+.keymap-row:nth-child(4){ padding-left: 7%; }
+.keymap-row:nth-child(5){ justify-content: center; }
+.keymap-key{
+    flex: 1 1 0;
+    min-width: 0;
+    aspect-ratio: 1;
+    max-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--color-line-faint);
+    background: color-mix(in srgb, var(--color-red-solid) var(--heat, 0%), var(--color-face-front-b));
+    color: #fff;
+    font: 400 clamp(9px, 1.6vw, 13px)/1 var(--font-mono);
+}
+.keymap-key.is-wide{ flex: 0 0 50%; aspect-ratio: auto; height: clamp(22px, 4vw, 36px); }
+.keymap-key.is-empty{ color: var(--color-line-faint); background: transparent; }
+.keymap-legend{ display: flex; align-items: center; gap: 10px; margin-top: 12px; color: var(--color-muted); font: 400 11px/1 var(--font-mono); }
+.keymap-scale{ width: 120px; height: 8px; border: 1px solid var(--color-line-faint); background: linear-gradient(90deg, var(--color-face-front-b), var(--color-red-solid)); }
+.keymap-worst{ margin-top: 10px; color: var(--color-muted); font: 400 max(12px, 1.4vh)/1.6 var(--font-mono); }

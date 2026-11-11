@@ -3,7 +3,9 @@ import { useTranslation } from "react-i18next";
 import { HangingButton } from "../../components/buttons/HangingButton";
 import { readResults, type PlayerResult, type RaceResults } from "../podium/results";
 import { CareerStats } from "./CareerStats";
+import { useKeyboardLayout } from "./hooks/useKeyboardLayout";
 import { usePlayerStats, type StatsState } from "./hooks/usePlayerStats";
+import { KeyboardHeatmap } from "./KeyboardHeatmap";
 import { ProfileDetails } from "./ProfileDetails";
 import { SpeedChart } from "./SpeedChart";
 import { StatBlock } from "./StatBlock";
@@ -45,6 +47,7 @@ export function ProfilePage() {
   const remote = usePlayerStats(subject && !guest ? subject.name : null);
   const [local] = useState<StatsState | null>(() => (guest && subject ? { status: "ready", stats: guestStats(subject.name) } : null));
   const stats = local ?? remote;
+  const [layout, setLayout] = useKeyboardLayout();
 
   useEffect(() => {
     document.title = subject ? t("profile.pageTitle", { name: subject.name }) : t("nav.profile");
@@ -84,7 +87,7 @@ export function ProfilePage() {
         </div>
       </header>
 
-      <CareerStats state={stats} guest={guest} />
+      <CareerStats state={stats} guest={guest} layout={layout} onLayout={setLayout} />
 
       {result && results && (
         <section className="profile-section" aria-labelledby="last-race-title">
@@ -97,6 +100,7 @@ export function ProfilePage() {
             <SpeedChart player={result} />
           </div>
           <ProfileDetails player={result} summary={results.summary} />
+          <KeyboardHeatmap keys={result.keys} layout={layout} onLayout={setLayout} />
         </section>
       )}
     </main>

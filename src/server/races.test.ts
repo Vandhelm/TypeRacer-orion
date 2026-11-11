@@ -59,6 +59,13 @@ describe("races", () => {
     expect(stats!.bestWpm).toBeGreaterThanOrEqual(stats!.averageWpm!);
   });
 
+  test("adds up a player's keys over every race", async () => {
+    const keyed = (keys: unknown) => ({ ...result("Clavier_Bot", true, 50), keys });
+    await recordRace(db, parseRace({ summary: SUMMARY, players: [keyed({ e: [10, 2], " ": [4, 0] })] }));
+    await recordRace(db, parseRace({ summary: SUMMARY, players: [keyed({ e: [5, 1], ab: [9, 9], z: [-1, 0] })] }));
+    expect((await playerStats(db, "Clavier_Bot"))!.keys).toEqual({ e: [15, 3], " ": [4, 0] });
+  });
+
   test("returns null for an unknown player", async () => {
     expect(await playerStats(db, "Personne")).toBeNull();
   });
