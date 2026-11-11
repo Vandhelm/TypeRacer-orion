@@ -1,0 +1,31 @@
+/* Play / Account segmented tabs */
+.view-tabs{
+    display: flex;
+    border: 1px solid var(--color-line);
+    animation: rise .7s .5s cubic-bezier(.2,.8,.2,1) both;
+}
+.view-tab{
+    all: unset;
+    box-sizing: border-box;
+    cursor: pointer;
+    flex: 1 1 0;
+    height: 5.2vh;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1.2vh;
+    color: var(--color-line-soft);
+    font: 500 max(11px, 1.3vh)/1 var(--font-sans);
+    letter-spacing: .26em;
+    transition: background .2s, color .2s;
+}
+.view-tab + .view-tab{ border-left: 1px solid var(--color-line); }
+.view-tab .n{ font-family: var(--font-mono); letter-spacing: 0; opacity: .7; }
+.view-tab:not(.active):hover{ color: #fff; background: rgba(255,255,255,.06); }
+.view-tab.active{ background: #f2f2f2; color: #000; cursor: default; }
+.view-tab:focus-visible{ outline: 1px solid #fff; outline-offset: 4px; }
+
+@media (prefers-reduced-motion: reduce){
+    .view-tabs{ animation: none; }
+}

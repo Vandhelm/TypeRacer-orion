@@ -1,0 +1,148 @@
+/* The pool: the room drawn as a wireframe, one lane per player.
+   Lane elements are created by pool/createRacePool.js. */
+.race-pool{
+    position: relative;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: repeat(var(--lanes), minmax(0, 1fr));
+    background: #050505;
+    border: 1px solid var(--color-line);
+    animation: rise .8s .1s cubic-bezier(.2,.8,.2,1) both;
+}
+.race-pool::before{
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'%3E%3Cpath vector-effect='non-scaling-stroke' fill='none' stroke='white' stroke-opacity='.17' d='M36 40H64V58H36ZM0 0L36 40M100 0L64 40M0 100L36 58M100 100L64 58M12 13.3V86M24 26.7V72M88 13.3V86M76 26.7V72M12 13.3H88M24 26.7H76M32.6 62H67.4M27.4 68H72.6M19.7 77H80.3M8.6 90H91.4M41 58L20 100M45.5 58L38 100M50 58V100M54.5 58L62 100M59 58L80 100'/%3E%3C/svg%3E") center/100% 100% no-repeat;
+}
+.race-pool::after{
+    content: "";
+    position: absolute;
+    z-index: 5;
+    inset: -7px;
+    pointer-events: none;
+    background: linear-gradient(#fff, #fff) 0 0/16px 1px, linear-gradient(#fff, #fff) 0 0/1px 16px, linear-gradient(#fff, #fff) 100% 100%/16px 1px, linear-gradient(#fff, #fff) 100% 100%/1px 16px;
+    background-repeat: no-repeat;
+}
+
+.race-lane{
+    --image-width: min(86cqi, 24vh);
+    --pipe-height: calc(var(--image-width) * .389);
+    --fish-height: calc(var(--image-width) * .667);
+    position: relative;
+    min-width: 0;
+    overflow: hidden;
+    container-type: inline-size;
+}
+.race-lane + .race-lane{ border-left: 1px solid var(--color-line-faint); }
+.race-lane.is-me{ background: linear-gradient(rgba(255,255,255,.08), rgba(255,255,255,.02)); box-shadow: inset 0 -3px 0 var(--color-red-solid); }
+
+.race-pipe{
+    --frame: 0;
+    position: absolute;
+    z-index: 3;
+    top: 0;
+    left: 50%;
+    width: var(--image-width);
+    aspect-ratio: 360/140;
+    transform: translateX(-50%);
+    background: var(--img) 0 calc(var(--frame) * 20%)/100% 600% no-repeat, #0a0a0a;
+    -webkit-mask: var(--pipe-mask, none) 0 calc(var(--frame) * 20%)/100% 600% no-repeat;
+    mask: var(--pipe-mask, none) 0 calc(var(--frame) * 20%)/100% 600% no-repeat;
+    filter: drop-shadow(0 0 .6px #fff) drop-shadow(0 0 .6px #fff);
+}
+.race-fish{
+    position: absolute;
+    z-index: 2;
+    left: 50%;
+    bottom: 0;
+    width: var(--image-width);
+    height: auto;
+    max-width: none;
+    transform: translateX(-50%) translateY(calc(var(--neck-rise, 0px) * -1));
+    -webkit-mask-image: linear-gradient(to top, transparent calc(var(--neck-rise, 0px) * -1), #000 calc(32% - var(--neck-rise, 0px)));
+    mask-image: linear-gradient(to top, transparent calc(var(--neck-rise, 0px) * -1), #000 calc(32% - var(--neck-rise, 0px)));
+    filter: drop-shadow(0 0 1.5px #fff) drop-shadow(0 0 3px rgba(255,255,255,.75));
+}
+.race-neck{
+    position: absolute;
+    z-index: 2;
+    left: 50%;
+    bottom: 0;
+    width: var(--image-width);
+    height: calc(var(--neck-rise, 0px) + 1px);
+    transform: translateX(-50%);
+    background: var(--neck) 0 0/100% 100% no-repeat;
+    -webkit-mask-image: linear-gradient(to top, transparent 0, #000 calc(var(--fish-height) * .32));
+    mask-image: linear-gradient(to top, transparent 0, #000 calc(var(--fish-height) * .32));
+    filter: drop-shadow(0 0 1.5px #fff) drop-shadow(0 0 3px rgba(255,255,255,.75));
+}
+.race-tank{ position: absolute; inset: 0; z-index: 2; width: 100%; height: 100%; pointer-events: none; }
+
+/* Rank stamp: the red diamond from the home page */
+.race-rank{
+    position: absolute;
+    z-index: 4;
+    left: 50%;
+    top: calc(var(--pipe-height) + 3vh);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: min(70cqi, 11vh);
+    height: min(70cqi, 11vh);
+    transform: translateX(-50%) rotate(-12deg);
+    color: var(--color-red-text);
+    font: 700 min(26cqi, 4vh)/1 var(--font-serif);
+    animation: game-rank-hit .7s cubic-bezier(.2,.9,.3,1) both;
+}
+.race-rank::before{
+    content: "";
+    position: absolute;
+    inset: 14%;
+    z-index: -1;
+    background: rgba(0,0,0,.72);
+    border: 4px double var(--color-red-hover);
+    transform: rotate(45deg);
+}
+@keyframes game-rank-hit{
+    0%  { opacity: 0; transform: translateX(-50%) scale(2.2) rotate(-28deg); }
+    50% { opacity: 1; transform: translateX(-50%) scale(.9) rotate(-12deg); }
+    70% { transform: translateX(-50%) scale(1.05) rotate(-12deg); }
+    100%{ opacity: 1; transform: translateX(-50%) scale(1) rotate(-12deg); }
+}
+
+/* Names under the lanes */
+.game-names{ display: grid; grid-template-columns: repeat(var(--lanes), minmax(0, 1fr)); }
+.game-name{
+    container-type: inline-size;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: .5vh;
+    padding: 0 .6vh;
+    text-align: center;
+}
+.game-name-line{
+    max-width: 100%;
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+    white-space: nowrap;
+    font: 400 max(10px, 1.2vh)/1.2 var(--font-mono);
+    letter-spacing: .1em;
+    color: var(--color-muted);
+}
+.game-name-line span{ min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.game-name.is-me .game-name-line{ color: #fff; font-weight: 500; }
+.game-progress{ display: block; width: 70%; height: 1px; background: var(--color-line-faint); }
+.game-progress i{ display: block; width: calc(var(--progress) * 100%); height: 100%; background: var(--color-line); transition: width .5s; }
+.game-name.is-me .game-progress{ height: 2px; }
+.game-name.is-me .game-progress i{ background: var(--color-red-text); }
+@container (max-width: 56px){ .game-name-line span{ display: none; } }
+
+@media (prefers-reduced-motion: reduce){
+    .race-pool, .race-rank{ animation: none; }
+    .game-progress i{ transition: none; }
+}

@@ -1,0 +1,42 @@
+/* Home view: the panel with Play / Account forms.
+   Page wrappers (.home, .panel-body, forms, button stacks) are laid out with Tailwind in home.html. */
+.panel{
+    pointer-events: auto;
+    position: relative;
+    width: 100%;
+    max-width: min(520px, 58vh);
+    max-height: 100%;
+    background: #000;
+    border: 1px solid var(--color-line);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3.2vh;
+    padding: 6vh 3vh 4vh;
+    animation: rise .8s .2s cubic-bezier(.2,.8,.2,1) both;
+}
+/* blueprint-style corner marks */
+.panel::before,
+.panel::after{
+    content: '';
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    border: 1px solid #fff;
+}
+.panel::before{ top: -7px; left: -7px; border-right: none; border-bottom: none; }
+.panel::after{ bottom: -7px; right: -7px; border-left: none; border-top: none; }
+
+
+/* Stacked forms (only one visible at a time) */
+.panes{
+    animation: rise .7s .65s cubic-bezier(.2,.8,.2,1) both;
+}
+
+@media (prefers-reduced-motion: reduce){
+    .panel, .panes{ animation: none; }
+}
+@media (max-width: 700px){
+    .panel{ max-width: 460px; gap: 28px; padding: 40px 20px 32px; }
+}

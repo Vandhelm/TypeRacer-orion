@@ -1,0 +1,44 @@
+/* Home page entry (home.html). Order matters: base → page sections → components → view states.
+   Tailwind: theme + utilities only, no preflight (reset.css is our base).
+   Utilities live in a cascade layer, so the plain CSS below always wins over them:
+   never style the same property of an element in both places. */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+@source "../../../../home.html";
+@source "../../../pages/home";
+@source "../../../components";
+
+@import "../../base/tokens.css";
+@import "../../base/reset.css" layer(base);   /* layered so Tailwind utilities can override it */
+@import "../../base/animations.css";
+@import "../../base/utilities.css";
+
+@import "./home.css";
+@import "./rooms.css";
+
+@import "../../components/navigation/navbar.css";
+@import "../../components/tabs/hanging-tabs.css";
+@import "../../components/buttons/hanging-button.css";
+@import "../../components/brand/logo-title.css";
+@import "../../components/tabs/view-tabs.css";
+@import "../../components/forms/text-field.css";
+@import "../../components/buttons/outline-button.css";
+@import "../../components/buttons/flip-button.css";
+@import "../../components/stamp.css";
+@import "../../components/cards/ticket.css";
+
+/* The "Back" sign hangs from the navbar */
+:root{ --hang-from: var(--navbar-height); }
+
+/* Two views in one page: html.rooms-view (set by JS) switches Home ↔ Rooms */
+.rooms, .hanging-button{ visibility: hidden; }
+html.rooms-view .rooms, html.rooms-view .hanging-button{ visibility: visible; }
+html.rooms-view .home{ visibility: hidden; }
+html.rooms-view .home.leaving{ visibility: visible; }
+
+@media (max-width: 760px){
+    html:not(.rooms-view) .rooms{ position: fixed; }
+    html.rooms-view .home{ display: none; }
+    html.rooms-view .rooms{ position: relative; }
+}

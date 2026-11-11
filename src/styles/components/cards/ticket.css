@@ -1,0 +1,201 @@
+/* Hanging ticket card with a tear-off stub. Sizes scale with --u and --hang (set by the parent, e.g. .tickets). */
+.ticket{
+    position: relative;
+    transform-origin: 50% calc(-1 * var(--hang));
+    animation: none;
+}
+.ticket:nth-child(1){ animation-delay: .25s; }
+.ticket:nth-child(2){ animation-delay: .33s; }
+.ticket:nth-child(3){ animation-delay: .41s; }
+.ticket:nth-child(4){ animation-delay: .49s; }
+html.rooms-view .ticket.descend{ animation: slide-down 1.3s cubic-bezier(.25,.8,.3,1) both; }
+
+/* the wire */
+.ticket::before{
+    content: '';
+    position: absolute;
+    z-index: 3;
+    left: 50%;
+    bottom: calc(100% - 12px);
+    width: 1px;
+    height: 120vh;
+    transform: translateX(-50%);
+    background: var(--color-line-soft);
+}
+
+/* the paper (hover motion is a damped spring computed in JS) */
+.ticket-paper{
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: calc(7 * var(--u));
+    padding: calc(15 * var(--u)) calc(10 * var(--u)) 0;
+    background: #070707;
+    border: 1px solid var(--color-line);
+    box-shadow: 0 1cqw 2cqw rgba(0,0,0,.55);
+    transform-origin: 50% 0;
+    will-change: transform;
+    transition: box-shadow .4s;
+}
+.ticket-paper::after{
+    content: '';
+    position: absolute;
+    inset: calc(3 * var(--u)) calc(3 * var(--u)) 0;
+    border: 1px solid var(--color-line-faint);
+    border-bottom: 0;
+    pointer-events: none;
+}
+.ticket:hover .ticket-paper{ box-shadow: 0 1.2cqw 2.4cqw rgba(0,0,0,.65); }
+
+.ticket-hole{
+    position: absolute;
+    z-index: 2;
+    left: 50%;
+    top: calc(4 * var(--u));
+    width: calc(6 * var(--u));
+    height: calc(6 * var(--u));
+    transform: translateX(-50%);
+    border-radius: 50%;
+    background: #000;
+    border: 1px solid var(--color-line);
+}
+
+/* content */
+.ticket-header{
+    text-align: center;
+    font: 500 max(9px, calc(3.6 * var(--u)))/1 var(--font-mono);
+    letter-spacing: .26em;
+    padding-left: .26em;
+    color: var(--color-line-soft);
+}
+.ticket-num{
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: calc(3.6 * var(--u));
+    padding: calc(7 * var(--u)) 0 calc(7 * var(--u));
+    border-top: 1px solid var(--color-line-soft);
+    border-bottom: 1px solid var(--color-line-soft);
+    box-shadow: 0 calc(-1.4 * var(--u)) 0 -1px var(--color-line-faint), 0 calc(1.4 * var(--u)) 0 -1px var(--color-line-faint);
+}
+.ticket-number{ font: 200 calc(26 * var(--u))/1 var(--font-sans); letter-spacing: .02em; color: #fff; }
+.ticket-table{ font: 500 calc(4.6 * var(--u))/1 var(--font-sans); letter-spacing: .34em; padding-left: .34em; }
+.ticket-serial{ font: 400 max(9px, calc(3.4 * var(--u)))/1 var(--font-mono); letter-spacing: .2em; color: rgba(255,255,255,.5); }
+.ticket-rows{ display: flex; flex-direction: column; gap: calc(5.5 * var(--u)); padding: calc(1 * var(--u)) 0; }
+.ticket-row{ display: flex; align-items: center; gap: calc(2 * var(--u)); min-width: 0; }
+.ticket-row::after{ content: ''; order: 1; flex: 1; min-width: calc(2 * var(--u)); border-top: 1px dotted rgba(255,255,255,.22); }
+.ticket-label{ font: 400 max(10px, calc(4 * var(--u)))/1 var(--font-mono); letter-spacing: .12em; color: rgba(255,255,255,.6); text-transform: uppercase; white-space: nowrap; }
+.ticket-value{ order: 2; font: 500 max(11px, calc(4.8 * var(--u)))/1 var(--font-mono); letter-spacing: .04em; color: #fff; white-space: nowrap; flex: none; }
+.ticket-value.yes{ color: var(--color-red-text); }
+
+/* perforation */
+.ticket-perforation{ position: relative; z-index: 3; margin: calc(1 * var(--u)) calc(-10 * var(--u)) 0; border-top: 1px dashed var(--color-line-soft); }
+.ticket-perforation::before, .ticket-perforation::after{
+    content: '';
+    position: absolute;
+    top: calc(-4.5 * var(--u));
+    width: calc(9 * var(--u));
+    height: calc(9 * var(--u));
+    border-radius: 50%;
+    background: #000;
+    border: 1px solid var(--color-line);
+}
+.ticket-perforation::before{ left: calc(-4.5 * var(--u) - 1px); clip-path: inset(-2px -2px -2px calc(50% - 2px)); }
+.ticket-perforation::after{ right: calc(-4.5 * var(--u) - 1px); clip-path: inset(-2px calc(50% - 2px) -2px -2px); }
+
+/* tear-off stub */
+.ticket-stub{ display: flex; flex-direction: column; gap: calc(5 * var(--u)); padding: calc(2 * var(--u)) 0 calc(10 * var(--u)); }
+.ticket-stub-header{
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font: 400 max(9px, calc(3.2 * var(--u)))/1 var(--font-mono);
+    letter-spacing: .24em;
+    color: var(--color-line-soft);
+}
+.ticket-stub-header .ticket-dot{ width: calc(3 * var(--u)); height: calc(3 * var(--u)); background: var(--color-red-solid); transform: rotate(45deg); }
+.ticket-button{
+    all: unset;
+    box-sizing: border-box;
+    cursor: pointer;
+    height: max(30px, calc(9.5 * var(--u)));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 calc(4 * var(--u)) 0 calc(4 * var(--u) + .3em);
+    background: var(--color-red-solid);
+    border: 1px solid rgba(255,140,120,.45);
+    color: #fff;
+    font: 500 max(10px, calc(3.8 * var(--u)))/1 var(--font-sans);
+    letter-spacing: .3em;
+    transition: background .2s, color .2s, border-color .2s;
+}
+.ticket-button:hover{ background: var(--color-red-hover); }
+.ticket-button:focus-visible{ outline: 1px solid #fff; outline-offset: 3px; }
+
+/* taken state */
+.ticket.taken .ticket-stub{ visibility: hidden; }
+.ticket.taken .ticket-perforation{ border-top: 1px solid var(--color-line); }   /* clean cut edge */
+
+/* detached stub flying away (copy placed over the page by JS) */
+.ticket-stub-flying{
+    position: fixed;
+    z-index: 30;
+    margin: 0;
+    padding: calc(1 * var(--u)) calc(8 * var(--u)) calc(8 * var(--u));
+    background: #060606;
+    border: 1px solid var(--color-line);
+    border-top: 1px dashed var(--color-line-soft);
+    pointer-events: none;
+    transform-origin: 20% 0;
+    animation: fly-away 1.2s cubic-bezier(.4,0,.6,1) forwards;
+}
+
+/* stamp on the coupon */
+.ticket-stamp{
+    position: absolute;
+    z-index: 4;
+    left: 50%;
+    top: 34%;
+    width: calc(38 * var(--u));
+    height: calc(38 * var(--u));
+    display: grid;
+    place-items: center;
+    opacity: 0;
+    pointer-events: none;
+    transform: translate(-50%, -50%);
+}
+.ticket-stamp::before{
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(6,6,6,.94);
+    border: calc(1.2 * var(--u)) double var(--color-red-hover);
+    transform: rotate(45deg);
+}
+.ticket-stamp span{
+    position: relative;
+    color: var(--color-red-text);
+    font: 600 max(10px, calc(4.4 * var(--u)))/1 var(--font-mono);
+    letter-spacing: .14em;
+    padding-left: .14em;
+    transform: rotate(-12deg);
+}
+.ticket.taken .ticket-stamp{ animation: stamp-stay .7s .35s cubic-bezier(.2,.9,.3,1) both; }
+
+@keyframes slide-down{
+    0%  { transform: translateY(-75vh) rotate(0deg); }
+    70% { transform: translateY(.8cqw) rotate(1.6deg); }
+    84% { transform: translateY(-.2cqw) rotate(-1deg); }
+    100%{ transform: none; }
+}
+@keyframes stamp-stay{ 0%{ opacity: 0; transform: translate(-50%,-50%) scale(2.2) rotate(-20deg); } 50%{ opacity: 1; transform: translate(-50%,-50%) scale(.9) rotate(0deg); } 70%{ transform: translate(-50%,-50%) scale(1.05); } 100%{ opacity: 1; transform: translate(-50%,-50%) scale(1); } }
+@keyframes fly-away{ 0%{ transform: none; opacity: 1; } 15%{ transform: translateY(calc(3 * var(--u))) rotate(4deg); } 45%{ transform: translate(14%, -20%) rotate(-14deg) scale(.94); opacity: 1; } 100%{ transform: translate(70%, -260%) rotate(-38deg) scale(.55); opacity: 0; } }
+
+@media (max-width: 760px){
+    .ticket:nth-child(n+3)::before{ height: calc(var(--hang) + 1cqw + 12px); }
+}
+@media (prefers-reduced-motion: reduce){
+    .ticket, .ticket:hover .ticket-paper{ animation: none !important; }
+    .ticket.taken .ticket-stamp{ animation: none; opacity: 1; }
+}

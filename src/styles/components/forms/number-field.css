@@ -1,0 +1,10 @@
+/* Number input with small up/down arrows */
+.number-field{ display: inline-flex; align-items: center; gap: 4px; }
+.number-field-arrows{ display: flex; flex-direction: column; }
+.number-field-arrow{ all: unset; box-sizing: border-box; cursor: pointer; width: 22px; height: 16px; display: flex; align-items: center; justify-content: center; color: var(--color-muted); transition: color .2s; }
+.number-field-arrow svg{ width: 9px; height: 9px; }
+.number-field-arrow:hover{ color: #fff; }
+.number-field-arrow:focus-visible{ outline: 1px solid #fff; }
+.number-field-input::-webkit-inner-spin-button, .number-field-input::-webkit-outer-spin-button{ -webkit-appearance: none; margin: 0; }
+.number-field-input{ all: unset; box-sizing: border-box; width: 3.4em; height: 32px; text-align: center; border-bottom: 1px solid var(--color-line-soft); font: 300 clamp(17px, 2.6vh, 24px)/1 var(--font-sans); color: #fff; caret-color: var(--color-red-text); }
+.number-field-input:focus{ border-bottom-color: #fff; }

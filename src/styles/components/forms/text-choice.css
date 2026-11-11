@@ -1,0 +1,16 @@
+/* Radio or checkbox shown as plain text */
+.text-choice{ position: relative; }
+.text-choice.inactive{ opacity: .35; }
+.text-choice input{ position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.text-choice input:disabled{ cursor: not-allowed; }
+.text-choice span{ display: flex; align-items: center; min-height: 40px; padding-bottom: 2px; font: 300 clamp(17px, 2.6vh, 24px)/1.1 var(--font-sans); color: var(--color-muted); border-bottom: 2px solid transparent; transition: color .2s, border-color .2s; }
+.text-choice input:hover + span{ color: #fff; }
+.text-choice input:checked + span{ color: #fff; border-bottom-color: var(--color-red-text); }
+.text-choice input:focus-visible + span{ outline: 1px solid #fff; outline-offset: 3px; }
+
+@media (prefers-reduced-motion: reduce){
+    .text-choice span{ transition: none; }
+}
+@media (max-width: 760px){
+    .text-choice span{ min-height: 44px; font-size: 21px; }
+}
