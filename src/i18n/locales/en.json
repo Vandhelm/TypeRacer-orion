@@ -261,6 +261,22 @@
       "fix": "fix",
       "carry-on": "carry on",
       "fatal": "fatal mistakes"
-    }
+    },
+    "career": "All races",
+    "lastRace": "Last race",
+    "bestWpm": "Best WPM",
+    "averageWpm": "Average WPM",
+    "averageAccuracy": "Average accuracy",
+    "races": "Races",
+    "wins": "Wins",
+    "progress": "WPM progress",
+    "race": "Race",
+    "date": "Date",
+    "loading": "Loading statistics…",
+    "statsError": "Statistics are unavailable right now.",
+    "noRaces": "No race recorded yet.",
+    "guestNoHistory": "Guests have no history. Create an account to keep your statistics.",
+    "empty": "Play a race to see statistics.",
+    "home": "Home"
   }
 }

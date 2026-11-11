@@ -261,6 +261,22 @@
       "fix": "corriger",
       "carry-on": "continuer",
       "fatal": "erreur fatale"
-    }
+    },
+    "career": "Toutes les courses",
+    "lastRace": "Dernière course",
+    "bestWpm": "Meilleur MPM",
+    "averageWpm": "MPM moyen",
+    "averageAccuracy": "Précision moyenne",
+    "races": "Courses",
+    "wins": "Victoires",
+    "progress": "Progression du MPM",
+    "race": "Course",
+    "date": "Date",
+    "loading": "Chargement des statistiques…",
+    "statsError": "Statistiques indisponibles pour le moment.",
+    "noRaces": "Aucune course enregistrée pour l'instant.",
+    "guestNoHistory": "Les invités n'ont pas d'historique. Crée un compte pour garder tes statistiques.",
+    "empty": "Joue une course pour voir des statistiques.",
+    "home": "Accueil"
   }
 }

@@ -1,60 +1,101 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { HangingButton } from "../../components/buttons/HangingButton";
-import { readResults, SAMPLE_RESULTS } from "../podium/results";
+import { readResults, type PlayerResult, type RaceResults } from "../podium/results";
+import { CareerStats } from "./CareerStats";
+import { usePlayerStats } from "./hooks/usePlayerStats";
 import { ProfileDetails } from "./ProfileDetails";
 import { SpeedChart } from "./SpeedChart";
 import { StatBlock } from "./StatBlock";
 
 const PODIUM_HREF = "/podium#arrived";
 
-/** Le podium ouvre la page avec ?player=N pour montrer un joueur ; sans ce paramètre, c'est mon profil, une page à part. */
-function requestedIndex(players: { me: boolean }[]) {
-  const param = new URLSearchParams(location.search).get("player");
-  if (param === null) return { index: Math.max(0, players.findIndex((player) => player.me)), fromPodium: false };
-  const index = Number(param);
-  return { index: Number.isInteger(index) && index >= 0 && index < players.length ? index : 0, fromPodium: true };
+type Subject = { name: string; result: PlayerResult | null; index: number; fromPodium: boolean };
+
+/**
+ * Qui montrer ? ?player=N : le N-ième joueur de la dernière course (depuis le podium) ; ?name=X : un joueur par son nom ;
+ * sans paramètre : moi dans la dernière course. null : rien à montrer.
+ */
+function subjectOf(results: RaceResults | null): Subject | null {
+  const query = new URLSearchParams(location.search);
+  const players = results?.players ?? [];
+  const param = query.get("player");
+  if (param !== null) {
+    const index = Number(param);
+    const result = Number.isInteger(index) ? players[index] : undefined;
+    return result ? { name: result.name, result, index, fromPodium: true } : null;
+  }
+  const name = query.get("name")?.trim();
+  if (name) {
+    const index = players.findIndex((player) => player.name.toLowerCase() === name.toLowerCase());
+    return { name: players[index]?.name ?? name, result: players[index] ?? null, index, fromPodium: false };
+  }
+  const index = players.findIndex((player) => player.me);
+  return index >= 0 ? { name: players[index]!.name, result: players[index]!, index, fromPodium: false } : null;
 }
 
-/** One player's statistics for the race that just ended. */
+/** Un joueur : ses statistiques sur toutes ses courses, puis le détail de la dernière course s'il y était. */
 export function ProfilePage() {
   const { t } = useTranslation();
-  const [{ players, summary }] = useState(() => readResults() ?? SAMPLE_RESULTS);
-  const [{ index, fromPodium }] = useState(() => requestedIndex(players));
-  const player = players[index]!;
+  const [results] = useState(readResults);
+  const [subject] = useState(() => subjectOf(results));
+  // un invité n'a pas d'historique : rien à demander au serveur (AUTH-03)
+  const guest = !!subject?.result?.me;
+  const stats = usePlayerStats(subject && !guest ? subject.name : null);
 
   useEffect(() => {
-    document.title = t("profile.pageTitle", { name: player.name });
-  }, [t, player.name]);
+    document.title = subject ? t("profile.pageTitle", { name: subject.name }) : t("nav.profile");
+  }, [t, subject]);
 
   useEffect(() => {
-    if (!fromPodium) return;
+    if (!subject?.fromPodium) return;
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") location.assign(PODIUM_HREF);
     };
     addEventListener("keydown", onKey);
     return () => removeEventListener("keydown", onKey);
-  }, [fromPodium]);
+  }, [subject]);
 
+  if (!subject) {
+    return (
+      <main className="profile" aria-labelledby="profile-name">
+        <header className="profile-head">
+          <HangingButton className="profile-back" href="/home">{t("profile.home")}</HangingButton>
+          <div className="profile-title"><h1 id="profile-name" className="profile-name">{t("nav.profile")}</h1></div>
+        </header>
+        <p className="profile-note">{t("profile.empty")}</p>
+      </main>
+    );
+  }
+
+  const { result, index } = subject;
   const place = t("profile.place", { rank: t(`podium.ranks.${index}`) });
 
   return (
     <main className="profile" aria-labelledby="profile-name">
       <header className="profile-head">
-        {fromPodium && <HangingButton className="profile-back" href={PODIUM_HREF}>{t("profile.back")}</HangingButton>}
+        {subject.fromPodium && <HangingButton className="profile-back" href={PODIUM_HREF}>{t("profile.back")}</HangingButton>}
         <div className="profile-title">
-          <h1 id="profile-name" className="profile-name">{player.name}</h1>
-          <p className="profile-rank">{player.me ? `${place} · ${t("room.you")}` : place}</p>
+          <h1 id="profile-name" className="profile-name">{subject.name}</h1>
+          {result && <p className="profile-rank">{result.me ? `${place} · ${t("room.you")}` : place}</p>}
         </div>
       </header>
-      <div className="profile-top">
-        <div className="profile-heroes">
-          <StatBlock label={t("game.wpm")} value={String(player.wpm)} />
-          <StatBlock label={t("profile.accuracy")} value={`${player.accuracy} %`} />
-        </div>
-        <SpeedChart player={player} />
-      </div>
-      <ProfileDetails player={player} summary={summary} />
+
+      <CareerStats state={guest ? null : stats} guest={guest} />
+
+      {result && results && (
+        <section className="profile-section" aria-labelledby="last-race-title">
+          <h2 id="last-race-title" className="profile-section-title">{t("profile.lastRace")}</h2>
+          <div className="profile-top">
+            <div className="profile-heroes">
+              <StatBlock label={t("game.wpm")} value={String(result.wpm)} />
+              <StatBlock label={t("profile.accuracy")} value={`${result.accuracy} %`} />
+            </div>
+            <SpeedChart player={result} />
+          </div>
+          <ProfileDetails player={result} summary={results.summary} />
+        </section>
+      )}
     </main>
   );
 }

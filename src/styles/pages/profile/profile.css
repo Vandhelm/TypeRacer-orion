@@ -78,3 +78,9 @@
     .profile-heroes{ flex-direction: row; gap: 36px; }
     .profile-grid{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* Sections : toutes les courses (serveur), puis la dernière course (cet onglet). */
+.profile-section + .profile-section{ margin-top: clamp(32px, 6vh, 56px); padding-top: clamp(20px, 3vh, 28px); border-top: 1px solid var(--color-line-soft); }
+.profile-section-title{ margin-bottom: clamp(16px, 3vh, 24px); color: var(--color-muted); font: 400 max(11px, 1.3vh)/1.2 var(--font-mono); letter-spacing: .2em; text-transform: uppercase; }
+.profile-note{ color: var(--color-muted); font: 400 max(12px, 1.4vh)/1.6 var(--font-mono); }
+.profile-grid--career{ margin-top: 0; margin-bottom: clamp(20px, 3vh, 28px); padding-top: 0; border-top: 0; }
