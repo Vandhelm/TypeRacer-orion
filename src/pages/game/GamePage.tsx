@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { HangingButton } from "../../components/buttons/HangingButton";
 import { buildResults, buildSummary, markSessionStart, saveResults, sessionSeconds, submitRace } from "../podium/results";
 import { useRoom } from "../room/hooks/useRoom";
+import { rememberGuestRace } from "../profile/stats";
 import { useRace } from "./hooks/useRace";
 import { loadRacePoolImages, type RacePoolImages } from "./pool/createRacePool";
 import { laneProgress } from "./race";
@@ -32,6 +33,9 @@ export function GamePage() {
     if (!showResults) return;
     const results = { players: buildResults(race, players), summary: buildSummary(race, room, sessionSeconds()) };
     saveResults(results);
+    const rank = results.players.findIndex((player) => player.me);
+    const me = results.players[rank];
+    if (me) rememberGuestRace({ at: new Date().toISOString(), wpm: me.wpm, accuracy: me.accuracy, rank: rank + 1 });
     submitRace(results, race.course.words.join(" "));
     location.replace("/podium"); // le retour arrière ne relance pas une course
   }, [showResults, race, players, room]);

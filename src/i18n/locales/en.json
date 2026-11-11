@@ -275,8 +275,9 @@
     "loading": "Loading statistics…",
     "statsError": "Statistics are unavailable right now.",
     "noRaces": "No race recorded yet.",
-    "guestNoHistory": "Guests have no history. Create an account to keep your statistics.",
     "empty": "Play a race to see statistics.",
-    "home": "Home"
+    "home": "Home",
+    "sessionRaces": "Races this session",
+    "guestSession": "Guest: these statistics vanish when the tab closes. Create an account to keep them."
   }
 }

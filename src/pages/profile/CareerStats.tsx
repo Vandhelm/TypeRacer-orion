@@ -4,13 +4,12 @@ import type { StatsState } from "./hooks/usePlayerStats";
 import { ProgressChart } from "./ProgressChart";
 import { StatBlock } from "./StatBlock";
 
-/** Toutes les courses du joueur (AUTH-06). Un invité n'a pas d'historique (AUTH-03). */
-export function CareerStats({ state, guest }: { state: StatsState | null; guest: boolean }) {
+/** Toutes les courses du joueur (AUTH-06). Pour un invité : celles de sa session seulement (AUTH-03). */
+export function CareerStats({ state, guest }: { state: StatsState; guest: boolean }) {
   const { t, i18n } = useTranslation();
 
   let body;
-  if (guest) body = <p className="profile-note">{t("profile.guestNoHistory")}</p>;
-  else if (!state || state.status === "loading") body = <p className="profile-note">{t("profile.loading")}</p>;
+  if (state.status === "loading") body = <p className="profile-note">{t("profile.loading")}</p>;
   else if (state.status === "error") body = <p className="profile-note">{t("profile.statsError")}</p>;
   else if (!state.stats || state.stats.races === 0) body = <p className="profile-note">{t("profile.noRaces")}</p>;
   else {
@@ -25,13 +24,14 @@ export function CareerStats({ state, guest }: { state: StatsState | null; guest:
           <StatBlock label={t("profile.wins")} value={String(stats.wins)} />
         </div>
         <ProgressChart progress={stats.progress} />
+        {guest && <p className="profile-note">{t("profile.guestSession")}</p>}
       </>
     );
   }
 
   return (
     <section className="profile-section" aria-labelledby="career-title">
-      <h2 id="career-title" className="profile-section-title">{t("profile.career")}</h2>
+      <h2 id="career-title" className="profile-section-title">{t(guest ? "profile.sessionRaces" : "profile.career")}</h2>
       {body}
     </section>
   );

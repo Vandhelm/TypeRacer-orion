@@ -275,8 +275,9 @@
     "loading": "Chargement des statistiques…",
     "statsError": "Statistiques indisponibles pour le moment.",
     "noRaces": "Aucune course enregistrée pour l'instant.",
-    "guestNoHistory": "Les invités n'ont pas d'historique. Crée un compte pour garder tes statistiques.",
     "empty": "Joue une course pour voir des statistiques.",
-    "home": "Accueil"
+    "home": "Accueil",
+    "sessionRaces": "Courses de cette session",
+    "guestSession": "Invité : ces statistiques disparaissent à la fermeture de l'onglet. Crée un compte pour les garder."
   }
 }

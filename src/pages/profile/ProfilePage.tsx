@@ -3,10 +3,11 @@ import { useTranslation } from "react-i18next";
 import { HangingButton } from "../../components/buttons/HangingButton";
 import { readResults, type PlayerResult, type RaceResults } from "../podium/results";
 import { CareerStats } from "./CareerStats";
-import { usePlayerStats } from "./hooks/usePlayerStats";
+import { usePlayerStats, type StatsState } from "./hooks/usePlayerStats";
 import { ProfileDetails } from "./ProfileDetails";
 import { SpeedChart } from "./SpeedChart";
 import { StatBlock } from "./StatBlock";
+import { guestStats } from "./stats";
 
 const PODIUM_HREF = "/podium#arrived";
 
@@ -39,9 +40,11 @@ export function ProfilePage() {
   const { t } = useTranslation();
   const [results] = useState(readResults);
   const [subject] = useState(() => subjectOf(results));
-  // un invité n'a pas d'historique : rien à demander au serveur (AUTH-03)
+  // un invité n'a pas d'historique sur le serveur (AUTH-03) : ses stats viennent de sa session
   const guest = !!subject?.result?.me;
-  const stats = usePlayerStats(subject && !guest ? subject.name : null);
+  const remote = usePlayerStats(subject && !guest ? subject.name : null);
+  const [local] = useState<StatsState | null>(() => (guest && subject ? { status: "ready", stats: guestStats(subject.name) } : null));
+  const stats = local ?? remote;
 
   useEffect(() => {
     document.title = subject ? t("profile.pageTitle", { name: subject.name }) : t("nav.profile");
@@ -81,7 +84,7 @@ export function ProfilePage() {
         </div>
       </header>
 
-      <CareerStats state={guest ? null : stats} guest={guest} />
+      <CareerStats state={stats} guest={guest} />
 
       {result && results && (
         <section className="profile-section" aria-labelledby="last-race-title">
