@@ -29,7 +29,7 @@
     "dev": "bun --hot server.ts",
     "typecheck": "tsc --noEmit",
     "build": "bun run build.ts",
-    "vercel-build": "if [ -n \"$VERCEL_ENV\" ]; then bun db/cli.ts migrate; fi && bun run build.ts",
+    "vercel-build": "if [ \"$VERCEL_ENV\" = production ] || [ \"$VERCEL_ENV\" = preview ]; then bun db/cli.ts migrate; fi && bun run build.ts",
     "db:up": "docker compose up -d --wait",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "bun db/cli.ts migrate",
