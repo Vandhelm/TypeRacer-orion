@@ -91,10 +91,10 @@ export function ProfilePage() {
           <h2 id="last-race-title" className="profile-section-title">{t("profile.lastRace")}</h2>
           <div className="profile-top">
             <div className="profile-heroes">
-              <StatBlock label={t("game.wpm")} value={String(result.wpm)} />
-              <StatBlock label={t("profile.accuracy")} value={`${result.accuracy} %`} />
+              <StatBlock className="panel" label={t("game.wpm")} value={String(result.wpm)} />
+              <StatBlock className="panel" label={t("profile.accuracy")} value={`${result.accuracy} %`} />
             </div>
-            <SpeedChart player={result} />
+            <div className="panel"><SpeedChart player={result} /></div>
           </div>
           <ProfileDetails player={result} summary={results.summary} />
         </section>

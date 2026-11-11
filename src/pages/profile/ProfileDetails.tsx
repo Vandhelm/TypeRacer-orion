@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import { useTranslation } from "react-i18next";
 import { oneDecimal, type PlayerResult, type RaceSummary } from "../podium/results";
 import { StatBlock } from "./StatBlock";
@@ -33,7 +34,9 @@ export function ProfileDetails({ player, summary }: { player: PlayerResult; summ
       <StatBlock label={t("profile.testType")} lines={race} />
       <StatBlock label={t("profile.other")} lines={outcome} />
       <StatBlock label={t("profile.raw")} value={String(player.raw)} />
-      <StatBlock label={t("profile.characters")} value={player.chars.join("/")} notes={[t("profile.charsDetail")]} />
+      <StatBlock label={t("profile.characters")} value={player.chars.map((count, i) => (
+          <Fragment key={i}>{i > 0 && <span className="stat-sep">/</span>}{count}</Fragment>
+        ))} notes={[t("profile.charsDetail")]} />
       <StatBlock label={t("profile.consistency")} value={`${player.consistency} %`} />
       <StatBlock
         label={t("profile.time")}

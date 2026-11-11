@@ -27,8 +27,10 @@ export function CareerStats({ state, guest, layout, onLayout }: Props) {
           <StatBlock label={t("profile.races")} value={String(stats.races)} />
           <StatBlock label={t("profile.wins")} value={String(stats.wins)} />
         </div>
-        <ProgressChart progress={stats.progress} />
-        <KeyboardHeatmap keys={stats.keys} layout={layout} onLayout={onLayout} />
+        <div className="profile-dash">
+          <div className="panel"><ProgressChart progress={stats.progress} /></div>
+          <div className="panel"><KeyboardHeatmap keys={stats.keys} layout={layout} onLayout={onLayout} /></div>
+        </div>
         {guest && <p className="profile-note">{t("profile.guestSession")}</p>}
       </>
     );
