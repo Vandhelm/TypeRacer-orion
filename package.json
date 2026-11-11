@@ -25,9 +25,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun ./home.html ./room.html ./game.html ./podium.html ./profile.html",
+    "dev": "bun --hot server.ts",
     "typecheck": "tsc --noEmit",
     "build": "bun run build.ts",
+    "vercel-build": "if [ \"$VERCEL_ENV\" = production ]; then bun db/cli.ts migrate; fi && bun run build.ts",
     "db:up": "docker compose up -d --wait",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "bun db/cli.ts migrate",

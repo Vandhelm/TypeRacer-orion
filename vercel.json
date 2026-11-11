@@ -1,1 +1,14 @@
-{"rewrites":[{"source":"/","destination":"/home"}],"cleanUrls":true}
+{
+  "bunVersion": "1.x",
+  "cleanUrls": true,
+  "rewrites": [
+    {
+      "source": "/",
+      "destination": "/home"
+    },
+    {
+      "source": "/api/(.*)",
+      "destination": "/api"
+    }
+  ]
+}
