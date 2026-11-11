@@ -24,7 +24,15 @@
     "stampCode": "CODE",
     "or": "OU",
     "withGoogle": "Continuer avec Google",
-    "withGithub": "Continuer avec GitHub"
+    "withGithub": "Continuer avec GitHub",
+    "loginToCreate": "Connecte-toi pour créer un salon.",
+    "badUsername": "Pseudo : 3 à 20 lettres, chiffres ou _.",
+    "badPassword": "Mot de passe : {{min}} caractères minimum.",
+    "signInFailed": "Pseudo ou mot de passe incorrect.",
+    "signUpFailed": "Ce pseudo est déjà pris.",
+    "signedInAs": "Connecté",
+    "myProfile": "MON PROFIL",
+    "signOut": "SE DÉCONNECTER"
   },
   "rooms": {
     "pageTitle": "Le kiosque — O.R.I.O.N",
