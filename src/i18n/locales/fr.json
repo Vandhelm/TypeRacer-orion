@@ -24,7 +24,8 @@
     "stampCode": "CODE",
     "or": "OU",
     "withGoogle": "Continuer avec Google",
-    "withGithub": "Continuer avec GitHub"
+    "withGithub": "Continuer avec GitHub",
+    "nicknameRule": "3 à 20 lettres, chiffres ou _"
   },
   "rooms": {
     "pageTitle": "Le kiosque — O.R.I.O.N",

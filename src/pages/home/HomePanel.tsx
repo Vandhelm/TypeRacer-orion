@@ -8,6 +8,7 @@ import { GithubIcon, GoogleIcon } from "../../components/icons";
 import { Stamp } from "../../components/Stamp";
 import { ViewTabs } from "../../components/tabs/ViewTabs";
 import { cleanRoomCode } from "../../rooms/access";
+import { NICKNAME_MAX, NICKNAME_PATTERN, saveNickname, storedNickname } from "../../players/nickname";
 
 type Pane = "play" | "account";
 type StampKey = "stampPlay" | "stampAccount" | "stampCode";
@@ -19,6 +20,7 @@ export function HomePanel({ ref }: { ref?: Ref<HTMLElement> }) {
   const { t } = useTranslation();
   const [pane, setPane] = useState<Pane>("play");
   const [code, setCode] = useState("");
+  const [nickname, setNickname] = useState(() => storedNickname() ?? "");
   const [showPassword, setShowPassword] = useState(false);
   const [stamp, setStamp] = useState<{ key: StampKey | null; on: boolean; play: number }>({ key: null, on: false, play: 0 });
   const stampTimer = useRef<number>(undefined);
@@ -65,7 +67,20 @@ export function HomePanel({ ref }: { ref?: Ref<HTMLElement> }) {
               id="nickname"
               num="01"
               label={t("home.nickname")}
-              inputProps={{ name: "nickname", autoComplete: "nickname", spellCheck: false, maxLength: 20, placeholder: "Corail_418" }}
+              inputProps={{
+                name: "nickname",
+                autoComplete: "nickname",
+                spellCheck: false,
+                maxLength: NICKNAME_MAX,
+                pattern: NICKNAME_PATTERN,
+                title: t("home.nicknameRule"),
+                placeholder: "Corail_418",
+                value: nickname,
+                onChange: (e) => {
+                  setNickname(e.target.value);
+                  saveNickname(e.target.value);
+                },
+              }}
             />
 
             <div className="flex flex-col gap-[1.3vh]">
