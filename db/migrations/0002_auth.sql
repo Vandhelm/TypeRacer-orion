@@ -1,3 +1,19 @@
+-- Restes d'une ancienne installation de Better Auth (colonnes en camelCase) : supprimés seulement s'ils sont vides.
+DO $$
+DECLARE
+  t text;
+  has_rows boolean;
+BEGIN
+  FOREACH t IN ARRAY ARRAY['account', 'session', 'verification', 'user', 'rateLimit'] LOOP
+    IF to_regclass(format('public.%I', t)) IS NOT NULL THEN
+      EXECUTE format('SELECT EXISTS (SELECT 1 FROM public.%I)', t) INTO has_rows;
+      IF has_rows THEN
+        RAISE EXCEPTION 'Old table "%" still holds rows: move them by hand before migrating.', t;
+      END IF;
+      EXECUTE format('DROP TABLE public.%I CASCADE', t);
+    END IF;
+  END LOOP;
+END $$;--> statement-breakpoint
 CREATE TABLE "account" (
 	"id" text PRIMARY KEY NOT NULL,
 	"account_id" text NOT NULL,

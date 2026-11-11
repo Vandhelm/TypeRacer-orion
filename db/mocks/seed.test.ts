@@ -98,3 +98,24 @@ describe("independent runs", () => {
     expect(await db.$count(races, isNull(races.roomId))).toBe(RACES.length);
   }, 30000);
 });
+
+describe("auth migration over an old Better Auth install", () => {
+  const legacy = async (withRow: boolean) => {
+    const { PGlite } = await import("@electric-sql/pglite");
+    const { drizzle } = await import("drizzle-orm/pglite");
+    const { migrate } = await import("drizzle-orm/pglite/migrator");
+    const { MIGRATIONS_DIR } = await import("../client");
+    const client = new PGlite();
+    await client.exec(`CREATE TABLE "user" ("id" text PRIMARY KEY, "name" text); CREATE TABLE "account" ("id" text PRIMARY KEY, "accountId" text); CREATE TABLE "rateLimit" ("id" text PRIMARY KEY);`);
+    if (withRow) await client.exec(`INSERT INTO "user" VALUES ('u1', 'Keep me')`);
+    return migrate(drizzle(client), { migrationsFolder: MIGRATIONS_DIR });
+  };
+
+  test("drops the old tables when they are empty", async () => {
+    await legacy(false);
+  });
+
+  test("stops when an old table still holds rows", async () => {
+    await expect(legacy(true)).rejects.toThrow();
+  });
+});
