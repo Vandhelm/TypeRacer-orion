@@ -1,6 +1,7 @@
 {
   "name": "typeracer-orion",
   "dependencies": {
+    "better-auth": "^1.7.20",
     "drizzle-orm": "^0.45.4",
     "i18next": "^26.7.2",
     "i18next-browser-languagedetector": "^8.3.0",
