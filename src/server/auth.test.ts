@@ -1,0 +1,58 @@
+import { beforeAll, describe, expect, test } from "bun:test";
+import { eq } from "drizzle-orm";
+import { players, user } from "../../db/schema";
+import { createMockDatabase } from "../../db/mocks/test-database";
+import { DEMO_PASSWORD } from "../../db/mocks/data";
+import { placeholderEmail } from "../accounts/username";
+import { createAuth } from "./auth";
+
+process.env.BETTER_AUTH_SECRET ??= "test-secret-test-secret-test-secret";
+process.env.BETTER_AUTH_URL ??= "http://localhost:3000";
+
+const signUp = (auth: ReturnType<typeof createAuth>, username: string, password = "sushi-roll-42") =>
+  auth.api.signUpEmail({ body: { name: username, email: placeholderEmail(username), password, username, displayUsername: username } });
+
+describe("username accounts", () => {
+  let db: Awaited<ReturnType<typeof createMockDatabase>>;
+  let auth: ReturnType<typeof createAuth>;
+  beforeAll(async () => {
+    db = await createMockDatabase();
+    auth = createAuth(db);
+  });
+
+  test("sign-up creates a user linked to a new player", async () => {
+    const { user: created } = await signUp(auth, "Nouveau_Thon");
+    const [row] = await db.select().from(user).where(eq(user.id, created.id));
+    const [player] = await db.select().from(players).where(eq(players.id, row!.playerId));
+    expect(player!.name).toBe("Nouveau_Thon");
+  });
+
+  test("signs in with username and password", async () => {
+    const result = await auth.api.signInUsername({ body: { username: "nouveau_thon", password: "sushi-roll-42" } });
+    expect(result?.token).toBeTruthy();
+  });
+
+  test("rejects a wrong password", async () => {
+    await expect(auth.api.signInUsername({ body: { username: "Nouveau_Thon", password: "wrong-password" } })).rejects.toThrow();
+  });
+
+  test("rejects a username taken by a guest or a bot", async () => {
+    await expect(signUp(auth, "Tamago_8")).rejects.toThrow();
+    await expect(signUp(auth, "thon_rouge")).rejects.toThrow();
+  });
+
+  test("rejects too short, too long or odd usernames", async () => {
+    await expect(signUp(auth, "ab")).rejects.toThrow();
+    await expect(signUp(auth, "a".repeat(21))).rejects.toThrow();
+    await expect(signUp(auth, "sushi roll")).rejects.toThrow();
+  });
+
+  test("rejects a short password", async () => {
+    await expect(signUp(auth, "Court_Mdp", "1234567")).rejects.toThrow();
+  });
+
+  test("demo accounts sign in with the demo password", async () => {
+    const result = await auth.api.signInUsername({ body: { username: "Corail_418", password: DEMO_PASSWORD } });
+    expect(result?.token).toBeTruthy();
+  });
+});

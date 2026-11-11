@@ -2,12 +2,19 @@
 import { sql } from "drizzle-orm";
 import { connect } from "../../db/client";
 import { InvalidRace, parseRace, playerStats, recordRace } from "./races";
+import { createAuth, type Auth } from "./auth";
 
 let database: ReturnType<typeof connect> | null = null;
 /** Une seule connexion par processus : une fonction Vercel réutilise son instance d'un appel à l'autre. */
 export function db() {
   database ??= connect();
   return database.db;
+}
+
+let authInstance: Auth | null = null;
+export function auth() {
+  authInstance ??= createAuth(db());
+  return authInstance;
 }
 
 type Handler = (req: Request) => Response | Promise<Response>;
@@ -46,6 +53,7 @@ export async function handleApi(req: Request): Promise<Response> {
   if (pathname === "/api/races") return postRace(req);
   const stats = pathname.match(/^\/api\/players\/([^/]+)\/stats$/);
   if (stats) return getStats(decodeURIComponent(stats[1]!));
+  if (pathname.startsWith("/api/auth/")) return auth().handler(req);
   const route = routes[pathname.replace(/\/$/, "")];
   return route ? route(req) : Response.json({ error: "not_found" }, { status: 404 });
 }

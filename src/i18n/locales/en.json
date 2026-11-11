@@ -25,7 +25,15 @@
     "or": "OR",
     "withGoogle": "Continue with Google",
     "withGithub": "Continue with GitHub",
-    "nicknameRule": "3 to 20 letters, digits or _"
+    "nicknameRule": "3 to 20 letters, digits or _",
+    "loginToCreate": "Log in to create a room.",
+    "badUsername": "Username: 3 to 20 letters, digits or _.",
+    "badPassword": "Password: at least {{min}} characters.",
+    "signInFailed": "Wrong username or password.",
+    "signUpFailed": "This username is already taken.",
+    "signedInAs": "Signed in",
+    "myProfile": "MY PROFILE",
+    "signOut": "LOG OUT"
   },
   "rooms": {
     "pageTitle": "The kiosk — O.R.I.O.N",
