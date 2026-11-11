@@ -29,18 +29,19 @@ export function KeyboardHeatmap({ keys, layout, onLayout }: Props) {
       <div className="keymap-board" aria-hidden="true">
         {rowsOf(layout).map((row, r) => (
           <div key={r} className="keymap-row">
-            {row.map((cap) => {
+            {row.map((cap, c) => {
               const value = heat.get(cap);
               const known = !!value && value.typed >= MIN_TYPED;
               const level = known ? Math.min(1, value.rate / RATE_MAX) : 0;
               return (
+                // la touche garde sa place d'une disposition à l'autre : seul un libellé qui change est remonté, donc animé
                 <span
-                  key={cap.chars.join("")}
+                  key={c}
                   className={`keymap-key${cap.wide ? " is-wide" : ""}${value ? "" : " is-empty"}`}
-                  style={{ "--heat": `${Math.round(level * 100)}%` } as CSSProperties}
+                  style={{ "--heat": `${Math.round(level * 100)}%`, "--i": r + c } as CSSProperties}
                   title={value ? t("profile.keys.detail", { key: nameOf(cap.label), rate: percent(value.rate), errors: Math.round(value.errors), typed: Math.round(value.typed) }) : undefined}
                 >
-                  {cap.label}
+                  <span key={cap.label} className="keymap-cap">{cap.label}</span>
                 </span>
               );
             })}
