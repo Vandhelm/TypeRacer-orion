@@ -1,7 +1,7 @@
 import type { Db } from "../client";
 import { accounts, corpusTexts, players, raceConfigs, raceResults, races, raceSamples, roomMembers, rooms, savedTexts } from "../schema";
 import { CORPUS } from "./corpus";
-import { DEFAULT_CONFIG, DEMO_PASSWORD, PLAYERS, RACES, ROOMS, SAVED_TEXTS, seatColor, type PlayerName } from "./data";
+import { DEFAULT_CONFIG, DEMO_PASSWORD, demoInviteToken, PLAYERS, RACES, ROOMS, SAVED_TEXTS, seatColor, type PlayerName } from "./data";
 
 const CHARS_PER_WORD = 5;
 
@@ -53,7 +53,7 @@ export async function seed(db: Db) {
       const configId = await insertConfig({ ...DEFAULT_CONFIG, ...room.config });
       const [row] = await tx
         .insert(rooms)
-        .values({ code: room.code, name: room.name, visibility: room.visibility, guests: room.guests, bots: room.bots, status: room.status, hostId: idOf(room.members[0]!), configId })
+        .values({ code: room.code, inviteToken: demoInviteToken(room.code), name: room.name, visibility: room.visibility, guests: room.guests, bots: room.bots, status: room.status, hostId: idOf(room.members[0]!), configId })
         .returning({ id: rooms.id });
       roomIds.set(room.code, row!.id);
       await tx.insert(roomMembers).values(room.members.map((member, seat) => ({ roomId: row!.id, playerId: idOf(member), seat, color: seatColor(seat) })));

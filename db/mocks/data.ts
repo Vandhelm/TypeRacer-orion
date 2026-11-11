@@ -55,12 +55,12 @@ type MockRoom = {
 };
 
 export const ROOMS: MockRoom[] = [
-  { code: "CORAIL", name: "Le bassin du matin", visibility: "public", guests: 4, bots: true, status: "waiting", members: ["Corail_418", "Thon_Rouge"] },
-  { code: "NORI42", name: "Fast fingers", visibility: "public", guests: 6, bots: false, status: "waiting", config: { language: "en", length: "short" }, members: ["Maki_77", "Ikura_21", "Tamago_8"] },
+  { code: "CRABE7", name: "Le bassin du matin", visibility: "public", guests: 4, bots: true, status: "waiting", members: ["Corail_418", "Thon_Rouge"] },
+  { code: "NAGE42", name: "Fast fingers", visibility: "public", guests: 6, bots: false, status: "waiting", config: { language: "en", length: "short" }, members: ["Maki_77", "Ikura_21", "Tamago_8"] },
   { code: "SECRET", name: "Entre amis", visibility: "private", guests: 2, bots: false, status: "waiting", config: { punctuation: true, mistakes: "fatal" }, members: ["Ikura_21"] },
   { code: "RACE88", name: "Course en cours", visibility: "semi", guests: 3, bots: true, status: "racing", members: ["Maki_77", "Wasabi99", "Saba_Sensei"] },
-  { code: "OLD001", name: "Salon du soir", visibility: "public", guests: 4, bots: true, status: "closed", members: ["Corail_418", "Maki_77", "Thon_Rouge", "Wasabi99"] },
-  { code: "OLD002", name: "Le grand large", visibility: "public", guests: 4, bots: true, status: "closed", members: ["Corail_418", "Ikura_21", "Tamago_8", "Saba_Sensei"] },
+  { code: "SVR234", name: "Salon du soir", visibility: "public", guests: 4, bots: true, status: "closed", members: ["Corail_418", "Maki_77", "Thon_Rouge", "Wasabi99"] },
+  { code: "SVR235", name: "Le grand large", visibility: "public", guests: 4, bots: true, status: "closed", members: ["Corail_418", "Ikura_21", "Tamago_8", "Saba_Sensei"] },
 ];
 
 export type MockEntry = { player: PlayerName; wpm: number; accuracy: number; seconds: number; finished: boolean; eliminated: boolean };
@@ -89,3 +89,8 @@ function pastRace(index: number): MockRace {
 }
 
 export const RACES = Array.from({ length: HISTORY_SIZE }, (_, index) => pastRace(index));
+
+/** Jeton d'invitation fixe pour la démo et les tests de bout en bout : /room?invite=demo-secret. */
+export function demoInviteToken(code: string) {
+  return `demo-${code.toLowerCase()}`;
+}
