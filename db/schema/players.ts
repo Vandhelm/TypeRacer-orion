@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import { boolean, check, integer, pgTable, text, timestamp, unique, uniqueIndex } from "drizzle-orm/pg-core";
 
-/** Identité en jeu (humains, invités, bots). Les identifiants de connexion restent à part. */
+/** Identité en jeu (humains, invités, bots). Un compte (table `user`) pointe vers son joueur ; un invité ou un bot n'en a pas. */
 export const players = pgTable(
   "players",
   {
@@ -13,11 +13,6 @@ export const players = pgTable(
   (table) => [uniqueIndex("players_name_lower_unique").on(sql`lower(${table.name})`)],
 );
 
-/** Un invité ou un bot n'a pas de compte. */
-export const accounts = pgTable("accounts", {
-  playerId: integer("player_id").primaryKey().references(() => players.id, { onDelete: "cascade" }),
-  passwordHash: text("password_hash").notNull(),
-});
 
 /** La bibliothèque de textes personnalisés d'un joueur. */
 export const savedTexts = pgTable(

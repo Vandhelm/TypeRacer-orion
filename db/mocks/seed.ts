@@ -1,5 +1,6 @@
 import type { Db } from "../client";
-import { accounts, corpusTexts, players, raceConfigs, raceResults, races, raceSamples, roomMembers, rooms, savedTexts } from "../schema";
+import { account, corpusTexts, players, raceConfigs, raceResults, races, raceSamples, roomMembers, rooms, savedTexts, user } from "../schema";
+import { placeholderEmail } from "../../src/accounts/username";
 import { CORPUS } from "./corpus";
 import { DEFAULT_CONFIG, DEMO_PASSWORD, demoInviteToken, PLAYERS, RACES, ROOMS, SAVED_TEXTS, seatColor, type PlayerName } from "./data";
 
@@ -44,7 +45,12 @@ export async function seed(db: Db) {
     const playerRows = await tx.insert(players).values(PLAYERS.map(({ name, bot }) => ({ name, isBot: bot }))).returning({ id: players.id, name: players.name });
     const idOf = (name: PlayerName) => playerRows.find((row) => row.name === name)!.id;
 
-    await tx.insert(accounts).values(PLAYERS.filter((player) => player.account).map(({ name }) => ({ playerId: idOf(name), passwordHash })));
+    // Les mêmes lignes que Better Auth crée à l'inscription : un user relié au joueur, et son mot de passe dans account.
+    for (const { name } of PLAYERS.filter((player) => player.account)) {
+      const id = crypto.randomUUID();
+      await tx.insert(user).values({ id, name, email: placeholderEmail(name), username: name.toLowerCase(), displayUsername: name, playerId: idOf(name) });
+      await tx.insert(account).values({ id: crypto.randomUUID(), accountId: id, providerId: "credential", userId: id, password: passwordHash });
+    }
     await tx.insert(savedTexts).values(SAVED_TEXTS.map(({ owner, name, body }) => ({ playerId: idOf(owner), name, body })));
     const corpusIds = (await tx.insert(corpusTexts).values(CORPUS).returning({ id: corpusTexts.id })).map((row) => row.id);
 

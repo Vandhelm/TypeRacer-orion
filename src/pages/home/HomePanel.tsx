@@ -8,6 +8,8 @@ import { GithubIcon, GoogleIcon } from "../../components/icons";
 import { Stamp } from "../../components/Stamp";
 import { ViewTabs } from "../../components/tabs/ViewTabs";
 import { cleanRoomCode } from "../../rooms/access";
+import { authClient, signInWithUsername, signUpWithUsername } from "../../accounts/client";
+import { isValidUsername, PASSWORD_MIN } from "../../accounts/username";
 
 type Pane = "play" | "account";
 type StampKey = "stampPlay" | "stampAccount" | "stampCode";
@@ -20,6 +22,12 @@ export function HomePanel({ ref }: { ref?: Ref<HTMLElement> }) {
   const [pane, setPane] = useState<Pane>("play");
   const [code, setCode] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [authError, setAuthError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const { data: session } = authClient.useSession();
+  const me = session?.user as { displayUsername?: string | null; username?: string | null; name: string } | undefined;
   const [stamp, setStamp] = useState<{ key: StampKey | null; on: boolean; play: number }>({ key: null, on: false, play: 0 });
   const stampTimer = useRef<number>(undefined);
   const codeInput = useRef<HTMLInputElement>(null);
@@ -35,6 +43,27 @@ export function HomePanel({ ref }: { ref?: Ref<HTMLElement> }) {
     e.preventDefault();
     showStamp(key);
   };
+  // AUTH-03 : un invité ne crée pas de salon, on l'envoie vers l'onglet compte
+  function createRoom() {
+    if (me) location.href = "/room?new";
+    else {
+      setPane("account");
+      setAuthError(t("home.loginToCreate"));
+    }
+  }
+
+  async function submitAccount(mode: "signIn" | "signUp") {
+    setAuthError("");
+    if (!isValidUsername(username)) return setAuthError(t("home.badUsername"));
+    if (password.length < PASSWORD_MIN) return setAuthError(t("home.badPassword", { min: PASSWORD_MIN }));
+    setBusy(true);
+    const { error } = mode === "signIn" ? await signInWithUsername(username, password) : await signUpWithUsername(username, password);
+    setBusy(false);
+    if (error) return setAuthError(t(mode === "signIn" ? "home.signInFailed" : "home.signUpFailed"));
+    setPassword("");
+    showStamp("stampAccount");
+  }
+
   // code saisi : on rejoint le salon avec le code déjà inscrit
   function enterCode() {
     showStamp("stampCode");
@@ -70,7 +99,7 @@ export function HomePanel({ ref }: { ref?: Ref<HTMLElement> }) {
 
             <div className="flex flex-col gap-[1.3vh]">
               <FlipButton type="submit" label={t("home.play")} backLabel={t("home.playBack")} />
-              <OutlineButton href="/room?new">{t("home.createRoom")}</OutlineButton>
+              <OutlineButton onClick={createRoom}>{t("home.createRoom")}</OutlineButton>
               <OutlineButton href="#rooms">{t("home.rooms")}</OutlineButton>
             </div>
 
@@ -98,22 +127,48 @@ export function HomePanel({ ref }: { ref?: Ref<HTMLElement> }) {
             </TextField>
           </form>
 
-          <form className={pane === "account" ? FORM : `is-hidden ${FORM}`} id="pane-account" aria-hidden={pane !== "account"} onSubmit={submitWith("stampAccount")}>
-            <TextField id="username" num="01" label={t("home.username")} inputProps={{ name: "username", autoComplete: "username", spellCheck: false }} />
+          <form
+            className={pane === "account" ? FORM : `is-hidden ${FORM}`}
+            id="pane-account"
+            aria-hidden={pane !== "account"}
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!me) void submitAccount("signIn");
+            }}
+          >
+            {me ? (
+              <>
+                <TextField id="signed-in" num="01" label={t("home.signedInAs")}>
+                  <p className="py-[1.2vh] text-[max(18px,2.6vh)] tracking-[.08em]">{me.displayUsername || me.username || me.name}</p>
+                </TextField>
+                <div className="flex flex-col gap-[1.3vh]">
+                  <OutlineButton href="/profile">{t("home.myProfile")}</OutlineButton>
+                  <OutlineButton onClick={() => void authClient.signOut()}>{t("home.signOut")}</OutlineButton>
+                </div>
+              </>
+            ) : (
+              <>
+            <TextField
+              id="username"
+              num="01"
+              label={t("home.username")}
+              inputProps={{ name: "username", autoComplete: "username", spellCheck: false, maxLength: 20, value: username, onChange: (e) => setUsername(e.target.value) }}
+            />
             <TextField
               id="password"
               num="02"
               label={t("home.password")}
-              inputProps={{ name: "password", type: showPassword ? "text" : "password", autoComplete: "current-password" }}
+              inputProps={{ name: "password", type: showPassword ? "text" : "password", autoComplete: "current-password", value: password, onChange: (e) => setPassword(e.target.value) }}
               action={
                 <button className="text-field-action" type="button" id="reveal-password" aria-pressed={showPassword} onClick={() => setShowPassword((v) => !v)}>
                   {t(showPassword ? "home.hide" : "home.show")}
                 </button>
               }
             />
+            <p role="alert" className="min-h-[1.4em] font-mono text-[max(11px,1.3vh)] tracking-[.08em] text-red-text">{authError}</p>
             <div className="flex flex-col gap-[1.3vh]">
-              <FlipButton type="submit" label={t("home.logIn")} backLabel={t("home.logInBack")} />
-              <OutlineButton>{t("home.createAccount")}</OutlineButton>
+              <FlipButton type="submit" label={t("home.logIn")} backLabel={t("home.logInBack")} disabled={busy} />
+              <OutlineButton disabled={busy} onClick={() => void submitAccount("signUp")}>{t("home.createAccount")}</OutlineButton>
             </div>
             {/* Connexion via un fournisseur externe (OAuth : à brancher sur le serveur) */}
             <div className="flex items-center gap-[1.2vh] font-mono text-[max(10px,1.2vh)] leading-none tracking-[.2em] text-line-soft uppercase before:flex-1 before:border-t before:border-dashed before:border-line-faint after:flex-1 after:border-t after:border-dashed after:border-line-faint">
@@ -123,6 +178,8 @@ export function HomePanel({ ref }: { ref?: Ref<HTMLElement> }) {
               <OutlineButton id="login-google" data-provider="google" aria-label={t("home.withGoogle")} icon={<GoogleIcon />}>GOOGLE</OutlineButton>
               <OutlineButton id="login-github" data-provider="github" aria-label={t("home.withGithub")} icon={<GithubIcon />}>GITHUB</OutlineButton>
             </div>
+              </>
+            )}
           </form>
         </div>
       </div>
