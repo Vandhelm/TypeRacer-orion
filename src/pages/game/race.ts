@@ -1,12 +1,15 @@
 // Déroulé d'une course. À BRANCHER : les adversaires sont simulés, leur progression doit venir du serveur de jeu.
-import type { BotSpeed, MistakeMode, Player } from "../room/room";
+import type { BotAccuracy, BotSpeed, MistakeMode, Player } from "../room/room";
 
 const BOT_WPM: Record<BotSpeed, [number, number]> = { slow: [25, 40], medium: [40, 65], fast: [65, 100], mixed: [25, 100] };
+/** Part des frappes justes, en %. Une faute est retapée : elle coûte du temps de frappe, pas de la vitesse nette. */
+const BOT_ACCURACY: Record<BotAccuracy, [number, number]> = { shaky: [82, 90], decent: [90, 96], high: [96, 100] };
 export const CHARS_PER_WORD = 5;
 export const TICK_MS = 200;
 
 export type Course = { words: string[]; /** Caractères cumulés (espaces comprises) après chaque mot. */ marks: number[]; durationMs: number; mistakes: MistakeMode };
-export type Bot = { lane: number; wpm: number; words: number; finishedAt: number };
+/** typed et errors : frappes et fautes cumulées, comme pour moi. */
+export type Bot = { lane: number; wpm: number; accuracy: number; words: number; typed: number; errors: number; finishedAt: number };
 /** Cumuls de fin de seconde : caractères validés, caractères tapés, fautes. */
 export type Sample = { chars: number; typed: number; errors: number };
 export type Race = {
@@ -38,11 +41,13 @@ export function createCourse(words: string[], durationSeconds: number, mistakes:
   return { words, marks, durationMs: durationSeconds * 1000, mistakes };
 }
 
-export function createRace(course: Course, players: Player[], botSpeed: BotSpeed, random: () => number = Math.random): Race {
+export function createRace(course: Course, players: Player[], botSpeed: BotSpeed, botAccuracy: BotAccuracy, random: () => number = Math.random): Race {
   const [low, high] = BOT_WPM[botSpeed];
+  const [worst, best] = BOT_ACCURACY[botAccuracy];
   const bots: Bot[] = [];
   players.forEach((player, lane) => {
-    if (!player.me) bots.push({ lane, wpm: Math.round(low + random() * (high - low)), words: 0, finishedAt: 0 });
+    if (player.me) return;
+    bots.push({ lane, wpm: Math.round(low + random() * (high - low)), accuracy: worst + random() * (best - worst), words: 0, typed: 0, errors: 0, finishedAt: 0 });
   });
   return {
     course,
@@ -123,13 +128,18 @@ export function advanceBots(race: Race, now: number, jitters: number[]): Race {
   const arrivals = [...race.arrivals];
   const bots = race.bots.map((bot, i) => {
     if (bot.finishedAt) return bot;
+    const jitter = jitters[i] ?? 0.5;
     // un adversaire tape à vitesse constante en caractères : les longs mots lui prennent plus de temps
     const current = words[Math.floor(bot.words)] ?? "";
     const pace = ((bot.wpm * CHARS_PER_WORD) / 60 / (current.length + 1)) * (TICK_MS / 1000);
-    const progress = Math.min(words.length, bot.words + pace * (0.55 + (jitters[i] ?? 0.5) * 0.9));
-    if (progress < words.length) return { ...bot, words: progress };
+    const progress = Math.min(words.length, bot.words + pace * (0.55 + jitter * 0.9));
+    // chaque caractère validé coûte en moyenne 100 / précision frappes : le surplus, ce sont ses fautes
+    const gained = botChars(race, { ...bot, words: progress }) - botChars(race, bot);
+    const mistakes = gained * (100 / bot.accuracy - 1) * (0.5 + jitter);
+    const moved = { ...bot, words: progress, typed: bot.typed + gained + mistakes, errors: bot.errors + mistakes };
+    if (progress < words.length) return moved;
     arrivals.push(bot.lane);
-    return { ...bot, words: progress, finishedAt: now };
+    return { ...moved, finishedAt: now };
   });
   const moved: Race = { ...race, bots, arrivals, now, phase: now - race.startedAt >= durationMs ? "done" : "racing" };
   return { ...moved, samples: recordSamples(moved) };
@@ -139,7 +149,7 @@ function myValidChars(race: Race) {
   return Math.max(0, race.course.marks[race.wordIndex]! - race.missedChars);
 }
 
-function botChars(race: Race, bot: Bot) {
+function botChars(race: Race, bot: Pick<Bot, "words">) {
   const { marks } = race.course;
   const whole = Math.floor(bot.words);
   const start = marks[whole] ?? 0;
@@ -153,8 +163,7 @@ function sampleOf(race: Race, lane: number): Sample | null {
   }
   const bot = race.bots.find((candidate) => candidate.lane === lane);
   if (!bot || bot.finishedAt) return null;
-  const chars = botChars(race, bot);
-  return { chars, typed: chars, errors: 0 };
+  return { chars: botChars(race, bot), typed: bot.typed, errors: bot.errors };
 }
 
 function recordSamples(race: Race) {

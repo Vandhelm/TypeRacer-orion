@@ -33,7 +33,7 @@ function reduce(race: Race, action: Action): Race {
 /** La course de cette page : décompte, adversaires, fin de partie. Le décompte attend `ready` (images du bassin prêtes). */
 export function useRace(room: Room, players: Player[], ready: boolean) {
   const [race, dispatch] = useReducer(reduce, null, () =>
-    createRace(createCourse(buildWords(room), room.duration, room.mistakes), players, room.botSpeed),
+    createRace(createCourse(buildWords(room), room.duration, room.mistakes), players, room.botSpeed, room.botAccuracy),
   );
   const [showResults, setShowResults] = useState(false);
   const { phase } = race;

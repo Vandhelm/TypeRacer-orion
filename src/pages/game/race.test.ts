@@ -6,7 +6,7 @@ const ME: Player = { name: "me", color: "red", me: true };
 const BOT: Player = { name: "bot", color: "blue", bot: true };
 
 function racing(mistakes: MistakeMode, players: Player[] = [ME, BOT], words = ["le", "riz", "attend"]): Race {
-  const race = createRace(createCourse(words, 60, mistakes), players, "medium", () => 0.5);
+  const race = createRace(createCourse(words, 60, mistakes), players, "medium", "high", () => 0.5);
   return { ...race, phase: "racing", count: null, startedAt: 1000, now: 1000 };
 }
 const type = (race: Race, ...values: string[]) => values.reduce((r, value) => applyInput(r, value, 2000), race);
@@ -95,5 +95,17 @@ describe("samples", () => {
   test("stops measuring a lane once it is done", () => {
     const race = { ...racing("fix"), finishedAt: 1500 };
     expect(advanceBots(race, 3200, [0.5]).samples[0]).toEqual([]);
+  });
+});
+
+describe("bot mistakes", () => {
+  test("a bot types more keys than it validates, as its accuracy says", () => {
+    let race = racing("fix", [ME, BOT], Array.from({ length: 40 }, () => "sushi"));
+    for (let t = 1200; t <= 20000; t += 200) race = advanceBots(race, t, [0.5]);
+    const bot = race.bots[0]!;
+    const valid = bot.typed - bot.errors;
+    expect(bot.errors).toBeGreaterThan(0);
+    expect(Math.round((100 * valid) / bot.typed)).toBeGreaterThanOrEqual(95);
+    expect(race.samples[1]!.at(-1)!.errors).toBeGreaterThan(0);
   });
 });

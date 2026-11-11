@@ -1,7 +1,7 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import { HangingButton } from "../../components/buttons/HangingButton";
-import { buildResults, buildSummary, markSessionStart, saveResults, sessionSeconds } from "../podium/results";
+import { buildResults, buildSummary, markSessionStart, saveResults, sessionSeconds, submitRace } from "../podium/results";
 import { useRoom } from "../room/hooks/useRoom";
 import { useRace } from "./hooks/useRace";
 import { loadRacePoolImages, type RacePoolImages } from "./pool/createRacePool";
@@ -30,7 +30,9 @@ export function GamePage() {
 
   useEffect(() => {
     if (!showResults) return;
-    saveResults({ players: buildResults(race, players, room.botAccuracy), summary: buildSummary(race, room, sessionSeconds()) });
+    const results = { players: buildResults(race, players), summary: buildSummary(race, room, sessionSeconds()) };
+    saveResults(results);
+    submitRace(results, race.course.words.join(" "));
     location.replace("/podium"); // le retour arrière ne relance pas une course
   }, [showResults, race, players, room]);
 
