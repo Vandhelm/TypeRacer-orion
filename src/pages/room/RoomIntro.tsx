@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { IconButton } from "../../components/buttons/IconButton";
-import { CheckIcon, CopyIcon, MinusIcon, PlusIcon } from "../../components/icons";
+import { CheckIcon, CopyIcon, LinkIcon, MinusIcon, PlusIcon } from "../../components/icons";
+import { allows } from "../../rooms/access";
 import type { RoomState } from "./hooks/useRoom";
 import { clampGuests, MAX_GUESTS, MIN_GUESTS } from "./room";
 
@@ -11,7 +12,7 @@ export function RoomIntro({ state }: { state: RoomState }) {
   const { t } = useTranslation();
   const { room, update, host, humans } = state;
   const [nameDraft, setNameDraft] = useState(room.autoName ? "" : room.name);
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<"code" | "link" | null>(null);
   const copyTimer = useRef(0);
   const plus = useRef<HTMLButtonElement>(null);
   const minus = useRef<HTMLButtonElement>(null);
@@ -33,16 +34,20 @@ export function RoomIntro({ state }: { state: RoomState }) {
     if (delta < 0 && next <= minGuests) plus.current?.focus();
   }
 
-  async function copyCode() {
+  async function copy(what: "code" | "link") {
+    const text = what === "code" ? room.code : `${location.origin}/room?invite=${room.invite}`;
     try {
-      await navigator.clipboard.writeText(room.code);
+      await navigator.clipboard.writeText(text);
     } catch {
       return;
     }
-    setCopied(true);
+    setCopied(what);
     clearTimeout(copyTimer.current);
-    copyTimer.current = window.setTimeout(() => setCopied(false), 1500);
+    copyTimer.current = window.setTimeout(() => setCopied(null), 1500);
   }
+
+  // Salon privé : le code n'ouvre rien, seul le lien d'invitation compte (SALLE-03).
+  const byCode = allows(room.visibility, "code");
 
   return (
     <div className="[grid-area:left]">
@@ -58,11 +63,16 @@ export function RoomIntro({ state }: { state: RoomState }) {
           </div>
         </div>
         <div className="room-shade">
-          <span className="room-label">{t("room.entryCode")}</span>
+          <span className="room-label">{t(byCode ? "room.entryCode" : "room.inviteOnly")}</span>
           <div className="room-value-row">
-            <span className="room-value room-code">{room.code}</span>
-            <IconButton label={t(copied ? "room.codeCopied" : "room.copy")} confirmed={copied} onClick={copyCode}>
-              {copied ? <CheckIcon /> : <CopyIcon />}
+            <span className="room-value room-code">{byCode ? room.code : t("room.link")}</span>
+            {byCode && (
+              <IconButton label={t(copied === "code" ? "room.codeCopied" : "room.copy")} confirmed={copied === "code"} onClick={() => copy("code")}>
+                {copied === "code" ? <CheckIcon /> : <CopyIcon />}
+              </IconButton>
+            )}
+            <IconButton label={t(copied === "link" ? "room.linkCopied" : "room.copyLink")} confirmed={copied === "link"} onClick={() => copy("link")}>
+              {copied === "link" ? <CheckIcon /> : <LinkIcon />}
             </IconButton>
           </div>
         </div>

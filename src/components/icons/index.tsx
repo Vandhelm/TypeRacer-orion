@@ -58,6 +58,15 @@ export function CopyIcon() {
   );
 }
 
+export function LinkIcon() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <path d="M7 9.5a2.5 2.5 0 0 0 3.5 0l2.5-2.5a2.5 2.5 0 0 0-3.5-3.5l-1 1" fill="none" stroke="currentColor" strokeWidth="1.2" />
+      <path d="M9 6.5a2.5 2.5 0 0 0-3.5 0L3 9a2.5 2.5 0 0 0 3.5 3.5l1-1" fill="none" stroke="currentColor" strokeWidth="1.2" />
+    </svg>
+  );
+}
+
 export function CheckIcon() {
   return (
     <svg viewBox="0 0 16 16" aria-hidden="true">
