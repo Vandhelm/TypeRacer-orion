@@ -5,7 +5,6 @@ import { readResults, type PlayerResult, type RaceResults } from "../podium/resu
 import { CareerStats } from "./CareerStats";
 import { useKeyboardLayout } from "./hooks/useKeyboardLayout";
 import { usePlayerStats, type StatsState } from "./hooks/usePlayerStats";
-import { KeyboardHeatmap } from "./KeyboardHeatmap";
 import { ProfileDetails } from "./ProfileDetails";
 import { SpeedChart } from "./SpeedChart";
 import { StatBlock } from "./StatBlock";
@@ -37,7 +36,7 @@ function subjectOf(results: RaceResults | null): Subject | null {
   return index >= 0 ? { name: players[index]!.name, result: players[index]!, index, fromPodium: false } : null;
 }
 
-/** Un joueur : ses statistiques sur toutes ses courses, puis le détail de la dernière course s'il y était. */
+/** Un joueur : le détail de la dernière course s'il y était, puis ses statistiques sur toutes ses courses. */
 export function ProfilePage() {
   const { t } = useTranslation();
   const [results] = useState(readResults);
@@ -87,8 +86,6 @@ export function ProfilePage() {
         </div>
       </header>
 
-      <CareerStats state={stats} guest={guest} layout={layout} onLayout={setLayout} />
-
       {result && results && (
         <section className="profile-section" aria-labelledby="last-race-title">
           <h2 id="last-race-title" className="profile-section-title">{t("profile.lastRace")}</h2>
@@ -100,9 +97,10 @@ export function ProfilePage() {
             <SpeedChart player={result} />
           </div>
           <ProfileDetails player={result} summary={results.summary} />
-          <KeyboardHeatmap keys={result.keys} layout={layout} onLayout={setLayout} />
         </section>
       )}
+
+      <CareerStats state={stats} guest={guest} layout={layout} onLayout={setLayout} />
     </main>
   );
 }
