@@ -7,11 +7,20 @@ import type { Db } from "../../db/client";
 import * as schema from "../../db/schema";
 import { isValidUsername, PASSWORD_MIN, USERNAME_MAX, USERNAME_MIN } from "../accounts/username";
 
+const https = (host?: string) => (host ? `https://${host}` : undefined);
+const { VERCEL_ENV, VERCEL_URL, VERCEL_BRANCH_URL, VERCEL_PROJECT_PRODUCTION_URL } = process.env;
+
+/** En local : BETTER_AUTH_URL. Sur Vercel : le domaine de production, ou l'URL de la prévisualisation. */
+const baseURL = process.env.BETTER_AUTH_URL || https(VERCEL_ENV === "production" ? VERCEL_PROJECT_PRODUCTION_URL : VERCEL_BRANCH_URL || VERCEL_URL);
+
+/** Toutes les adresses d'où le site peut appeler l'API (domaines, alias Vercel, prévisualisation). */
+const trustedOrigins = ["https://vandhelm.com", "https://www.vandhelm.com", https(VERCEL_URL), https(VERCEL_BRANCH_URL), https(VERCEL_PROJECT_PRODUCTION_URL)].filter((origin): origin is string => !!origin);
+
 export function createAuth(db: Db) {
   return betterAuth({
     secret: process.env.BETTER_AUTH_SECRET,
-    baseURL: process.env.BETTER_AUTH_URL,
-    trustedOrigins: process.env.VERCEL_URL ? [`https://${process.env.VERCEL_URL}`] : [],
+    baseURL,
+    trustedOrigins,
     database: drizzleAdapter(db, { provider: "pg", schema: { user: schema.user, session: schema.session, account: schema.account, verification: schema.verification } }),
     emailAndPassword: {
       enabled: true,
