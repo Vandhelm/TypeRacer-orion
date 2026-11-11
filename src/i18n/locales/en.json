@@ -292,6 +292,7 @@
       "space": "Space",
       "detail": "{{key}}: {{rate}} errors ({{errors}} of {{typed}} keystrokes)",
       "weakest": "Most missed keys:",
+      "none": "No keys recorded yet: they appear after your next race.",
       "clean": "Not enough mistakes to spot a weak key."
     },
     "sessionRaces": "Races this session",

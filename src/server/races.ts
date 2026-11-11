@@ -123,6 +123,9 @@ export async function recordRace(db: Db, race: ParsedRace) {
   });
 }
 
+/** postgres-js (en ligne) renvoie un tableau de lignes, PGlite (tests) un objet { rows }. */
+const rowsOf = <T>(result: unknown): T[] => (Array.isArray(result) ? result : ((result as { rows?: T[] }).rows ?? []));
+
 /** Statistiques d'un joueur sur toutes ses courses, et sa progression (MPM course après course). */
 export async function playerStats(db: Db, name: string) {
   const [player] = await db.select({ id: players.id, name: players.name, isBot: players.isBot }).from(players).where(sql`lower(${players.name}) = lower(${name})`);
@@ -144,7 +147,7 @@ export async function playerStats(db: Db, name: string) {
     FROM ${raceResults}, jsonb_each(${raceResults.keys}) AS k
     WHERE ${raceResults.playerId} = ${player.id}
     GROUP BY k.key`);
-  const keys: KeyCounts = Object.fromEntries((keyRows.rows as { key: string; typed: number; errors: number }[]).map((row) => [row.key, [Number(Number(row.typed).toFixed(1)), Number(Number(row.errors).toFixed(1))]]));
+  const keys: KeyCounts = Object.fromEntries(rowsOf<{ key: string; typed: number; errors: number }>(keyRows).map((row) => [row.key, [Number(Number(row.typed).toFixed(1)), Number(Number(row.errors).toFixed(1))]]));
   const round = (value: string | number | null | undefined, digits = 0) => (value == null ? null : Number(Number(value).toFixed(digits)));
   return {
     name: player.name,

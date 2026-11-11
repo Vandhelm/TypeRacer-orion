@@ -292,6 +292,7 @@
       "space": "Espace",
       "detail": "{{key}} : {{rate}} d'erreurs ({{errors}} sur {{typed}} frappes)",
       "weakest": "Touches les plus ratées :",
+      "none": "Pas encore de touches enregistrées : elles apparaissent après ta prochaine course.",
       "clean": "Pas assez de fautes pour repérer une touche faible."
     },
     "sessionRaces": "Courses de cette session",

@@ -14,8 +14,6 @@ export function KeyboardHeatmap({ keys, layout, onLayout }: Props) {
   const percent = (rate: number) => `${new Intl.NumberFormat(i18n.language, { maximumFractionDigits: 1 }).format(rate * 100)} %`;
   const nameOf = (label: string) => label || t("profile.keys.space");
 
-  if (!heat.size) return null;
-
   return (
     <div className="keymap">
       <div className="keymap-head">
@@ -57,7 +55,9 @@ export function KeyboardHeatmap({ keys, layout, onLayout }: Props) {
       </div>
 
       <p className="keymap-worst">
-        {worst.length
+        {!heat.size
+          ? t("profile.keys.none")
+          : worst.length
           ? `${t("profile.keys.weakest")} ${worst.map(([cap, value]) => `${nameOf(cap.label)} ${percent(value.rate)}`).join(" · ")}`
           : t("profile.keys.clean")}
       </p>
