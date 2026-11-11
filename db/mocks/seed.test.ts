@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, test } from "bun:test";
 import { eq, isNull, sql } from "drizzle-orm";
 import { accounts, corpusTexts, players, raceConfigs, raceResults, races, raceSamples, roomMembers, rooms } from "../schema";
 import { CORPUS } from "./corpus";
-import { DEMO_PASSWORD, PLAYERS, RACES, ROOMS } from "./data";
+import { DEFAULT_CONFIG, DEMO_PASSWORD, PLAYERS, RACES, ROOMS } from "./data";
 import { seed } from "./seed";
 import { createEmptyDatabase, createMockDatabase } from "./test-database";
 
@@ -26,6 +26,16 @@ describe("schema", () => {
 
   test("rejects a value outside the game options", async () => {
     await fails(db.execute(sql`INSERT INTO corpus_texts (language, type, level, body) VALUES ('de', 'quote', 'common', 'x')`));
+  });
+
+  test("rejects an ambiguous or malformed room code", async () => {
+    const [host] = await db.insert(players).values({ name: "Code_Host" }).returning({ id: players.id });
+    const [config] = await db.insert(raceConfigs).values(DEFAULT_CONFIG).returning({ id: raceConfigs.id });
+    const room = { name: "x", visibility: "public" as const, guests: 4, bots: true, hostId: host!.id, configId: config!.id };
+    await fails(db.insert(rooms).values({ ...room, code: "CORAIL", inviteToken: "a" }));
+    await fails(db.insert(rooms).values({ ...room, code: "ABC23", inviteToken: "b" }));
+    await db.insert(rooms).values({ ...room, code: "ABC234", inviteToken: "c" });
+    await fails(db.insert(rooms).values({ ...room, code: "ABC235", inviteToken: "c" }));
   });
 
   test("treats player names as case-insensitive", async () => {

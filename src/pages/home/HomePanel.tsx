@@ -7,6 +7,7 @@ import { TextField, TextInput } from "../../components/forms/TextField";
 import { GithubIcon, GoogleIcon } from "../../components/icons";
 import { Stamp } from "../../components/Stamp";
 import { ViewTabs } from "../../components/tabs/ViewTabs";
+import { cleanRoomCode } from "../../rooms/access";
 
 type Pane = "play" | "account";
 type StampKey = "stampPlay" | "stampAccount" | "stampCode";
@@ -84,7 +85,7 @@ export function HomePanel({ ref }: { ref?: Ref<HTMLElement> }) {
                   maxLength={6}
                   placeholder="K7Q2M9"
                   value={code}
-                  onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))}
+                  onChange={(e) => setCode(cleanRoomCode(e.target.value))}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.preventDefault();

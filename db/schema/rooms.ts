@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import { boolean, check, index, integer, pgTable, primaryKey, text, timestamp, unique } from "drizzle-orm/pg-core";
 import { botAccuracy, botSpeed, language, level, mistakeMode, roomStatus, textLength, textType, visibility } from "./enums";
 import { players } from "./players";
+import { CODE_PATTERN } from "../../src/rooms/access";
 
 /** Réglages d'une course, immuables : modifier un salon crée une nouvelle ligne, pour que chaque course garde les siens. */
 export const raceConfigs = pgTable(
@@ -36,6 +37,8 @@ export const rooms = pgTable(
   {
     id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
     code: text("code").notNull().unique(),
+    /** Jeton du lien d'invitation : seule entrée d'un salon privé. */
+    inviteToken: text("invite_token").notNull().unique(),
     name: text("name").notNull(),
     autoName: boolean("auto_name").notNull().default(true),
     visibility: visibility("visibility").notNull(),
@@ -46,7 +49,9 @@ export const rooms = pgTable(
     configId: integer("config_id").notNull().references(() => raceConfigs.id),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [index("rooms_lobby").on(table.status, table.visibility), check("rooms_guests_range", sql`${table.guests} between 2 and 8`)],
+  (table) => [index("rooms_lobby").on(table.status, table.visibility), check("rooms_guests_range", sql`${table.guests} between 2 and 8`),
+    check("rooms_code_format", sql`${table.code} ~ ${sql.raw(`'${CODE_PATTERN}'`)}`),
+  ],
 );
 
 /** Qui occupe quelle place. La couleur dépend de la place, pas du joueur. */

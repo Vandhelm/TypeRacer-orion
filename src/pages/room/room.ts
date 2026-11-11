@@ -1,5 +1,6 @@
 // Room model. À BRANCHER : sans serveur de jeu, le salon est gardé dans ce navigateur et les autres joueurs sont simulés.
 import type { TFunction } from "i18next";
+import { cleanRoomCode, newInviteToken, newRoomCode, VISIBILITIES, type Visibility } from "../../rooms/access";
 
 export const MY_NAME = "Corail_418";
 const BOT_NAMES = ["Thon_Rouge", "Wasabi99", "Saba_Sensei", "Nori_Ninja", "Ebi_Fry", "Uni_Kun", "Tako_San"];
@@ -13,7 +14,6 @@ export const MAX_TEXT_LENGTH = 5000;
 const ROOM_KEY = "orion-room";
 const TEXTS_KEY = "orion-texts";
 
-const VISIBILITIES = ["private", "semi", "public"] as const;
 const LANGUAGES = ["fr", "en"] as const;
 const BOT_SPEEDS = ["slow", "medium", "fast", "mixed"] as const;
 const BOT_ACCURACIES = ["shaky", "decent", "high"] as const;
@@ -22,7 +22,7 @@ const TEXT_LENGTHS = ["very-short", "short", "medium", "long", "other"] as const
 const LEVELS = ["common", "rich", "expert"] as const;
 const MISTAKE_MODES = ["fix", "carry-on", "fatal"] as const;
 
-export type Visibility = (typeof VISIBILITIES)[number];
+export type { Visibility };
 export type TextLanguage = (typeof LANGUAGES)[number];
 export type BotSpeed = (typeof BOT_SPEEDS)[number];
 export type BotAccuracy = (typeof BOT_ACCURACIES)[number];
@@ -39,6 +39,8 @@ export type Room = {
   guests: number;
   bots: boolean;
   code: string;
+  /** Jeton du lien d'invitation. */
+  invite: string;
   botSpeed: BotSpeed;
   botAccuracy: BotAccuracy;
   textType: TextType;
@@ -87,11 +89,6 @@ export function forgetRoom() {
   try { localStorage.removeItem(ROOM_KEY); } catch { /* stockage indisponible */ }
 }
 
-function newCode() {
-  // À BRANCHER : le code doit venir du serveur de jeu.
-  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  return Array.from({ length: 6 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join("");
-}
 export function clampGuests(n: unknown, fallback: number) {
   const value = Number(n);
   return Number.isFinite(value) ? Math.min(MAX_GUESTS, Math.max(MIN_GUESTS, Math.round(value))) : fallback;
@@ -108,7 +105,7 @@ function oneOf<T extends string>(list: readonly T[], value: unknown, fallback: T
 }
 
 function newRoom(t: TFunction): Room {
-  return { ...RACE_DEFAULTS, name: t("room.defaultName"), autoName: true, visibility: "private", language: "fr", guests: 4, bots: true, code: newCode() };
+  return { ...RACE_DEFAULTS, name: t("room.defaultName"), autoName: true, visibility: "private", language: "fr", guests: 4, bots: true, code: newRoomCode(), invite: newInviteToken() };
 }
 
 function storedRoom(t: TFunction): Room | null {
@@ -123,6 +120,7 @@ function storedRoom(t: TFunction): Room | null {
       guests: clampGuests(s.guests, 4),
       bots: s.bots !== false,
       code: String(s.code),
+      invite: String(s.invite || newInviteToken()),
       textType: oneOf(TEXT_TYPES, s.textType, RACE_DEFAULTS.textType),
       length: oneOf(TEXT_LENGTHS, s.length, RACE_DEFAULTS.length),
       wordCount: Number(s.wordCount) >= 1 ? Math.min(1000, Math.round(Number(s.wordCount))) : RACE_DEFAULTS.wordCount,
@@ -151,10 +149,17 @@ export function saveRoom(room: Room) {
 export function readSession(search: string, t: TFunction): Session {
   const query = new URLSearchParams(search);
   const stored = storedRoom(t);
-  const code = (query.get("code") || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
+  const code = cleanRoomCode(query.get("code") || "");
+  // À BRANCHER : le serveur retrouvera le salon par son jeton et refusera le code pour un salon privé.
+  const invite = query.get("invite");
+
+  if (invite && !(stored && stored.invite === invite)) {
+    const room: Room = { ...RACE_DEFAULTS, name: t("room.inviteRoomName"), autoName: false, visibility: "private", language: "fr", guests: 4, bots: true, code: newRoomCode(), invite };
+    return { room, host: false, present: 2 };
+  }
 
   if (code && !(stored && stored.code === code)) {
-    const room: Room = { ...RACE_DEFAULTS, name: t("room.codeRoomName", { code }), autoName: false, visibility: "private", language: "fr", guests: 4, bots: true, code };
+    const room: Room = { ...RACE_DEFAULTS, name: t("room.codeRoomName", { code }), autoName: false, visibility: "semi", language: "fr", guests: 4, bots: true, code, invite: newInviteToken() };
     return { room, host: false, present: 2 };
   }
   const table = query.get("table");
@@ -168,7 +173,8 @@ export function readSession(search: string, t: TFunction): Session {
       language: query.get("lang") === "en" ? "en" : "fr",
       guests,
       bots: query.get("bots") !== "0",
-      code: newCode(),
+      code: newRoomCode(),
+      invite: newInviteToken(),
     };
     return { room, host: false, present: Math.min(guests, Math.max(2, (parseInt(query.get("present") ?? "", 10) || 1) + 1)) };
   }
