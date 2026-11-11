@@ -1,10 +1,12 @@
 -- Restes d'une ancienne installation de Better Auth (colonnes en camelCase) : supprimés seulement s'ils sont vides.
+-- rateLimit ne garde que des compteurs temporaires : il part dans tous les cas.
+DROP TABLE IF EXISTS "rateLimit";--> statement-breakpoint
 DO $$
 DECLARE
   t text;
   has_rows boolean;
 BEGIN
-  FOREACH t IN ARRAY ARRAY['account', 'session', 'verification', 'user', 'rateLimit'] LOOP
+  FOREACH t IN ARRAY ARRAY['account', 'session', 'verification', 'user'] LOOP
     IF to_regclass(format('public.%I', t)) IS NOT NULL THEN
       EXECUTE format('SELECT EXISTS (SELECT 1 FROM public.%I)', t) INTO has_rows;
       IF has_rows THEN

@@ -106,7 +106,7 @@ describe("auth migration over an old Better Auth install", () => {
     const { migrate } = await import("drizzle-orm/pglite/migrator");
     const { MIGRATIONS_DIR } = await import("../client");
     const client = new PGlite();
-    await client.exec(`CREATE TABLE "user" ("id" text PRIMARY KEY, "name" text); CREATE TABLE "account" ("id" text PRIMARY KEY, "accountId" text); CREATE TABLE "rateLimit" ("id" text PRIMARY KEY);`);
+    await client.exec(`CREATE TABLE "user" ("id" text PRIMARY KEY, "name" text); CREATE TABLE "account" ("id" text PRIMARY KEY, "accountId" text); CREATE TABLE "rateLimit" ("id" text PRIMARY KEY); INSERT INTO "rateLimit" VALUES ('r1');`);
     if (withRow) await client.exec(`INSERT INTO "user" VALUES ('u1', 'Keep me')`);
     return migrate(drizzle(client), { migrationsFolder: MIGRATIONS_DIR });
   };
