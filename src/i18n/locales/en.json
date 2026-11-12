@@ -310,5 +310,53 @@
     "extra": "extra",
     "missed_one": "missed",
     "missed_other": "missed"
+  },
+  "account": {
+    "tabs": {
+      "compte": "Account",
+      "stats": "Stats"
+    },
+    "photo": {
+      "title": "Profile picture",
+      "help": "JPEG, PNG or WebP · 2 MB max. The image is cropped to a circle and shrunk.",
+      "choose": "Choose an image",
+      "remove": "Remove",
+      "change": "Change your profile picture",
+      "changeShort": "Change",
+      "saved": "Picture saved.",
+      "removed": "Picture removed.",
+      "errors": {
+        "type": "Format not allowed: JPEG, PNG or WebP.",
+        "size": "Image too large: 2 MB max.",
+        "unreadable": "This image could not be read.",
+        "bad_type": "Format not allowed: JPEG, PNG or WebP.",
+        "too_large": "Image too large: 2 MB max.",
+        "unauthorized": "Your session expired: sign in again.",
+        "failed": "The picture could not be saved. Try again."
+      }
+    },
+    "name": {
+      "title": "Username",
+      "rule": "{{min}} to {{max}} letters, digits or _",
+      "help": "This is the name shown in rooms, on the podium and on your profile.",
+      "save": "Save",
+      "saved": "Username saved.",
+      "taken": "This username is already taken.",
+      "invalid": "Only letters, digits or _, at least 3 characters.",
+      "failed": "The username could not be saved. Try again."
+    },
+    "links": {
+      "title": "Linked accounts",
+      "linked": "linked",
+      "notLinked": "not linked",
+      "link": "Link",
+      "unlink": "Unlink",
+      "confirm": "Confirm",
+      "confirmNote": "Unlink {{provider}}? You won't be able to sign in with it anymore.",
+      "done": "{{provider}} is linked to your account.",
+      "failed": "Could not link this {{provider}} account: it may already belong to another account.",
+      "last": "This is your only way to sign in: {{provider}} can't be unlinked.",
+      "unlinkFailed": "{{provider}} could not be unlinked. Try again."
+    }
   }
 }

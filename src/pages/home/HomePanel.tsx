@@ -9,14 +9,13 @@ import { Stamp } from "../../components/Stamp";
 import { ViewTabs } from "../../components/tabs/ViewTabs";
 import { cleanRoomCode } from "../../rooms/access";
 import { NICKNAME_MAX, NICKNAME_PATTERN, saveNickname, storedNickname } from "../../players/nickname";
-import { authClient, changeUsername, linkProvider, PROVIDER_NAMES, signInWith, signInWithUsername, signUpWithUsername, SOCIAL_PROVIDERS, type SocialProvider } from "../../accounts/client";
+import { authClient, changeUsername, isProvider, linkProvider, PROVIDER_NAMES, signInWith, signInWithUsername, signUpWithUsername, SOCIAL_PROVIDERS, type SocialProvider } from "../../accounts/client";
 import { isValidUsername, PASSWORD_MIN } from "../../accounts/username";
 
 type Pane = "play" | "account";
 type StampKey = "stampPlay" | "stampAccount" | "stampCode";
 
 const PROVIDER_ICONS: Record<SocialProvider, () => React.JSX.Element> = { github: GithubIcon, discord: DiscordIcon };
-const isProvider = (value: string | null): value is SocialProvider => SOCIAL_PROVIDERS.includes(value as SocialProvider);
 
 const FORM = "col-start-1 row-start-1 flex flex-col gap-[2.1vh] [align-self:start]";
 

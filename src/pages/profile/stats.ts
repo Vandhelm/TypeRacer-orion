@@ -7,6 +7,8 @@ export type ProgressPoint = { at: string; wpm: number; accuracy: number };
 export type PlayerStats = {
   name: string;
   bot: boolean;
+  /** Sa photo de profil (data: URL), s'il en a choisi une. */
+  image?: string | null;
   races: number;
   wins: number;
   bestWpm: number | null;

@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { authClient } from "../../accounts/client";
 import { HangingButton } from "../../components/buttons/HangingButton";
 import { readResults, type PlayerResult, type RaceResults } from "../podium/results";
 import { CareerStats } from "./CareerStats";
 import { useKeyboardLayout } from "./hooks/useKeyboardLayout";
 import { usePlayerStats, type StatsState } from "./hooks/usePlayerStats";
 import { LastRace } from "./LastRace";
+import { OwnProfile, type Me } from "./OwnProfile";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { guestStats } from "./stats";
 
@@ -35,8 +37,17 @@ function subjectOf(results: RaceResults | null): Subject | null {
   return index >= 0 ? { name: players[index]!.name, result: players[index]!, index, fromPodium: false } : null;
 }
 
-/** Un joueur : le détail de la dernière course s'il y était, puis ses statistiques sur toutes ses courses. */
+/** Sans ?player ni ?name (la navbar) et connecté : son propre profil, Compte et Stats. Sinon : la page de stats d'un joueur. */
 export function ProfilePage() {
+  const [own] = useState(() => { const query = new URLSearchParams(location.search); return !query.has("player") && !query.has("name"); });
+  const { data: session, isPending } = authClient.useSession();
+  if (own && isPending) return <main className="profile" aria-busy="true" />;
+  if (own && session) return <OwnProfile me={session.user as Me} />;
+  return <PlayerProfile />;
+}
+
+/** Un joueur : le détail de la dernière course s'il y était, puis ses statistiques sur toutes ses courses. */
+function PlayerProfile() {
   const { t } = useTranslation();
   const [results] = useState(readResults);
   const [subject] = useState(() => subjectOf(results));
@@ -84,7 +95,7 @@ export function ProfilePage() {
             <h1 id="profile-name" className="profile-name">{subject.name}</h1>
             {result && <p className="profile-rank">{result.me ? `${place} · ${t("room.you")}` : place}</p>}
           </div>
-          <ProfileAvatar name={subject.name} />
+          <ProfileAvatar name={subject.name} src={stats.status === "ready" ? stats.stats?.image : null} />
         </div>
       </header>
 

@@ -3,7 +3,7 @@
 import { avg, count, desc, eq, max, sql } from "drizzle-orm";
 import type { Db } from "../../db/client";
 import { parseKeys, type KeyCounts } from "../players/keys";
-import { players, raceConfigs, raceResults, races, raceSamples } from "../../db/schema";
+import { players, raceConfigs, raceResults, races, raceSamples, user } from "../../db/schema";
 
 const LANGUAGES = ["fr", "en"] as const;
 const BOT_SPEEDS = ["slow", "medium", "fast", "mixed"] as const;
@@ -148,10 +148,13 @@ export async function playerStats(db: Db, name: string) {
     WHERE ${raceResults.playerId} = ${player.id}
     GROUP BY k.key`);
   const keys: KeyCounts = Object.fromEntries(rowsOf<{ key: string; typed: number; errors: number }>(keyRows).map((row) => [row.key, [Number(Number(row.typed).toFixed(1)), Number(Number(row.errors).toFixed(1))]]));
+  // la photo de son compte, s'il en a un (AUTH-04)
+  const [account] = await db.select({ image: user.image }).from(user).where(eq(user.playerId, player.id));
   const round = (value: string | number | null | undefined, digits = 0) => (value == null ? null : Number(Number(value).toFixed(digits)));
   return {
     name: player.name,
     bot: player.isBot,
+    image: account?.image ?? null,
     races: totals?.races ?? 0,
     wins: totals?.wins ?? 0,
     bestWpm: totals?.best ?? null,
