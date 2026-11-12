@@ -1,4 +1,4 @@
-// Better Auth : sessions, inscription et connexion par identifiants ou par GitHub.
+// Better Auth : sessions, inscription et connexion par identifiants, GitHub ou Discord.
 import { betterAuth } from "better-auth";
 import { eq } from "drizzle-orm";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
@@ -21,10 +21,10 @@ const baseURL = process.env.BETTER_AUTH_URL || (VERCEL_ENV === "production" ? ht
 /** Toutes les adresses d'où le site peut appeler l'API (domaines, alias Vercel, prévisualisation). */
 const trustedOrigins = ["https://vandhelm.com", "https://www.vandhelm.com", https(VERCEL_URL), https(VERCEL_BRANCH_URL), https(VERCEL_PROJECT_PRODUCTION_URL)].filter((origin): origin is string => !!origin);
 
-const { GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET } = process.env;
+const { GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, DISCORD_CLIENT_ID, DISCORD_CLIENT_SECRET } = process.env;
 
-/** Pseudo GitHub ramené à la règle des pseudonymes : « octo-cat » devient « octo_cat ». */
-export function usernameFromGithub(login: string) {
+/** Pseudo GitHub ou Discord ramené à la règle des pseudonymes : « octo-cat » ou « octo.cat » devient « octo_cat ». */
+export function usernameFromLogin(login: string) {
   const base = login.replace(/[^A-Za-z0-9_]/g, "_").slice(0, USERNAME_MAX);
   return base.length >= USERNAME_MIN ? base : base.padEnd(USERNAME_MIN, "_");
 }
@@ -48,24 +48,22 @@ export function createAuth(db: Db) {
       // Hash natif de Bun (argon2id) ; verify reconnaît aussi le bcrypt des données de démo.
       password: { hash: (password) => Bun.password.hash(password), verify: ({ hash, password }) => Bun.password.verify(password, hash) },
     },
-    // Activé seulement quand l'application OAuth GitHub est configurée.
-    socialProviders:
-      GITHUB_CLIENT_ID && GITHUB_CLIENT_SECRET
-        ? {
-            github: {
-              clientId: GITHUB_CLIENT_ID,
-              clientSecret: GITHUB_CLIENT_SECRET,
-              // Pas de « username » ici : le plugin refuserait un nom pris. Le hook ci-dessous choisit le nom libre.
-              mapProfileToUser: (profile) => ({ displayUsername: usernameFromGithub(profile.login) }),
-            },
-          }
-        : undefined,
-    // Un compte peut lier GitHub même si son e-mail (interne, pour les comptes par identifiants) diffère.
+    // Chaque fournisseur n'est activé que si son application OAuth est configurée.
+    // Pas de « username » dans mapProfileToUser : le plugin refuserait un nom pris. Le hook plus bas choisit le nom libre.
+    socialProviders: {
+      ...(GITHUB_CLIENT_ID && GITHUB_CLIENT_SECRET && {
+        github: { clientId: GITHUB_CLIENT_ID, clientSecret: GITHUB_CLIENT_SECRET, mapProfileToUser: (profile) => ({ displayUsername: usernameFromLogin(profile.login) }) },
+      }),
+      ...(DISCORD_CLIENT_ID && DISCORD_CLIENT_SECRET && {
+        discord: { clientId: DISCORD_CLIENT_ID, clientSecret: DISCORD_CLIENT_SECRET, mapProfileToUser: (profile) => ({ displayUsername: usernameFromLogin(profile.username) }) },
+      }),
+    },
+    // Un compte peut lier GitHub ou Discord même si son e-mail (interne, pour les comptes par identifiants) diffère.
     account: { accountLinking: { enabled: true, allowDifferentEmails: true } },
     user: {
       additionalFields: {
         playerId: { type: "number", required: false, input: false },
-        // Compte GitHub arrivé avec un nom déjà pris : il doit choisir son pseudo.
+        // Compte GitHub ou Discord arrivé avec un nom déjà pris : il doit choisir son pseudo.
         needsUsername: { type: "boolean", required: false, input: false, defaultValue: false },
       },
     },
@@ -76,7 +74,7 @@ export function createAuth(db: Db) {
           // Chaque compte a son joueur : c'est lui qui porte le nom en jeu, les courses et les salons.
           before: async (data) => {
             // Inscription par identifiants : le pseudo saisi, ou un refus.
-            // Via GitHub (pas de pseudo fourni) : le nom GitHub s'il est libre, sinon un nom provisoire à remplacer.
+            // Via GitHub ou Discord (pas de pseudo fourni) : le nom GitHub s'il est libre, sinon un nom provisoire à remplacer.
             const external = !data.username;
             const wanted = String(data.displayUsername || data.username || data.name);
             for (let n = 1; n <= (external ? 50 : 1); n++) {

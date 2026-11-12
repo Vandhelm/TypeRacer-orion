@@ -57,12 +57,13 @@ describe("username accounts", () => {
   });
 });
 
-describe("GitHub accounts", () => {
-  test("turns a GitHub login into a valid username", async () => {
-    const { usernameFromGithub } = await import("./auth");
-    expect(usernameFromGithub("octo-cat")).toBe("octo_cat");
-    expect(usernameFromGithub("ab")).toBe("ab_");
-    expect(usernameFromGithub("a".repeat(30))).toHaveLength(20);
+describe("GitHub and Discord accounts", () => {
+  test("turns a GitHub or Discord login into a valid username", async () => {
+    const { usernameFromLogin } = await import("./auth");
+    expect(usernameFromLogin("octo-cat")).toBe("octo_cat");
+    expect(usernameFromLogin("octo.cat")).toBe("octo_cat");
+    expect(usernameFromLogin("ab")).toBe("ab_");
+    expect(usernameFromLogin("a".repeat(30))).toHaveLength(20);
   });
 
   test("a GitHub user whose name is taken gets a free one", async () => {
