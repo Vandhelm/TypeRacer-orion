@@ -16,39 +16,95 @@
     margin-bottom: clamp(20px, 4vh, 40px);
 }
 .hanging-button.profile-back{ position: relative; top: auto; left: auto; animation: none; }
-.profile-title{ margin-left: auto; text-align: right; }
+
+/* Le joueur : nom et rang, puis sa photo (ou son initiale) dans un rond */
+.profile-id{ margin-left: auto; display: flex; align-items: center; gap: 16px; min-width: 0; }
+.profile-title{ text-align: right; min-width: 0; }
 .profile-name{ font: 300 clamp(20px, 3.4vh, 32px)/1.1 var(--font-sans); letter-spacing: .1em; overflow-wrap: anywhere; }
 .profile-rank{ margin-top: 8px; color: var(--color-muted); font: 400 max(11px, 1.3vh)/1 var(--font-mono); letter-spacing: .2em; text-transform: uppercase; }
-
-/* Tableau de bord : chaque bloc est une tuile encadrée, les tuiles se partagent la largeur */
-.panel,
-.profile-grid > .stat{
-    min-width: 0;
-    padding: clamp(14px, 2vh, 20px);
-    border: 1px solid var(--color-line-faint);
-    background: rgba(255,255,255,.025);
-}
-.profile-top{ display: grid; grid-template-columns: minmax(180px, 260px) minmax(0, 1fr); gap: 12px; align-items: stretch; }
-.profile-heroes{ display: flex; flex-direction: column; gap: 12px; }
-.profile-heroes .panel{ flex: 1; display: flex; flex-direction: column; justify-content: space-between; gap: 12px; }
-
-.stat-label{ display: block; color: var(--color-muted); font: 400 max(11px, 1.3vh)/1.2 var(--font-mono); letter-spacing: .2em; text-transform: uppercase; }
-.stat-value{ display: block; margin-top: 8px; font-weight: 300; font-variant-numeric: tabular-nums; }
-.stat-text{ display: block; margin-top: 8px; font: 400 max(12px, 1.4vh)/1.5 var(--font-mono); }
-.stat-sep{ margin: 0 .35em; color: var(--color-muted); font-weight: 200; }
-.stat-note{ display: block; margin-top: 6px; color: var(--color-muted); font: 400 max(11px, 1.2vh)/1.5 var(--font-mono); }
-.profile-heroes .stat-value{ font-size: clamp(44px, 8vh, 80px); line-height: 1; }
-
-.profile-grid{
+/* Même double filet que le bouton suspendu ; l'image remplit le cercle */
+.profile-avatar{
+    flex: none;
+    width: clamp(48px, 7vh, 64px);
+    aspect-ratio: 1;
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-    gap: 12px;
-    margin-top: 12px;
+    place-items: center;
+    overflow: hidden;
+    border-radius: 50%;
+    border: 1px solid var(--color-line);
+    box-shadow: inset 0 0 0 3px #000, inset 0 0 0 4px var(--color-line-faint);
+    background: var(--color-face-front-b);
+    color: var(--color-muted);
+    font: 300 clamp(20px, 3.2vh, 28px)/1 var(--font-sans);
 }
-.profile-grid .stat-value{ font-size: clamp(22px, 3.4vh, 32px); line-height: 1.1; overflow-wrap: anywhere; }
+.profile-avatar img{ width: 100%; height: 100%; object-fit: cover; }
+/* Sans photo : la tête du poisson d'O.R.I.O.N, cadrée sur les mâchoires et l'œil ; l'initiale n'est pas dessinée */
+.avatar-default{
+    width: 100%;
+    height: 100%;
+    font-size: 0;
+    color: transparent;
+    background: url("../../../assets/podium/avatar.webp") no-repeat 57% 18% / 185%;
+}
 
+/* Sections : pas de cadre, un titre à barre rouge et un grand écart entre elles */
+.profile-section + .profile-section{ margin-top: clamp(36px, 6vh, 64px); }
+.profile-section-title::before{ content: ""; width: 3px; height: 1.1em; background: var(--color-red-text); }
+.profile-section-title{ display: flex; align-items: center; gap: 10px; margin-bottom: 14px; color: #fff; font: 400 max(11px, 1.3vh)/1.2 var(--font-mono); letter-spacing: .2em; text-transform: uppercase; }
+.profile-note{ color: var(--color-muted); font: 400 max(12px, 1.4vh)/1.6 var(--font-mono); }
+.profile-note + .profile-note, .profile-card + .profile-note{ margin-top: 12px; }
+
+/* Contexte de la course : les réglages se lisent comme une phrase (le « · » reste collé au mot d'avant),
+   l'issue et la session forment un groupe à part, à droite. */
+.race-context{ display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 32px; margin-bottom: 16px; color: var(--color-muted); font: 400 max(12px, 1.4vh)/1.6 var(--font-mono); }
+.race-settings{ min-width: 0; }
+.race-settings i{ font-style: normal; margin-right: .5em; color: var(--color-line-soft); }
+.race-meta{ display: flex; flex-wrap: wrap; gap: 4px 20px; white-space: nowrap; }
+.race-outcome{ color: #fff; }
+
+/* Carte : les chiffres et leurs graphiques dans un seul cadre, séparés par des filets (le fond de la grille les dessine) */
+/* padding-box : le fond des filets ne passe pas sous le contour, qui garde la teinte des autres cadres */
+.profile-card{ display: grid; gap: 1px; background: var(--color-line-faint) padding-box; border: 1px solid var(--color-line-faint); }
+.profile-card > *{ min-width: 0; padding: clamp(14px, 2vh, 20px); background: var(--color-face-front-a); }
+.profile-card--race{ grid-template-columns: 1.2fr 1.2fr 1fr 1fr 1fr 1.5fr; }
+.profile-card--race > .card-chart{ grid-column: 1 / -1; }
+.profile-card--career{ grid-template-columns: repeat(20, minmax(0, 1fr)); }
+.profile-card--career > .stat{ grid-column: span 4; }
+.profile-card--career > .card-progress{ grid-column: span 11; }
+.profile-card--career > .card-keys{ grid-column: span 9; }
+@media (max-width: 1100px){
+    .profile-card--career > .card-progress, .profile-card--career > .card-keys{ grid-column: 1 / -1; }
+}
+@media (max-width: 1000px){
+    .profile-card--race{ grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .profile-card--career{ grid-template-columns: repeat(6, minmax(0, 1fr)); }
+    .profile-card--career > .stat{ grid-column: span 2; }
+    .profile-card--career > .stat--hero{ grid-column: span 3; }
+}
+/* Mobile : les deux chiffres clés, tout de suite leur graphique, puis le détail ; plus de cadre, le contenu suit la marge */
+@media (max-width: 700px){
+    .profile-card{ gap: 0; background: transparent; border: 0; }
+    .profile-card > *{ order: 2; padding-inline: 0; background: transparent; }
+    .profile-card > .stat--hero{ order: 0; }
+    .profile-card > .card-chart{ order: 1; border-block: 1px solid var(--color-line-faint); }
+    .profile-card > .card-keys{ order: 3; border-top: 1px solid var(--color-line-faint); }
+    .profile-card--race{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* Un chiffre : son libellé (avec le repère de sa courbe), sa valeur, ses notes */
+.stat-label{ display: block; color: var(--color-muted); font: 400 max(11px, 1.3vh)/1.2 var(--font-mono); letter-spacing: .2em; text-transform: uppercase; }
+.stat-label .chart-swatch{ vertical-align: middle; margin: -2px 8px 0 0; }
+.stat-value{ display: block; margin-top: 8px; font-size: clamp(22px, 3.4vh, 32px); font-weight: 300; line-height: 1.1; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.stat--hero .stat-value{ font-size: clamp(36px, 6vh, 56px); line-height: 1; }
+/* Un nombre ne se coupe jamais ; son unité, plus petite, reste collée dessus */
+.stat-unit{ margin-left: .12em; font-size: .5em; color: var(--color-muted); }
+.stat-note{ display: block; margin-top: 6px; color: var(--color-muted); font: 400 max(11px, 1.2vh)/1.5 var(--font-mono); }
+.stat-note .chart-cross{ margin-right: .2em; }
+.stat-error{ color: var(--color-red-text); font-weight: 400; }
+
+/* Graphiques */
 .chart{ position: relative; min-width: 0; }
-.chart-legend{ display: flex; flex-wrap: wrap; gap: 8px 20px; margin-bottom: 10px; color: var(--color-muted); font: 400 max(11px, 1.2vh)/1 var(--font-mono); letter-spacing: .08em; }
+.chart-legend{ display: flex; flex-wrap: wrap; gap: 8px 20px; margin-bottom: 16px; color: var(--color-muted); font: 400 max(11px, 1.2vh)/1 var(--font-mono); letter-spacing: .08em; }
 .chart-legend span{ display: inline-flex; align-items: center; gap: 8px; }
 .chart-swatch{ display: inline-block; width: 18px; height: 2px; }
 .chart-swatch--wpm{ background: var(--color-red-text); }
@@ -80,39 +136,21 @@
 }
 .chart-tip p{ display: flex; justify-content: space-between; gap: 14px; }
 .chart-tip span{ color: var(--color-muted); }
+.chart-tip .chart-tip-head{ margin-bottom: 4px; padding-bottom: 4px; border-bottom: 1px solid var(--color-line-faint); letter-spacing: .1em; text-transform: uppercase; font-size: 11px; }
 
-@media (max-width: 700px){
-    .profile-top{ grid-template-columns: minmax(0, 1fr); }
-    .profile-heroes{ flex-direction: row; }
-    .profile-heroes .panel{ flex: 1 1 0; }
-    .profile-grid{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-
-/* Sections : toutes les courses (serveur), puis la dernière course (cet onglet). */
-/* Chaque section est un cadre : ses tuiles et ses graphiques vont ensemble */
-.profile-section{
-    padding: clamp(14px, 2vw, 22px);
-    border: 1px solid var(--color-line-soft);
-    background: rgba(255,255,255,.015);
-}
-.profile-section + .profile-section{ margin-top: clamp(20px, 3vh, 32px); }
-.profile-section-title::before{ content: ""; width: 3px; height: 1.1em; background: var(--color-red-text); }
-.profile-section-title{ display: flex; align-items: center; gap: 10px; margin-bottom: 14px; color: #fff; font: 400 max(11px, 1.3vh)/1.2 var(--font-mono); letter-spacing: .2em; text-transform: uppercase; }
-.profile-note{ color: var(--color-muted); font: 400 max(12px, 1.4vh)/1.6 var(--font-mono); }
-.profile-grid--career{ margin: 0 0 12px; }
-.profile-dash{ display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
-@media (min-width: 1100px){
-    .profile-dash{ grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); align-items: stretch; }
-}
-
-/* Heatmap du clavier : la couleur d'une touche suit son taux d'erreur (--heat, de 0 à 100 %) */
-.keymap{ min-width: 0; }
-.keymap-head{ display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 20px; margin-bottom: 14px; }
-.keymap-title{ color: var(--color-muted); font: 400 max(11px, 1.2vh)/1 var(--font-mono); letter-spacing: .08em; }
+/* Heatmap du clavier : la couleur d'une touche suit son taux d'erreur (--heat, de 0 à 100 %).
+   Sa case s'étire à la hauteur du graphique : l'espace libre va au-dessus du clavier et des touches ratées. */
+.card-keys{ display: flex; flex-direction: column; }
+.keymap{ min-width: 0; flex: 1; display: flex; flex-direction: column; }
+.keymap-head{ display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 20px; margin-bottom: 28px; }
+.keymap-title{ display: inline-flex; align-items: center; gap: 8px; color: var(--color-muted); font: 400 max(11px, 1.2vh)/1 var(--font-mono); letter-spacing: .08em; }
+/* Repère du clavier : une petite touche en dégradé, comme le trait des courbes */
+.key-swatch{ display: inline-block; width: 10px; height: 10px; border: 1px solid var(--color-line-faint); background: linear-gradient(135deg, var(--color-face-front-b), var(--color-red-solid)); }
 .keymap-head .view-tabs{ gap: 8px; border: 0; animation: none; }
 .keymap-head .view-tab{ height: 32px; min-height: 32px; padding: 0 18px; border: 1px solid var(--color-line); font-size: 11px; letter-spacing: .2em; }
 .keymap-head .view-tab + .view-tab{ border-left: 1px solid var(--color-line); }
-.keymap-board{ display: grid; gap: 4px; max-width: 640px; margin: 0 auto; }
+/* width : margin auto dans une colonne flex rétrécirait le clavier à son contenu */
+.keymap-board{ display: grid; gap: 4px; width: 100%; max-width: 640px; margin: auto auto 0; }
 .keymap-row{ display: flex; gap: 4px; }
 .keymap-row:nth-child(2){ padding-left: 3%; }
 .keymap-row:nth-child(3){ padding-left: 5%; }
@@ -130,18 +168,36 @@
     background: color-mix(in srgb, var(--color-red-solid) var(--heat, 0%), var(--color-face-front-b));
     color: #fff;
     font: 400 clamp(9px, 1.6vw, 13px)/1 var(--font-mono);
+    transition: background .35s ease, color .35s ease;
 }
-.keymap-key{ transition: background .35s ease, color .35s ease; }
 .keymap-cap{ display: inline-block; animation: keymap-swap .34s calc(var(--i, 0) * 12ms) cubic-bezier(.2,.8,.2,1) both; }
 @keyframes keymap-swap{
     from{ opacity: 0; transform: translateY(-45%) scale(.7); }
 }
+.keymap-key.is-wide{ flex: 0 0 50%; aspect-ratio: auto; height: clamp(22px, 4vw, 36px); }
+.keymap-key.is-empty{ color: var(--color-line-faint); background: transparent; }
+.keymap-legend{ display: flex; align-items: center; gap: 10px; margin-top: 28px; color: var(--color-muted); font: 400 11px/1 var(--font-mono); }
+.keymap-scale{ width: 120px; height: 8px; border: 1px solid var(--color-line-faint); background: linear-gradient(90deg, var(--color-face-front-b), var(--color-red-solid)); }
+
+/* Touches les plus ratées : de petites touches teintées, chacune avec son taux */
+.keymap-worst{ margin-top: auto; padding-top: 28px; color: var(--color-muted); font: 400 max(12px, 1.4vh)/1.6 var(--font-mono); }
+.worst-list{ display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 8px; list-style: none; }
+.worst-list li{ display: flex; align-items: center; gap: 8px; white-space: nowrap; color: #fff; font-variant-numeric: tabular-nums; }
+.mini-key{
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 26px;
+    height: 26px;
+    padding: 0 6px;
+    border: 1px solid var(--color-line-faint);
+    background: color-mix(in srgb, var(--color-red-solid) var(--heat, 0%), var(--color-face-front-b));
+    color: #fff;
+    font: 400 12px/1 var(--font-mono);
+}
+.mini-key.is-wide{ font-size: 10px; letter-spacing: .08em; }
+
 @media (prefers-reduced-motion: reduce){
     .keymap-key{ transition: none; }
     .keymap-cap{ animation: none; }
 }
-.keymap-key.is-wide{ flex: 0 0 50%; aspect-ratio: auto; height: clamp(22px, 4vw, 36px); }
-.keymap-key.is-empty{ color: var(--color-line-faint); background: transparent; }
-.keymap-legend{ display: flex; align-items: center; gap: 10px; margin-top: 12px; color: var(--color-muted); font: 400 11px/1 var(--font-mono); }
-.keymap-scale{ width: 120px; height: 8px; border: 1px solid var(--color-line-faint); background: linear-gradient(90deg, var(--color-face-front-b), var(--color-red-solid)); }
-.keymap-worst{ margin-top: 10px; color: var(--color-muted); font: 400 max(12px, 1.4vh)/1.6 var(--font-mono); }

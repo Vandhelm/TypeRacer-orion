@@ -4,7 +4,7 @@ import type { StatsState } from "./hooks/usePlayerStats";
 import type { Layout } from "./keyboard";
 import { KeyboardHeatmap } from "./KeyboardHeatmap";
 import { ProgressChart } from "./ProgressChart";
-import { StatBlock } from "./StatBlock";
+import { StatBlock, Swatch, Unit } from "./StatBlock";
 
 /** Toutes les courses du joueur (AUTH-06). Pour un invité : celles de sa session seulement (AUTH-03). */
 type Props = { state: StatsState; guest: boolean; layout: Layout; onLayout: (layout: Layout) => void };
@@ -20,16 +20,14 @@ export function CareerStats({ state, guest, layout, onLayout }: Props) {
     const { stats } = state;
     body = (
       <>
-        <div className="profile-grid profile-grid--career">
-          <StatBlock label={t("profile.bestWpm")} value={String(stats.bestWpm ?? 0)} />
-          <StatBlock label={t("profile.averageWpm")} value={String(stats.averageWpm ?? 0)} />
-          <StatBlock label={t("profile.averageAccuracy")} value={`${oneDecimal(i18n.language, stats.averageAccuracy ?? 0)} %`} />
-          <StatBlock label={t("profile.races")} value={String(stats.races)} />
-          <StatBlock label={t("profile.wins")} value={String(stats.wins)} />
-        </div>
-        <div className="profile-dash">
-          <div className="panel"><ProgressChart progress={stats.progress} /></div>
-          <div className="panel"><KeyboardHeatmap keys={stats.keys} layout={layout} onLayout={onLayout} /></div>
+        <div className="profile-card profile-card--career">
+          <StatBlock hero marker={<Swatch series="wpm" />} label={t("profile.bestWpm")} value={stats.bestWpm ?? 0} />
+          <StatBlock hero marker={<Swatch series="wpm" />} label={t("profile.averageWpm")} value={stats.averageWpm ?? 0} />
+          <StatBlock label={t("profile.averageAccuracy")} value={<>{oneDecimal(i18n.language, stats.averageAccuracy ?? 0)}<Unit>%</Unit></>} />
+          <StatBlock label={t("profile.races")} value={stats.races} />
+          <StatBlock label={t("profile.wins")} value={stats.wins} />
+          <div className="card-chart card-progress"><ProgressChart progress={stats.progress} /></div>
+          <div className="card-keys"><KeyboardHeatmap keys={stats.keys} layout={layout} onLayout={onLayout} /></div>
         </div>
         {guest && <p className="profile-note">{t("profile.guestSession")}</p>}
       </>

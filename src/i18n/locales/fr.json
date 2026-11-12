@@ -296,6 +296,12 @@
       "clean": "Pas assez de fautes pour repérer une touche faible."
     },
     "sessionRaces": "Courses de cette session",
-    "guestSession": "Invité : ces statistiques disparaissent à la fermeture de l'onglet. Crée un compte pour les garder."
+    "guestSession": "Invité : ces statistiques disparaissent à la fermeture de l'onglet. Crée un compte pour les garder.",
+    "seconds": "{{duration}} s",
+    "correctChars": "Caractères justes",
+    "wrong": "faux",
+    "extra": "en trop",
+    "missed_one": "manqué",
+    "missed_other": "manqués"
   }
 }

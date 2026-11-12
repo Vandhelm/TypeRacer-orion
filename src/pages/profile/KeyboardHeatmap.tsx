@@ -6,6 +6,9 @@ import { heatOf, LAYOUTS, MIN_TYPED, RATE_MAX, rowsOf, weakest, type Layout } fr
 
 type Props = { keys: KeyCounts; layout: Layout; onLayout: (layout: Layout) => void };
 
+/** La teinte d'une touche, de 0 (aucune faute) à 1 (RATE_MAX ou plus). */
+const levelOf = (rate: number) => Math.min(1, rate / RATE_MAX);
+
 /** Le taux d'erreur de chaque touche, sur un clavier AZERTY ou QWERTY, avec les touches les plus ratées en clair. */
 export function KeyboardHeatmap({ keys, layout, onLayout }: Props) {
   const { t, i18n } = useTranslation();
@@ -17,7 +20,7 @@ export function KeyboardHeatmap({ keys, layout, onLayout }: Props) {
   return (
     <div className="keymap">
       <div className="keymap-head">
-        <h3 className="keymap-title">{t("profile.keys.title")}</h3>
+        <h3 className="keymap-title"><i className="key-swatch" />{t("profile.keys.title")}</h3>
         <ViewTabs
           options={LAYOUTS.map((value) => ({ value, label: value.toUpperCase() }))}
           value={layout}
@@ -32,7 +35,7 @@ export function KeyboardHeatmap({ keys, layout, onLayout }: Props) {
             {row.map((cap, c) => {
               const value = heat.get(cap);
               const known = !!value && value.typed >= MIN_TYPED;
-              const level = known ? Math.min(1, value.rate / RATE_MAX) : 0;
+              const level = known ? levelOf(value.rate) : 0;
               return (
                 // la touche garde sa place d'une disposition à l'autre : seul un libellé qui change est remonté, donc animé
                 <span
@@ -55,13 +58,23 @@ export function KeyboardHeatmap({ keys, layout, onLayout }: Props) {
         <span>{`${percent(RATE_MAX)}+`}</span>
       </div>
 
-      <p className="keymap-worst">
-        {!heat.size
-          ? t("profile.keys.none")
-          : worst.length
-          ? `${t("profile.keys.weakest")} ${worst.map(([cap, value]) => `${nameOf(cap.label)} ${percent(value.rate)}`).join(" · ")}`
-          : t("profile.keys.clean")}
-      </p>
+      {worst.length ? (
+        <div className="keymap-worst">
+          <span>{t("profile.keys.weakest")}</span>
+          <ul className="worst-list">
+            {worst.map(([cap, value]) => (
+              <li key={cap.label}>
+                <span className={`mini-key${cap.wide ? " is-wide" : ""}`} style={{ "--heat": `${Math.round(levelOf(value.rate) * 100)}%` } as CSSProperties}>
+                  {nameOf(cap.label)}
+                </span>
+                {percent(value.rate)}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        <p className="keymap-worst">{t(heat.size ? "profile.keys.clean" : "profile.keys.none")}</p>
+      )}
     </div>
   );
 }

@@ -296,6 +296,12 @@
       "clean": "Not enough mistakes to spot a weak key."
     },
     "sessionRaces": "Races this session",
-    "guestSession": "Guest: these statistics vanish when the tab closes. Create an account to keep them."
+    "guestSession": "Guest: these statistics vanish when the tab closes. Create an account to keep them.",
+    "seconds": "{{duration}} s",
+    "correctChars": "Correct characters",
+    "wrong": "wrong",
+    "extra": "extra",
+    "missed_one": "missed",
+    "missed_other": "missed"
   }
 }

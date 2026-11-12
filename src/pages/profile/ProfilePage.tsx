@@ -5,9 +5,8 @@ import { readResults, type PlayerResult, type RaceResults } from "../podium/resu
 import { CareerStats } from "./CareerStats";
 import { useKeyboardLayout } from "./hooks/useKeyboardLayout";
 import { usePlayerStats, type StatsState } from "./hooks/usePlayerStats";
-import { ProfileDetails } from "./ProfileDetails";
-import { SpeedChart } from "./SpeedChart";
-import { StatBlock } from "./StatBlock";
+import { LastRace } from "./LastRace";
+import { ProfileAvatar } from "./ProfileAvatar";
 import { guestStats } from "./stats";
 
 const PODIUM_HREF = "/podium#arrived";
@@ -80,25 +79,16 @@ export function ProfilePage() {
     <main className="profile" aria-labelledby="profile-name">
       <header className="profile-head">
         {subject.fromPodium && <HangingButton className="profile-back" href={PODIUM_HREF}>{t("profile.back")}</HangingButton>}
-        <div className="profile-title">
-          <h1 id="profile-name" className="profile-name">{subject.name}</h1>
-          {result && <p className="profile-rank">{result.me ? `${place} · ${t("room.you")}` : place}</p>}
+        <div className="profile-id">
+          <div className="profile-title">
+            <h1 id="profile-name" className="profile-name">{subject.name}</h1>
+            {result && <p className="profile-rank">{result.me ? `${place} · ${t("room.you")}` : place}</p>}
+          </div>
+          <ProfileAvatar name={subject.name} />
         </div>
       </header>
 
-      {result && results && (
-        <section className="profile-section" aria-labelledby="last-race-title">
-          <h2 id="last-race-title" className="profile-section-title">{t("profile.lastRace")}</h2>
-          <div className="profile-top">
-            <div className="profile-heroes">
-              <StatBlock className="panel" label={t("game.wpm")} value={String(result.wpm)} />
-              <StatBlock className="panel" label={t("profile.accuracy")} value={`${result.accuracy} %`} />
-            </div>
-            <div className="panel"><SpeedChart player={result} /></div>
-          </div>
-          <ProfileDetails player={result} summary={results.summary} />
-        </section>
-      )}
+      {result && results && <LastRace player={result} summary={results.summary} />}
 
       <CareerStats state={stats} guest={guest} layout={layout} onLayout={setLayout} />
     </main>
