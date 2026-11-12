@@ -23,7 +23,6 @@
     "stampAccount": "OK",
     "stampCode": "CODE",
     "or": "OR",
-    "withGoogle": "Continue with Google",
     "withGithub": "Continue with GitHub",
     "withDiscord": "Continue with Discord",
     "socialFailed": "{{provider}} sign-in failed. Try again.",

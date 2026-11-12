@@ -4,7 +4,7 @@ import { LogoTitle } from "../../components/brand/LogoTitle";
 import { FlipButton } from "../../components/buttons/FlipButton";
 import { OutlineButton } from "../../components/buttons/OutlineButton";
 import { TextField, TextInput } from "../../components/forms/TextField";
-import { DiscordIcon, GithubIcon, GoogleIcon } from "../../components/icons";
+import { DiscordIcon, GithubIcon } from "../../components/icons";
 import { Stamp } from "../../components/Stamp";
 import { ViewTabs } from "../../components/tabs/ViewTabs";
 import { cleanRoomCode } from "../../rooms/access";
@@ -242,12 +242,11 @@ export function HomePanel({ ref }: { ref?: Ref<HTMLElement> }) {
               <FlipButton type="submit" label={t("home.logIn")} backLabel={t("home.logInBack")} disabled={busy} />
               <OutlineButton disabled={busy} onClick={() => void submitAccount("signUp")}>{t("home.createAccount")}</OutlineButton>
             </div>
-            {/* Connexion via un fournisseur externe (GitHub et Discord branchés, Google à venir) */}
+            {/* Connexion via un fournisseur externe */}
             <div className="flex items-center gap-[1.2vh] font-mono text-[max(10px,1.2vh)] leading-none tracking-[.2em] text-line-soft uppercase before:flex-1 before:border-t before:border-dashed before:border-line-faint after:flex-1 after:border-t after:border-dashed after:border-line-faint">
               {t("home.or")}
             </div>
-            <div className="grid grid-cols-3 gap-[1.3vh] phone:grid-cols-1">
-              <OutlineButton id="login-google" data-provider="google" aria-label={t("home.withGoogle")} icon={<GoogleIcon />}>GOOGLE</OutlineButton>
+            <div className="grid grid-cols-2 gap-[1.3vh]">
               <OutlineButton id="login-github" data-provider="github" aria-label={t("home.withGithub")} icon={<GithubIcon />} disabled={busy} onClick={() => goTo("github", "signIn")}>GITHUB</OutlineButton>
               <OutlineButton id="login-discord" data-provider="discord" aria-label={t("home.withDiscord")} icon={<DiscordIcon />} disabled={busy} onClick={() => goTo("discord", "signIn")}>DISCORD</OutlineButton>
             </div>
