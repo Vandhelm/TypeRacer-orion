@@ -56,3 +56,22 @@ describe("username accounts", () => {
     expect(result?.token).toBeTruthy();
   });
 });
+
+describe("GitHub accounts", () => {
+  test("turns a GitHub login into a valid username", async () => {
+    const { usernameFromGithub } = await import("./auth");
+    expect(usernameFromGithub("octo-cat")).toBe("octo_cat");
+    expect(usernameFromGithub("ab")).toBe("ab_");
+    expect(usernameFromGithub("a".repeat(30))).toHaveLength(20);
+  });
+
+  test("a GitHub user whose name is taken gets a free one", async () => {
+    const db = await createMockDatabase();
+    const auth = createAuth(db);
+    const ctx = await auth.$context;
+    const created = await ctx.internalAdapter.createUser({ name: "Tamago", email: "tamago@example.com", emailVerified: true, username: "tamago_8", displayUsername: "Tamago_8" }, { method: "oauth", oauth: { providerId: "github", profile: {} } });
+    const [player] = await db.select().from(players).where(eq(players.id, created.playerId));
+    expect(player!.name).toBe("Tamago_8_2");
+    expect(created.displayUsername).toBe("Tamago_8_2");
+  });
+});

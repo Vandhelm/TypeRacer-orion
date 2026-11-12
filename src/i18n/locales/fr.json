@@ -25,6 +25,7 @@
     "or": "OU",
     "withGoogle": "Continuer avec Google",
     "withGithub": "Continuer avec GitHub",
+    "githubFailed": "La connexion GitHub a échoué. Réessayez.",
     "loginToCreate": "Connecte-toi pour créer un salon.",
     "badUsername": "Pseudo : 3 à 20 lettres, chiffres ou _.",
     "badPassword": "Mot de passe : {{min}} caractères minimum.",

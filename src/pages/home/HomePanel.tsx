@@ -8,7 +8,7 @@ import { GithubIcon, GoogleIcon } from "../../components/icons";
 import { Stamp } from "../../components/Stamp";
 import { ViewTabs } from "../../components/tabs/ViewTabs";
 import { cleanRoomCode } from "../../rooms/access";
-import { authClient, signInWithUsername, signUpWithUsername } from "../../accounts/client";
+import { authClient, signInWithGithub, signInWithUsername, signUpWithUsername } from "../../accounts/client";
 import { isValidUsername, PASSWORD_MIN } from "../../accounts/username";
 
 type Pane = "play" | "account";
@@ -33,6 +33,15 @@ export function HomePanel({ ref }: { ref?: Ref<HTMLElement> }) {
   const codeInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => () => clearTimeout(stampTimer.current), []);
+  // Retour d'un échec OAuth : on ouvre l'onglet compte avec le message
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get("authError") !== "github") return;
+    setPane("account");
+    setAuthError(t("home.githubFailed"));
+    params.delete("authError");
+    history.replaceState(null, "", location.pathname + (params.size ? `?${params}` : ""));
+  }, []);
 
   function showStamp(key: StampKey) {
     clearTimeout(stampTimer.current);
@@ -170,13 +179,13 @@ export function HomePanel({ ref }: { ref?: Ref<HTMLElement> }) {
               <FlipButton type="submit" label={t("home.logIn")} backLabel={t("home.logInBack")} disabled={busy} />
               <OutlineButton disabled={busy} onClick={() => void submitAccount("signUp")}>{t("home.createAccount")}</OutlineButton>
             </div>
-            {/* Connexion via un fournisseur externe (OAuth : à brancher sur le serveur) */}
+            {/* Connexion via un fournisseur externe (GitHub branché, Google à venir) */}
             <div className="flex items-center gap-[1.2vh] font-mono text-[max(10px,1.2vh)] leading-none tracking-[.2em] text-line-soft uppercase before:flex-1 before:border-t before:border-dashed before:border-line-faint after:flex-1 after:border-t after:border-dashed after:border-line-faint">
               {t("home.or")}
             </div>
             <div className="grid grid-cols-2 gap-[1.3vh]">
               <OutlineButton id="login-google" data-provider="google" aria-label={t("home.withGoogle")} icon={<GoogleIcon />}>GOOGLE</OutlineButton>
-              <OutlineButton id="login-github" data-provider="github" aria-label={t("home.withGithub")} icon={<GithubIcon />}>GITHUB</OutlineButton>
+              <OutlineButton id="login-github" data-provider="github" aria-label={t("home.withGithub")} icon={<GithubIcon />} disabled={busy} onClick={() => { setBusy(true); void signInWithGithub().then(({ error }) => { if (error) { setBusy(false); setAuthError(t("home.githubFailed")); } }); }}>GITHUB</OutlineButton>
             </div>
               </>
             )}

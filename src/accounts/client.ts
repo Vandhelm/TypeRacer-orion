@@ -12,3 +12,7 @@ export function signUpWithUsername(username: string, password: string) {
 export function signInWithUsername(username: string, password: string) {
   return authClient.signIn.username({ username, password });
 }
+
+export function signInWithGithub() {
+  return authClient.signIn.social({ provider: "github", callbackURL: "/", errorCallbackURL: "/?authError=github" });
+}
