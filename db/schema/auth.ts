@@ -17,6 +17,8 @@ export const user = pgTable("user", {
   username: text("username").unique(),
   displayUsername: text("display_username"),
   playerId: integer("player_id").notNull().unique().references(() => players.id, { onDelete: "cascade" }),
+  /** Arrivé par GitHub ou Discord avec un nom déjà pris : doit choisir son pseudo. */
+  needsUsername: boolean("needs_username").notNull().default(false),
   ...timestamps,
 });
 

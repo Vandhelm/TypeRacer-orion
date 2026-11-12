@@ -4,15 +4,18 @@ import { LogoTitle } from "../../components/brand/LogoTitle";
 import { FlipButton } from "../../components/buttons/FlipButton";
 import { OutlineButton } from "../../components/buttons/OutlineButton";
 import { TextField, TextInput } from "../../components/forms/TextField";
-import { GithubIcon, GoogleIcon } from "../../components/icons";
+import { DiscordIcon, GithubIcon } from "../../components/icons";
 import { Stamp } from "../../components/Stamp";
 import { ViewTabs } from "../../components/tabs/ViewTabs";
 import { cleanRoomCode } from "../../rooms/access";
-import { authClient, signInWithUsername, signUpWithUsername } from "../../accounts/client";
+import { authClient, changeUsername, linkProvider, PROVIDER_NAMES, signInWith, signInWithUsername, signUpWithUsername, SOCIAL_PROVIDERS, type SocialProvider } from "../../accounts/client";
 import { isValidUsername, PASSWORD_MIN } from "../../accounts/username";
 
 type Pane = "play" | "account";
 type StampKey = "stampPlay" | "stampAccount" | "stampCode";
+
+const PROVIDER_ICONS: Record<SocialProvider, () => React.JSX.Element> = { github: GithubIcon, discord: DiscordIcon };
+const isProvider = (value: string | null): value is SocialProvider => SOCIAL_PROVIDERS.includes(value as SocialProvider);
 
 const FORM = "col-start-1 row-start-1 flex flex-col gap-[2.1vh] [align-self:start]";
 
@@ -27,12 +30,38 @@ export function HomePanel({ ref }: { ref?: Ref<HTMLElement> }) {
   const [authError, setAuthError] = useState("");
   const [busy, setBusy] = useState(false);
   const { data: session } = authClient.useSession();
-  const me = session?.user as { displayUsername?: string | null; username?: string | null; name: string } | undefined;
+  const me = session?.user as { id: string; displayUsername?: string | null; username?: string | null; name: string; needsUsername?: boolean } | undefined;
+  const [linkedProviders, setLinkedProviders] = useState<string[]>([]);
+  const [notice, setNotice] = useState("");
   const [stamp, setStamp] = useState<{ key: StampKey | null; on: boolean; play: number }>({ key: null, on: false, play: 0 });
   const stampTimer = useRef<number>(undefined);
   const codeInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => () => clearTimeout(stampTimer.current), []);
+  // Retour de GitHub ou Discord (connexion ou liaison) : on ouvre l'onglet compte avec le message
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const failed = params.get("authError");
+    const linked = params.get("linked");
+    if (!failed && !linked) return;
+    setPane("account");
+    const providerOf = (value: string | null) => (isProvider(value) ? PROVIDER_NAMES[value] : "");
+    if (failed === "link") setAuthError(t("home.linkFailed", { provider: providerOf(params.get("provider")) }));
+    else if (failed) setAuthError(t("home.socialFailed", { provider: providerOf(failed) }));
+    else setNotice(t("home.providerLinked", { provider: providerOf(linked) }));
+    for (const key of ["authError", "linked", "provider", "error", "error_description"]) params.delete(key);
+    history.replaceState(null, "", location.pathname + (params.size ? `?${params}` : ""));
+  }, []);
+
+  // Compte connecté : quels fournisseurs sont déjà liés ? Et un pseudo à choisir est pré-rempli.
+  useEffect(() => {
+    if (!me) return;
+    void authClient.listAccounts().then(({ data }) => setLinkedProviders(data?.map((a) => a.providerId) ?? []));
+    if (me.needsUsername) {
+      setPane("account");
+      setUsername(me.displayUsername || "");
+    }
+  }, [me?.id, me?.needsUsername]);
 
   function showStamp(key: StampKey) {
     clearTimeout(stampTimer.current);
@@ -61,6 +90,28 @@ export function HomePanel({ ref }: { ref?: Ref<HTMLElement> }) {
     setBusy(false);
     if (error) return setAuthError(t(mode === "signIn" ? "home.signInFailed" : "home.signUpFailed"));
     setPassword("");
+    showStamp("stampAccount");
+  }
+
+  // Départ vers GitHub ou Discord : en cas d'erreur avant la redirection, on reste ici avec le message
+  function goTo(provider: SocialProvider, action: "signIn" | "link") {
+    setBusy(true);
+    setAuthError("");
+    void (action === "link" ? linkProvider(provider) : signInWith(provider)).then(({ error }) => {
+      if (!error) return;
+      setBusy(false);
+      setAuthError(t(action === "link" ? "home.linkFailed" : "home.socialFailed", { provider: PROVIDER_NAMES[provider] }));
+    });
+  }
+
+  async function submitUsername() {
+    setAuthError("");
+    if (!isValidUsername(username)) return setAuthError(t("home.badUsername"));
+    setBusy(true);
+    const { error } = await changeUsername(username);
+    setBusy(false);
+    if (error) return setAuthError(t("home.signUpFailed"));
+    await authClient.getSession({ query: { disableCookieCache: true } });
     showStamp("stampAccount");
   }
 
@@ -134,17 +185,38 @@ export function HomePanel({ ref }: { ref?: Ref<HTMLElement> }) {
             onSubmit={(e) => {
               e.preventDefault();
               if (!me) void submitAccount("signIn");
+              else if (me.needsUsername) void submitUsername();
             }}
           >
-            {me ? (
+            {me?.needsUsername ? (
+              <>
+                <TextField
+                  id="new-username"
+                  num="01"
+                  label={t("home.chooseUsername")}
+                  inputProps={{ name: "username", autoComplete: "username", spellCheck: false, maxLength: 20, value: username, onChange: (e) => setUsername(e.target.value) }}
+                />
+                <p role="alert" className="min-h-[1.4em] font-mono text-[max(11px,1.3vh)] tracking-[.08em] text-red-text">{authError || t("home.usernameTakenExternal")}</p>
+                <FlipButton type="submit" label={t("home.confirmUsername")} backLabel={t("home.confirmUsername")} disabled={busy} />
+              </>
+            ) : me ? (
               <>
                 <TextField id="signed-in" num="01" label={t("home.signedInAs")}>
                   <p className="py-[1.2vh] text-[max(18px,2.6vh)] tracking-[.08em]">{me.displayUsername || me.username || me.name}</p>
                 </TextField>
                 <div className="flex flex-col gap-[1.3vh]">
                   <OutlineButton href="/profile">{t("home.myProfile")}</OutlineButton>
+                  {SOCIAL_PROVIDERS.filter((p) => !linkedProviders.includes(p)).map((provider) => {
+                    const Icon = PROVIDER_ICONS[provider];
+                    return (
+                      <OutlineButton key={provider} icon={<Icon />} disabled={busy} onClick={() => goTo(provider, "link")}>
+                        {t("home.linkProvider", { provider: PROVIDER_NAMES[provider].toUpperCase() })}
+                      </OutlineButton>
+                    );
+                  })}
                   <OutlineButton onClick={() => void authClient.signOut()}>{t("home.signOut")}</OutlineButton>
                 </div>
+                <p role="status" className={`min-h-[1.4em] font-mono text-[max(11px,1.3vh)] tracking-[.08em] ${authError ? "text-red-text" : "text-line-soft"}`}>{authError || notice}</p>
               </>
             ) : (
               <>
@@ -170,13 +242,13 @@ export function HomePanel({ ref }: { ref?: Ref<HTMLElement> }) {
               <FlipButton type="submit" label={t("home.logIn")} backLabel={t("home.logInBack")} disabled={busy} />
               <OutlineButton disabled={busy} onClick={() => void submitAccount("signUp")}>{t("home.createAccount")}</OutlineButton>
             </div>
-            {/* Connexion via un fournisseur externe (OAuth : à brancher sur le serveur) */}
+            {/* Connexion via un fournisseur externe */}
             <div className="flex items-center gap-[1.2vh] font-mono text-[max(10px,1.2vh)] leading-none tracking-[.2em] text-line-soft uppercase before:flex-1 before:border-t before:border-dashed before:border-line-faint after:flex-1 after:border-t after:border-dashed after:border-line-faint">
               {t("home.or")}
             </div>
             <div className="grid grid-cols-2 gap-[1.3vh]">
-              <OutlineButton id="login-google" data-provider="google" aria-label={t("home.withGoogle")} icon={<GoogleIcon />}>GOOGLE</OutlineButton>
-              <OutlineButton id="login-github" data-provider="github" aria-label={t("home.withGithub")} icon={<GithubIcon />}>GITHUB</OutlineButton>
+              <OutlineButton id="login-github" data-provider="github" aria-label={t("home.withGithub")} icon={<GithubIcon />} disabled={busy} onClick={() => goTo("github", "signIn")}>GITHUB</OutlineButton>
+              <OutlineButton id="login-discord" data-provider="discord" aria-label={t("home.withDiscord")} icon={<DiscordIcon />} disabled={busy} onClick={() => goTo("discord", "signIn")}>DISCORD</OutlineButton>
             </div>
               </>
             )}
