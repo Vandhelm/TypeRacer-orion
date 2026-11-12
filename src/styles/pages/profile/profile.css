@@ -204,8 +204,8 @@
 
 /* Son propre profil (depuis la navbar) : onglets Compte / Stats, même pièce que AZERTY / QWERTY */
 .profile-tabs{ margin-bottom: clamp(20px, 3vh, 32px); }
-.profile-tabs .view-tabs{ gap: 8px; border: 0; animation: none; }
-.profile-tabs .view-tab{ height: 36px; min-height: 36px; padding: 0 22px; border: 1px solid var(--color-line); font-size: 11px; letter-spacing: .22em; text-transform: uppercase; transition: none; }
+.profile-tabs .view-tabs{ width: fit-content; gap: 8px; border: 0; animation: none; }
+.profile-tabs .view-tab{ flex: none; height: 36px; min-height: 36px; padding: 0 22px; border: 1px solid var(--color-line); font-size: 11px; letter-spacing: .22em; text-transform: uppercase; transition: none; }
 .profile-tabs .view-tab + .view-tab{ border-left: 1px solid var(--color-line); }
 /* Changement d'onglet : l'onglet bascule net, le contenu arrive en fondu et monte légèrement */
 .tab-enter{ animation: tab-enter .26s cubic-bezier(.2,.8,.2,1) both; }
@@ -217,7 +217,8 @@
 .acc-main{ flex: 1 1 220px; min-width: 0; display: grid; gap: 10px; }
 .acc-help{ color: var(--color-muted); font: 400 12px/1.6 var(--font-mono); }
 .acc-actions{ display: flex; flex-wrap: wrap; gap: 10px; }
-.acc-msg{ min-height: 1.4em; font: 400 12px/1.4 var(--font-mono); }
+.acc-msg:empty{ display: none; }
+.acc-msg{ font: 400 12px/1.4 var(--font-mono); }
 .acc-msg.is-error{ color: var(--color-red-text); }
 .acc-msg.is-ok{ color: #fff; }
 
