@@ -16,3 +16,12 @@ export function signInWithUsername(username: string, password: string) {
 export function signInWithGithub() {
   return authClient.signIn.social({ provider: "github", callbackURL: "/", errorCallbackURL: "/?authError=github" });
 }
+
+/** Relie GitHub au compte connecté : ensuite, « Continuer avec GitHub » ouvre ce même compte. */
+export function linkGithub() {
+  return authClient.linkSocial({ provider: "github", callbackURL: "/?linked=github", errorCallbackURL: "/?authError=link" });
+}
+
+export function changeUsername(username: string) {
+  return authClient.updateUser({ username, displayUsername: username });
+}

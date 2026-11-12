@@ -1,11 +1,12 @@
 // Better Auth : sessions, inscription et connexion par identifiants ou par GitHub.
 import { betterAuth } from "better-auth";
+import { eq } from "drizzle-orm";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { APIError } from "better-auth/api";
 import { username } from "better-auth/plugins";
 import type { Db } from "../../db/client";
 import * as schema from "../../db/schema";
-import { isValidUsername, PASSWORD_MIN, PLACEHOLDER_EMAIL_DOMAIN, USERNAME_MAX, USERNAME_MIN } from "../accounts/username";
+import { isValidUsername, PASSWORD_MIN, USERNAME_MAX, USERNAME_MIN } from "../accounts/username";
 
 const https = (host?: string) => (host ? `https://${host}` : undefined);
 const { VERCEL_ENV, VERCEL_URL, VERCEL_BRANCH_URL, VERCEL_PROJECT_PRODUCTION_URL } = process.env;
@@ -59,22 +60,44 @@ export function createAuth(db: Db) {
             },
           }
         : undefined,
-    user: { additionalFields: { playerId: { type: "number", required: false, input: false } } },
+    // Un compte peut lier GitHub même si son e-mail (interne, pour les comptes par identifiants) diffère.
+    account: { accountLinking: { enabled: true, allowDifferentEmails: true } },
+    user: {
+      additionalFields: {
+        playerId: { type: "number", required: false, input: false },
+        // Compte GitHub arrivé avec un nom déjà pris : il doit choisir son pseudo.
+        needsUsername: { type: "boolean", required: false, input: false, defaultValue: false },
+      },
+    },
     plugins: [username({ minUsernameLength: USERNAME_MIN, maxUsernameLength: USERNAME_MAX, usernameValidator: isValidUsername })],
     databaseHooks: {
       user: {
         create: {
           // Chaque compte a son joueur : c'est lui qui porte le nom en jeu, les courses et les salons.
           before: async (data) => {
+            // Inscription par identifiants : le pseudo saisi, ou un refus.
+            // Via GitHub (pas de pseudo fourni) : le nom GitHub s'il est libre, sinon un nom provisoire à remplacer.
+            const external = !data.username;
             const wanted = String(data.displayUsername || data.username || data.name);
-            // Inscription par identifiants : le pseudo choisi ou rien. Via GitHub : on cherche un nom libre.
-            const social = !String(data.email).endsWith(`@${PLACEHOLDER_EMAIL_DOMAIN}`);
-            for (let n = 1; n <= (social ? 50 : 1); n++) {
+            for (let n = 1; n <= (external ? 50 : 1); n++) {
               const name = withSuffix(wanted, n);
               const [player] = await db.insert(schema.players).values({ name }).onConflictDoNothing().returning({ id: schema.players.id });
-              if (player) return { data: { ...data, ...(social && { username: name.toLowerCase(), displayUsername: name }), playerId: player.id } };
+              if (!player) continue;
+              const chosen = external && { username: name.toLowerCase(), displayUsername: name, needsUsername: n > 1 };
+              return { data: { ...data, ...chosen, playerId: player.id } };
             }
             throw new APIError("BAD_REQUEST", { message: "Username is already taken." });
+          },
+        },
+        update: {
+          // Changer de pseudo renomme aussi le joueur : le nom en jeu suit le compte.
+          before: async (data, ctx) => {
+            const name = data.displayUsername ?? data.username;
+            const playerId = (ctx?.context.session?.user as { playerId?: number } | undefined)?.playerId;
+            if (typeof name !== "string" || !playerId) return;
+            const renamed = await db.update(schema.players).set({ name }).where(eq(schema.players.id, playerId)).returning({ id: schema.players.id }).catch(() => []);
+            if (!renamed.length) throw new APIError("BAD_REQUEST", { code: "USERNAME_IS_ALREADY_TAKEN", message: "Username is already taken." });
+            return { data: { ...data, needsUsername: false } };
           },
         },
       },
