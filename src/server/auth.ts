@@ -54,10 +54,8 @@ export function createAuth(db: Db) {
             github: {
               clientId: GITHUB_CLIENT_ID,
               clientSecret: GITHUB_CLIENT_SECRET,
-              mapProfileToUser: (profile) => {
-                const name = usernameFromGithub(profile.login);
-                return { username: name.toLowerCase(), displayUsername: name };
-              },
+              // Pas de « username » ici : le plugin refuserait un nom pris. Le hook ci-dessous choisit le nom libre.
+              mapProfileToUser: (profile) => ({ displayUsername: usernameFromGithub(profile.login) }),
             },
           }
         : undefined,

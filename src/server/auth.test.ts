@@ -69,9 +69,19 @@ describe("GitHub accounts", () => {
     const db = await createMockDatabase();
     const auth = createAuth(db);
     const ctx = await auth.$context;
-    const created = await ctx.internalAdapter.createUser({ name: "Tamago", email: "tamago@example.com", emailVerified: true, username: "tamago_8", displayUsername: "Tamago_8" }, { method: "oauth", oauth: { providerId: "github", profile: {} } });
+    const created = await ctx.internalAdapter.createUser({ name: "Tamago", email: "tamago@example.com", emailVerified: true, displayUsername: "Tamago_8" }, { method: "oauth", oauth: { providerId: "github", profile: {} } });
     const [player] = await db.select().from(players).where(eq(players.id, created.playerId));
     expect(player!.name).toBe("Tamago_8_2");
     expect(created.displayUsername).toBe("Tamago_8_2");
+  });
+
+  test("a GitHub login equal to an existing account gets a free name", async () => {
+    const db = await createMockDatabase();
+    const auth = createAuth(db);
+    await signUp(auth, "Octo_Cat");
+    const ctx = await auth.$context;
+    const created = await ctx.internalAdapter.createUser({ name: "Octo", email: "octo@example.com", emailVerified: true, displayUsername: "Octo_Cat" }, { method: "oauth", oauth: { providerId: "github", profile: {} } });
+    expect(created.username).toBe("octo_cat_2");
+    expect(created.displayUsername).toBe("Octo_Cat_2");
   });
 });
