@@ -10,8 +10,12 @@ import { isValidUsername, PASSWORD_MIN, PLACEHOLDER_EMAIL_DOMAIN, USERNAME_MAX, 
 const https = (host?: string) => (host ? `https://${host}` : undefined);
 const { VERCEL_ENV, VERCEL_URL, VERCEL_BRANCH_URL, VERCEL_PROJECT_PRODUCTION_URL } = process.env;
 
-/** En local : BETTER_AUTH_URL. Sur Vercel : le domaine de production, ou l'URL de la prévisualisation. */
-const baseURL = process.env.BETTER_AUTH_URL || https(VERCEL_ENV === "production" ? VERCEL_PROJECT_PRODUCTION_URL : VERCEL_BRANCH_URL || VERCEL_URL);
+/**
+ * En local : BETTER_AUTH_URL. En production : le domaine de production.
+ * En prévisualisation : rien, Better Auth prend le domaine de chaque requête (URL de branche ou URL du déploiement),
+ * pour que le retour GitHub revienne là où le cookie a été posé.
+ */
+const baseURL = process.env.BETTER_AUTH_URL || (VERCEL_ENV === "production" ? https(VERCEL_PROJECT_PRODUCTION_URL) : undefined);
 
 /** Toutes les adresses d'où le site peut appeler l'API (domaines, alias Vercel, prévisualisation). */
 const trustedOrigins = ["https://vandhelm.com", "https://www.vandhelm.com", https(VERCEL_URL), https(VERCEL_BRANCH_URL), https(VERCEL_PROJECT_PRODUCTION_URL)].filter((origin): origin is string => !!origin);
