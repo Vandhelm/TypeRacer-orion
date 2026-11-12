@@ -24,6 +24,7 @@
     "stampCode": "CODE",
     "or": "OR",
     "withGithub": "Continue with GitHub",
+    "nicknameRule": "3 to 20 letters, digits or _",
     "withDiscord": "Continue with Discord",
     "socialFailed": "{{provider}} sign-in failed. Try again.",
     "chooseUsername": "Choose your username",
@@ -276,6 +277,86 @@
       "fix": "fix",
       "carry-on": "carry on",
       "fatal": "fatal mistakes"
+    },
+    "career": "All races",
+    "lastRace": "Last race",
+    "bestWpm": "Best WPM",
+    "averageWpm": "Average WPM",
+    "averageAccuracy": "Average accuracy",
+    "races": "Races",
+    "wins": "Wins",
+    "progress": "WPM progress",
+    "race": "Race",
+    "date": "Date",
+    "loading": "Loading statistics…",
+    "statsError": "Statistics are unavailable right now.",
+    "noRaces": "No race recorded yet.",
+    "empty": "Play a race to see statistics.",
+    "home": "Home",
+    "keys": {
+      "title": "Errors per key",
+      "layout": "Keyboard layout",
+      "space": "Space",
+      "detail": "{{key}}: {{rate}} errors ({{errors}} of {{typed}} keystrokes)",
+      "weakest": "Most missed keys:",
+      "none": "No keys recorded yet: they appear after your next race.",
+      "clean": "Not enough mistakes to spot a weak key."
+    },
+    "sessionRaces": "Races this session",
+    "guestSession": "Guest: these statistics vanish when the tab closes. Create an account to keep them.",
+    "seconds": "{{duration}} s",
+    "correctChars": "Correct characters",
+    "wrong": "wrong",
+    "extra": "extra",
+    "missed_one": "missed",
+    "missed_other": "missed"
+  },
+  "account": {
+    "tabs": {
+      "compte": "Account",
+      "stats": "Stats"
+    },
+    "photo": {
+      "title": "Profile picture",
+      "help": "JPEG, PNG or WebP · 2 MB max. The image is cropped to a circle and shrunk.",
+      "choose": "Choose an image",
+      "remove": "Remove",
+      "change": "Change your profile picture",
+      "changeShort": "Change",
+      "saved": "Picture saved.",
+      "removed": "Picture removed.",
+      "errors": {
+        "type": "Format not allowed: JPEG, PNG or WebP.",
+        "size": "Image too large: 2 MB max.",
+        "unreadable": "This image could not be read.",
+        "bad_type": "Format not allowed: JPEG, PNG or WebP.",
+        "too_large": "Image too large: 2 MB max.",
+        "unauthorized": "Your session expired: sign in again.",
+        "failed": "The picture could not be saved. Try again."
+      }
+    },
+    "name": {
+      "title": "Username",
+      "rule": "{{min}} to {{max}} letters, digits or _",
+      "help": "This is the name shown in rooms, on the podium and on your profile.",
+      "save": "Save",
+      "saved": "Username saved.",
+      "taken": "This username is already taken.",
+      "invalid": "Only letters, digits or _, at least 3 characters.",
+      "failed": "The username could not be saved. Try again."
+    },
+    "links": {
+      "title": "Linked accounts",
+      "linked": "linked",
+      "notLinked": "not linked",
+      "link": "Link",
+      "unlink": "Unlink",
+      "confirm": "Confirm",
+      "confirmNote": "Unlink {{provider}}? You won't be able to sign in with it anymore.",
+      "done": "{{provider}} is linked to your account.",
+      "failed": "Could not link this {{provider}} account: it may already belong to another account.",
+      "last": "This is your only way to sign in: {{provider}} can't be unlinked.",
+      "unlinkFailed": "{{provider}} could not be unlinked. Try again."
     }
   }
 }

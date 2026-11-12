@@ -24,6 +24,7 @@
     "stampCode": "CODE",
     "or": "OU",
     "withGithub": "Continuer avec GitHub",
+    "nicknameRule": "3 à 20 lettres, chiffres ou _",
     "withDiscord": "Continuer avec Discord",
     "socialFailed": "La connexion {{provider}} a échoué. Réessayez.",
     "chooseUsername": "Choisis ton pseudo",
@@ -276,6 +277,86 @@
       "fix": "corriger",
       "carry-on": "continuer",
       "fatal": "erreur fatale"
+    },
+    "career": "Toutes les courses",
+    "lastRace": "Dernière course",
+    "bestWpm": "Meilleur MPM",
+    "averageWpm": "MPM moyen",
+    "averageAccuracy": "Précision moyenne",
+    "races": "Courses",
+    "wins": "Victoires",
+    "progress": "Progression du MPM",
+    "race": "Course",
+    "date": "Date",
+    "loading": "Chargement des statistiques…",
+    "statsError": "Statistiques indisponibles pour le moment.",
+    "noRaces": "Aucune course enregistrée pour l'instant.",
+    "empty": "Joue une course pour voir des statistiques.",
+    "home": "Accueil",
+    "keys": {
+      "title": "Erreurs par touche",
+      "layout": "Disposition du clavier",
+      "space": "Espace",
+      "detail": "{{key}} : {{rate}} d'erreurs ({{errors}} sur {{typed}} frappes)",
+      "weakest": "Touches les plus ratées :",
+      "none": "Pas encore de touches enregistrées : elles apparaissent après ta prochaine course.",
+      "clean": "Pas assez de fautes pour repérer une touche faible."
+    },
+    "sessionRaces": "Courses de cette session",
+    "guestSession": "Invité : ces statistiques disparaissent à la fermeture de l'onglet. Crée un compte pour les garder.",
+    "seconds": "{{duration}} s",
+    "correctChars": "Caractères justes",
+    "wrong": "faux",
+    "extra": "en trop",
+    "missed_one": "manqué",
+    "missed_other": "manqués"
+  },
+  "account": {
+    "tabs": {
+      "compte": "Compte",
+      "stats": "Stats"
+    },
+    "photo": {
+      "title": "Photo de profil",
+      "help": "JPEG, PNG ou WebP · 2 Mo au maximum. L'image est recadrée en rond et réduite.",
+      "choose": "Choisir une image",
+      "remove": "Retirer",
+      "change": "Changer la photo de profil",
+      "changeShort": "Changer",
+      "saved": "Photo enregistrée.",
+      "removed": "Photo retirée.",
+      "errors": {
+        "type": "Format refusé : JPEG, PNG ou WebP.",
+        "size": "Image trop lourde : 2 Mo au maximum.",
+        "unreadable": "Impossible de lire cette image.",
+        "bad_type": "Format refusé : JPEG, PNG ou WebP.",
+        "too_large": "Image trop lourde : 2 Mo au maximum.",
+        "unauthorized": "Ta session a expiré : reconnecte-toi.",
+        "failed": "La photo n'a pas pu être enregistrée. Réessaie."
+      }
+    },
+    "name": {
+      "title": "Pseudo",
+      "rule": "{{min}} à {{max}} lettres, chiffres ou _",
+      "help": "C'est le nom affiché dans les salons, sur le podium et sur ton profil.",
+      "save": "Enregistrer",
+      "saved": "Pseudo enregistré.",
+      "taken": "Ce pseudo est déjà pris.",
+      "invalid": "Seulement des lettres, des chiffres ou _, 3 caractères au moins.",
+      "failed": "Le pseudo n'a pas pu être enregistré. Réessaie."
+    },
+    "links": {
+      "title": "Comptes liés",
+      "linked": "lié",
+      "notLinked": "non lié",
+      "link": "Lier",
+      "unlink": "Délier",
+      "confirm": "Confirmer",
+      "confirmNote": "Délier {{provider}} ? Tu ne pourras plus te connecter avec.",
+      "done": "{{provider}} est lié à ton compte.",
+      "failed": "Impossible de lier ce compte {{provider}} : il est peut-être déjà utilisé par un autre compte.",
+      "last": "C'est ton seul moyen de connexion : impossible de délier {{provider}}.",
+      "unlinkFailed": "{{provider}} n'a pas pu être délié. Réessaie."
     }
   }
 }

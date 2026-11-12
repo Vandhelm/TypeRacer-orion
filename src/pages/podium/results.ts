@@ -1,10 +1,13 @@
-// Résultats d'une course, confiés par le jeu au podium et aux profils. À BRANCHER : le détail des adversaires est simulé, il doit venir du serveur de jeu.
+// Résultats d'une course, confiés par le jeu au podium et aux profils : tout vient de ce que chaque couloir a vraiment tapé pendant la course.
 import { CHARS_PER_WORD, laneElapsedMs, laneProgress, laneWpm, myAccuracy, type Race, type Sample } from "../game/race";
-import type { BotAccuracy, Player, Room } from "../room/room";
+import { parseKeys, roundKeys, type KeyCounts } from "../../players/keys";
+import type { Player, Room } from "../room/room";
 
 export type PlayerResult = {
   name: string;
   me: boolean;
+  /** Un bot du jeu : ses courses sont enregistrées et son profil est public. */
+  bot: boolean;
   wpm: number;
   raw: number;
   accuracy: number;
@@ -19,8 +22,10 @@ export type PlayerResult = {
   wpmSeries: number[];
   rawSeries: number[];
   errorSeries: number[];
+  /** Frappes et fautes par touche (heatmap du clavier). */
+  keys: KeyCounts;
 };
-export type RaceSummary = Pick<Room, "textType" | "language" | "duration" | "level" | "punctuation" | "numbers" | "specials" | "accents" | "excluded" | "mistakes"> & {
+export type RaceSummary = Pick<Room, "textType" | "language" | "duration" | "level" | "punctuation" | "numbers" | "specials" | "accents" | "excluded" | "mistakes" | "botSpeed" | "botAccuracy" | "length"> & {
   wordCount: number;
   sessionSeconds: number;
 };
@@ -28,7 +33,6 @@ export type RaceResults = { players: PlayerResult[]; summary: RaceSummary };
 
 const RESULTS_KEY = "orion-results";
 const SESSION_KEY = "orion-session-start";
-const BOT_ACCURACY: Record<BotAccuracy, [number, number]> = { shaky: [82, 90], decent: [90, 96], high: [96, 100] };
 
 const sum = (values: number[]) => values.reduce((total, value) => total + value, 0);
 
@@ -41,61 +45,61 @@ function consistencyOf(raw: number[]) {
 
 const deltas = (samples: Sample[], pick: (sample: Sample) => number) => samples.map((sample, i) => pick(sample) - (i ? pick(samples[i - 1]!) : 0));
 
-function detailOf(race: Race, lane: number, accuracy: number, random: () => number) {
+/** Frappes et fautes cumulées d'un couloir, à la fin de sa course. */
+function totalsOf(race: Race, lane: number) {
+  if (lane === race.myLane) return { typed: race.keystrokes, wrong: race.wrongChars, extra: race.extraChars, missed: race.missedChars };
+  const bot = race.bots.find((candidate) => candidate.lane === lane);
+  return { typed: bot?.typed ?? 0, wrong: bot?.errors ?? 0, extra: 0, missed: 0 };
+}
+
+function accuracyOf(race: Race, lane: number) {
+  if (lane === race.myLane) return myAccuracy(race);
+  const { typed, wrong } = totalsOf(race, lane);
+  return typed > 0 ? Math.round((100 * (typed - wrong)) / typed) : 100;
+}
+
+function detailOf(race: Race, lane: number) {
   const samples = race.samples[lane] ?? [];
-  const mine = lane === race.myLane;
   const typedPerSecond = deltas(samples, (sample) => sample.typed);
-  // un adversaire reprend ses fautes : il frappe plus de caractères qu'il n'en valide
-  const effort = mine ? 1 : 100 / (accuracy || 100);
-  const errorSeries = mine
-    ? deltas(samples, (sample) => sample.errors)
-    : typedPerSecond.map((typed) => Math.max(0, Math.round(typed * (effort - 1) + random() - 0.5)));
-  const wpm = laneWpm(race, lane);
-  const lastChars = Math.round(samples.at(-1)?.chars ?? 0);
+  const { typed, wrong, extra, missed } = totalsOf(race, lane);
+  const minutes = laneElapsedMs(race, lane) / 60000;
   return {
-    raw: mine ? rawWpm(race, lane) : Math.round(wpm * effort),
-    chars: (mine
-      ? [race.keystrokes - race.wrongChars - race.extraChars, race.wrongChars, race.extraChars, race.missedChars]
-      : [lastChars, sum(errorSeries), 0, 0]) as PlayerResult["chars"],
-    consistency: consistencyOf(typedPerSecond.map((typed) => typed * effort)),
-    idle: samples.length ? Math.round((1000 * typedPerSecond.filter((typed) => typed === 0).length) / samples.length) / 10 : 0,
+    raw: minutes > 0.02 ? Math.round(typed / CHARS_PER_WORD / minutes) : 0,
+    chars: [Math.round(typed - wrong - extra), Math.round(wrong), Math.round(extra), Math.round(missed)] as PlayerResult["chars"],
+    consistency: consistencyOf(typedPerSecond),
+    idle: samples.length ? Math.round((1000 * typedPerSecond.filter((value) => value === 0).length) / samples.length) / 10 : 0,
     wpmSeries: samples.map((sample, i) => Math.round((sample.chars / CHARS_PER_WORD) * (60 / (i + 1)))),
-    rawSeries: typedPerSecond.map((typed) => Math.round((typed * effort * 60) / CHARS_PER_WORD)),
-    errorSeries,
+    rawSeries: typedPerSecond.map((value) => Math.round((value * 60) / CHARS_PER_WORD)),
+    errorSeries: deltas(samples, (sample) => sample.errors).map(Math.round),
+    keys: roundKeys(lane === race.myLane ? race.keys : (race.bots.find((bot) => bot.lane === lane)?.keys ?? {})),
   };
 }
 
-function rawWpm(race: Race, lane: number) {
-  const minutes = laneElapsedMs(race, lane) / 60000;
-  return minutes > 0.02 ? Math.round(race.keystrokes / CHARS_PER_WORD / minutes) : 0;
-}
-
 /** Les joueurs dans l'ordre final : les arrivées, puis les autres selon leur avancée. */
-export function buildResults(race: Race, players: Player[], botAccuracy: BotAccuracy, random: () => number = Math.random): PlayerResult[] {
-  const [low, high] = BOT_ACCURACY[botAccuracy];
+export function buildResults(race: Race, players: Player[]): PlayerResult[] {
   const others = players
     .map((_, lane) => lane)
     .filter((lane) => !race.arrivals.includes(lane))
     .sort((a, b) => laneProgress(race, b) - laneProgress(race, a));
   return [...race.arrivals, ...others].map((lane) => {
     const mine = lane === race.myLane;
-    const accuracy = mine ? myAccuracy(race) : Math.round(low + random() * (high - low));
     return {
       name: players[lane]!.name,
       me: !!players[lane]!.me,
+      bot: !!players[lane]!.bot,
       wpm: laneWpm(race, lane),
-      accuracy,
+      accuracy: accuracyOf(race, lane),
       seconds: Math.round(laneElapsedMs(race, lane) / 1000),
       finished: race.arrivals.includes(lane),
       eliminated: mine && race.eliminated,
-      ...detailOf(race, lane, accuracy, random),
+      ...detailOf(race, lane),
     };
   });
 }
 
 export function buildSummary(race: Race, room: Room, sessionSeconds: number): RaceSummary {
-  const { textType, language, duration, level, punctuation, numbers, specials, accents, excluded, mistakes } = room;
-  return { textType, language, duration, level, punctuation, numbers, specials, accents, excluded, mistakes, wordCount: race.course.words.length, sessionSeconds };
+  const { textType, language, duration, level, punctuation, numbers, specials, accents, excluded, mistakes, botSpeed, botAccuracy, length } = room;
+  return { textType, language, duration, level, punctuation, numbers, specials, accents, excluded, mistakes, botSpeed, botAccuracy, length, wordCount: race.course.words.length, sessionSeconds };
 }
 
 const numbersOf = (value: unknown) => (Array.isArray(value) ? value.map(Number) : []);
@@ -109,6 +113,7 @@ export function parseResults(raw: string | null): RaceResults | null {
       return {
         name: String(p.name),
         me: !!p.me,
+        bot: !!p.bot,
         wpm: Number(p.wpm) || 0,
         raw: Number(p.raw) || 0,
         accuracy: Number(p.accuracy) || 0,
@@ -121,6 +126,7 @@ export function parseResults(raw: string | null): RaceResults | null {
         wpmSeries: numbersOf(p.wpmSeries),
         rawSeries: numbersOf(p.rawSeries),
         errorSeries: numbersOf(p.errorSeries),
+        keys: parseKeys(p.keys),
       };
     });
     return { players, summary: stored.summary as RaceSummary };
@@ -131,6 +137,16 @@ export function parseResults(raw: string | null): RaceResults | null {
 
 export function saveResults(results: RaceResults) {
   try { sessionStorage.setItem(RESULTS_KEY, JSON.stringify(results)); } catch { /* stockage indisponible */ }
+}
+
+/** Envoie la course au serveur, qui garde l'historique des bots. keepalive : l'envoi survit au passage au podium. */
+export function submitRace(results: RaceResults, content: string) {
+  fetch("/api/races", {
+    method: "POST",
+    keepalive: true,
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ ...results, content }),
+  }).catch(() => { /* hors ligne : la course n'entre pas dans l'historique */ });
 }
 
 export function readResults() {
@@ -150,19 +166,3 @@ export const profileHref = (index: number) => `/profile?player=${index}`;
 
 export const oneDecimal = (language: string, value: number) =>
   new Intl.NumberFormat(language === "en" ? "en-CA" : "fr-CA", { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(value);
-
-function sample(name: string, wpm: number, me = false): PlayerResult {
-  const seconds = Array.from({ length: 45 }, (_, i) => i);
-  return {
-    name, me, wpm, raw: wpm + 8, accuracy: 96, seconds: 45, chars: [Math.round(wpm * 3.75), 6, 2, 0], consistency: 71, idle: 0, finished: true, eliminated: false,
-    wpmSeries: seconds.map((i) => Math.round(wpm * (1 + 2 / (i + 4)) + Math.sin(i / 3) * 2)),
-    rawSeries: seconds.map((i) => Math.round(wpm + 8 + Math.sin(i * 1.7) * 14)),
-    errorSeries: seconds.map((i) => (i % 13 === 5 ? 1 : 0)),
-  };
-}
-
-/** Page ouverte sans partie : des joueurs d'exemple. */
-export const SAMPLE_RESULTS: RaceResults = {
-  players: [sample("Corail_418", 68, true), sample("Wasabi_77", 61), sample("Nori_203", 54), sample("Thon_Rouge", 47)],
-  summary: { textType: "words", language: "fr", duration: 120, level: "common", punctuation: false, numbers: false, specials: false, accents: true, excluded: "", mistakes: "fix", wordCount: 31, sessionSeconds: 52 },
-};
