@@ -28,6 +28,8 @@ try {
   console.log(usesDemoData ? "Database seeded." : "Database migrated.");
 } catch (error) {
   console.error(error instanceof Error ? error.message : error);
+  // Drizzle enveloppe l'erreur de Postgres : sa cause dit pourquoi (table existante, contrainte...).
+  if (error instanceof Error && error.cause) console.error("Cause:", error.cause instanceof Error ? error.cause.message : error.cause);
   process.exitCode = 1;
 } finally {
   await close();
