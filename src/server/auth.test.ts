@@ -56,3 +56,66 @@ describe("username accounts", () => {
     expect(result?.token).toBeTruthy();
   });
 });
+
+describe("GitHub and Discord accounts", () => {
+  test("turns a GitHub or Discord login into a valid username", async () => {
+    const { usernameFromLogin } = await import("./auth");
+    expect(usernameFromLogin("octo-cat")).toBe("octo_cat");
+    expect(usernameFromLogin("octo.cat")).toBe("octo_cat");
+    expect(usernameFromLogin("ab")).toBe("ab_");
+    expect(usernameFromLogin("a".repeat(30))).toHaveLength(20);
+  });
+
+  test("a GitHub user whose name is taken gets a free one", async () => {
+    const db = await createMockDatabase();
+    const auth = createAuth(db);
+    const ctx = await auth.$context;
+    const created = await ctx.internalAdapter.createUser({ name: "Tamago", email: "tamago@example.com", emailVerified: true, displayUsername: "Tamago_8" }, { method: "oauth", oauth: { providerId: "github", profile: {} } });
+    const [player] = await db.select().from(players).where(eq(players.id, created.playerId));
+    expect(player!.name).toBe("Tamago_8_2");
+    expect(created.displayUsername).toBe("Tamago_8_2");
+  });
+
+  test("a GitHub login equal to an existing account gets a free name", async () => {
+    const db = await createMockDatabase();
+    const auth = createAuth(db);
+    await signUp(auth, "Octo_Cat");
+    const ctx = await auth.$context;
+    const created = await ctx.internalAdapter.createUser({ name: "Octo", email: "octo@example.com", emailVerified: true, displayUsername: "Octo_Cat" }, { method: "oauth", oauth: { providerId: "github", profile: {} } });
+    expect(created.username).toBe("octo_cat_2");
+    expect(created.displayUsername).toBe("Octo_Cat_2");
+    expect(created.needsUsername).toBe(true);
+  });
+
+  test("a GitHub login that is free keeps its name, with nothing to choose", async () => {
+    const db = await createMockDatabase();
+    const ctx = await createAuth(db).$context;
+    const created = await ctx.internalAdapter.createUser({ name: "Libre", email: "libre@example.com", emailVerified: true, displayUsername: "Pseudo_Libre" }, { method: "oauth", oauth: { providerId: "github", profile: {} } });
+    expect(created.displayUsername).toBe("Pseudo_Libre");
+    expect(created.needsUsername).toBe(false);
+  });
+});
+
+describe("changing username", () => {
+  test("renames the player too and clears the pending choice", async () => {
+    const db = await createMockDatabase();
+    const auth = createAuth(db);
+    await signUp(auth, "Ancien_Nom");
+    const { headers } = await auth.api.signInUsername({ body: { username: "Ancien_Nom", password: "sushi-roll-42" }, returnHeaders: true });
+    const cookie = headers.get("set-cookie")!.split(";")[0]!;
+    await auth.api.updateUser({ body: { username: "Nouveau_Nom", displayUsername: "Nouveau_Nom" }, headers: new Headers({ cookie }) });
+    const [row] = await db.select().from(user).where(eq(user.username, "nouveau_nom"));
+    const [player] = await db.select().from(players).where(eq(players.id, row!.playerId));
+    expect(player!.name).toBe("Nouveau_Nom");
+    expect(row!.needsUsername).toBe(false);
+  });
+
+  test("refuses a name already used by a guest", async () => {
+    const db = await createMockDatabase();
+    const auth = createAuth(db);
+    await signUp(auth, "Autre_Nom");
+    const { headers } = await auth.api.signInUsername({ body: { username: "Autre_Nom", password: "sushi-roll-42" }, returnHeaders: true });
+    const cookie = headers.get("set-cookie")!.split(";")[0]!;
+    await expect(auth.api.updateUser({ body: { username: "Tamago_8", displayUsername: "Tamago_8" }, headers: new Headers({ cookie }) })).rejects.toThrow();
+  });
+});

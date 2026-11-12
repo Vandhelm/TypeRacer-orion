@@ -12,3 +12,20 @@ export function signUpWithUsername(username: string, password: string) {
 export function signInWithUsername(username: string, password: string) {
   return authClient.signIn.username({ username, password });
 }
+
+export const SOCIAL_PROVIDERS = ["github", "discord"] as const;
+export type SocialProvider = (typeof SOCIAL_PROVIDERS)[number];
+export const PROVIDER_NAMES: Record<SocialProvider, string> = { github: "GitHub", discord: "Discord" };
+
+export function signInWith(provider: SocialProvider) {
+  return authClient.signIn.social({ provider, callbackURL: "/", errorCallbackURL: `/?authError=${provider}` });
+}
+
+/** Relie GitHub ou Discord au compte connecté : ensuite, « Continuer avec … » ouvre ce même compte. */
+export function linkProvider(provider: SocialProvider) {
+  return authClient.linkSocial({ provider, callbackURL: `/?linked=${provider}`, errorCallbackURL: `/?authError=link&provider=${provider}` });
+}
+
+export function changeUsername(username: string) {
+  return authClient.updateUser({ username, displayUsername: username });
+}
