@@ -5,6 +5,7 @@ import { UserIcon } from "../../components/icons";
 import { Navbar } from "../../components/navigation/Navbar";
 import { HangingTabs } from "../../components/tabs/HangingTabs";
 import { languages, type Language } from "../../i18n";
+import { authClient, displayName } from "../../accounts/client";
 import { HomePanel } from "./HomePanel";
 import { useHashView } from "./hooks/useHashView";
 import { useViewTransition } from "./hooks/useViewTransition";
@@ -23,6 +24,8 @@ export function HomePage() {
   const view = useHashView();
   const [leaving, setLeaving] = useState(false);
   const [descending, setDescending] = useState(false);
+  const { data: session } = authClient.useSession();
+  const me = session?.user as Parameters<typeof displayName>[0] | undefined;
 
   const scene = useRef<SceneApi | null>(null);
   const panel = useRef<HTMLElement>(null);
@@ -47,7 +50,7 @@ export function HomePage() {
         brand="O.R.I.O.N"
         brandHref="#home"
         brandLabel={t("nav.home")}
-        links={[{ href: "/profile", label: t("nav.profile"), icon: <UserIcon /> }]}
+        links={[{ href: "/profile", label: me ? displayName(me) : t("nav.profile"), icon: <UserIcon /> }]}
         linksLabel={t("nav.main")}
       >
         <HangingTabs

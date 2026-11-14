@@ -9,13 +9,11 @@ import { Stamp } from "../../components/Stamp";
 import { ViewTabs } from "../../components/tabs/ViewTabs";
 import { cleanRoomCode } from "../../rooms/access";
 import { NICKNAME_MAX, NICKNAME_PATTERN, saveNickname, storedNickname } from "../../players/nickname";
-import { authClient, changeUsername, isProvider, linkProvider, PROVIDER_NAMES, signInWith, signInWithUsername, signUpWithUsername, SOCIAL_PROVIDERS, type SocialProvider } from "../../accounts/client";
+import { authClient, changeUsername, displayName, isProvider, PROVIDER_NAMES, signInWith, signInWithUsername, signUpWithUsername, type SocialProvider } from "../../accounts/client";
 import { isValidUsername, PASSWORD_MIN } from "../../accounts/username";
 
 type Pane = "play" | "account";
 type StampKey = "stampPlay" | "stampAccount" | "stampCode";
-
-const PROVIDER_ICONS: Record<SocialProvider, () => React.JSX.Element> = { github: GithubIcon, discord: DiscordIcon };
 
 const FORM = "col-start-1 row-start-1 flex flex-col gap-[2.1vh] [align-self:start]";
 
@@ -32,33 +30,25 @@ export function HomePanel({ ref }: { ref?: Ref<HTMLElement> }) {
   const [busy, setBusy] = useState(false);
   const { data: session } = authClient.useSession();
   const me = session?.user as { id: string; displayUsername?: string | null; username?: string | null; name: string; needsUsername?: boolean } | undefined;
-  const [linkedProviders, setLinkedProviders] = useState<string[]>([]);
-  const [notice, setNotice] = useState("");
   const [stamp, setStamp] = useState<{ key: StampKey | null; on: boolean; play: number }>({ key: null, on: false, play: 0 });
   const stampTimer = useRef<number>(undefined);
   const codeInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => () => clearTimeout(stampTimer.current), []);
-  // Retour de GitHub ou Discord (connexion ou liaison) : on ouvre l'onglet compte avec le message
+  // Retour d'une connexion GitHub ou Discord ratée : on ouvre l'onglet compte avec le message (la liaison se fait sur le profil)
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const failed = params.get("authError");
-    const linked = params.get("linked");
-    if (!failed && !linked) return;
+    if (!failed) return;
     setPane("account");
-    const providerOf = (value: string | null) => (isProvider(value) ? PROVIDER_NAMES[value] : "");
-    if (failed === "link") setAuthError(t("home.linkFailed", { provider: providerOf(params.get("provider")) }));
-    else if (failed) setAuthError(t("home.socialFailed", { provider: providerOf(failed) }));
-    else setNotice(t("home.providerLinked", { provider: providerOf(linked) }));
-    for (const key of ["authError", "linked", "provider", "error", "error_description"]) params.delete(key);
+    setAuthError(t("home.socialFailed", { provider: isProvider(failed) ? PROVIDER_NAMES[failed] : "" }));
+    for (const key of ["authError", "error", "error_description"]) params.delete(key);
     history.replaceState(null, "", location.pathname + (params.size ? `?${params}` : ""));
   }, []);
 
-  // Compte connecté : quels fournisseurs sont déjà liés ? Et un pseudo à choisir est pré-rempli.
+  // Un pseudo à choisir est pré-rempli.
   useEffect(() => {
-    if (!me) return;
-    void authClient.listAccounts().then(({ data }) => setLinkedProviders(data?.map((a) => a.providerId) ?? []));
-    if (me.needsUsername) {
+    if (me?.needsUsername) {
       setPane("account");
       setUsername(me.displayUsername || "");
     }
@@ -95,13 +85,13 @@ export function HomePanel({ ref }: { ref?: Ref<HTMLElement> }) {
   }
 
   // Départ vers GitHub ou Discord : en cas d'erreur avant la redirection, on reste ici avec le message
-  function goTo(provider: SocialProvider, action: "signIn" | "link") {
+  function goTo(provider: SocialProvider) {
     setBusy(true);
     setAuthError("");
-    void (action === "link" ? linkProvider(provider) : signInWith(provider)).then(({ error }) => {
+    void signInWith(provider).then(({ error }) => {
       if (!error) return;
       setBusy(false);
-      setAuthError(t(action === "link" ? "home.linkFailed" : "home.socialFailed", { provider: PROVIDER_NAMES[provider] }));
+      setAuthError(t("home.socialFailed", { provider: PROVIDER_NAMES[provider] }));
     });
   }
 
@@ -216,21 +206,10 @@ export function HomePanel({ ref }: { ref?: Ref<HTMLElement> }) {
             ) : me ? (
               <>
                 <TextField id="signed-in" num="01" label={t("home.signedInAs")}>
-                  <p className="py-[1.2vh] text-[max(18px,2.6vh)] tracking-[.08em]">{me.displayUsername || me.username || me.name}</p>
+                  <a className="block py-[1.2vh] underline-offset-4 hover:underline focus-visible:underline text-[max(18px,2.6vh)] tracking-[.08em]" href="/profile" title={t("home.myProfile")}>{displayName(me)}</a>
                 </TextField>
-                <div className="flex flex-col gap-[1.3vh]">
-                  <OutlineButton href="/profile">{t("home.myProfile")}</OutlineButton>
-                  {SOCIAL_PROVIDERS.filter((p) => !linkedProviders.includes(p)).map((provider) => {
-                    const Icon = PROVIDER_ICONS[provider];
-                    return (
-                      <OutlineButton key={provider} icon={<Icon />} disabled={busy} onClick={() => goTo(provider, "link")}>
-                        {t("home.linkProvider", { provider: PROVIDER_NAMES[provider].toUpperCase() })}
-                      </OutlineButton>
-                    );
-                  })}
-                  <OutlineButton onClick={() => void authClient.signOut()}>{t("home.signOut")}</OutlineButton>
-                </div>
-                <p role="status" className={`min-h-[1.4em] font-mono text-[max(11px,1.3vh)] tracking-[.08em] ${authError ? "text-red-text" : "text-line-soft"}`}>{authError || notice}</p>
+                <OutlineButton onClick={() => void authClient.signOut()}>{t("home.signOut")}</OutlineButton>
+                <p role="alert" className="min-h-[1.4em] font-mono text-[max(11px,1.3vh)] tracking-[.08em] text-red-text">{authError}</p>
               </>
             ) : (
               <>
@@ -261,8 +240,8 @@ export function HomePanel({ ref }: { ref?: Ref<HTMLElement> }) {
               {t("home.or")}
             </div>
             <div className="grid grid-cols-2 gap-[1.3vh]">
-              <OutlineButton id="login-github" data-provider="github" aria-label={t("home.withGithub")} icon={<GithubIcon />} disabled={busy} onClick={() => goTo("github", "signIn")}>GITHUB</OutlineButton>
-              <OutlineButton id="login-discord" data-provider="discord" aria-label={t("home.withDiscord")} icon={<DiscordIcon />} disabled={busy} onClick={() => goTo("discord", "signIn")}>DISCORD</OutlineButton>
+              <OutlineButton id="login-github" data-provider="github" aria-label={t("home.withGithub")} icon={<GithubIcon />} disabled={busy} onClick={() => goTo("github")}>GITHUB</OutlineButton>
+              <OutlineButton id="login-discord" data-provider="discord" aria-label={t("home.withDiscord")} icon={<DiscordIcon />} disabled={busy} onClick={() => goTo("discord")}>DISCORD</OutlineButton>
             </div>
               </>
             )}

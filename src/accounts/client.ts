@@ -18,6 +18,9 @@ export type SocialProvider = (typeof SOCIAL_PROVIDERS)[number];
 export const isProvider = (value: string | null): value is SocialProvider => SOCIAL_PROVIDERS.includes(value as SocialProvider);
 export const PROVIDER_NAMES: Record<SocialProvider, string> = { github: "GitHub", discord: "Discord" };
 
+/** Le nom affiché d'un compte connecté. */
+export const displayName = (user: { displayUsername?: string | null; username?: string | null; name: string }) => user.displayUsername || user.username || user.name;
+
 export function signInWith(provider: SocialProvider) {
   return authClient.signIn.social({ provider, callbackURL: "/", errorCallbackURL: `/?authError=${provider}` });
 }
