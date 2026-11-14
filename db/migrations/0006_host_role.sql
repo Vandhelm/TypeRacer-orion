@@ -1,0 +1,1 @@
+ALTER TABLE "rooms" ADD COLUMN "host_plays" boolean DEFAULT true NOT NULL;

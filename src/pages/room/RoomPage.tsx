@@ -4,6 +4,7 @@ import { FlipButton } from "../../components/buttons/FlipButton";
 import { HangingButton } from "../../components/buttons/HangingButton";
 import { Stamp } from "../../components/Stamp";
 import { HangingTabs } from "../../components/tabs/HangingTabs";
+import { authClient } from "../../accounts/client";
 import { languages, type Language } from "../../i18n";
 import { FishPond } from "./FishPond";
 import { useRoom } from "./hooks/useRoom";
@@ -29,6 +30,12 @@ export function RoomPage() {
   useEffect(() => {
     document.title = t("room.pageTitle");
   }, [t]);
+
+  // SALLE-01 : seul un joueur connecté crée et tient un salon ; sinon, retour à l'accueil
+  const { data: session, isPending } = authClient.useSession();
+  useEffect(() => {
+    if (host && !isPending && !session) location.replace("/home");
+  }, [host, isPending, session]);
 
   function launch() {
     if (launched.current) return;
@@ -60,7 +67,7 @@ export function RoomPage() {
         </HangingButton>
         <div className="room-shade text-right phone:w-full">
           <h1 className="room-title">{displayName}</h1>
-          <p className="room-subtitle">{`${t(host ? "room.host" : "room.guest")} · ${t(`room.${VISIBILITY_KEY[room.visibility]}`)}`}</p>
+          <p className="room-subtitle">{[t(host ? "room.host" : "room.guest"), host && !room.hostPlays ? t("room.spectator") : "", t(`room.${VISIBILITY_KEY[room.visibility]}`)].filter(Boolean).join(" · ")}</p>
         </div>
       </header>
 

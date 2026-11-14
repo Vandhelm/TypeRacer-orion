@@ -76,3 +76,6 @@
     .game-panel, .game-cursor::after{ animation: none; }
     .game-text{ transition: none; }
 }
+
+/* Hôte spectateur : pas de texte à taper, juste un rappel. */
+.game-spectating{ padding: 1.4vh 0; font: 400 max(12px, 1.5vh)/1.4 var(--font-mono); letter-spacing: .08em; color: var(--color-muted); text-align: center; }

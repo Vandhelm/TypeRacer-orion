@@ -38,6 +38,8 @@ export type Room = {
   language: TextLanguage;
   guests: number;
   bots: boolean;
+  /** L'hôte court avec les autres, ou regarde seulement (SALLE-01). */
+  hostPlays: boolean;
   code: string;
   /** Jeton du lien d'invitation. */
   invite: string;
@@ -105,7 +107,7 @@ function oneOf<T extends string>(list: readonly T[], value: unknown, fallback: T
 }
 
 function newRoom(t: TFunction): Room {
-  return { ...RACE_DEFAULTS, name: t("room.defaultName"), autoName: true, visibility: "private", language: "fr", guests: 4, bots: true, code: newRoomCode(), invite: newInviteToken() };
+  return { ...RACE_DEFAULTS, name: t("room.defaultName"), autoName: true, visibility: "private", language: "fr", guests: 4, bots: true, hostPlays: true, code: newRoomCode(), invite: newInviteToken() };
 }
 
 function storedRoom(t: TFunction): Room | null {
@@ -119,6 +121,7 @@ function storedRoom(t: TFunction): Room | null {
       language: s.language === "en" ? "en" : "fr",
       guests: clampGuests(s.guests, 4),
       bots: s.bots !== false,
+      hostPlays: s.hostPlays !== false,
       code: String(s.code),
       invite: String(s.invite || newInviteToken()),
       textType: oneOf(TEXT_TYPES, s.textType, RACE_DEFAULTS.textType),
@@ -154,12 +157,12 @@ export function readSession(search: string, t: TFunction): Session {
   const invite = query.get("invite");
 
   if (invite && !(stored && stored.invite === invite)) {
-    const room: Room = { ...RACE_DEFAULTS, name: t("room.inviteRoomName"), autoName: false, visibility: "private", language: "fr", guests: 4, bots: true, code: newRoomCode(), invite };
+    const room: Room = { ...RACE_DEFAULTS, name: t("room.inviteRoomName"), autoName: false, visibility: "private", language: "fr", guests: 4, bots: true, hostPlays: true, code: newRoomCode(), invite };
     return { room, host: false, present: 2 };
   }
 
   if (code && !(stored && stored.code === code)) {
-    const room: Room = { ...RACE_DEFAULTS, name: t("room.codeRoomName", { code }), autoName: false, visibility: "semi", language: "fr", guests: 4, bots: true, code, invite: newInviteToken() };
+    const room: Room = { ...RACE_DEFAULTS, name: t("room.codeRoomName", { code }), autoName: false, visibility: "semi", language: "fr", guests: 4, bots: true, hostPlays: true, code, invite: newInviteToken() };
     return { room, host: false, present: 2 };
   }
   const table = query.get("table");
@@ -173,6 +176,7 @@ export function readSession(search: string, t: TFunction): Session {
       language: query.get("lang") === "en" ? "en" : "fr",
       guests,
       bots: query.get("bots") !== "0",
+      hostPlays: true,
       code: newRoomCode(),
       invite: newInviteToken(),
     };
@@ -182,12 +186,13 @@ export function readSession(search: string, t: TFunction): Session {
   return { room: stored, host: true, present: 1 };
 }
 
-/** La liste des places : joueurs présents, puis bots ou places libres. */
-export function seatsOf(room: Pick<Room, "guests" | "bots">, host: boolean, present: number): Seat[] {
+/** La liste des places : joueurs présents, puis bots ou places libres. Un hôte spectateur n'en prend pas. */
+export function seatsOf(room: Pick<Room, "guests" | "bots" | "hostPlays">, host: boolean, present: number): Seat[] {
   const people: Omit<Player, "color">[] = [];
   const me = myName();
-  if (host) people.push({ name: me, host: true, me: true });
-  else {
+  if (host) {
+    if (room.hostPlays) people.push({ name: me, host: true, me: true });
+  } else {
     people.push({ name: PLAYER_NAMES[0]!, host: true });
     people.push({ name: me, me: true });
     for (let i = 2; i < present; i++) people.push({ name: PLAYER_NAMES[i - 1]! });

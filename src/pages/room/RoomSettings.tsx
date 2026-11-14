@@ -130,6 +130,9 @@ export function RoomSettings({ state, onEditText, action }: RoomSettingsProps) {
         <Row id="label-visibility" label={t("room.visibility")} help={help.visibility}>
           {radios("visibility", [["private", "private"], ["semi", "semiPrivate"], ["public", "public"]])}
         </Row>
+        <Row id="label-host-role" label={t("room.hostRole")} help={t(room.hostPlays ? "room.helpParticipant" : "room.helpSpectator")}>
+          {radios("hostPlays", [[true, "participant"], [false, "spectator"]])}
+        </Row>
         <Row id="label-duration" label={t("room.raceLength")} help={t("room.helpRaceLength")}>
           {host ? (
             <>

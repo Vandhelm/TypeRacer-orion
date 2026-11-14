@@ -202,7 +202,8 @@ function recordSamples(race: Race) {
   });
 }
 
-export const everyoneDone = (race: Race) => race.finishedAt > 0 && race.bots.every((bot) => bot.finishedAt > 0);
+/** Un hôte spectateur n'a pas de couloir (myLane -1) : on n'attend que les autres. */
+export const everyoneDone = (race: Race) => (race.myLane < 0 || race.finishedAt > 0) && race.bots.every((bot) => bot.finishedAt > 0);
 
 export function elapsedMs(race: Race) {
   return race.startedAt ? Math.max(0, (race.finishedAt || race.now) - race.startedAt) : 0;

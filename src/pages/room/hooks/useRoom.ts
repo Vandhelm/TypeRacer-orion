@@ -18,7 +18,7 @@ export function useRoom() {
   }, [host, room]);
 
   const update = useCallback((patch: Partial<Room>) => setRoom((current) => ({ ...current, ...patch })), []);
-  const seats = useMemo(() => seatsOf({ guests: room.guests, bots: room.bots }, host, present), [room.guests, room.bots, host, present]);
+  const seats = useMemo(() => seatsOf({ guests: room.guests, bots: room.bots, hostPlays: room.hostPlays }, host, present), [room.guests, room.bots, room.hostPlays, host, present]);
   const players = useMemo(() => seats.filter(isPlayer), [seats]);
 
   return {
@@ -27,7 +27,7 @@ export function useRoom() {
     host,
     seats,
     players,
-    humans: host ? 1 : present,
+    humans: host ? Number(room.hostPlays) : present,
     displayName: room.autoName ? t("room.defaultName") : room.name,
   };
 }

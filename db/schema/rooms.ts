@@ -44,6 +44,8 @@ export const rooms = pgTable(
     visibility: visibility("visibility").notNull(),
     guests: integer("guests").notNull(),
     bots: boolean("bots").notNull(),
+    /** L'hôte court (true) ou regarde seulement (SALLE-01). Spectateur : il n'occupe pas de place. */
+    hostPlays: boolean("host_plays").notNull().default(true),
     status: roomStatus("status").notNull().default("waiting"),
     hostId: integer("host_id").notNull().references(() => players.id),
     configId: integer("config_id").notNull().references(() => raceConfigs.id),

@@ -58,7 +58,7 @@ export function GamePage() {
         ))}
       </div>
 
-      <TypingPanel race={race} onInput={onInput} lang={room.language} />
+      {race.myLane >= 0 ? <TypingPanel race={race} onInput={onInput} lang={room.language} /> : <p className="game-spectating" role="status">{t("game.spectating")}</p>}
 
       {race.count !== null && images && (
         <div className="game-overlay" role="status">

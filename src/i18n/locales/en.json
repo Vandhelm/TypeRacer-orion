@@ -196,7 +196,12 @@
     "link": "Link",
     "copyLink": "Copy invite link",
     "linkCopied": "Link copied",
-    "inviteRoomName": "Invite-only room"
+    "inviteRoomName": "Invite-only room",
+    "hostRole": "Host role",
+    "participant": "Participant",
+    "spectator": "Spectator",
+    "helpParticipant": "The host races with the others and takes a seat.",
+    "helpSpectator": "The host watches the race without taking part: their seat stays free."
   },
   "game": {
     "pageTitle": "O.R.I.O.N — The race",
@@ -210,7 +215,8 @@
     "go": "GO",
     "poolLabel": "Race: {{count}} fish, one per player. Progress for each player is shown under their lane.",
     "playAgain": "PLAY AGAIN",
-    "backToRoom": "BACK TO THE ROOM"
+    "backToRoom": "BACK TO THE ROOM",
+    "spectating": "You're watching this race as a spectator."
   },
   "podium": {
     "pageTitle": "O.R.I.O.N — The podium",
