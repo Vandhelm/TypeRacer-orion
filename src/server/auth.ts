@@ -3,7 +3,7 @@ import { betterAuth } from "better-auth";
 import { eq } from "drizzle-orm";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { APIError } from "better-auth/api";
-import { username } from "better-auth/plugins";
+import { oAuthProxy, username } from "better-auth/plugins";
 import type { Db } from "../../db/client";
 import * as schema from "../../db/schema";
 import { isValidUsername, PASSWORD_MIN, USERNAME_MAX, USERNAME_MIN } from "../accounts/username";
@@ -19,7 +19,17 @@ const { VERCEL_ENV, VERCEL_URL, VERCEL_BRANCH_URL, VERCEL_PROJECT_PRODUCTION_URL
 const baseURL = process.env.BETTER_AUTH_URL || (VERCEL_ENV === "production" ? https(VERCEL_PROJECT_PRODUCTION_URL) : undefined);
 
 /** Toutes les adresses d'où le site peut appeler l'API (domaines, alias Vercel, prévisualisation). */
-const trustedOrigins = ["https://vandhelm.com", "https://www.vandhelm.com", https(VERCEL_URL), https(VERCEL_BRANCH_URL), https(VERCEL_PROJECT_PRODUCTION_URL)].filter((origin): origin is string => !!origin);
+// Les prévisualisations (*-orion-5216.vercel.app) en font partie : la production y renvoie après GitHub ou Discord.
+const trustedOrigins = ["https://vandhelm.com", "https://www.vandhelm.com", "https://*-orion-5216.vercel.app", https(VERCEL_URL), https(VERCEL_BRANCH_URL), https(VERCEL_PROJECT_PRODUCTION_URL)].filter((origin): origin is string => !!origin);
+
+/**
+ * GitHub et Discord n'acceptent que l'adresse de retour de la production. Une prévisualisation passe donc par elle :
+ * le fournisseur revient sur la production, qui renvoie la connexion chiffrée à la prévisualisation de départ.
+ * Production et prévisualisation doivent partager OAUTH_PROXY_SECRET (ou, à défaut, BETTER_AUTH_SECRET).
+ * OAUTH_PROXY_URL : l'adresse de production inscrite chez GitHub et Discord, si ce n'est pas le domaine de production de Vercel.
+ */
+const productionURL = process.env.OAUTH_PROXY_URL || (VERCEL_ENV === "production" ? baseURL : https(VERCEL_PROJECT_PRODUCTION_URL));
+const proxy = VERCEL_ENV && productionURL ? [oAuthProxy({ productionURL, secret: process.env.OAUTH_PROXY_SECRET || undefined })] : [];
 
 const { GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, DISCORD_CLIENT_ID, DISCORD_CLIENT_SECRET } = process.env;
 
@@ -67,7 +77,7 @@ export function createAuth(db: Db) {
         needsUsername: { type: "boolean", required: false, input: false, defaultValue: false },
       },
     },
-    plugins: [username({ minUsernameLength: USERNAME_MIN, maxUsernameLength: USERNAME_MAX, usernameValidator: isValidUsername })],
+    plugins: [username({ minUsernameLength: USERNAME_MIN, maxUsernameLength: USERNAME_MAX, usernameValidator: isValidUsername }), ...proxy],
     databaseHooks: {
       user: {
         create: {
