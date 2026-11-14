@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { IconButton } from "../../components/buttons/IconButton";
-import { CheckIcon, CopyIcon, LinkIcon, MinusIcon, PlusIcon } from "../../components/icons";
+import { CheckIcon, CopyIcon, LinkIcon, MinusIcon, PlusIcon, QrIcon } from "../../components/icons";
 import { allows } from "../../rooms/access";
 import type { RoomState } from "./hooks/useRoom";
 import { clampGuests, MAX_GUESTS, MIN_GUESTS } from "./room";
+import { RoomQrDialog, type RoomQrHandle } from "./RoomQrDialog";
 
 /** Big numbers (guests, entry code) and the room name. */
 export function RoomIntro({ state }: { state: RoomState }) {
@@ -16,6 +17,7 @@ export function RoomIntro({ state }: { state: RoomState }) {
   const copyTimer = useRef(0);
   const plus = useRef<HTMLButtonElement>(null);
   const minus = useRef<HTMLButtonElement>(null);
+  const qr = useRef<RoomQrHandle>(null);
   const minGuests = Math.max(MIN_GUESTS, humans);
 
   useEffect(() => () => clearTimeout(copyTimer.current), []);
@@ -46,7 +48,7 @@ export function RoomIntro({ state }: { state: RoomState }) {
     copyTimer.current = window.setTimeout(() => setCopied(null), 1500);
   }
 
-  // Salon privé : le code n'ouvre rien, seul le lien d'invitation compte (SALLE-03).
+  // Salon privé : le code n'ouvre rien, seul le lien d'invitation compte (SALLE-03). Le QR code porte le code : même règle.
   const byCode = allows(room.visibility, "code");
 
   return (
@@ -69,6 +71,11 @@ export function RoomIntro({ state }: { state: RoomState }) {
             {byCode && (
               <IconButton label={t(copied === "code" ? "room.codeCopied" : "room.copy")} confirmed={copied === "code"} onClick={() => copy("code")}>
                 {copied === "code" ? <CheckIcon /> : <CopyIcon />}
+              </IconButton>
+            )}
+            {byCode && (
+              <IconButton label={t("room.showQr")} onClick={() => qr.current?.open()}>
+                <QrIcon />
               </IconButton>
             )}
             <IconButton label={t(copied === "link" ? "room.linkCopied" : "room.copyLink")} confirmed={copied === "link"} onClick={() => copy("link")}>
@@ -95,6 +102,7 @@ export function RoomIntro({ state }: { state: RoomState }) {
           />
         </div>
       </div>
+      {byCode && <RoomQrDialog ref={qr} code={room.code} />}
     </div>
   );
 }

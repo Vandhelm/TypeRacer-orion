@@ -1,0 +1,8 @@
+/* QR code du salon : modules noirs sur fond blanc, pour que les téléphones le lisent. */
+.room-qr{ position: fixed; inset: 0; margin: auto; width: min(360px, calc(100vw - 32px)); max-height: calc(100vh - 32px); padding: clamp(18px, 3vh, 28px); overflow-y: auto; background: #000; color: #fff; border: 1px solid var(--color-line); text-align: center; }
+.room-qr::backdrop{ background: rgba(0,0,0,.82); }
+.room-qr[open]{ display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.room-qr h2{ font: 300 clamp(18px, 2.6vh, 24px)/1.1 var(--font-sans); letter-spacing: .1em; }
+.room-qr-code{ display: block; width: min(260px, 100%); height: auto; aspect-ratio: 1; }
+.room-qr-value{ font: 400 clamp(22px, 3.4vh, 30px)/1 var(--font-mono); letter-spacing: .3em; }
+.room-qr-help{ font: 400 max(11px, 1.2vh)/1.4 var(--font-mono); color: var(--color-muted); }

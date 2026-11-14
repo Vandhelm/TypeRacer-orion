@@ -89,7 +89,7 @@
     "semiPrivate": "Sur code",
     "public": "Public",
     "helpPrivate": "Hors de l'explorateur. On entre seulement avec le lien d'invitation.",
-    "helpSemiPrivate": "Hors de l'explorateur. On entre avec le code ou le lien d'invitation.",
+    "helpSemiPrivate": "Hors de l'explorateur. On entre avec le code, son QR code ou le lien d'invitation.",
     "helpPublic": "Visible dans l'explorateur et « Faire une course ». Ouvert à tous.",
     "textLanguage": "Langue du texte",
     "french": "Français",
@@ -201,7 +201,12 @@
     "participant": "Participant",
     "spectator": "Spectateur",
     "helpParticipant": "L'hôte court avec les autres et prend une place.",
-    "helpSpectator": "L'hôte regarde la course sans y prendre part : sa place reste libre."
+    "helpSpectator": "L'hôte regarde la course sans y prendre part : sa place reste libre.",
+    "showQr": "Afficher le QR code",
+    "qrTitle": "Rejoindre par QR code",
+    "qrLabel": "QR code du salon {{code}}",
+    "qrHelp": "Scanne-le avec ton téléphone pour entrer dans le salon, comme avec le code.",
+    "close": "Fermer"
   },
   "game": {
     "pageTitle": "O.R.I.O.N — L'épreuve",

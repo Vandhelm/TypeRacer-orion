@@ -90,3 +90,12 @@ export function ChevronIcon({ direction }: { direction: "up" | "down" }) {
     </svg>
   );
 }
+
+export function QrIcon() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <path d="M2.5 2.5h4v4h-4zM9.5 2.5h4v4h-4zM2.5 9.5h4v4h-4z" fill="none" stroke="currentColor" strokeWidth="1.2" />
+      <path d="M4 4h1v1H4zM11 4h1v1h-1zM4 11h1v1H4zM9 9h2v2H9zM11 11h2v2h-2zM9 12h1v1H9zM12 9h1v1h-1z" fill="currentColor" />
+    </svg>
+  );
+}

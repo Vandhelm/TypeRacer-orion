@@ -89,7 +89,7 @@
     "semiPrivate": "Code only",
     "public": "Public",
     "helpPrivate": "Not in the explorer. Join only with the invite link.",
-    "helpSemiPrivate": "Not in the explorer. Join with the code or the invite link.",
+    "helpSemiPrivate": "Not in the explorer. Join with the code, its QR code or the invite link.",
     "helpPublic": "Listed in the explorer and “Quick race”. Open to everyone.",
     "textLanguage": "Text language",
     "french": "French",
@@ -201,7 +201,12 @@
     "participant": "Participant",
     "spectator": "Spectator",
     "helpParticipant": "The host races with the others and takes a seat.",
-    "helpSpectator": "The host watches the race without taking part: their seat stays free."
+    "helpSpectator": "The host watches the race without taking part: their seat stays free.",
+    "showQr": "Show QR code",
+    "qrTitle": "Join with a QR code",
+    "qrLabel": "QR code for room {{code}}",
+    "qrHelp": "Scan it with your phone to enter the room, just like with the code.",
+    "close": "Close"
   },
   "game": {
     "pageTitle": "O.R.I.O.N — The race",
