@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { HangingButton } from "../../components/buttons/HangingButton";
-import { HomeIcon, RoomsIcon } from "../../components/icons";
+import { HomeIcon, RoomsIcon, TrainingIcon } from "../../components/icons";
 import { Navbar } from "../../components/navigation/Navbar";
 import { UserMenu } from "../../components/navigation/UserMenu";
 import { HomePanel } from "./HomePanel";
@@ -48,6 +48,7 @@ export function HomePage() {
         links={[
           { href: "#home", label: t("nav.homeLink"), icon: <HomeIcon />, current: view === "home" },
           { href: "#rooms", label: t("nav.rooms"), icon: <RoomsIcon />, current: view === "rooms" },
+          { href: "/training", label: t("nav.training"), icon: <TrainingIcon />, soon: t("nav.soon") },
         ]}
         linksLabel={t("nav.main")}
       >

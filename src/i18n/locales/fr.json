@@ -68,7 +68,9 @@
     "rooms": "Salons",
     "account": "Compte",
     "signIn": "Se connecter",
-    "signOut": "Déconnexion"
+    "signOut": "Déconnexion",
+    "training": "Entraînement",
+    "soon": "Bientôt"
   },
   "room": {
     "pageTitle": "O.R.I.O.N — Le salon",

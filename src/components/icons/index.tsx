@@ -116,3 +116,12 @@ export function RoomsIcon() {
     </svg>
   );
 }
+
+export function TrainingIcon() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <rect x="1.5" y="4" width="13" height="8" />
+      <path d="M4 7h1M7 7h1M10 7h2M5 9.5h6" />
+    </svg>
+  );
+}

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
-export type NavbarLink = { href: string; label: string; icon?: ReactNode; current?: boolean };
+/** `soon` shows the link greyed out with a small tag, not clickable yet. */
+export type NavbarLink = { href: string; label: string; icon?: ReactNode; current?: boolean; soon?: string };
 
 type NavbarProps = {
   brand: string;
@@ -24,12 +25,20 @@ export function Navbar({ brand, brandHref, brandLabel, links, linksLabel, childr
         <span className="navbar-brand-label">{brand}</span>
       </a>
       <nav className="navbar-links" aria-label={linksLabel}>
-        {links.map((link) => (
-          <a key={link.href} className="navbar-link" href={link.href} aria-current={link.current ? "page" : undefined}>
-            {link.icon}
-            <span className="navbar-link-label">{link.label}</span>
-          </a>
-        ))}
+        {links.map((link) =>
+          link.soon ? (
+            <a key={link.href} className="navbar-link" role="link" aria-disabled="true" title={link.soon}>
+              {link.icon}
+              <span className="navbar-link-label">{link.label}</span>
+              <span className="navbar-link-soon">{link.soon}</span>
+            </a>
+          ) : (
+            <a key={link.href} className="navbar-link" href={link.href} aria-current={link.current ? "page" : undefined}>
+              {link.icon}
+              <span className="navbar-link-label">{link.label}</span>
+            </a>
+          ),
+        )}
       </nav>
       <div className="navbar-end">{children}</div>
     </header>

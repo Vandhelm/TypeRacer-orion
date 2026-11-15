@@ -68,7 +68,9 @@
     "rooms": "Rooms",
     "account": "Account",
     "signIn": "Log in",
-    "signOut": "Log out"
+    "signOut": "Log out",
+    "training": "Training",
+    "soon": "Soon"
   },
   "room": {
     "pageTitle": "O.R.I.O.N — The room",
