@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { authClient } from "../../accounts/client";
-import { ChevronIcon, UserIcon } from "../icons";
+import { UserIcon } from "../icons";
 
 /** Right side of the navbar: the player's name opening a small account menu, or a sign-in link. */
 export function UserMenu() {
@@ -44,7 +44,7 @@ export function UserMenu() {
       <button className="user-menu-trigger" type="button" aria-expanded={open} aria-controls={menuId} onClick={() => setOpen(!open)}>
         <UserIcon />
         <span className="user-menu-name">{user.displayUsername || user.name}</span>
-        <ChevronIcon direction={open ? "up" : "down"} />
+        <span className="user-menu-caret" aria-hidden="true">▼</span>
       </button>
       {open && (
         <div className="user-menu-panel" id={menuId}>

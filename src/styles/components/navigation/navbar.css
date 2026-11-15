@@ -63,7 +63,7 @@
     .navbar-link-label, .user-menu-name{ position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 }
 @media (prefers-reduced-motion: reduce){
-    .navbar-link, .user-menu-trigger, .user-menu-item{ transition: none; }
+    .navbar-link, .user-menu-trigger, .user-menu-item, .user-menu-caret{ transition: none; }
 }
 
 /* Account menu (UserMenu.tsx) */
@@ -83,7 +83,8 @@
     transition: color .2s;
 }
 .user-menu-trigger svg{ width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.5; }
-.user-menu-trigger svg:last-child{ width: 10px; height: 10px; }
+.user-menu-caret{ font-size: 9px; transition: transform .2s; }
+.user-menu-trigger[aria-expanded="true"] .user-menu-caret{ transform: rotate(180deg); }
 .user-menu-trigger:hover, .user-menu-trigger[aria-expanded="true"]{ color: #fff; }
 .user-menu-trigger:focus-visible{ outline: 1px solid #fff; outline-offset: 4px; }
 .user-menu-panel{
