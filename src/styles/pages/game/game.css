@@ -7,13 +7,13 @@
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr) auto auto;
     gap: 2vh;
-    padding: 30px 3vw 3vh;
+    padding: calc(var(--navbar-height) + 30px) 3vw 3vh;
     background: #000;
     color: #fff;
     font-family: var(--font-sans);
 }
 
-.hanging-button.game-leave{ position: absolute; top: 30px; left: 3vw; }
+.hanging-button.game-leave{ position: absolute; top: calc(var(--navbar-height) + 30px); left: 3vw; }
 .hanging-button.game-leave::before, .hanging-button.game-leave::after{ height: 30px; }
 
 .game-header{
@@ -75,7 +75,7 @@
         overflow: visible;
         grid-template-columns: auto minmax(0, 1fr);
         grid-template-rows: auto max(52vh, 280px) auto auto;
-        padding: 30px 12px 28px;
+        padding: calc(var(--navbar-height) + 30px) 12px 28px;
     }
     .hanging-button.game-leave{ position: relative; top: auto; left: auto; grid-column: 1; grid-row: 1; justify-self: start; align-self: start; }
     .game-header{ grid-column: 2; grid-row: 1; }

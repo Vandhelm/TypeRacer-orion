@@ -12,6 +12,8 @@
 @import "../../base/animations.css";
 @import "../../base/utilities.css";
 
+@import "../../components/navigation/navbar.css";
+
 @import "../../components/tabs/hanging-tabs.css";
 @import "../../components/tabs/section-tabs.css";
 @import "../../components/buttons/hanging-button.css";

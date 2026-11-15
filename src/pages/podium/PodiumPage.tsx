@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { SiteNavbar } from "../../components/navigation/SiteNavbar";
 import { PodiumBoard } from "./PodiumBoard";
 import { PodiumScene } from "./PodiumScene";
 import { readResults } from "./results";
@@ -25,6 +26,7 @@ export function PodiumPage() {
 
   return (
     <>
+      <SiteNavbar />
       <PodiumScene players={players} arrived={arrived} />
       <PodiumBoard players={players} showPlace arrived={arrived} />
     </>

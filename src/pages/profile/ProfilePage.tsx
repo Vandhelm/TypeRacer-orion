@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { SiteNavbar } from "../../components/navigation/SiteNavbar";
 import { authClient } from "../../accounts/client";
 import { HangingButton } from "../../components/buttons/HangingButton";
 import { readResults, type PlayerResult, type RaceResults } from "../podium/results";
@@ -41,9 +42,12 @@ function subjectOf(results: RaceResults | null): Subject | null {
 export function ProfilePage() {
   const [own] = useState(() => { const query = new URLSearchParams(location.search); return !query.has("player") && !query.has("name"); });
   const { data: session, isPending } = authClient.useSession();
-  if (own && isPending) return <main className="profile" aria-busy="true" />;
-  if (own && session) return <OwnProfile me={session.user as Me} />;
-  return <PlayerProfile />;
+  return (
+    <>
+      <SiteNavbar />
+      {own && isPending ? <main className="profile" aria-busy="true" /> : own && session ? <OwnProfile me={session.user as Me} /> : <PlayerProfile />}
+    </>
+  );
 }
 
 /** Un joueur : le détail de la dernière course s'il y était, puis ses statistiques sur toutes ses courses. */

@@ -1,9 +1,7 @@
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { HangingButton } from "../../components/buttons/HangingButton";
-import { HomeIcon, RoomsIcon, TrainingIcon } from "../../components/icons";
-import { Navbar } from "../../components/navigation/Navbar";
-import { UserMenu } from "../../components/navigation/UserMenu";
+import { SiteNavbar } from "../../components/navigation/SiteNavbar";
 import { HomePanel } from "./HomePanel";
 import { useHashView } from "./hooks/useHashView";
 import { useViewTransition } from "./hooks/useViewTransition";
@@ -40,20 +38,7 @@ export function HomePage() {
     <>
       <Scene initialView={view} apiRef={scene} />
 
-      <Navbar
-        className="fixed inset-x-0 top-0 z-20"
-        brand="O.R.I.O.N"
-        brandHref="#home"
-        brandLabel={t("nav.home")}
-        links={[
-          { href: "#home", label: t("nav.homeLink"), icon: <HomeIcon />, current: view === "home" },
-          { href: "#rooms", label: t("nav.rooms"), icon: <RoomsIcon />, current: view === "rooms" },
-          { href: "/training", label: t("nav.training"), icon: <TrainingIcon />, soon: t("nav.soon") },
-        ]}
-        linksLabel={t("nav.main")}
-      >
-        <UserMenu />
-      </Navbar>
+      <SiteNavbar className="fixed inset-x-0 top-0 z-20" current={view} />
 
       <HangingButton ref={back} href="#home">{t("rooms.back")}</HangingButton>
 

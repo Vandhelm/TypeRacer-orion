@@ -2,7 +2,7 @@
     position: fixed;
     inset: 0;
     overflow-y: auto;
-    padding: 30px clamp(16px, 4vw, 56px) 32px;
+    padding: calc(var(--navbar-height) + 30px) clamp(16px, 4vw, 56px) 32px;
     background: #000;
     color: #fff;
     font-family: var(--font-sans);

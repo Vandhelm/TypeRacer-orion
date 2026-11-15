@@ -1,6 +1,7 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import { HangingButton } from "../../components/buttons/HangingButton";
+import { SiteNavbar } from "../../components/navigation/SiteNavbar";
 import { buildResults, buildSummary, markSessionStart, saveResults, sessionSeconds, submitRace } from "../podium/results";
 import { useRoom } from "../room/hooks/useRoom";
 import { rememberGuestRace } from "../profile/stats";
@@ -42,6 +43,7 @@ export function GamePage() {
 
   return (
     <div className="game-root" style={{ "--lanes": players.length } as CSSProperties}>
+      <SiteNavbar />
       <HangingButton className="game-leave" href="/room">{t("room.leave")}</HangingButton>
       <header className="game-header">
         <h1 className="game-title">{displayName}</h1>

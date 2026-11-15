@@ -12,6 +12,8 @@
 @import "../../base/animations.css";
 @import "../../base/utilities.css";
 
+@import "../../components/navigation/navbar.css";
+
 @import "../../components/buttons/hanging-button.css";
 
 @import "./game.css";

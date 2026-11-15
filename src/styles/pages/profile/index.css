@@ -4,10 +4,13 @@
 @import "tailwindcss/utilities.css" layer(utilities);
 @source "../../../../profile.html";
 @source "../../../pages/profile";
+@source "../../../components";
 
 @import "../../base/tokens.css";
 @import "../../base/reset.css" layer(base);
 @import "../../base/animations.css";
+
+@import "../../components/navigation/navbar.css";
 
 @import "../../components/buttons/hanging-button.css";
 @import "../../components/tabs/view-tabs.css";
