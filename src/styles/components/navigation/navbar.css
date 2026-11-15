@@ -1,8 +1,9 @@
-/* Top navigation bar: brand on the left, links and extras (e.g. .hanging-tabs) on the right.
+/* Top navigation bar: brand on the left, links centered, user menu on the right.
    Its height is --navbar-height (tokens.css). Place it with Tailwind in the page (e.g. fixed top-0). */
 .navbar{
-    display: flex;
-    align-items: flex-start;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: stretch;
     gap: 8px;
     height: var(--navbar-height);
     padding: 0 24px;
@@ -19,6 +20,8 @@
     text-decoration: none;
     font: 500 12px/1 var(--font-mono);
     letter-spacing: .3em;
+    justify-self: start;
+    white-space: nowrap;
 }
 .navbar-brand svg{ width: 14px; height: 14px; flex: none; }
 .navbar-brand svg polygon{ fill: var(--color-red); stroke: rgba(255,140,120,.4); stroke-width: 1; }
@@ -27,8 +30,11 @@
 .navbar-links{
     display: flex;
     height: 100%;
-    margin-left: auto;
-    margin-right: 16px;
+}
+.navbar-end{
+    display: flex;
+    align-items: center;
+    justify-self: end;
 }
 .navbar-link{
     display: flex;
@@ -49,13 +55,57 @@
 
 @media (max-width: 700px){
     .navbar{ padding: 0 16px; }
-    .navbar-links{ margin-right: 8px; }
     .navbar-link{ padding: 0 8px; }
 }
 @media (max-width: 420px){
     /* icon only on small phones: the label stays available to screen readers */
-    .navbar-link-label{ position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+    .navbar-brand-label{ display: none; }
+    .navbar-link-label, .user-menu-name{ position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 }
 @media (prefers-reduced-motion: reduce){
-    .navbar-link{ transition: none; }
+    .navbar-link, .user-menu-trigger, .user-menu-item{ transition: none; }
 }
+
+/* Account menu (UserMenu.tsx) */
+.user-menu{ position: relative; height: 100%; display: flex; align-items: center; }
+.user-menu-trigger{
+    all: unset;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 100%;
+    color: var(--color-muted);
+    font: 500 12px/1 var(--font-mono);
+    letter-spacing: .22em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    transition: color .2s;
+}
+.user-menu-trigger svg{ width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.5; }
+.user-menu-trigger svg:last-child{ width: 10px; height: 10px; }
+.user-menu-trigger:hover, .user-menu-trigger[aria-expanded="true"]{ color: #fff; }
+.user-menu-trigger:focus-visible{ outline: 1px solid #fff; outline-offset: 4px; }
+.user-menu-panel{
+    position: absolute;
+    top: calc(100% + 1px);
+    right: 0;
+    min-width: 220px;
+    display: grid;
+    background: var(--color-face-front-a);
+    border: 1px solid var(--color-line-soft);
+    border-top: 2px solid var(--color-red-solid);
+}
+.user-menu-item{
+    all: unset;
+    cursor: pointer;
+    padding: 13px 16px;
+    color: var(--color-muted);
+    font: 500 11px/1 var(--font-mono);
+    letter-spacing: .2em;
+    text-transform: uppercase;
+    transition: color .2s, background .2s;
+}
+.user-menu-item:hover{ color: #fff; background: var(--color-face-front-b); }
+.user-menu-item:focus-visible{ outline: 1px solid #fff; outline-offset: -4px; }
+.user-menu-item--danger{ border-top: 1px solid var(--color-line-faint); color: var(--color-red-text); }

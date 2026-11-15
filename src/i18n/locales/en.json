@@ -63,7 +63,12 @@
   "nav": {
     "main": "Main navigation",
     "home": "O.R.I.O.N, home",
-    "profile": "Profile"
+    "profile": "Profile",
+    "homeLink": "Home",
+    "rooms": "Rooms",
+    "account": "Account",
+    "signIn": "Log in",
+    "signOut": "Log out"
   },
   "room": {
     "pageTitle": "O.R.I.O.N — The room",
@@ -368,6 +373,10 @@
       "failed": "Could not link this {{provider}} account: it may already belong to another account.",
       "last": "This is your only way to sign in: {{provider}} can't be unlinked.",
       "unlinkFailed": "{{provider}} could not be unlinked. Try again."
+    },
+    "language": {
+      "title": "Language",
+      "help": "The language of the whole interface. It's remembered on this device."
     }
   }
 }

@@ -11,5 +11,6 @@
 
 @import "../../components/buttons/hanging-button.css";
 @import "../../components/tabs/view-tabs.css";
+@import "../../components/forms/text-choice.css";
 
 @import "./profile.css";

@@ -5,6 +5,7 @@ import { isProvider, PROVIDER_NAMES } from "../../accounts/client";
 import { HangingButton } from "../../components/buttons/HangingButton";
 import { ViewTabs } from "../../components/tabs/ViewTabs";
 import { readResults } from "../podium/results";
+import { LanguageSection } from "./account/LanguageSection";
 import { LinksSection } from "./account/LinksSection";
 import { NameSection } from "./account/NameSection";
 import { PhotoSection } from "./account/PhotoSection";
@@ -76,6 +77,7 @@ export function OwnProfile({ me }: { me: Me }) {
             <PhotoSection name={name} image={image} onChange={setImage} />
             <NameSection name={name} onChange={setName} />
             <LinksSection notice={notice} />
+            <LanguageSection />
           </div>
         ) : (
           <>

@@ -8,12 +8,12 @@ type NavbarProps = {
   brandLabel?: string;
   links: NavbarLink[];
   linksLabel?: string;
-  /** Extra content on the right, e.g. <HangingTabs>. */
+  /** Right side, e.g. <UserMenu>. */
   children?: ReactNode;
   className?: string;
 };
 
-/** Top navigation bar (styles: components/navigation/navbar.css). */
+/** Top navigation bar: brand on the left, links centered, extras on the right (styles: components/navigation/navbar.css). */
 export function Navbar({ brand, brandHref, brandLabel, links, linksLabel, children, className = "" }: NavbarProps) {
   return (
     <header className={`navbar ${className}`.trim()}>
@@ -21,7 +21,7 @@ export function Navbar({ brand, brandHref, brandLabel, links, linksLabel, childr
         <svg viewBox="0 0 100 100" aria-hidden="true">
           <polygon points="50,4 96,50 50,96 4,50" />
         </svg>
-        {brand}
+        <span className="navbar-brand-label">{brand}</span>
       </a>
       <nav className="navbar-links" aria-label={linksLabel}>
         {links.map((link) => (
@@ -31,7 +31,7 @@ export function Navbar({ brand, brandHref, brandLabel, links, linksLabel, childr
           </a>
         ))}
       </nav>
-      {children}
+      <div className="navbar-end">{children}</div>
     </header>
   );
 }

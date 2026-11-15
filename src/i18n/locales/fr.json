@@ -63,7 +63,12 @@
   "nav": {
     "main": "Navigation principale",
     "home": "O.R.I.O.N, accueil",
-    "profile": "Profil"
+    "profile": "Profil",
+    "homeLink": "Accueil",
+    "rooms": "Salons",
+    "account": "Compte",
+    "signIn": "Se connecter",
+    "signOut": "Déconnexion"
   },
   "room": {
     "pageTitle": "O.R.I.O.N — Le salon",
@@ -368,6 +373,10 @@
       "failed": "Impossible de lier ce compte {{provider}} : il est peut-être déjà utilisé par un autre compte.",
       "last": "C'est ton seul moyen de connexion : impossible de délier {{provider}}.",
       "unlinkFailed": "{{provider}} n'a pas pu être délié. Réessaie."
+    },
+    "language": {
+      "title": "Langue",
+      "help": "La langue de toute l'interface. Elle est retenue sur cet appareil."
     }
   }
 }

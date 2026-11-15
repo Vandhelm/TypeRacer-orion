@@ -99,3 +99,20 @@ export function QrIcon() {
     </svg>
   );
 }
+
+export function HomeIcon() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <path d="M2 7.5L8 2l6 5.5V14H2z" />
+    </svg>
+  );
+}
+
+export function RoomsIcon() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <rect x="2" y="3" width="12" height="10" />
+      <path d="M2 6.5h12" />
+    </svg>
+  );
+}
