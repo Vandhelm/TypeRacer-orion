@@ -67,7 +67,7 @@ export function createAuth(db: Db) {
         needsUsername: { type: "boolean", required: false, input: false, defaultValue: false },
       },
     },
-    plugins: [username({ minUsernameLength: USERNAME_MIN, maxUsernameLength: USERNAME_MAX, usernameValidator: isValidUsername })],
+    plugins: [username({ minUsernameLength: USERNAME_MIN, maxUsernameLength: USERNAME_MAX, usernameValidator: isValidUsername, displayUsernameValidator: isValidUsername })],
     databaseHooks: {
       user: {
         create: {
@@ -89,13 +89,21 @@ export function createAuth(db: Db) {
         },
         update: {
           // Changer de pseudo renomme aussi le joueur : le nom en jeu suit le compte.
+          // Le pseudo affiché n'est que le pseudo avec sa casse : sans pseudo, il reprend le pseudo ; autre chose est refusé.
           before: async (data, ctx) => {
-            const name = data.displayUsername ?? data.username;
-            const playerId = (ctx?.context.session?.user as { playerId?: number } | undefined)?.playerId;
+            const sessionUser = ctx?.context.session?.user as { playerId?: number; username?: string | null } | undefined;
+            const playerId = sessionUser?.playerId;
+            // Le plugin a déjà mis `username` en minuscules : la casse saisie se retrouve dans la requête.
+            const typed = (ctx?.body as { username?: unknown } | undefined)?.username;
+            const name = data.displayUsername ?? (typeof typed === "string" && typed.toLowerCase() === data.username ? typed : data.username);
             if (typeof name !== "string" || !playerId) return;
+            const usernameAfter = typeof data.username === "string" ? data.username : sessionUser?.username;
+            if (!isValidUsername(name) || name.toLowerCase() !== usernameAfter?.toLowerCase()) {
+              throw new APIError("BAD_REQUEST", { code: "INVALID_DISPLAY_USERNAME", message: "Display username is invalid." });
+            }
             const renamed = await db.update(schema.players).set({ name }).where(eq(schema.players.id, playerId)).returning({ id: schema.players.id }).catch(() => []);
             if (!renamed.length) throw new APIError("BAD_REQUEST", { code: "USERNAME_IS_ALREADY_TAKEN", message: "Username is already taken." });
-            return { data: { ...data, needsUsername: false } };
+            return { data: { ...data, displayUsername: name, needsUsername: false } };
           },
         },
       },
