@@ -131,6 +131,19 @@ Avant chaque commit, vérifie que tu es sur la bonne branche (`git branch --show
 
 Si tu as commité sur la mauvaise branche par erreur et que ce n'est pas poussé : `git cherry-pick <sha>` sur la bonne branche, puis demande à l'utilisateur avant de retirer le commit de l'autre (`git reset` réécrit l'historique). Jamais d'`--amend`, de rebase ou de `--force`.
 
+## Déléguer à l'agent dev
+
+Pour coder un critère entier, ou corriger les problèmes d'un rapport QA, la conversation principale peut confier le travail à l'agent **`dev`** (`.claude/agents/dev.md`). Il crée la branche selon ce skill, code, teste, commite, puis rend un rapport ; il ne pousse pas et ne merge pas.
+
+Boucle conseillée :
+
+1. `dev` sur le critère (« Implémente AUTH-02 », avec la ligne de matrice et, s'il existe, le dernier rapport QA).
+2. `qa` sur le même critère et la même branche (voir « Fin de feature »), sans lui transmettre le rapport de `dev`.
+3. Si la QA trouve des problèmes : renvoie-les à `dev` (même branche), puis relance `qa`. Après deux allers-retours sans verdict « Rempli », arrête-toi et montre les deux rapports à l'utilisateur.
+4. Verdict « Rempli » : continue avec « Fin de feature ».
+
+Deux agents `dev` peuvent travailler en parallèle sur deux critères indépendants seulement s'ils ne touchent pas les mêmes fichiers ; sinon, l'un après l'autre.
+
 ## Fin de feature : push et merge dans dev
 
 Une feature est terminée quand le critère est implémenté et que l'utilisateur le dit (« c'est bon », « fini », « on merge ») ou valide le résultat. Ne pousse pas au fil des commits.
@@ -161,4 +174,5 @@ Une feature est terminée quand le critère est implémenté et que l'utilisateu
 | Branche parente `feature/<page>` existe | proposer de la renommer en `.../base` |
 | Commit | Conventional Commits, anglais, sujet ≤ 50 caractères, footer `Refs: <CRITÈRE>`, sans co-auteur, sur la branche du critère |
 | Travail non commité de la branche courante | stash, puis pop au retour (pas de commit à la place de l'utilisateur) |
+| Coder un critère | agent `dev` → agent `qa` → corrections au besoin (2 tours max) |
 | Feature terminée | QA du critère (agent `qa`) → matrice → confirmer → push → merge `--no-ff` dans dev |
