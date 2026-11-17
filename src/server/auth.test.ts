@@ -119,3 +119,65 @@ describe("changing username", () => {
     await expect(auth.api.updateUser({ body: { username: "Tamago_8", displayUsername: "Tamago_8" }, headers: new Headers({ cookie }) })).rejects.toThrow();
   });
 });
+
+describe("changing display username", () => {
+  async function signedIn(name: string) {
+    const db = await createMockDatabase();
+    const auth = createAuth(db);
+    await signUp(auth, name);
+    const { headers } = await auth.api.signInUsername({ body: { username: name, password: "sushi-roll-42" }, returnHeaders: true });
+    const cookie = headers.get("set-cookie")!.split(";")[0]!;
+    const playerName = async () => {
+      const [row] = await db.select().from(user).where(eq(user.username, name.toLowerCase()));
+      const [player] = await db.select().from(players).where(eq(players.id, row!.playerId));
+      return { player: player!.name, displayUsername: row?.displayUsername, username: row?.username };
+    };
+    return { auth, db, headers: new Headers({ cookie }), playerName };
+  }
+
+  test("refuses a display username that breaks the username rule", async () => {
+    const { auth, headers, playerName } = await signedIn("Garde_Nom");
+    await expect(auth.api.updateUser({ body: { displayUsername: "x" }, headers })).rejects.toThrow();
+    await expect(auth.api.updateUser({ body: { displayUsername: "a".repeat(200) }, headers })).rejects.toThrow();
+    await expect(auth.api.updateUser({ body: { displayUsername: "sushi roll" }, headers })).rejects.toThrow();
+    expect(await playerName()).toEqual({ player: "Garde_Nom", displayUsername: "Garde_Nom", username: "garde_nom" });
+  });
+
+  test("refuses a display username that is not the username", async () => {
+    const { auth, headers, playerName } = await signedIn("Vrai_Nom");
+    await expect(auth.api.updateUser({ body: { displayUsername: "Faux_Nom" }, headers })).rejects.toThrow();
+    await expect(auth.api.updateUser({ body: { username: "Autre_Nom", displayUsername: "Faux_Nom" }, headers })).rejects.toThrow();
+    expect(await playerName()).toEqual({ player: "Vrai_Nom", displayUsername: "Vrai_Nom", username: "vrai_nom" });
+  });
+
+  test("refuses a display username that is not a string", async () => {
+    const { auth, headers, playerName } = await signedIn("Type_Nom");
+    // Le type de l'API n'accepte que des chaînes, mais la route HTTP prend n'importe quel JSON : on simule ce corps-là.
+    const raw = (body: Record<string, unknown>) => body as { username?: string; displayUsername?: string };
+    await expect(auth.api.updateUser({ body: raw({ displayUsername: null }), headers })).rejects.toThrow();
+    await expect(auth.api.updateUser({ body: raw({ displayUsername: 42 }), headers })).rejects.toThrow();
+    await expect(auth.api.updateUser({ body: raw({ username: "Type_Neuf", displayUsername: null }), headers })).rejects.toThrow();
+    expect(await playerName()).toEqual({ player: "Type_Nom", displayUsername: "Type_Nom", username: "type_nom" });
+  });
+
+  test("changes the case as the name form sends it", async () => {
+    const { auth, headers, playerName } = await signedIn("abc_def");
+    await auth.api.updateUser({ body: { username: "ABC_def", displayUsername: "ABC_def" }, headers });
+    expect(await playerName()).toEqual({ player: "ABC_def", displayUsername: "ABC_def", username: "abc_def" });
+  });
+
+  test("changes only the case of the display username", async () => {
+    const { auth, headers, playerName } = await signedIn("Casse_Nom");
+    await auth.api.updateUser({ body: { displayUsername: "CASSE_nom" }, headers });
+    expect(await playerName()).toEqual({ player: "CASSE_nom", displayUsername: "CASSE_nom", username: "casse_nom" });
+  });
+
+  test("a username alone renames the display username and the player", async () => {
+    const { auth, db, headers } = await signedIn("Seul_Nom");
+    await auth.api.updateUser({ body: { username: "Seul_Neuf" }, headers });
+    const [row] = await db.select().from(user).where(eq(user.username, "seul_neuf"));
+    const [player] = await db.select().from(players).where(eq(players.id, row!.playerId));
+    expect(row!.displayUsername).toBe("Seul_Neuf");
+    expect(player!.name).toBe("Seul_Neuf");
+  });
+});
