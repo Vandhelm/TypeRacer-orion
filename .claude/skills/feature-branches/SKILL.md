@@ -136,16 +136,20 @@ Si tu as commité sur la mauvaise branche par erreur et que ce n'est pas poussé
 Une feature est terminée quand le critère est implémenté et que l'utilisateur le dit (« c'est bon », « fini », « on merge ») ou valide le résultat. Ne pousse pas au fil des commits.
 
 1. Vérifie que tout est commité (`git status --short`) et lance les tests concernés s'il y en a (`bun test <fichier>`).
-2. Annonce ce qui va être poussé et mergé (branche, nombre de commits) et attends un oui — le push est visible sur GitHub, l'utilisateur pousse d'habitude lui-même.
-3. Push : `git push -u origin <branche>`.
-4. Merge dans dev, sans fast-forward pour garder la feature lisible :
+2. **QA du critère.** Lance l'agent `qa` sur le critère de la branche (portée « critère », ex. « Vérifie AUTH-03 sur `fix/home/auth-03` »), sans lui dire ce que tu penses avoir fait : il doit le constater lui-même. Pendant qu'il tourne, ne pousse rien.
+   - Verdict « Rempli » : reporte sa ligne de matrice dans `docs/EXIGENCES.md` (statut, fichiers, tests, notes), commite-la sur la branche (`docs: update requirement matrix` + `Refs: <ID>`), puis passe à l'étape suivante.
+   - Tout autre verdict : arrête-toi. Montre le rapport (parties ⚠️ / ❌, hors scope) et demande s'il faut corriger d'abord ou pousser quand même. Si l'utilisateur pousse quand même, la ligne de matrice prend le statut de la QA (`partiel`, `non fait`), jamais `complet`.
+   - Si l'agent `qa` n'existe pas dans ce dépôt, dis-le et passe à l'étape suivante.
+3. Annonce ce qui va être poussé et mergé (branche, nombre de commits, verdict QA) et attends un oui — le push est visible sur GitHub, l'utilisateur pousse d'habitude lui-même.
+4. Push : `git push -u origin <branche>`.
+5. Merge dans dev, sans fast-forward pour garder la feature lisible :
    ```bash
    git switch dev
    git merge --no-ff --no-edit <branche>
    ```
    En cas de conflit, arrête-toi et montre les fichiers en conflit ; ne résous pas à l'aveugle.
-5. Ne pousse pas `dev` et ne merge pas dans `main` sauf demande explicite.
-6. Résume en une ou deux lignes : branche poussée, merge dans dev (sha), ce qui reste à pousser.
+6. Ne pousse pas `dev` et ne merge pas dans `main` sauf demande explicite.
+7. Résume en une ou deux lignes : verdict QA, branche poussée, merge dans dev (sha), ce qui reste à pousser.
 
 ## Récap des décisions
 
@@ -157,4 +161,4 @@ Une feature est terminée quand le critère est implémenté et que l'utilisateu
 | Branche parente `feature/<page>` existe | proposer de la renommer en `.../base` |
 | Commit | Conventional Commits, anglais, sujet ≤ 50 caractères, footer `Refs: <CRITÈRE>`, sans co-auteur, sur la branche du critère |
 | Travail non commité de la branche courante | stash, puis pop au retour (pas de commit à la place de l'utilisateur) |
-| Feature terminée | confirmer → push → merge `--no-ff` dans dev |
+| Feature terminée | QA du critère (agent `qa`) → matrice → confirmer → push → merge `--no-ff` dans dev |
