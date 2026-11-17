@@ -1,0 +1,61 @@
+# Intégration continue (TECH-09) : à chaque push et pull request, lint, types, tests unitaires
+# et de régression, puis smoke tests sur un vrai Postgres.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: orion
+          POSTGRES_PASSWORD: orion
+          POSTGRES_DB: orion
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U orion"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgres://orion:orion@localhost:5432/orion
+      BETTER_AUTH_SECRET: ci-only-secret-ci-only-secret-ci-only
+      BETTER_AUTH_URL: http://localhost:3000
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+
+      - name: Installer les dépendances
+        run: bun install --frozen-lockfile
+
+      - name: Lint
+        run: bun run lint
+
+      - name: Types (tsc --noEmit)
+        run: bun run typecheck
+
+      - name: Tests unitaires et de régression
+        run: bun test
+
+      - name: Smoke tests
+        run: bun run test:smoke
+
+      # TECH-02 interdit tout fichier .js/.jsx. Non bloquant tant que les 3 fichiers existants
+      # (api/index.js, createRacePool.js, createScene.js) ne sont pas convertis : retirer
+      # continue-on-error une fois fait.
+      - name: Aucun fichier JavaScript (TECH-02)
+        run: bun run check:no-js
+        continue-on-error: true

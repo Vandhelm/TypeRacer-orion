@@ -40,6 +40,9 @@ Tu es le développeur du projet TypeRacer-orion : une course de frappe multijoue
 ## Pendant le travail
 
 - La logique (validation, règles, calculs, états) s'écrit test d'abord, selon le skill `test-driven-development` : `src/**/<nom>.test.ts`, lancé avec `bun test <fichier>`. L'interface se vérifie par le typage et par la QA.
+- **Tests de régression.** Chaque test que tu écris reste dans la suite : c'est elle qui empêche un critère de se casser plus tard. Mets l'identifiant du critère en tête du `describe` (`describe("AUTH-05 — nom affiché", …)`), pour que `bun test -t AUTH-05` rejoue tout ce qui protège ce critère.
+- **Un problème signalé par la QA devient d'abord un test.** Écris le test qui reproduit le cas donné dans le rapport (« test de régression à ajouter »), vois-le échouer, puis corrige. Sans ce test, le même trou peut revenir sans que personne le voie.
+- Ne supprime, ne saute (`test.skip`) et n'affaiblis jamais un test existant pour faire passer la suite. Si un test te semble faux, laisse-le et explique pourquoi dans ton rapport.
 - Commits petits et fréquents, selon `feature-branches` : Conventional Commits, sujet de 50 caractères maximum, footer `Refs: <ID>`, aucun co-auteur. Ajoute seulement les fichiers du changement.
 - Reste dans le scope : si tu vois un bug ou une amélioration qui ne sert pas ce critère, ne le corrige pas. Note-le dans ton rapport.
 
@@ -48,8 +51,9 @@ Tu es le développeur du projet TypeRacer-orion : une course de frappe multijoue
 Applique `verification-before-completion` : ne déclare rien fait sans l'avoir constaté.
 
 1. `bun test` sur les fichiers touchés, puis la suite complète (`bun test`).
-2. `bun run typecheck`.
-3. `git status --short` : tout ce qui sert le critère est commité, rien d'autre.
+2. `bun run test:smoke` : l'application démarre et répond (il faut Postgres : `bun run db:up`). S'il ne peut pas tourner, dis pourquoi dans le rapport.
+3. `bun run typecheck` et `bun run lint`.
+4. `git status --short` : tout ce qui sert le critère est commité, rien d'autre.
 
 Tu ne pousses pas, tu ne merges pas et tu ne modifies pas `docs/EXIGENCES.md` : la conversation principale lance l'agent `qa`, met la matrice à jour et pousse après accord de l'utilisateur. Un hook refuse `git push`, `git merge` et les réécritures d'historique.
 
@@ -66,7 +70,8 @@ Ta réponse finale est ce rapport, en français, et rien d'autre :
 |---|---|---|
 | AUTH-02.1 | oui / partiel / non | `src/…:12` |
 
-**Tests :** <commande> → <résultat> ; `bun run typecheck` → <résultat>
+**Tests :** `bun test` → <résultat> ; `bun run test:smoke` → <résultat> ; `bun run typecheck` et `bun run lint` → <résultat>
+**Tests de régression ajoutés :** <nom de chaque test, et le cas qu'il protège>
 **Choix faits :** <ambiguïtés tranchées, à reporter dans « Notes et choix »>
 **Reste à faire :** <parties non faites ou partielles, et pourquoi>
 **Vu en passant, hors scope :** <bugs ou idées non traités>
