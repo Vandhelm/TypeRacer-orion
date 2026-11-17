@@ -8,11 +8,11 @@ Les statuts viennent des rapports de l'agent `qa` (skill `criteria-check`). Une 
 
 | ID | Statut | Fichiers principaux | Tests associés | Notes et choix |
 |---|---|---|---|---|
-| TECH-01 | non vérifié |  |  |  |
+| TECH-01 | non fait | `package.json`, `build.ts`, `server.ts` | aucun | Choix assumé : Bun (vu en classe) avec React et TypeScript, au lieu de Next.js App Router. Pages HTML par entrée (`home.html`, `room.html`…) bâties par `build.ts`. Inscrit le 2026-11-17. |
 | TECH-02 | non vérifié |  |  |  |
 | TECH-03 | non vérifié |  |  |  |
 | TECH-04 | non vérifié |  |  |  |
-| TECH-05 | non vérifié |  |  |  |
+| TECH-05 | partiel | `vercel.json`, `api/` | aucun | Application déployée publiquement en HTTPS sur Vercel, pas sur un VPS. Choix assumé : on garde la plateforme utilisée depuis le début. À confirmer avec l'enseignant. Inscrit le 2026-11-17. |
 | TECH-06 | non vérifié |  |  |  |
 | TECH-07 | non vérifié |  |  |  |
 | TECH-08 | non vérifié |  |  |  |
