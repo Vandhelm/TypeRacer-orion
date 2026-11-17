@@ -145,9 +145,6 @@ Les statuts viennent des rapports de l'agent `qa` (skill `criteria-check`). Une 
 
 ## 6. Qualité
 
-| ID | Statut | Fichiers principaux | Tests associés | Notes et choix |
-|---|---|---|---|---|
-
 ### 6.1 Tests (TEST)
 
 | ID | Statut | Fichiers principaux | Tests associés | Notes et choix |
