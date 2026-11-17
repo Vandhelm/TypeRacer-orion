@@ -88,7 +88,8 @@ Trouve le code qui la réalise et lis-le vraiment. Un nom de fonction prometteur
   - tous les chemins : chaque endroit où l'action est possible (route API, page, socket, URL directe comme `/room?new`) applique la règle ;
   - ce qui s'affiche vraiment : pour une partie visible, suis la classe jusqu'au CSS (`grep -rn "<classe>" src/styles`). Un `font-size: 0`, un `display: none` ou une image de fond peut remplacer ce que le composant rend ;
   - le sens exact des mots : « généré » veut dire propre à chaque joueur, pas une image identique pour tous ; « signé » veut dire vérifié ; « en temps réel » veut dire sans rechargement.
-- **Testé ?** Cherche les tests (`grep -rln "<nom>" src --include="*.test.ts"`, et `e2e/` pour Playwright). Lance ceux qui existent : `bun test <fichiers>`. Si la branche à vérifier n'est pas celle du répertoire de travail et que les fichiers diffèrent, ne bascule pas : indique que les tests n'ont pas été lancés et pourquoi. Une partie sans test n'est pas un échec, mais elle va dans la colonne « Tests associés » comme « aucun ».
+- **Testé ?** Cherche les tests (`grep -rln "<nom>" src --include="*.test.ts"`, et `e2e/` pour Playwright). Lance ceux qui existent : `bun test <fichiers>`. Si la branche à vérifier n'est pas celle du répertoire de travail et que les fichiers diffèrent, ne bascule pas : indique que les tests n'ont pas été lancés et pourquoi. Une partie sans test n'est pas un échec, mais elle va dans la colonne « Tests associés » comme « aucun ». Les tests sont nommés par critère : `bun test -t <ID>` rejoue ceux d'une exigence.
+- **Test de régression à ajouter.** Pour chaque partie ⚠️ ou ❌, et chaque partie ✅ sans test, écris dans le rapport le cas exact qui doit devenir un test : entrée, appel, résultat attendu (« `updateUser({ body: { displayUsername: null } })` → refusé, `players.name` inchangé »). Tu ne peux pas l'écrire toi-même ; l'agent `dev` le transformera en test avant de corriger.
 
 Verdict par partie :
 
@@ -125,7 +126,7 @@ En plus des sections, suis le parcours d'un joueur dans le code, de bout en bout
 
 Pour chaque étape : ✅ branchée, ⚠️ branchée avec un trou (dis lequel), ❌ coupée (dis où le parcours s'arrête). Un parcours coupé est le premier problème à rapporter : l'application doit être fonctionnelle en production (TECH-05).
 
-Si des tests Playwright existent (TEST-02), lance-les et rapporte le résultat ; sinon dis que le parcours n'a été suivi que dans le code.
+Lance aussi `bun run test:smoke` (il faut Postgres : `bun run db:up`) : il vérifie que chaque page et l'API répondent. Si des tests Playwright existent (TEST-02), lance-les et rapporte le résultat ; sinon dis que le parcours n'a été suivi que dans le code.
 
 ## 7. Rapport
 
@@ -152,6 +153,9 @@ En français, sans rien ajouter avant.
 
 ### Tests
 <commande et résultat, ou pourquoi aucun ; parties sans test>
+
+### Tests de régression à ajouter
+- <partie> — <entrée> → <résultat attendu>
 
 ### Ligne de matrice
 | <ID> | <statut> | <fichiers principaux> | <tests> | <notes> |

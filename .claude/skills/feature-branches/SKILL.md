@@ -148,7 +148,7 @@ Deux agents `dev` peuvent travailler en parallèle sur deux critères indépenda
 
 Une feature est terminée quand le critère est implémenté et que l'utilisateur le dit (« c'est bon », « fini », « on merge ») ou valide le résultat. Ne pousse pas au fil des commits.
 
-1. Vérifie que tout est commité (`git status --short`) et lance les tests concernés s'il y en a (`bun test <fichier>`).
+1. Vérifie que tout est commité (`git status --short`), puis lance la suite de régression (`bun test`) et les smoke tests (`bun run test:smoke`, avec Postgres démarré par `bun run db:up`). Un test rouge bloque le push : montre-le à l'utilisateur plutôt que de le contourner.
 2. **QA du critère.** Lance l'agent `qa` sur le critère de la branche (portée « critère », ex. « Vérifie AUTH-03 sur `fix/home/auth-03` »), sans lui dire ce que tu penses avoir fait : il doit le constater lui-même. Pendant qu'il tourne, ne pousse rien.
    - Verdict « Rempli » : reporte sa ligne de matrice dans `docs/EXIGENCES.md` (statut, fichiers, tests, notes), commite-la sur la branche (`docs: update requirement matrix` + `Refs: <ID>`), puis passe à l'étape suivante.
    - Tout autre verdict : arrête-toi. Montre le rapport (parties ⚠️ / ❌, hors scope) et demande s'il faut corriger d'abord ou pousser quand même. Si l'utilisateur pousse quand même, la ligne de matrice prend le statut de la QA (`partiel`, `non fait`), jamais `complet`.
