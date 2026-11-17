@@ -1,0 +1,45 @@
+{
+  "skill_name": "criteria-check",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Est-ce que AUTH-01 est bien respecté sur la branche feature/auth ? Vérifie aussi que rien ne sort du scope.",
+      "expected_output": "Rapport sur la branche déjà mergée (diff du merge), Discord et GitHub vérifiés avec preuves, login mot de passe et librairie marqués « permis », hors-scope listé.",
+      "files": [],
+      "assertions": [
+        "Cites the exact AUTH-01 text from docs/criteres.md",
+        "Handles the already-merged branch (compares the merge commit's two sides, not an empty dev...branch diff)",
+        "Checks Discord and GitHub OAuth separately, each with file:line evidence",
+        "Treats password login and auth library as permitted, not required",
+        "Lists files of the branch that are out of AUTH-01 scope, or states there are none",
+        "Leaves the repo untouched (same branch, clean status)"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Vérifie AUTH-02 sur ma branche, j'ai rien oublié ?",
+      "expected_output": "Le cookie signé est signalé manquant (sessionStorage), les bornes 3-20 vérifiées, la modif de CareerStats.tsx signalée hors scope.",
+      "files": [],
+      "assertions": [
+        "Flags the signed-cookie session as missing or partial (nickname kept in sessionStorage)",
+        "Checks the 3 to 20 character bounds explicitly",
+        "Flags the CareerStats.tsx change as out of scope",
+        "Does not give an overall 'fulfilled' verdict",
+        "Leaves the repo untouched (same branch, clean status)"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "AUTH-03 est rempli sur feature/profile-account ? Et est-ce que cette branche sort du scope ?",
+      "expected_output": "La branche porte surtout AUTH-04/AUTH-05 : rapport qui le signale comme hors scope, et statut honnête de chaque exigence AUTH-03 (création de salle, historique, photo, avatar).",
+      "files": [],
+      "assertions": [
+        "Splits AUTH-03 into separate requirements (no room creation, no persistent history, no profile photo, generated avatar)",
+        "Says where each requirement is implemented, or that it is not in this branch",
+        "Flags the AUTH-04 / AUTH-05 work (photo, username, linked accounts) as out of AUTH-03 scope",
+        "Checks the room-creation ban on the server side, not only in the UI",
+        "Leaves the repo untouched (same branch, clean status)"
+      ]
+    }
+  ]
+}
