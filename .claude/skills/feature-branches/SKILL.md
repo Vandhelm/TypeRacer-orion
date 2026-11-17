@@ -64,7 +64,24 @@ Format (Conventional Commits, en anglais) :
 <type>(<page>): <ce que fait le changement, à l'impératif, minuscule, sans point>
 ```
 
-- Types : `feat`, `fix`, `style` (visuel/CSS sans logique), `refactor`, `test`, `docs`, `chore`.
+- Type, à choisir dans cette liste et nulle part ailleurs :
+
+  | Type | Quand |
+  |---|---|
+  | `feat` | nouvelle fonctionnalité (y compris un nouvel élément visuel) |
+  | `fix` | correction de bug (y compris un défaut visuel : marge, couleur, alignement) |
+  | `docs` | documentation seulement |
+  | `style` | formatage du code (indentation, espaces, points-virgules), sans effet sur le comportement ni sur l'affichage |
+  | `refactor` | restructuration du code sans changer le comportement |
+  | `perf` | amélioration de performance |
+  | `test` | ajout ou mise à jour de tests |
+  | `chore` | outillage ou maintenance (dépendances, config, skills) |
+  | `ci` | CI/CD |
+  | `build` | système de build |
+  | `revert` | annulation d'un commit précédent |
+  | `security` | correction de sécurité |
+
+  Attention : `style` veut dire formatage du code, pas CSS. Un changement visible à l'écran est un `feat` ou un `fix`.
 - Scope : la page ou zone (`profile`, `home`, `auth`, `room`).
 - Sujet de **50 caractères maximum**, type et scope compris (règle 50/72 : GitHub tronque les sujets plus longs dans la liste des commits et les titres de PR). Il dit le *quoi* du point de vue de l'utilisateur ou du code, pas « update file ». Compte avant de commiter (`printf %s "<sujet>" | wc -c`) ; si ça dépasse, raccourcis le sujet plutôt que le scope.
 - Pas de corps, ou quelques mots si le pourquoi n'est pas évident : une ligne vide après le sujet, puis des lignes de 72 caractères maximum.
@@ -73,7 +90,7 @@ Format (Conventional Commits, en anglais) :
 Exemples :
 - `feat(profile): show best WPM per race mode`
 - `fix(auth): keep session after Discord redirect`
-- `style(home): equal margins on the login panel`
+- `fix(home): equal margins on the login panel`
 - `test(profile): cover stats with no finished race`
 
 Avant chaque commit, vérifie que tu es sur la bonne branche (`git branch --show-current`) et n'ajoute que les fichiers de ce changement (`git add <fichiers>`, pas `git add -A` si d'autres fichiers sans rapport traînent, comme `.claude/launch.json`).
