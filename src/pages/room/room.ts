@@ -1,8 +1,8 @@
 // Room model. À BRANCHER : sans serveur de jeu, le salon est gardé dans ce navigateur et les autres joueurs sont simulés.
 import type { TFunction } from "i18next";
+import { myName } from "../../players/nickname";
 import { cleanRoomCode, newInviteToken, newRoomCode, VISIBILITIES, type Visibility } from "../../rooms/access";
 
-export const MY_NAME = "Corail_418";
 const BOT_NAMES = ["Thon_Rouge", "Wasabi99", "Saba_Sensei", "Nori_Ninja", "Ebi_Fry", "Uni_Kun", "Tako_San"];
 const PLAYER_NAMES = ["Maki_77", "Ikura_21", "Tamago_8", "Sake_Bomb", "Kani_404", "Hotate_3", "Toro_19"];
 // Une couleur par joueur : celle de son poisson et de sa puce sur le billet
@@ -185,10 +185,11 @@ export function readSession(search: string, t: TFunction): Session {
 /** La liste des places : joueurs présents, puis bots ou places libres. */
 export function seatsOf(room: Pick<Room, "guests" | "bots">, host: boolean, present: number): Seat[] {
   const people: Omit<Player, "color">[] = [];
-  if (host) people.push({ name: MY_NAME, host: true, me: true });
+  const me = myName();
+  if (host) people.push({ name: me, host: true, me: true });
   else {
     people.push({ name: PLAYER_NAMES[0]!, host: true });
-    people.push({ name: MY_NAME, me: true });
+    people.push({ name: me, me: true });
     for (let i = 2; i < present; i++) people.push({ name: PLAYER_NAMES[i - 1]! });
   }
   let bot = 0;

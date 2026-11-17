@@ -50,7 +50,7 @@ export function SpeedChart({ player }: { player: PlayerResult }) {
             </g>
           ))}
           {chart.timeTicks.map((i) => <text key={i} x={chart.x(i)} y={chart.height - 8} textAnchor="middle">{i + 1}</text>)}
-          <text x={chart.left} y={10}>{labels.wpm}</text>
+          <text x={chart.left} y={chart.axisLabel}>{labels.wpm}</text>
           {errors.map((count, i) => count > 0 && <text key={i} className="chart-error" x={chart.x(i)} y={chart.bandCenter + 5} textAnchor="middle">×</text>)}
           {chart.count > 1 ? (
             <>

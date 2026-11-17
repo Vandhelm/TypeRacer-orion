@@ -8,14 +8,14 @@ import { DiscordIcon, GithubIcon } from "../../components/icons";
 import { Stamp } from "../../components/Stamp";
 import { ViewTabs } from "../../components/tabs/ViewTabs";
 import { cleanRoomCode } from "../../rooms/access";
-import { authClient, changeUsername, linkProvider, PROVIDER_NAMES, signInWith, signInWithUsername, signUpWithUsername, SOCIAL_PROVIDERS, type SocialProvider } from "../../accounts/client";
+import { NICKNAME_MAX, NICKNAME_PATTERN, saveNickname, storedNickname } from "../../players/nickname";
+import { authClient, changeUsername, isProvider, linkProvider, PROVIDER_NAMES, signInWith, signInWithUsername, signUpWithUsername, SOCIAL_PROVIDERS, type SocialProvider } from "../../accounts/client";
 import { isValidUsername, PASSWORD_MIN } from "../../accounts/username";
 
 type Pane = "play" | "account";
 type StampKey = "stampPlay" | "stampAccount" | "stampCode";
 
 const PROVIDER_ICONS: Record<SocialProvider, () => React.JSX.Element> = { github: GithubIcon, discord: DiscordIcon };
-const isProvider = (value: string | null): value is SocialProvider => SOCIAL_PROVIDERS.includes(value as SocialProvider);
 
 const FORM = "col-start-1 row-start-1 flex flex-col gap-[2.1vh] [align-self:start]";
 
@@ -24,6 +24,7 @@ export function HomePanel({ ref }: { ref?: Ref<HTMLElement> }) {
   const { t } = useTranslation();
   const [pane, setPane] = useState<Pane>("play");
   const [code, setCode] = useState("");
+  const [nickname, setNickname] = useState(() => storedNickname() ?? "");
   const [showPassword, setShowPassword] = useState(false);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -145,7 +146,20 @@ export function HomePanel({ ref }: { ref?: Ref<HTMLElement> }) {
               id="nickname"
               num="01"
               label={t("home.nickname")}
-              inputProps={{ name: "nickname", autoComplete: "nickname", spellCheck: false, maxLength: 20, placeholder: "Corail_418" }}
+              inputProps={{
+                name: "nickname",
+                autoComplete: "nickname",
+                spellCheck: false,
+                maxLength: NICKNAME_MAX,
+                pattern: NICKNAME_PATTERN,
+                title: t("home.nicknameRule"),
+                placeholder: "Corail_418",
+                value: nickname,
+                onChange: (e) => {
+                  setNickname(e.target.value);
+                  saveNickname(e.target.value);
+                },
+              }}
             />
 
             <div className="flex flex-col gap-[1.3vh]">

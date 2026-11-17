@@ -1,12 +1,16 @@
 // Déroulé d'une course. À BRANCHER : les adversaires sont simulés, leur progression doit venir du serveur de jeu.
-import type { BotSpeed, MistakeMode, Player } from "../room/room";
+import { countKey, type KeyCounts } from "../../players/keys";
+import type { BotAccuracy, BotSpeed, MistakeMode, Player } from "../room/room";
 
 const BOT_WPM: Record<BotSpeed, [number, number]> = { slow: [25, 40], medium: [40, 65], fast: [65, 100], mixed: [25, 100] };
+/** Part des frappes justes, en %. Une faute est retapée : elle coûte du temps de frappe, pas de la vitesse nette. */
+const BOT_ACCURACY: Record<BotAccuracy, [number, number]> = { shaky: [82, 90], decent: [90, 96], high: [96, 100] };
 export const CHARS_PER_WORD = 5;
 export const TICK_MS = 200;
 
 export type Course = { words: string[]; /** Caractères cumulés (espaces comprises) après chaque mot. */ marks: number[]; durationMs: number; mistakes: MistakeMode };
-export type Bot = { lane: number; wpm: number; words: number; finishedAt: number };
+/** typed et errors : frappes et fautes cumulées, comme pour moi. keys : les mêmes, touche par touche. */
+export type Bot = { lane: number; wpm: number; accuracy: number; words: number; typed: number; errors: number; keys: KeyCounts; finishedAt: number };
 /** Cumuls de fin de seconde : caractères validés, caractères tapés, fautes. */
 export type Sample = { chars: number; typed: number; errors: number };
 export type Race = {
@@ -21,6 +25,8 @@ export type Race = {
   keystrokes: number;
   wrongChars: number;
   extraChars: number;
+  /** Mes frappes et fautes, par caractère attendu. */
+  keys: KeyCounts;
   missedWords: ReadonlySet<number>;
   missedChars: number;
   finishedAt: number;
@@ -38,11 +44,13 @@ export function createCourse(words: string[], durationSeconds: number, mistakes:
   return { words, marks, durationMs: durationSeconds * 1000, mistakes };
 }
 
-export function createRace(course: Course, players: Player[], botSpeed: BotSpeed, random: () => number = Math.random): Race {
+export function createRace(course: Course, players: Player[], botSpeed: BotSpeed, botAccuracy: BotAccuracy, random: () => number = Math.random): Race {
   const [low, high] = BOT_WPM[botSpeed];
+  const [worst, best] = BOT_ACCURACY[botAccuracy];
   const bots: Bot[] = [];
   players.forEach((player, lane) => {
-    if (!player.me) bots.push({ lane, wpm: Math.round(low + random() * (high - low)), words: 0, finishedAt: 0 });
+    if (player.me) return;
+    bots.push({ lane, wpm: Math.round(low + random() * (high - low)), accuracy: worst + random() * (best - worst), words: 0, typed: 0, errors: 0, keys: {}, finishedAt: 0 });
   });
   return {
     course,
@@ -56,6 +64,7 @@ export function createRace(course: Course, players: Player[], botSpeed: BotSpeed
     keystrokes: 0,
     wrongChars: 0,
     extraChars: 0,
+    keys: {},
     missedWords: new Set(),
     missedChars: 0,
     finishedAt: 0,
@@ -78,17 +87,24 @@ export function applyInput(race: Race, value: string, now: number): Race {
   const added = value.length > race.typed.length;
   const spaced = value.endsWith(" ");
   const clean = spaced ? value.slice(0, -1) : value;
-  let { wrongChars, extraChars } = race;
+  let { wrongChars, extraChars, keys } = race;
 
   if (added) {
-    // chaque lettre ajoutée : juste, fausse, ou en trop
+    // chaque lettre ajoutée : juste, fausse, ou en trop ; la touche attendue garde la frappe
     for (let k = race.typed.length; k < value.length; k++) {
-      if (k === target.length && value[k] === " " && clean === target) continue;
+      if (k === target.length && value[k] === " " && clean === target) {
+        keys = countKey(keys, " ", false);
+        continue;
+      }
       if (k >= target.length) extraChars += 1;
-      else if (value[k] !== target[k]) wrongChars += 1;
+      else {
+        const wrong = value[k] !== target[k];
+        if (wrong) wrongChars += 1;
+        keys = countKey(keys, target[k]!, wrong);
+      }
     }
   }
-  const counted = { keystrokes: race.keystrokes + (added ? value.length - race.typed.length : 0), wrongChars, extraChars };
+  const counted = { keystrokes: race.keystrokes + (added ? value.length - race.typed.length : 0), wrongChars, extraChars, keys };
 
   // fatale : la première faute arrête la course
   if (mistakes === "fatal" && added && !target.startsWith(clean) && !(spaced && clean === target)) {
@@ -123,23 +139,43 @@ export function advanceBots(race: Race, now: number, jitters: number[]): Race {
   const arrivals = [...race.arrivals];
   const bots = race.bots.map((bot, i) => {
     if (bot.finishedAt) return bot;
+    const jitter = jitters[i] ?? 0.5;
     // un adversaire tape à vitesse constante en caractères : les longs mots lui prennent plus de temps
     const current = words[Math.floor(bot.words)] ?? "";
     const pace = ((bot.wpm * CHARS_PER_WORD) / 60 / (current.length + 1)) * (TICK_MS / 1000);
-    const progress = Math.min(words.length, bot.words + pace * (0.55 + (jitters[i] ?? 0.5) * 0.9));
-    if (progress < words.length) return { ...bot, words: progress };
+    const progress = Math.min(words.length, bot.words + pace * (0.55 + jitter * 0.9));
+    // chaque caractère validé coûte en moyenne 100 / précision frappes : le surplus, ce sont ses fautes
+    const gained = botChars(race, { ...bot, words: progress }) - botChars(race, bot);
+    const rate = (100 / bot.accuracy - 1) * (0.5 + jitter);
+    const mistakes = gained * rate;
+    const keys = botKeys(race, bot.keys, botChars(race, bot), gained, rate);
+    const moved = { ...bot, words: progress, typed: bot.typed + gained + mistakes, errors: bot.errors + mistakes, keys };
+    if (progress < words.length) return moved;
     arrivals.push(bot.lane);
-    return { ...bot, words: progress, finishedAt: now };
+    return { ...moved, finishedAt: now };
   });
   const moved: Race = { ...race, bots, arrivals, now, phase: now - race.startedAt >= durationMs ? "done" : "racing" };
   return { ...moved, samples: recordSamples(moved) };
 }
 
+/** Chaque caractère du texte qu'un bot dépasse ce tick-ci : ses fautes tombent plus souvent sur les touches difficiles. */
+function botKeys(race: Race, keys: KeyCounts, from: number, gained: number, rate: number): KeyCounts {
+  const text = race.course.words.join(" ") + " ";
+  let counts = keys;
+  for (let i = Math.floor(from); i < Math.floor(from + gained) && i < text.length; i++) {
+    const misses = rate * difficulty(text[i]!);
+    counts = countKey(counts, text[i]!, misses > 0, 1 + misses, misses);
+  }
+  return counts;
+}
+
+const difficulty = (char: string) => (/[a-z ]/.test(char) ? 1 : 2);
+
 function myValidChars(race: Race) {
   return Math.max(0, race.course.marks[race.wordIndex]! - race.missedChars);
 }
 
-function botChars(race: Race, bot: Bot) {
+function botChars(race: Race, bot: Pick<Bot, "words">) {
   const { marks } = race.course;
   const whole = Math.floor(bot.words);
   const start = marks[whole] ?? 0;
@@ -153,8 +189,7 @@ function sampleOf(race: Race, lane: number): Sample | null {
   }
   const bot = race.bots.find((candidate) => candidate.lane === lane);
   if (!bot || bot.finishedAt) return null;
-  const chars = botChars(race, bot);
-  return { chars, typed: chars, errors: 0 };
+  return { chars: botChars(race, bot), typed: bot.typed, errors: bot.errors };
 }
 
 function recordSamples(race: Race) {

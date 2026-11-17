@@ -10,5 +10,6 @@
 @import "../../base/animations.css";
 
 @import "../../components/buttons/hanging-button.css";
+@import "../../components/tabs/view-tabs.css";
 
 @import "./profile.css";

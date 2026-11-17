@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { boolean, check, foreignKey, index, integer, pgTable, primaryKey, real, text, timestamp, unique } from "drizzle-orm/pg-core";
+import { boolean, check, foreignKey, index, integer, jsonb, pgTable, primaryKey, real, text, timestamp, unique } from "drizzle-orm/pg-core";
 import { players } from "./players";
 import { raceConfigs, rooms } from "./rooms";
 import { corpusTexts } from "./texts";
@@ -39,6 +39,8 @@ export const raceResults = pgTable(
     finished: boolean("finished").notNull(),
     eliminated: boolean("eliminated").notNull().default(false),
     sessionSeconds: integer("session_seconds").notNull().default(0),
+    /** caractère → [frappes, fautes] */
+    keys: jsonb("keys").$type<Record<string, [number, number]>>().notNull().default({}),
   },
   (table) => [
     primaryKey({ columns: [table.raceId, table.playerId] }),

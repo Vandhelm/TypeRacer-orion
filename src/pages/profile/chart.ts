@@ -1,7 +1,9 @@
 // Géométrie du graphique : une seule échelle (MPM), les erreurs à part sur leur propre bande.
 const LEFT = 34;
 const RIGHT = 8;
-const TOP = 18;
+const TOP = 34;
+/** Le libellé de l'axe (MPM), au-dessus de la plus haute graduation. */
+const AXIS_LABEL = 14;
 const BOTTOM = 26;
 const ERROR_BAND = 22;
 const SPEED_STEPS = [5, 10, 15, 20, 25, 50, 100, 150, 200, 250, 500];
@@ -27,6 +29,7 @@ export function buildChart(wpm: number[], raw: number[], width: number, plot: nu
     left: LEFT,
     right: width - RIGHT,
     top: TOP,
+    axisLabel: AXIS_LABEL,
     bandTop: TOP + plot,
     bandCenter: TOP + plot + ERROR_BAND / 2,
     cursorBottom: TOP + plot + ERROR_BAND,

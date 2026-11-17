@@ -36,6 +36,13 @@
       "when": 1794454170859,
       "tag": "0004_github_username",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1794488940584,
+      "tag": "0005_race_keys",
+      "breakpoints": true
     }
   ]
 }
