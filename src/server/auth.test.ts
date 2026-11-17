@@ -150,6 +150,22 @@ describe("changing display username", () => {
     expect(await playerName()).toEqual({ player: "Vrai_Nom", displayUsername: "Vrai_Nom", username: "vrai_nom" });
   });
 
+  test("refuses a display username that is not a string", async () => {
+    const { auth, headers, playerName } = await signedIn("Type_Nom");
+    // Le type de l'API n'accepte que des chaînes, mais la route HTTP prend n'importe quel JSON : on simule ce corps-là.
+    const raw = (body: Record<string, unknown>) => body as { username?: string; displayUsername?: string };
+    await expect(auth.api.updateUser({ body: raw({ displayUsername: null }), headers })).rejects.toThrow();
+    await expect(auth.api.updateUser({ body: raw({ displayUsername: 42 }), headers })).rejects.toThrow();
+    await expect(auth.api.updateUser({ body: raw({ username: "Type_Neuf", displayUsername: null }), headers })).rejects.toThrow();
+    expect(await playerName()).toEqual({ player: "Type_Nom", displayUsername: "Type_Nom", username: "type_nom" });
+  });
+
+  test("changes the case as the name form sends it", async () => {
+    const { auth, headers, playerName } = await signedIn("abc_def");
+    await auth.api.updateUser({ body: { username: "ABC_def", displayUsername: "ABC_def" }, headers });
+    expect(await playerName()).toEqual({ player: "ABC_def", displayUsername: "ABC_def", username: "abc_def" });
+  });
+
   test("changes only the case of the display username", async () => {
     const { auth, headers, playerName } = await signedIn("Casse_Nom");
     await auth.api.updateUser({ body: { displayUsername: "CASSE_nom" }, headers });

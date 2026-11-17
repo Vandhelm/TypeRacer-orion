@@ -36,6 +36,8 @@ function withSuffix(name: string, n: number) {
   return name.slice(0, USERNAME_MAX - suffix.length) + suffix;
 }
 
+const invalidDisplayUsername = () => new APIError("BAD_REQUEST", { code: "INVALID_DISPLAY_USERNAME", message: "Display username is invalid." });
+
 export function createAuth(db: Db) {
   return betterAuth({
     secret: process.env.BETTER_AUTH_SECRET,
@@ -93,13 +95,17 @@ export function createAuth(db: Db) {
           before: async (data, ctx) => {
             const sessionUser = ctx?.context.session?.user as { playerId?: number; username?: string | null } | undefined;
             const playerId = sessionUser?.playerId;
+            // La route accepte n'importe quel JSON et le plugin ne vérifie que les chaînes : null ou 42 sont refusés ici.
+            if ("displayUsername" in data && typeof data.displayUsername !== "string") {
+              throw invalidDisplayUsername();
+            }
             // Le plugin a déjà mis `username` en minuscules : la casse saisie se retrouve dans la requête.
             const typed = (ctx?.body as { username?: unknown } | undefined)?.username;
             const name = data.displayUsername ?? (typeof typed === "string" && typed.toLowerCase() === data.username ? typed : data.username);
             if (typeof name !== "string" || !playerId) return;
             const usernameAfter = typeof data.username === "string" ? data.username : sessionUser?.username;
             if (!isValidUsername(name) || name.toLowerCase() !== usernameAfter?.toLowerCase()) {
-              throw new APIError("BAD_REQUEST", { code: "INVALID_DISPLAY_USERNAME", message: "Display username is invalid." });
+              throw invalidDisplayUsername();
             }
             const renamed = await db.update(schema.players).set({ name }).where(eq(schema.players.id, playerId)).returning({ id: schema.players.id }).catch(() => []);
             if (!renamed.length) throw new APIError("BAD_REQUEST", { code: "USERNAME_IS_ALREADY_TAKEN", message: "Username is already taken." });
