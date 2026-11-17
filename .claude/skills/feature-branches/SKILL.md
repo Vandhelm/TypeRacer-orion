@@ -58,10 +58,22 @@ Ne perds jamais de travail : pas de `git checkout -- .`, `git reset --hard` ou `
 
 Commite petit et souvent : un commit par changement cohérent (un comportement, une correction), pas un commit géant en fin de tâche.
 
-Format (Conventional Commits, en anglais) :
+Format : [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.0/#specification), en anglais.
 
 ```
 <type>(<page>): <ce que fait le changement, à l'impératif, minuscule, sans point>
+
+[corps facultatif]
+
+Refs: <CRITÈRE>
+```
+
+Le critère va dans un **footer `Refs:`**, pas dans le sujet ni dans le scope. C'est l'emplacement prévu par la spec pour les références (son exemple est `Refs: #123`) : le scope doit nommer une partie du code, et le sujet reste court et lisible. Le footer garde la casse du code (`Refs: AUTH-06`), ce qui permet de retrouver tous les commits d'un critère avec `git log --grep "Refs: AUTH-06"`, même après le merge dans `dev`.
+
+Écris le commit avec un `-m` par paragraphe, git insère les lignes vides :
+
+```bash
+git commit -m "feat(profile): add best WPM helper" -m "Refs: AUTH-06"
 ```
 
 - Type, à choisir dans cette liste et nulle part ailleurs :
@@ -85,13 +97,35 @@ Format (Conventional Commits, en anglais) :
 - Scope : la page ou zone (`profile`, `home`, `auth`, `room`).
 - Sujet de **50 caractères maximum**, type et scope compris (règle 50/72 : GitHub tronque les sujets plus longs dans la liste des commits et les titres de PR). Il dit le *quoi* du point de vue de l'utilisateur ou du code, pas « update file ». Compte avant de commiter (`printf %s "<sujet>" | wc -c`) ; si ça dépasse, raccourcis le sujet plutôt que le scope.
 - Pas de corps, ou quelques mots si le pourquoi n'est pas évident : une ligne vide après le sujet, puis des lignes de 72 caractères maximum.
+- Footer `Refs: <CRITÈRE>` sur chaque commit lié à un critère, en dernier, après une ligne vide. Plusieurs critères : `Refs: AUTH-03, AUTH-06`. Sans critère (outillage, skill), pas de footer.
+- Changement cassant (API, schéma de base, format de données dont dépend un autre module) : `!` avant les deux-points (`feat(auth)!: …`) et un footer `BREAKING CHANGE: <ce qui casse>`, en majuscules comme l'exige la spec.
+- `revert` : sujet `revert: <sujet du commit annulé>` et footer `Refs: <sha court>` (plus `Refs: <CRITÈRE>` s'il y en a un).
 - **Pas de ligne `Co-Authored-By`** ni d'autre attribution.
 
 Exemples :
-- `feat(profile): show best WPM per race mode`
-- `fix(auth): keep session after Discord redirect`
-- `fix(home): equal margins on the login panel`
-- `test(profile): cover stats with no finished race`
+
+```
+feat(profile): show best WPM per race mode
+
+Refs: AUTH-06
+```
+
+```
+fix(home): equal margins on the login panel
+
+Refs: AUTH-03
+```
+
+```
+feat(room)!: require an invite for private rooms
+
+Refs: SALLE-02
+BREAKING CHANGE: canJoin now takes an invite token
+```
+
+```
+chore: add feature-branches skill
+```
 
 Avant chaque commit, vérifie que tu es sur la bonne branche (`git branch --show-current`) et n'ajoute que les fichiers de ce changement (`git add <fichiers>`, pas `git add -A` si d'autres fichiers sans rapport traînent, comme `.claude/launch.json`).
 
@@ -121,6 +155,6 @@ Une feature est terminée quand le critère est implémenté et que l'utilisateu
 | Nouveau critère qui utilise du code non mergé d'une autre branche | branche depuis cette branche, en le disant |
 | Même critère, branche existante | basculer dessus |
 | Branche parente `feature/<page>` existe | proposer de la renommer en `.../base` |
-| Commit | conventionnel, anglais, sujet ≤ 50 caractères, sans co-auteur, sur la branche du critère |
+| Commit | Conventional Commits, anglais, sujet ≤ 50 caractères, footer `Refs: <CRITÈRE>`, sans co-auteur, sur la branche du critère |
 | Travail non commité de la branche courante | stash, puis pop au retour (pas de commit à la place de l'utilisateur) |
 | Feature terminée | confirmer → push → merge `--no-ff` dans dev |
