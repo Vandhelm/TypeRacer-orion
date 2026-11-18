@@ -1,6 +1,6 @@
 // Room model. Le salon vit sur le serveur (src/server/rooms.ts) : cette page n'en garde qu'une copie, sans stockage local.
 import { isGuestPlayer } from "../../players/nickname";
-import { cleanRoomCode, type Visibility } from "../../rooms/access";
+import { cleanRoomCode, isRoomCode, type Visibility } from "../../rooms/access";
 import { MAX_GUESTS, MIN_GUESTS, MAX_TEXT_LENGTH, type Role, type RoomSettings } from "../../rooms/settings";
 import type { MemberView, RoomView } from "../../server/rooms";
 import { BOT_NAMES } from "../../players/bots";
@@ -56,6 +56,29 @@ export function readSession(search: string, _t?: unknown, guest = isGuestPlayer(
   if (code) return { host: false, code };
   if (guest) return null;
   return { host: true };
+}
+
+/** Ce que la page demande au serveur en arrivant : créer son salon, y entrer, ou relire celui dont on est membre. */
+export type Arrival = { action: "create" } | { action: "join"; via: { code: string } | { invite: string } } | { action: "read"; code: string };
+
+/**
+ * /room crée (compte) ou rejoint (code, lien) ; /game relit seulement le salon lancé, donné par ?code, et ne crée
+ * jamais de salon (SALLE-09). Null : rien à ouvrir, la page renvoie à l'accueil.
+ */
+export function arrivalOf(search: string, page: "room" | "game", guest = isGuestPlayer()): Arrival | null {
+  if (page === "game") {
+    const code = cleanRoomCode(new URLSearchParams(search).get("code") || "");
+    return isRoomCode(code) ? { action: "read", code } : null;
+  }
+  const session = readSession(search, undefined, guest);
+  if (!session) return null;
+  if (session.host) return { action: "create" };
+  return { action: "join", via: session.invite ? { invite: session.invite } : { code: session.code ?? "" } };
+}
+
+/** SALLE-09 : la page de course d'un salon lancé ; chaque membre y suit l'hôte. Null hors course. */
+export function raceHref(status: RoomView["status"], code: string): string | null {
+  return status === "racing" && code ? `/game?code=${code}` : null;
 }
 
 /** La copie locale d'un salon reçu du serveur. */

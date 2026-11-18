@@ -7,21 +7,20 @@ import { HangingTabs } from "../../components/tabs/HangingTabs";
 import { languages, type Language } from "../../i18n";
 import { FishPond } from "./FishPond";
 import { useRoom } from "./hooks/useRoom";
-import { isPlayer } from "./room";
+import { isPlayer, raceHref } from "./room";
 import { RoomIntro } from "./RoomIntro";
 import { RoomSettings } from "./RoomSettings";
 import { RoomTicket } from "./RoomTicket";
 import { TextEditorDialog, type TextEditorHandle } from "./TextEditorDialog";
 
 const LANGUAGE_TABS = (["fr", "en"] as const).map((code) => ({ value: code, label: code.toUpperCase(), ariaLabel: languages[code] }));
-const GAME_PAGE = "/game";
 const VISIBILITY_KEY = { private: "private", semi: "semiPrivate", public: "public" } as const;
 
 /** Waiting room: the host sets up the race, a guest sees the settings read-only. */
 export function RoomPage() {
   const { t, i18n } = useTranslation();
   const state = useRoom();
-  const { room, update, host, seats, players, spectators, displayName, ready, error, leave, launch: launchOnServer } = state;
+  const { room, update, host, seats, players, spectators, displayName, ready, error, leave, status, launch: launchOnServer } = state;
   const editor = useRef<TextEditorHandle>(null);
   const launched = useRef(false);
   const [stampOn, setStampOn] = useState(false);
@@ -29,6 +28,12 @@ export function RoomPage() {
   useEffect(() => {
     document.title = t("room.pageTitle");
   }, [t]);
+
+  // SALLE-09 : le salon est lancé (par l'hôte, ou avant un rechargement) : chaque membre rejoint la course
+  const race = raceHref(status, room.code);
+  useEffect(() => {
+    if (race && !launched.current) location.replace(race);
+  }, [race]);
 
   async function launch() {
     if (launched.current) return;
@@ -40,7 +45,8 @@ export function RoomPage() {
     }
     const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (!reduced) setStampOn(true);
-    setTimeout(() => { location.href = GAME_PAGE; }, reduced ? 0 : 800);
+    const href = raceHref("racing", room.code)!;
+    setTimeout(() => { location.href = href; }, reduced ? 0 : 800);
   }
 
   const openEditor = () => editor.current?.open();

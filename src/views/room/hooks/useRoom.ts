@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { DEFAULT_SETTINGS, type Role, type RoomSettings } from "../../../rooms/settings";
 import type { RoomResult } from "../../../server/rooms";
 import { roomApi, watchRoom, type Answer, type RoomError } from "../api";
-import { isPlayer, readSession, roomOf, seatsOf, type Room, type RoomView } from "../room";
+import { arrivalOf, isPlayer, roomOf, seatsOf, type Room, type RoomView } from "../room";
 
 /** Le temps d'attendre la fin d'une saisie avant d'envoyer les réglages au serveur. */
 const SAVE_DELAY_MS = 400;
@@ -12,10 +12,11 @@ const EMPTY_VIEW: RoomView = { code: "", status: "waiting", host: "", settings: 
 /**
  * The room shown on this page, as the server knows it: its settings, its members, who we are in it.
  * The host's changes are sent to the server (which checks they come from the host); nothing is kept in this browser.
+ * On /game (`page: "game"`), the launched room is only read back, never created or joined (SALLE-09).
  */
-export function useRoom() {
+export function useRoom(page: "room" | "game" = "room") {
   const { t } = useTranslation();
-  const [session] = useState(() => readSession(location.search));
+  const [arrival] = useState(() => arrivalOf(location.search, page));
   const [view, setView] = useState<RoomView>(EMPTY_VIEW);
   const [you, setYou] = useState("");
   const [room, setRoom] = useState<Room>(() => roomOf(EMPTY_VIEW));
@@ -41,15 +42,17 @@ export function useRoom() {
     [apply],
   );
 
-  // Arrivée : créer son salon (hôte) ou retrouver celui de l'adresse. AUTH-03 : un invité sans salon repart.
+  // Arrivée : créer son salon (hôte), retrouver celui de l'adresse, ou relire le salon lancé (/game).
+  // AUTH-03 : un invité sans salon repart.
   useEffect(() => {
-    if (!session) {
-      location.replace("/home#rooms");
+    if (!arrival) {
+      location.replace(page === "game" ? "/home" : "/home#rooms");
       return;
     }
     let live = true;
     // SALLE-03 : le serveur décide si ce code ou ce lien ouvre le salon ; un membre qui revient le retrouve
-    const request = session.host ? roomApi.create("player") : roomApi.join(session.invite ? { invite: session.invite } : { code: session.code ?? "" });
+    const request =
+      arrival.action === "create" ? roomApi.create("player") : arrival.action === "join" ? roomApi.join(arrival.via) : roomApi.read(arrival.code);
     request.then((reply) => {
       if (!live) return;
       answer(reply);
@@ -59,13 +62,14 @@ export function useRoom() {
     return () => {
       live = false;
     };
-  }, [session, answer]);
+  }, [arrival, page, answer]);
 
   useEffect(() => () => clearTimeout(timer.current), []);
 
   // En direct : les arrivées, les départs et les réglages de l'hôte. Le lien d'invitation reste celui reçu par HTTP.
+  // /game ne suit pas le salon : sa socket fermée hors course ferait sortir le joueur (leaveAfterDisconnect)
   useEffect(() => {
-    if (!code) return;
+    if (!code || page === "game") return;
     return watchRoom(
       code,
       (next) => {
@@ -74,7 +78,7 @@ export function useRoom() {
       },
       setError,
     );
-  }, [code]);
+  }, [code, page]);
 
   /** Quitter le salon (bouton « Quitter ») : le serveur retire le membre et prévient les autres. */
   const leave = useCallback(() => {
@@ -106,6 +110,11 @@ export function useRoom() {
   /** SALLE-01 : l'hôte court (participant) ou regarde (spectateur). */
   const setRole = useCallback(async (role: Role) => answer(await roomApi.update(code, { role })), [code, answer]);
 
+  /** SALLE-09 : la course est finie ; le serveur passe le salon aux résultats. keepalive : la page part au podium juste après. */
+  const finish = useCallback(() => {
+    if (code) void roomApi.finish(code);
+  }, [code]);
+
   /** SALLE-09 : le serveur passe le salon en course (hôte seulement) ; un refus s'affiche comme les autres. */
   const launch = useCallback(async () => {
     const reply = await roomApi.launch(code);
@@ -121,6 +130,9 @@ export function useRoom() {
     ready: ready && !error,
     error,
     leave,
+    finish,
+    /** waiting, racing, results, closed : l'état du salon selon le serveur. */
+    status: view.status,
     room,
     update,
     host,

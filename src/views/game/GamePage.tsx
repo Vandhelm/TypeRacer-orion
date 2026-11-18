@@ -2,7 +2,7 @@ import { useEffect, useState, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import { HangingButton } from "../../components/buttons/HangingButton";
 import { buildResults, buildSummary, markSessionStart, saveResults, sessionSeconds, submitRace } from "../podium/results";
-import { useRoom } from "../room/hooks/useRoom";
+import { useRoom, type RoomState } from "../room/hooks/useRoom";
 import { rememberGuestRace } from "../profile/stats";
 import { useRace } from "./hooks/useRace";
 import { loadRacePoolImages, type RacePoolImages } from "./pool/createRacePool";
@@ -10,18 +10,35 @@ import { laneProgress } from "./race";
 import { RacePool } from "./RacePool";
 import { TypingPanel } from "./TypingPanel";
 
-/** The race: one lane per player and the shared text. It hands over to the podium at the end. */
+/** The race of the launched room (/game?code=…): read back from the server, never created here (SALLE-09). */
 export function GamePage() {
   const { t } = useTranslation();
-  const { room, players, displayName } = useRoom();
-  const [images, setImages] = useState<RacePoolImages | null>(null);
-  const { race, onInput, showResults } = useRace(room, players, images !== null);
-
-  useEffect(markSessionStart, []);
+  const state = useRoom("game");
 
   useEffect(() => {
     document.title = t("game.pageTitle");
   }, [t]);
+
+  // la course part des réglages et des joueurs du salon : rien à lancer tant que le serveur n'a pas répondu
+  if (!state.ready) {
+    return (
+      <div className="game-root" role={state.error ? "alert" : "status"}>
+        <p>{t(state.error ? `room.errors.${state.error}` : "room.loading")}</p>
+        {state.error && <HangingButton className="game-leave" href="/home">{t("room.leave")}</HangingButton>}
+      </div>
+    );
+  }
+  return <GameRace state={state} />;
+}
+
+/** One lane per player and the shared text. It hands over to the podium at the end. */
+function GameRace({ state }: { state: RoomState }) {
+  const { t } = useTranslation();
+  const { room, players, displayName, finish, leave } = state;
+  const [images, setImages] = useState<RacePoolImages | null>(null);
+  const { race, onInput, showResults } = useRace(room, players, images !== null);
+
+  useEffect(markSessionStart, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -31,18 +48,20 @@ export function GamePage() {
 
   useEffect(() => {
     if (!showResults) return;
-    const results = { players: buildResults(race, players), summary: buildSummary(race, room, sessionSeconds()) };
+    const results = { players: buildResults(race, players), summary: buildSummary(race, room, sessionSeconds()), room: room.code };
     saveResults(results);
     const rank = results.players.findIndex((player) => player.me);
     const me = results.players[rank];
     if (me) rememberGuestRace({ at: new Date().toISOString(), wpm: me.wpm, accuracy: me.accuracy, rank: rank + 1, keys: me.keys });
     submitRace(results, race.course.words.join(" "));
+    finish(); // SALLE-09 : le salon passe aux résultats et accepte de nouveau des arrivants
     location.replace("/podium"); // le retour arrière ne relance pas une course
-  }, [showResults, race, players, room]);
+  }, [showResults, race, players, room, finish]);
 
   return (
     <div className="game-root" style={{ "--lanes": players.length } as CSSProperties}>
-      <HangingButton className="game-leave" href="/room">{t("room.leave")}</HangingButton>
+      {/* quitter la course quitte le salon ; /room sans code créerait un nouveau salon */}
+      <HangingButton className="game-leave" href="/home" onClick={leave}>{t("room.leave")}</HangingButton>
       <header className="game-header">
         <h1 className="game-title">{displayName}</h1>
       </header>

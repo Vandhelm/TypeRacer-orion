@@ -29,6 +29,8 @@ export const roomApi = {
   leave: (code: string) => fetch(`/api/rooms/${code}/leave`, { method: "POST", credentials: "same-origin", keepalive: true }).catch(() => undefined),
   /** SALLE-09 : l'hôte lance la course ; le serveur ferme alors le salon aux nouveaux arrivants. */
   launch: (code: string) => send("POST", `/api/rooms/${code}/launch`),
+  /** SALLE-09 : la course est finie, le salon repasse aux résultats. keepalive : la page part au podium juste après. */
+  finish: (code: string) => fetch(`/api/rooms/${code}/finish`, { method: "POST", credentials: "same-origin", keepalive: true }).catch(() => undefined),
   update: (code: string, body: { role?: Role; settings?: Partial<RoomSettings> }) => send("PATCH", `/api/rooms/${code}`, body),
 };
 
