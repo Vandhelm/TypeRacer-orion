@@ -7,7 +7,7 @@ import { roomInvites, roomMembers, rooms } from "../../db/schema";
 import { newInviteToken } from "../rooms/access";
 import { memberKey, RoomRefused, type Identity } from "./rooms";
 
-/** Assez pour inviter chaque place d'un grand salon plusieurs fois ; au-delà, l'hôte remplirait la base pour rien. */
+/** Liens libres (pas encore utilisés) à la fois dans un salon : au-delà, l'hôte remplirait la base pour rien. */
 export const MAX_INVITES = 50;
 
 /** Ce que l'hôte voit d'un lien : jamais l'IP de la personne. usedBy : son nom ; usedAt : ISO 8601. */
@@ -44,7 +44,9 @@ export async function createInvite(db: Db, code: string, who: Identity): Promise
   return db.transaction(async (tx) => {
     const [room] = await tx.select({ status: rooms.status }).from(rooms).where(eq(rooms.id, id)).for("update");
     if (!room || room.status === "closed") throw new RoomRefused("not_found");
-    if ((await tx.$count(roomInvites, eq(roomInvites.roomId, id))) >= MAX_INVITES) throw new RoomRefused("invite_limit");
+    // seuls les liens libres comptent : un lien utilisé ou révoqué ne bloque pas les invitations suivantes
+    const unused = await tx.$count(roomInvites, and(eq(roomInvites.roomId, id), isNull(roomInvites.usedBy), isNull(roomInvites.revokedAt)));
+    if (unused >= MAX_INVITES) throw new RoomRefused("invite_limit");
     const [row] = await tx.insert(roomInvites).values({ roomId: id, token: newInviteToken() }).returning();
     return viewOf(row!);
   });
@@ -59,8 +61,8 @@ export async function roomOfInvite(db: Db, token: string): Promise<number> {
 
 /**
  * Utiliser un lien pour entrer, dans la transaction de joinRoom, sous le verrou du salon (le lien est verrouillé aussi).
- * Libre : il est lié à cette IP et à cette personne. Déjà lié : seule une demande de la même IP passe, et seulement
- * si la personne liée n'est plus dans le salon ou si c'est elle (reconnexion) ; sinon invite_taken.
+ * Libre : il est lié à cette IP et à cette personne. Déjà lié : il ne sert plus qu'à cette personne depuis cette IP
+ * (reconnexion) ; toute autre demande est refusée (invite_taken), même d'une autre session derrière la même IP.
  * Sans IP connue, un lien n'est jamais pris : on ne saurait pas à qui le lier.
  * `isMember` : la personne est déjà dans le salon ; un lien libre n'est alors pas consommé.
  */
@@ -72,17 +74,13 @@ export async function claimInvite(tx: Db, roomId: number, token: string, who: Id
     .for("update");
   if (!invite) throw new RoomRefused("not_found");
   const key = memberKey(who);
-  if (!invite.usedBy) {
-    if (isMember) return;
-    if (!ip) throw new RoomRefused("invite_taken");
-  } else {
-    if (!ip || invite.usedIp !== ip) throw new RoomRefused("invite_taken");
-    if (invite.usedBy === key) return;
-    // même IP, autre session : le lien ne passe à cette personne que si celle d'avant a quitté le salon
-    const [holder] = await tx.select({ key: roomMembers.memberKey }).from(roomMembers).where(and(eq(roomMembers.roomId, roomId), eq(roomMembers.memberKey, invite.usedBy)));
-    if (holder || isMember) throw new RoomRefused("invite_taken");
+  if (invite.usedBy) {
+    if (!ip || invite.usedIp !== ip || invite.usedBy !== key) throw new RoomRefused("invite_taken");
+    return;
   }
-  await tx.update(roomInvites).set({ usedBy: key, usedName: who.name, usedIp: ip, usedAt: invite.usedAt ?? new Date() }).where(eq(roomInvites.id, invite.id));
+  if (isMember) return;
+  if (!ip) throw new RoomRefused("invite_taken");
+  await tx.update(roomInvites).set({ usedBy: key, usedName: who.name, usedIp: ip, usedAt: new Date() }).where(eq(roomInvites.id, invite.id));
 }
 
 /**

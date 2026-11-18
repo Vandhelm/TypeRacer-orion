@@ -85,7 +85,7 @@ describe("SALLE-04 — one invitation link per guest, single use, bound to an IP
   beforeAll(async () => {
     t = await setup();
     host = await t.signUp("Hote_Liens");
-  });
+  }, 30_000); // migrations PGlite et hachage du mot de passe : plus de 5 s à froid, sous charge
 
   test("a new room has no link yet; the host generates several distinct ones, all unused", async () => {
     const code = await open();
@@ -185,6 +185,18 @@ describe("SALLE-04 — one invitation link per guest, single use, bound to an IP
     expect(await membersNamed("Colocataire_2")).toBe(0);
   });
 
+  test("another session behind the same IP cannot take over a link after its holder left", async () => {
+    const code = await open();
+    const { token } = await newInvite(code);
+    await join(t.guest("Titulaire_A"), token, IP_A);
+    await t.call("POST", `/api/rooms/${code}/leave`, t.guest("Titulaire_A"));
+    const other = await join(t.freshGuest("Voisin_B"), token, IP_A);
+    expect(other.status).toBe(403);
+    expect(await other.json()).toEqual({ error: "invite_taken" });
+    expect((await invitesOf(code))[0]).toMatchObject({ usedBy: "Titulaire_A" });
+    expect((await join(t.guest("Titulaire_A"), token, IP_A)).status).toBe(200);
+  });
+
   test("a request without a known IP cannot claim a link; the link stays unused", async () => {
     const code = await open();
     const { token } = await newInvite(code);
@@ -247,6 +259,16 @@ describe("SALLE-04 — one invitation link per guest, single use, bound to an IP
     const over = await t.call("POST", `/api/rooms/${code}/invites`, host.cookie);
     expect(over.status).toBe(409);
     expect(await over.json()).toEqual({ error: "invite_limit" });
+  });
+
+  test(`only unused links count against the ${MAX_INVITES} limit: used ones free a place`, async () => {
+    const code = await open();
+    const [room] = await t.db.select({ id: rooms.id }).from(rooms).where(eq(rooms.code, code));
+    await t.db.insert(roomInvites).values(Array.from({ length: MAX_INVITES - 1 }, () => ({ roomId: room!.id, token: newInviteToken() })));
+    const last = await newInvite(code);
+    expect((await t.call("POST", `/api/rooms/${code}/invites`, host.cookie)).status).toBe(409);
+    await join(t.guest("Libere_Place"), last.token);
+    expect((await t.call("POST", `/api/rooms/${code}/invites`, host.cookie)).status).toBe(201);
   });
 
   test("revokeInvitesOf (expulsion, SALLE-07): the expelled member's link is refused afterwards", async () => {
