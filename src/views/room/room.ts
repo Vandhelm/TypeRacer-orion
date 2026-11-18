@@ -18,8 +18,8 @@ export type TextLength = RoomSettings["length"];
 export type Level = RoomSettings["level"];
 export type MistakeMode = RoomSettings["mistakes"];
 
-/** Les réglages du salon, son code et (pour l'hôte) son lien d'invitation. */
-export type Room = RoomSettings & { code: string; invite: string };
+/** Les réglages du salon et son code. Les liens d'invitation se lisent à part (SALLE-04, hooks/useInvites). */
+export type Room = RoomSettings & { code: string };
 
 export type Player = { name: string; color: string; host?: boolean; me?: boolean; bot?: boolean };
 export type Seat = Player | { free: true };
@@ -91,7 +91,7 @@ export function roomHrefOutsideRace(status: RoomView["status"], code: string): s
 
 /** La copie locale d'un salon reçu du serveur. */
 export function roomOf(view: RoomView): Room {
-  return { ...view.settings, code: view.code, invite: view.invite ?? "" };
+  return { ...view.settings, code: view.code };
 }
 
 /** La liste des places : les participants à leur place, puis des bots ou des places libres. Les spectateurs n'en ont pas. */
