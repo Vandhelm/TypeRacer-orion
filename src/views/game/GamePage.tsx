@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import { HangingButton } from "../../components/buttons/HangingButton";
 import { buildResults, buildSummary, markSessionStart, saveResults, sessionSeconds, submitRace } from "../podium/results";
@@ -29,15 +29,18 @@ export function GamePage() {
     return () => { cancelled = true; };
   }, []);
 
+  const submitted = useRef(false);
   useEffect(() => {
-    if (!showResults) return;
+    // une seule fois : une frappe ou un salon mis à jour pendant l'envoi relancerait l'effet
+    if (!showResults || submitted.current) return;
+    submitted.current = true;
     const results = { players: buildResults(race, players), summary: buildSummary(race, room, sessionSeconds()) };
     saveResults(results);
     const rank = results.players.findIndex((player) => player.me);
     const me = results.players[rank];
     if (me) rememberGuestRace({ at: new Date().toISOString(), wpm: me.wpm, accuracy: me.accuracy, rank: rank + 1, keys: me.keys });
-    submitRace(results, race.course.words.join(" "));
-    location.replace("/podium"); // le retour arrière ne relance pas une course
+    // le retour arrière ne relance pas une course ; une grosse course part sans keepalive, la page attend son envoi
+    void submitRace(results, race.course.words.join(" ")).then(() => location.replace("/podium"));
   }, [showResults, race, players, room]);
 
   return (

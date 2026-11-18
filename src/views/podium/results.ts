@@ -162,14 +162,25 @@ export function raceBody(results: RaceResults, content: string) {
   return { id: crypto.randomUUID(), ...results, content };
 }
 
-/** Envoie la course au serveur, qui garde l'historique des bots et du compte connecté (sa session, pas le corps). keepalive : l'envoi survit au passage au podium. */
-export function submitRace(results: RaceResults, content: string) {
-  fetch("/api/races", {
-    method: "POST",
-    keepalive: true,
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(raceBody(results, content)),
-  }).catch(() => { /* hors ligne : la course n'entre pas dans l'historique */ });
+/** Les navigateurs refusent un corps keepalive de plus de 64 Kio : une longue course à 8 joueurs le dépasse. */
+export const KEEPALIVE_LIMIT = 65_536;
+/** Au-delà, le jeu attend la réponse avant de passer au podium, mais pas plus longtemps que ceci. */
+const SUBMIT_WAIT_MS = 10_000;
+
+/**
+ * Envoie la course au serveur, qui garde l'historique des bots et du compte connecté (sa session, pas le corps).
+ * Un petit corps part en keepalive (l'envoi survit au passage au podium) ; un gros part sans, et la promesse
+ * ne se résout qu'à la réponse : quitter la page avant couperait l'envoi.
+ */
+export function submitRace(results: RaceResults, content: string): Promise<void> {
+  const body = JSON.stringify(raceBody(results, content));
+  const keepalive = new TextEncoder().encode(body).length <= KEEPALIVE_LIMIT;
+  const sent = fetch("/api/races", { method: "POST", keepalive, headers: { "content-type": "application/json" }, body }).then(
+    () => undefined,
+    () => undefined, // hors ligne : la course n'entre pas dans l'historique
+  );
+  if (keepalive) return Promise.resolve();
+  return Promise.race([sent, new Promise<void>((resolve) => setTimeout(resolve, SUBMIT_WAIT_MS))]);
 }
 
 export function readResults() {

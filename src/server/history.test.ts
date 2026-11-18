@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, test } from "bun:test";
+import { afterEach, beforeAll, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { players } from "../../db/schema";
 import { createMockDatabase } from "../../db/mocks/test-database";
@@ -6,8 +6,8 @@ import { placeholderEmail } from "../accounts/username";
 import { createAuth } from "./auth";
 import { GUEST_COOKIE, signGuest } from "./guest";
 import { handleHistory, HISTORY_PAGE_SIZE } from "./history";
-import { parseRace, recordRace } from "./races";
-import { RACE_ERRORS } from "../views/podium/results";
+import { handleRace, parseRace, recordRace } from "./races";
+import { RACE_ERRORS, submitRace, toResults } from "../views/podium/results";
 
 process.env.BETTER_AUTH_SECRET ??= "test-secret-test-secret-test-secret";
 process.env.BETTER_AUTH_URL ??= "http://localhost:3000";
@@ -38,7 +38,7 @@ async function setup() {
     (await recordRace(db, parseRace({ summary: SUMMARY, content: "le riz attend", players: [...others, result(name, false, wpm)] }), { playerId }))!;
   const call = (path: string, cookie?: string, method = "GET") =>
     handleHistory(new Request(`http://localhost${path}`, { method, headers: cookie ? { cookie } : {} }), db, auth, SECRET);
-  return { db, signUp, guest, race, call };
+  return { db, auth, signUp, guest, race, call };
 }
 
 type ListBody = { page: number; pageSize: number; total: number; pages: number; races: { id: number; wpm: number; rank: number; players: number; accuracy: number; finished: boolean; at: string }[] };
@@ -129,6 +129,66 @@ describe("HIST-01 — every finished race appears in the signed-in user's histor
       expect(res.status).toBe(400);
       expect(await res.json()).toEqual({ error: "invalid_page" });
     }
+  });
+
+  describe("a race too big for a keepalive request (over 64 KiB) still reaches the history", () => {
+    const realFetch = globalThis.fetch;
+    afterEach(() => {
+      globalThis.fetch = realFetch;
+    });
+
+    /** Le plus gros corps que le serveur accepte : 8 joueurs, des séries de 600 points. */
+    const bigResults = (me: string) => {
+      const long = () => Array.from({ length: 600 }, () => 9999);
+      const names = [me, "Nori_Ninja", "Ebi_Fry", "Humain_1", "Humain_2", "Humain_3", "Humain_4", "Humain_5"];
+      const players = names.map((name, index) => ({ ...result(name, index === 1 || index === 2, 120), seconds: 600, wpmSeries: long(), rawSeries: long(), errorSeries: long() }));
+      return toResults({ summary: { ...SUMMARY, duration: 600 }, players })!;
+    };
+
+    test("8 players, 600-second series and a 10 000-character text are sent without keepalive, then listed", async () => {
+      const me = await t.signUp("Hist_Gros");
+      const results = bigResults("Hist_Gros");
+
+      let sent: RequestInit | undefined;
+      globalThis.fetch = (async (_url: string, init?: RequestInit) => {
+        sent = init;
+        return new Response(null, { status: 201 });
+      }) as typeof fetch;
+      await submitRace(results, "a".repeat(10_000));
+
+      expect(new TextEncoder().encode(String(sent!.body)).length).toBeGreaterThan(65_536);
+      expect(sent!.keepalive).not.toBe(true);
+      // le même corps, reçu par la vraie route avec la session du compte
+      const headers = { ...(sent!.headers as Record<string, string>), cookie: me.cookie };
+      const posted = await handleRace(new Request("http://localhost/api/races", { method: "POST", headers, body: sent!.body }), t.db, t.auth, SECRET);
+      expect(posted.status).toBe(201);
+      const { raceId } = (await posted.json()) as { raceId: number };
+      const body = (await (await t.call("/api/history", me.cookie)).json()) as ListBody;
+      expect(body.races.map((race) => race.id)).toEqual([raceId]);
+      expect(body.races[0]).toMatchObject({ players: 8, rank: 1 });
+    });
+
+    test("a usual race still leaves in keepalive, without holding the page", async () => {
+      let sent: RequestInit | undefined;
+      globalThis.fetch = ((_url: string, init?: RequestInit) => {
+        sent = init;
+        return new Promise<Response>(() => {}); // pas de réponse : la page ne doit pas l'attendre
+      }) as typeof fetch;
+      await submitRace(toResults({ summary: SUMMARY, players: [result("Hist_Petit", false, 50)] })!, "le riz attend");
+      expect(sent!.keepalive).toBe(true);
+    });
+
+    test("a big race holds the page until the server answers", async () => {
+      let answer: (res: Response) => void = () => {};
+      globalThis.fetch = (() => new Promise<Response>((resolve) => (answer = resolve))) as unknown as typeof fetch;
+      let done = false;
+      const pending = submitRace(bigResults("Hist_Lent"), "a".repeat(10_000)).then(() => (done = true));
+      await Bun.sleep(20);
+      expect(done).toBe(false);
+      answer(new Response(null, { status: 201 }));
+      await pending;
+      expect(done).toBe(true);
+    });
   });
 
   test("only GET is allowed (405)", async () => {
