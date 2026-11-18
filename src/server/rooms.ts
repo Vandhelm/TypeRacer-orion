@@ -100,9 +100,17 @@ export class RoomRefused extends Error {
 export type RefusalReason = "not_found" | "not_member" | "not_host" | "full" | "in_race" | "closed" | "already_in_room" | "kicked" | "invalid_target" | "unknown_member";
 
 /** SALLE-07 : cette personne a été expulsée de ce salon. */
-async function isKicked(db: Db, roomId: number, key: string): Promise<boolean> {
-  return (await db.$count(roomBans, and(eq(roomBans.roomId, roomId), eq(roomBans.memberKey, key)))) > 0;
+async function isKicked(db: Db, roomId: number, key: string, name?: string): Promise<boolean> {
+  const keys = name ? [key, nameBan(name)] : [key];
+  return (await db.$count(roomBans, and(eq(roomBans.roomId, roomId), inArray(roomBans.memberKey, keys)))) > 0;
 }
+
+/**
+ * SALLE-07 : un invité expulsé obtient sans peine une nouvelle session (POST /api/guest) ; son pseudonyme, lui, est
+ * banni aussi (une ligne « name:<pseudonyme en minuscules> » dans room_bans), et un compte ne revient pas en invité
+ * sous son nom. Limite : sous un autre pseudonyme, rien ne le reconnaît (pas de bannissement par IP).
+ */
+const nameBan = (name: string) => `name:${name.toLowerCase()}`;
 
 /** SALLE-06 : le code du salon dont cette personne est membre, s'il y en a un (au plus un, par la contrainte en base). */
 async function currentRoomOf(db: Db, key: string): Promise<string | null> {
@@ -237,7 +245,7 @@ export async function readRoom(db: Db, code: string, who: Identity): Promise<Roo
   });
   if (!member) {
     // SALLE-07 : la page d'un expulsé le lui dit ; il connaissait déjà le salon, rien n'est révélé (SALLE-10)
-    if (room.status !== "closed" && (await isKicked(db, room.id, key))) throw new RoomRefused("kicked");
+    if (room.status !== "closed" && (await isKicked(db, room.id, key, who.name))) throw new RoomRefused("kicked");
     throw new RoomRefused("not_found"); // SALLE-10 : un non-membre ne sait pas si le salon existe
   }
   return { room: await roomView(db, room.id, key), you: key };
@@ -334,7 +342,7 @@ export async function joinRoom(db: Db, who: Identity, via: JoinVia): Promise<Roo
     // et il retrouve son salon par son code même si l'hôte l'a rendu privé (SALLE-03)
     if (await membership(tx, id, key)) return;
     // SALLE-07 : un expulsé ne revient pas, ni par code ni par lien, quel que soit le rôle demandé
-    if (await isKicked(tx, id, key)) throw new RoomRefused("kicked");
+    if (await isKicked(tx, id, key, who.name)) throw new RoomRefused("kicked");
     // la visibilité est lue sous le verrou : l'hôte a pu rendre le salon privé entre-temps
     if ("code" in via && !allows(room.visibility, "code")) throw new RoomRefused("not_found");
     if (!canJoin(room.status)) throw new RoomRefused("in_race");
@@ -503,9 +511,11 @@ export async function kickMember(db: Db, code: string, who: Identity, target: st
     if (!(await membership(tx, id, key))) throw new RoomRefused("not_found"); // SALLE-10 : un non-membre ne sait pas si le salon existe
     if (key !== memberKey({ playerId: room.hostId })) throw new RoomRefused("not_host");
     if (target === key) throw new RoomRefused("invalid_target");
-    const removed = await tx.delete(roomMembers).where(and(eq(roomMembers.roomId, id), eq(roomMembers.memberKey, target))).returning({ key: roomMembers.memberKey });
-    if (!removed.length) throw new RoomRefused("unknown_member");
-    await tx.insert(roomBans).values({ roomId: id, memberKey: target }).onConflictDoNothing();
+    const [removed] = await tx.delete(roomMembers).where(and(eq(roomMembers.roomId, id), eq(roomMembers.memberKey, target))).returning({ playerId: roomMembers.playerId, guestName: roomMembers.guestName });
+    if (!removed) throw new RoomRefused("unknown_member");
+    const [account] = removed.playerId === null ? [] : await tx.select({ name: players.name }).from(players).where(eq(players.id, removed.playerId));
+    const name = removed.guestName ?? account?.name;
+    await tx.insert(roomBans).values([{ roomId: id, memberKey: target }, ...(name ? [{ roomId: id, memberKey: nameBan(name) }] : [])]).onConflictDoNothing();
     // À BRANCHER (SALLE-04) : révoquer ici, dans la même transaction, le lien d'invitation personnel de `target`.
     // room_bans suffit déjà à le refuser à l'entrée, quel que soit le lien ; la révocation nettoie le jeton.
     await afterDeparture(tx, id);

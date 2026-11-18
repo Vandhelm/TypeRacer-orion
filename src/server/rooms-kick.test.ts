@@ -47,6 +47,23 @@ describe("SALLE-07 — the host kicks a participant or a spectator, who can no l
     expect(await keysOf(room.code)).not.toContain(body.you);
   });
 
+  test("a kicked guest cannot come back with a new guest session under the same nickname, whatever its case", async () => {
+    const { room, host } = await t.open("Exp_Pseudo");
+    const { body } = await t.join(t.guest("Recidiviste"), { code: room.code });
+    await kick(room.code, host.cookie, { member: body.you });
+    expect((await t.join(t.guest("Recidiviste"), { code: room.code })).body.error).toBe("kicked");
+    expect((await t.join(t.guest("recidiviste"), { invite: room.invite! })).body.error).toBe("kicked");
+    expect((await t.join(t.guest("Innocent"), { code: room.code })).status).toBe(200);
+  });
+
+  test("a kicked account cannot come back as a guest under its own name", async () => {
+    const { room, host } = await t.open("Exp_Deguise");
+    const victim = await t.signUp("Exp_Masque");
+    const { body } = await t.join(victim.cookie, { code: room.code });
+    await kick(room.code, host.cookie, { member: body.you });
+    expect((await t.join(t.guest("Exp_Masque"), { code: room.code })).body.error).toBe("kicked");
+  });
+
   test("the host kicks a spectator the same way", async () => {
     const { room, host } = await t.open("Exp_Spect");
     const cookie = t.guest("Voyeur");
@@ -62,7 +79,7 @@ describe("SALLE-07 — the host kicks a participant or a spectator, who can no l
     await kick(room.code, host.cookie, { member: body.you });
     expect((await t.join(victim.cookie, { code: room.code })).body.error).toBe("kicked");
     const [roomRow] = await t.db.select({ id: rooms.id }).from(rooms).where(eq(rooms.code, room.code));
-    expect(await t.db.select({ key: roomBans.memberKey }).from(roomBans).where(eq(roomBans.roomId, roomRow!.id))).toEqual([{ key: body.you }]);
+    expect(await t.db.select({ key: roomBans.memberKey }).from(roomBans).where(eq(roomBans.roomId, roomRow!.id))).toEqual(expect.arrayContaining([{ key: body.you }, { key: "name:exp_victime" }]));
   });
 
   test("the kicked member reading the room gets 403 kicked (their page says so); a kick does not bar other rooms", async () => {
