@@ -1,12 +1,14 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, setSystemTime, test } from "bun:test";
+import { isIP } from "node:net";
 import { sql } from "drizzle-orm";
 import { createMockDatabase, createServerDatabase } from "../../db/mocks/test-database";
 import { createAuth } from "./auth";
-import { clientIp } from "./client-ip";
+import { clientIp, socketIp } from "./client-ip";
 import { GUEST_COOKIE, signGuest } from "./guest";
 import en from "../i18n/locales/en.json";
 import fr from "../i18n/locales/fr.json";
-import { hit, ipKey, JOIN_RULE, joinGuard } from "./rate-limit";
+import { rateLimits } from "../../db/schema";
+import { hit, ipKey, JOIN_RULE, joinGuard, purgeExpired } from "./rate-limit";
 import { handleRoomsApi } from "./rooms-api";
 
 process.env.BETTER_AUTH_SECRET ??= "test-secret-test-secret-test-secret";
@@ -17,8 +19,10 @@ const T0 = new Date("2026-11-18T12:00:00.000Z");
 const SETUP_TIMEOUT = 20_000;
 const later = (ms: number) => new Date(T0.getTime() + ms);
 
-describe("SALLE-10 — client IP behind a proxy", () => {
-  const ip = (headers: Record<string, string>) => clientIp(new Headers(headers));
+const TRUSTED = { TRUST_PROXY: "1" };
+
+describe("SALLE-10 — client IP behind a declared proxy (TRUST_PROXY=1)", () => {
+  const ip = (headers: Record<string, string>) => clientIp(new Headers(headers), { env: TRUSTED });
 
   test("reads the first value of x-forwarded-for", () => {
     expect(ip({ "x-forwarded-for": " 203.0.113.7 , 10.0.0.1" })).toBe("203.0.113.7");
@@ -36,6 +40,43 @@ describe("SALLE-10 — client IP behind a proxy", () => {
 
   test("IPv6 is accepted", () => {
     expect(ip({ "x-forwarded-for": "2001:db8::1" })).toBe("2001:db8::1");
+  });
+});
+
+describe("SALLE-10 — client IP: proxy headers are only trusted behind a proxy", () => {
+  const spoofed = { "x-forwarded-for": "203.0.113.66", "x-real-ip": "203.0.113.67", "x-vercel-forwarded-for": "203.0.113.68" };
+
+  test("without a declared proxy, client headers are ignored and the socket IP is used", () => {
+    expect(clientIp(new Headers(spoofed), { env: {}, peer: "192.0.2.50" })).toBe("192.0.2.50");
+  });
+
+  test("without a declared proxy nor a socket IP, the shared unknown key is used", () => {
+    expect(clientIp(new Headers(spoofed), { env: {} })).toBe("unknown");
+  });
+
+  test("TRUST_PROXY must be on: 0 or false do not trust the headers", () => {
+    for (const value of ["0", "false", ""]) expect(clientIp(new Headers(spoofed), { env: { TRUST_PROXY: value }, peer: "192.0.2.50" })).toBe("192.0.2.50");
+  });
+
+  test("on Vercel, x-vercel-forwarded-for is preferred to x-forwarded-for", () => {
+    expect(clientIp(new Headers(spoofed), { env: { VERCEL: "1" } })).toBe("203.0.113.68");
+    expect(clientIp(new Headers({ "x-forwarded-for": "203.0.113.66, 10.0.0.1" }), { env: { VERCEL: "1" } })).toBe("203.0.113.66");
+  });
+
+  test("off Vercel, x-vercel-forwarded-for is not trusted, even behind a declared proxy", () => {
+    expect(clientIp(new Headers({ "x-vercel-forwarded-for": "203.0.113.68" }), { env: TRUSTED, peer: "192.0.2.50" })).toBe("192.0.2.50");
+  });
+
+  test("the socket IP comes from a Bun server, not from a Next.js route context", async () => {
+    const server = Bun.serve({ port: 0, fetch: (req, srv) => new Response(socketIp(srv, req) ?? "none") });
+    try {
+      const seen = await (await fetch(`http://localhost:${server.port}/`)).text();
+      expect(isIP(seen)).not.toBe(0);
+    } finally {
+      server.stop(true);
+    }
+    expect(socketIp({ params: Promise.resolve({}) }, new Request("http://localhost/"))).toBeNull();
+    expect(socketIp(undefined, new Request("http://localhost/"))).toBeNull();
   });
 });
 
@@ -71,28 +112,45 @@ describe("SALLE-10 — attempt counter (10 per minute per IP)", () => {
   }, SETUP_TIMEOUT);
 
   test("the 11th attempt in one minute is refused, with a wait under a minute", async () => {
-    for (let i = 0; i < 10; i++) expect((await hit(db, JOIN_RULE, "203.0.113.1", later(i * 1000))).allowed).toBe(true);
-    const refused = await hit(db, JOIN_RULE, "203.0.113.1", later(10_000));
+    for (let i = 0; i < 10; i++) expect((await hit(db, JOIN_RULE, "203.0.113.1", { now: later(i * 1000) })).allowed).toBe(true);
+    const refused = await hit(db, JOIN_RULE, "203.0.113.1", { now: later(10_000) });
     expect(refused).toEqual({ allowed: false, retryAfter: 50 });
   });
 
   test("another IP is not affected", async () => {
-    expect((await hit(db, JOIN_RULE, "203.0.113.2", later(10_000))).allowed).toBe(true);
+    expect((await hit(db, JOIN_RULE, "203.0.113.2", { now: later(10_000) })).allowed).toBe(true);
   });
 
   test("refused attempts keep counting but do not extend the window", async () => {
-    expect(await hit(db, JOIN_RULE, "203.0.113.1", later(59_500))).toEqual({ allowed: false, retryAfter: 1 });
+    expect(await hit(db, JOIN_RULE, "203.0.113.1", { now: later(59_500) })).toEqual({ allowed: false, retryAfter: 1 });
   });
 
   test("Retry-After never exceeds the window, even with a clock behind another instance's", async () => {
-    for (let i = 0; i < 11; i++) await hit(db, JOIN_RULE, "203.0.113.3", later(5_000));
-    expect(await hit(db, JOIN_RULE, "203.0.113.3", later(0))).toEqual({ allowed: false, retryAfter: 60 });
+    for (let i = 0; i < 11; i++) await hit(db, JOIN_RULE, "203.0.113.3", { now: later(5_000) });
+    expect(await hit(db, JOIN_RULE, "203.0.113.3", { now: later(0) })).toEqual({ allowed: false, retryAfter: 60 });
+  });
+
+  test("expired windows are purged, live ones are kept", async () => {
+    await hit(db, JOIN_RULE, "203.0.113.20", { now: later(0), purge: false });
+    await hit(db, JOIN_RULE, "203.0.113.21", { now: later(100_000), purge: false });
+    await purgeExpired(db, JOIN_RULE, later(130_000));
+    const keys = (await db.select({ key: rateLimits.key }).from(rateLimits)).map((row) => row.key);
+    expect(keys).not.toContain("203.0.113.20");
+    expect(keys).toContain("203.0.113.21");
+  });
+
+  test("an attempt may purge expired windows on the way", async () => {
+    await hit(db, JOIN_RULE, "203.0.113.22", { now: later(0), purge: false });
+    await hit(db, JOIN_RULE, "203.0.113.23", { now: later(130_000), purge: true });
+    const keys = (await db.select({ key: rateLimits.key }).from(rateLimits)).map((row) => row.key);
+    expect(keys).not.toContain("203.0.113.22");
+    expect(keys).toContain("203.0.113.23");
   });
 
   test("after the window, attempts are accepted again", async () => {
-    expect((await hit(db, JOIN_RULE, "203.0.113.1", later(60_000))).allowed).toBe(true);
-    for (let i = 1; i < 10; i++) expect((await hit(db, JOIN_RULE, "203.0.113.1", later(60_000 + i))).allowed).toBe(true);
-    expect((await hit(db, JOIN_RULE, "203.0.113.1", later(60_010))).allowed).toBe(false);
+    expect((await hit(db, JOIN_RULE, "203.0.113.1", { now: later(60_000) })).allowed).toBe(true);
+    for (let i = 1; i < 10; i++) expect((await hit(db, JOIN_RULE, "203.0.113.1", { now: later(60_000 + i) })).allowed).toBe(true);
+    expect((await hit(db, JOIN_RULE, "203.0.113.1", { now: later(60_010) })).allowed).toBe(false);
   });
 });
 
@@ -119,7 +177,7 @@ describe("SALLE-10 — POST /api/rooms/join is rate limited per IP", () => {
       auth,
       SECRET,
       () => {},
-      joinGuard(db, () => clock),
+      joinGuard(db, { now: () => clock, env: TRUSTED }),
     );
   const guest = (name: string) => `${GUEST_COOKIE}=${signGuest(name, SECRET)}`;
   const join = (ip: string, code: string, name = "Curieux") => call("POST", "/api/rooms/join", ip, guest(name), { code });
@@ -174,6 +232,21 @@ describe("SALLE-10 — POST /api/rooms/join is rate limited per IP", () => {
     expect((await join("198.51.100.10", "ZZZ222")).status).toBe(404);
   });
 
+  test("without a declared proxy, rotating x-forwarded-for from one socket IP does not escape the limit", async () => {
+    const guard = joinGuard(db, { now: () => clock, env: {}, peer: "192.0.2.77" });
+    const attempt = (forwarded: string) =>
+      handleRoomsApi(
+        new Request("http://localhost/api/rooms/join", { method: "POST", headers: { cookie: guest("Rotatif"), "x-forwarded-for": forwarded, "content-type": "application/json" }, body: JSON.stringify({ code: "ZZZ222" }) }),
+        db,
+        auth,
+        SECRET,
+        () => {},
+        guard,
+      );
+    for (let i = 0; i < 10; i++) expect((await attempt(`203.0.113.${100 + i}`)).status).toBe(404);
+    expect((await attempt("203.0.113.200")).status).toBe(429);
+  });
+
   test("reading or creating rooms is not counted", async () => {
     for (let i = 0; i < 12; i++) expect((await call("GET", "/api/rooms", "198.51.100.14", guest("Lecteur"))).status).toBe(200);
     expect((await join("198.51.100.14", "ZZZ222")).status).toBe(404);
@@ -202,14 +275,26 @@ describe.skipIf(!process.env.DATABASE_URL)("SALLE-10 — the limit holds across 
   });
 
   test("two connections to the same database share the counter", async () => {
-    for (let i = 0; i < 5; i++) expect((await hit(server.db, JOIN_RULE, "192.0.2.1", later(i))).allowed).toBe(true);
-    for (let i = 5; i < 10; i++) expect((await hit(second.db, JOIN_RULE, "192.0.2.1", later(i))).allowed).toBe(true);
-    expect((await hit(server.db, JOIN_RULE, "192.0.2.1", later(10))).allowed).toBe(false);
-    expect((await hit(second.db, JOIN_RULE, "192.0.2.1", later(11))).allowed).toBe(false);
+    for (let i = 0; i < 5; i++) expect((await hit(server.db, JOIN_RULE, "192.0.2.1", { now: later(i) })).allowed).toBe(true);
+    for (let i = 5; i < 10; i++) expect((await hit(second.db, JOIN_RULE, "192.0.2.1", { now: later(i) })).allowed).toBe(true);
+    expect((await hit(server.db, JOIN_RULE, "192.0.2.1", { now: later(10) })).allowed).toBe(false);
+    expect((await hit(second.db, JOIN_RULE, "192.0.2.1", { now: later(11) })).allowed).toBe(false);
+  });
+
+  test("the database clock decides: an instance 120 s ahead does not reopen the window", async () => {
+    const guard = joinGuard(server.db, { env: TRUSTED });
+    const attempt = () => guard(new Request("http://localhost/api/rooms/join", { method: "POST", headers: { "x-forwarded-for": "192.0.2.3" } }));
+    for (let i = 0; i < 10; i++) expect(await attempt()).toBeNull();
+    setSystemTime(new Date(Date.now() + 120_000));
+    try {
+      expect((await attempt())?.status).toBe(429);
+    } finally {
+      setSystemTime();
+    }
   });
 
   test("simultaneous attempts on two instances let exactly 10 through", async () => {
-    const results = await Promise.all(Array.from({ length: 30 }, (_, i) => hit(i % 2 ? server.db : second.db, JOIN_RULE, "192.0.2.2", T0)));
+    const results = await Promise.all(Array.from({ length: 30 }, (_, i) => hit(i % 2 ? server.db : second.db, JOIN_RULE, "192.0.2.2", { now: T0 })));
     expect(results.filter((r) => r.allowed)).toHaveLength(10);
   });
 });

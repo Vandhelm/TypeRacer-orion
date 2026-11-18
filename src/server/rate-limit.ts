@@ -5,7 +5,7 @@ import { isIP } from "node:net";
 import { sql } from "drizzle-orm";
 import type { Db } from "../../db/client";
 import { rateLimits } from "../../db/schema";
-import { clientIp } from "./client-ip";
+import { clientIp, type IpContext } from "./client-ip";
 
 export type Rule = { bucket: string; limit: number; windowMs: number };
 
@@ -35,13 +35,25 @@ export function ipKey(ip: string): string {
 
 export type Verdict = { allowed: true } | { allowed: false; retryAfter: number };
 
-/** Compte une tentative de `key` pour `rule`. Toute tentative compte, acceptée ou non, réussie ou non. */
-export async function hit(db: Db, rule: Rule, key: string, now = new Date()): Promise<Verdict> {
-  const at = sql`${now.toISOString()}::timestamptz`;
-  const expired = sql`${rateLimits.windowStart} <= ${at} - ${`${rule.windowMs} milliseconds`}::interval`;
+/** Part des tentatives qui purgent au passage les fenêtres expirées : la table reste petite sans tâche planifiée. */
+export const PURGE_RATE = 0.01;
+
+/** `now` : l'heure de la tentative, pour les tests ; par défaut l'horloge de Postgres, commune à toutes les instances. */
+export type HitOptions = { now?: Date; purge?: boolean };
+
+const instant = (now?: Date) => (now ? sql`${now.toISOString()}::timestamptz` : sql`now()`);
+const span = (rule: Rule) => sql`${`${rule.windowMs} milliseconds`}::interval`;
+
+/**
+ * Compte une tentative de `key` pour `rule`. Toute tentative compte, acceptée ou non, réussie ou non : une IP partagée
+ * (NAT d'une école, d'un bureau) partage donc aussi ses 10 essais par minute, entrées réussies comprises.
+ */
+export async function hit(db: Db, rule: Rule, key: string, { now, purge = Math.random() < PURGE_RATE }: HitOptions = {}): Promise<Verdict> {
+  const at = instant(now);
+  const expired = sql`${rateLimits.windowStart} <= ${at} - ${span(rule)}`;
   const [row] = await db
     .insert(rateLimits)
-    .values({ bucket: rule.bucket, key, windowStart: now, count: 1 })
+    .values({ bucket: rule.bucket, key, windowStart: at, count: 1 })
     .onConflictDoUpdate({
       target: [rateLimits.bucket, rateLimits.key],
       set: {
@@ -49,19 +61,25 @@ export async function hit(db: Db, rule: Rule, key: string, now = new Date()): Pr
         windowStart: sql`case when ${expired} then ${at} else ${rateLimits.windowStart} end`,
       },
     })
-    .returning({ count: rateLimits.count, windowStart: rateLimits.windowStart });
+    .returning({ count: rateLimits.count, left: sql<string>`extract(epoch from ${rateLimits.windowStart} + ${span(rule)} - ${at})` });
+  if (purge) await purgeExpired(db, rule, now);
   if (row!.count <= rule.limit) return { allowed: true };
-  const left = row!.windowStart.getTime() + rule.windowMs - now.getTime();
-  // une instance dont l'horloge retarde ne doit pas annoncer plus d'une fenêtre d'attente
-  return { allowed: false, retryAfter: Math.min(rule.windowMs / 1000, Math.max(1, Math.ceil(left / 1000))) };
+  // borné à une fenêtre : une heure injectée en retard sur la fenêtre ne doit pas annoncer plus d'attente
+  return { allowed: false, retryAfter: Math.min(rule.windowMs / 1000, Math.max(1, Math.ceil(Number(row!.left)))) };
+}
+
+/** Supprime les fenêtres expirées de `rule` : la tentative suivante d'une telle clé repartirait de 1 de toute façon. */
+export async function purgeExpired(db: Db, rule: Rule, now?: Date): Promise<void> {
+  await db.delete(rateLimits).where(sql`${rateLimits.bucket} = ${rule.bucket} and ${rateLimits.windowStart} <= ${instant(now)} - ${span(rule)}`);
 }
 
 /** Garde d'une route : null si la requête passe, sinon la réponse 429 à renvoyer. */
 export type Guard = (req: Request) => Promise<Response | null>;
 
-export function joinGuard(db: Db, now: () => Date = () => new Date()): Guard {
+/** `peer` : l'IP de la socket (serveur Bun) ; `env` : pour les tests (voir client-ip.ts) ; `now` : idem. */
+export function joinGuard(db: Db, { now, env, peer }: { now?: () => Date } & IpContext = {}): Guard {
   return async (req) => {
-    const verdict = await hit(db, JOIN_RULE, ipKey(clientIp(req.headers)), now());
+    const verdict = await hit(db, JOIN_RULE, ipKey(clientIp(req.headers, { env, peer })), { now: now?.() });
     if (verdict.allowed) return null;
     return Response.json({ error: "rate_limited" }, { status: 429, headers: { "retry-after": String(verdict.retryAfter) } });
   };
