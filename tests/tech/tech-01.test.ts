@@ -17,7 +17,9 @@ describe("TECH-01 Next.js App Router, ancienne pile Bun retiree", () => {
     const scripts = JSON.parse(readFileSync("package.json", "utf8")).scripts as Record<string, string>;
     expect(scripts["dev:legacy"]).toBeUndefined();
     expect(scripts["build"]).toBeUndefined();
-    expect(scripts["dev"]).toContain("next dev");
+    // `dev` lance Next.js et le serveur temps réel (TECH-06) : Next passe par `next:dev`.
+    expect(scripts["dev"]).toContain("next:dev");
+    expect(scripts["next:dev"]).toContain("next dev");
     expect(scripts["next:build"]).toContain("next build");
   });
 
