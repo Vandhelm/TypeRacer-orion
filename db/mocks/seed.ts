@@ -1,5 +1,5 @@
 import type { Db } from "../client";
-import { account, corpusTexts, players, raceConfigs, raceResults, races, raceSamples, roomMembers, rooms, savedTexts, user } from "../schema";
+import { account, corpusTexts, players, raceConfigs, raceResults, races, raceSamples, roomInvites, roomMembers, rooms, savedTexts, user } from "../schema";
 import { placeholderEmail } from "../../src/accounts/username";
 import { CORPUS } from "./corpus";
 import { DEFAULT_CONFIG, DEMO_PASSWORD, demoInviteToken, PLAYERS, RACES, ROOMS, SAVED_TEXTS, seatColor, type PlayerName } from "./data";
@@ -59,9 +59,10 @@ export async function seed(db: Db) {
       const configId = await insertConfig({ ...DEFAULT_CONFIG, ...room.config });
       const [row] = await tx
         .insert(rooms)
-        .values({ code: room.code, inviteToken: demoInviteToken(room.code), name: room.name, visibility: room.visibility, guests: room.guests, bots: room.bots, status: room.status, hostId: idOf(room.members[0]!), configId })
+        .values({ code: room.code, name: room.name, visibility: room.visibility, guests: room.guests, bots: room.bots, status: room.status, hostId: idOf(room.members[0]!), configId })
         .returning({ id: rooms.id });
       roomIds.set(room.code, row!.id);
+      await tx.insert(roomInvites).values({ roomId: row!.id, token: demoInviteToken(room.code) }); // SALLE-04 : un lien libre par salon de démo
       await tx.insert(roomMembers).values(room.members.map((member, seat) => ({ roomId: row!.id, memberKey: `player:${idOf(member)}`, playerId: idOf(member), seat, color: seatColor(seat) })));
     }
 

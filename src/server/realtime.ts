@@ -75,7 +75,7 @@ export function createRealtime({ db, auth, secret, events, leaveAfterMs = LEAVE_
         ws.subscribe(topic(ws.data.code));
         try {
           const { room } = await readRoom(db, ws.data.code, ws.data.who);
-          const message: RoomSocketMessage = { type: "room", room: { ...room, invite: null } };
+          const message: RoomSocketMessage = { type: "room", room }; // sans lien d'invitation (SALLE-04 : room-invites.ts)
           ws.send(JSON.stringify(message));
         } catch {
           ws.close(4403, "not_member");

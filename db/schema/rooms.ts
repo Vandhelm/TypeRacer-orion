@@ -37,8 +37,6 @@ export const rooms = pgTable(
   {
     id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
     code: text("code").notNull().unique(),
-    /** Jeton du lien d'invitation : seule entrée d'un salon privé. */
-    inviteToken: text("invite_token").notNull().unique(),
     name: text("name").notNull(),
     autoName: boolean("auto_name").notNull().default(true),
     visibility: visibility("visibility").notNull(),
@@ -82,5 +80,29 @@ export const roomMembers = pgTable(
     check("room_members_seat_range", sql`${table.seat} between 0 and 7`),
     check("room_members_identity", sql`(${table.playerId} is null) <> (${table.guestName} is null)`),
     check("room_members_seat_role", sql`(${table.role} = 'player') = (${table.seat} is not null)`),
+  ],
+);
+
+/**
+ * SALLE-04 : les liens d'invitation, un par invité, seule entrée d'un salon privé. À sa première utilisation, un lien
+ * est lié à l'IP et à la personne (member_key) qui l'a utilisé ; used_name garde son nom pour le statut montré à l'hôte.
+ * Révoqué (revoked_at) quand son membre est expulsé (SALLE-07) ; invalide dès que le salon est fermé.
+ */
+export const roomInvites = pgTable(
+  "room_invites",
+  {
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    roomId: integer("room_id").notNull().references(() => rooms.id, { onDelete: "cascade" }),
+    token: text("token").notNull().unique(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    usedBy: text("used_by"),
+    usedName: text("used_name"),
+    usedIp: text("used_ip"),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("room_invites_room").on(table.roomId),
+    check("room_invites_used", sql`(${table.usedBy} is null) = (${table.usedIp} is null) and (${table.usedBy} is null) = (${table.usedAt} is null)`),
   ],
 );
