@@ -37,6 +37,8 @@ Une course de frappe multijoueur en temps réel, travail de session noté exigen
 | `bun run typecheck`, `bun run lint` | types et règles TECH-02 (Oxlint) |
 | `bun run next:build` | build de production |
 
+Dans un agent, coupe toujours la sortie : `bun test 2>&1 | tail -30` (idem pour `typecheck`, `lint`, `test:smoke`). Relance sans `tail` seulement si la trace d'un échec est tronquée.
+
 La CI GitHub Actions lance tout cela à chaque push.
 
 ## Git et exigences

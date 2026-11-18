@@ -152,7 +152,7 @@ Lance aussi `bun run test:smoke` (il faut Postgres : `bun run db:up`) : il véri
 
 ## 7. Rapport
 
-En français, sans rien ajouter avant.
+En français, sans rien ajouter avant. Sans remplissage : une ligne par partie et par problème, preuves en `fichier:ligne`, jamais de code cité. Sortie des tests coupée (`2>&1 | tail -30`).
 
 ### Portée critère
 

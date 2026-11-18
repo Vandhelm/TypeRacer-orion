@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(bun test:*)",
+      "Bash(bun run test:*)",
+      "Bash(bun run typecheck:*)",
+      "Bash(bun run lint:*)",
+      "Bash(bun run db:up:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git branch:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git switch:*)",
+      "Bash(git checkout -b:*)",
+      "Bash(git stash:*)",
+      "Bash(git merge --no-ff:*)",
+      "Bash(git worktree:*)",
+      "Bash(git cherry-pick:*)"
+    ],
+    "deny": [
+      "Bash(git push:*)"
+    ]
+  }
+}

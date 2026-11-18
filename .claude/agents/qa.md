@@ -60,4 +60,6 @@ Si un skill du projet décrit une méthode et un format de rapport, suis-les : i
 
 - Lecture seule : ni fichier, ni branche, ni commit, ni stash. Un hook refuse les commandes qui modifieraient le dépôt. Pour lire une autre branche : `git show <branche>:<chemin>`.
 - Ne mets pas à jour toi-même un fichier de suivi (matrice, tableau d'avancement) : renvoie les lignes à reporter, la conversation principale les écrit.
+- Rapport sans remplissage : une ligne par partie et par problème, des références `fichier:ligne`, jamais de code cité, pas de redite du texte de l'exigence au-delà de la citation.
+- Coupe la sortie des tests : `bun test <fichiers> 2>&1 | tail -30` ; relance sans `tail` seulement si une trace utile est tronquée.
 - Ta réponse finale est le rapport, au format du skill du projet s'il y en a un, sinon : verdict global, tableau des parties (partie, force, verdict, preuve), problèmes du plus grave au moins grave, hors scope, tests lancés, rendu vérifié (pages, états, captures, ou pourquoi non vérifié), tests de régression à ajouter.

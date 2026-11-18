@@ -11,7 +11,7 @@ Tu ne codes pas toi-même : tu organises les agents `dev`, `qa` et `Explore`, pu
 
 ## 1. Le mode
 
-Les tokens coûtent : **le mode par défaut est light**. Ne passe en medium ou en complex que si l'utilisateur le demande (« medium », « complex », « go for it », « mets le paquet »). Si la tâche te semble trop grosse pour light, termine en light et propose le mode supérieur dans ton rapport.
+Les tokens coûtent : **le mode par défaut est light**. Un mode nommé par l'utilisateur (« medium », « complex », « go for it », « mets le paquet ») l'emporte toujours. Ne demande jamais le mode : une exigence → light, plusieurs exigences ou une section → medium, et complex quand l'utilisateur le dit ou que le skill du projet le prévoit. Si la tâche te semble trop grosse pour light, termine en light et propose le mode supérieur dans ton rapport.
 
 | | **light** (défaut) | **medium** | **complex** |
 |---|---|---|---|
@@ -32,10 +32,11 @@ Passe toujours `model` dans l'appel `Agent` : il l'emporte sur le frontmatter. C
 |---|---|---|---|
 | `Explore` | localiser des fichiers ou du code | comprendre un flux | — |
 | `qa` | — | light et medium | complex, ou sécurité, droits, temps réel en jeu |
-| `dev` | — | correction ciblée d'un rapport QA, i18n, style, textes | nouvelle exigence, schéma de base, logique serveur ou sécurité |
+| `dev` | — | **par défaut** : nouvelle exigence, correction d'un rapport QA, i18n, style, textes | escalade après un tour échoué, schéma de base, sécurité, droits, temps réel |
 
 - **Escalade :** un tour de correction qui échoue fait monter le `dev` suivant d'un cran (sonnet → opus). Ne redescends pas sur la même unité.
 - Un agent ne change pas de modèle en cours de route : le choix se fait au lancement.
+- **Effort :** passe toujours `effort` dans l'appel `Agent` : `low` pour `Explore`, `medium` pour `dev`, `high` pour `qa` (c'est le filet de sécurité : en medium, il rate des cas limites) et pour tout agent sur `opus` (sécurité, droits, temps réel, escalade).
 - Note le modèle de chaque agent dans le rapport final.
 
 **Light avec une seule unité :** pas de phase de découpe ni d'`Explore`. Lance directement un `dev`, puis un `qa`, puis au plus un `dev` de correction.
@@ -56,7 +57,7 @@ dev (code + tests + commits) → qa (constate) → [problèmes ?] → dev (corri
 - **Message au `dev` :** l'exigence et sa source, le mode, le dernier rapport QA s'il existe (seulement les problèmes et les tests de régression à ajouter), et les choix déjà faits par l'utilisateur. Ne lui dicte pas l'implémentation.
 - **Message au `qa` :** la portée (exigence et branche) et le mode, **sans le rapport du dev ni ton avis** : il doit constater lui-même. En medium et complex, si l'unité touche une partie visible (page, design, thème, responsive, textes, langue), ajoute « Vérifie le rendu dans le navigateur » et le chemin du worktree. Un rapport qui marque ✅ une partie visible sans dire qu'il a ouvert la page n'est pas un verdict favorable : relance le `qa`.
 - **Parallèle :** lance dans la même réponse les `dev` d'unités indépendantes, **chacun avec `isolation: "worktree"`** : dans un même checkout, leurs `git checkout` se marchent dessus. Un seul `dev` à la fois peut travailler sans worktree.
-- **Worktree :** il part du HEAD courant et n'a ni `.env` ni `node_modules`. Dis au `dev` de créer sa branche depuis la base du projet et, si le projet a un `.env.example`, de lancer les commandes avec `bun --env-file=.env.example` (ou l'équivalent). Donne au `qa` le chemin du worktree pour lancer les tests.
+- **Worktree :** il part de la branche par défaut (`main`), **pas** du HEAD courant, et n'a ni `.env` ni `node_modules`. Dis au `dev` de créer sa branche avec `git switch -c <branche> <base>`, en nommant la base exacte (`dev`, ou la branche dont il dépend) et, si le projet a un `.env.example`, de lancer les commandes avec `bun --env-file=.env.example` (ou l'équivalent). Donne au `qa` le chemin du worktree pour lancer les tests.
 - **Verdict favorable avec des tests de régression suggérés :** en light, ne relance pas de `dev` pour eux ; liste-les dans le rapport. En medium et complex, ils font l'objet du tour de correction.
 - Limite de tours atteinte sans verdict favorable : arrête cette unité et garde le dernier rapport.
 - En complex, quand toutes les unités ont fini, lance une **seconde QA indépendante** (un `qa` par unité, sans les rapports précédents).
@@ -74,12 +75,12 @@ Le `dev` a déjà lancé les vérifications et le `qa` a déjà constaté. Ne re
 
 Quand l'utilisateur demande une section entière (« fais la section 5.3 », « tous les AUTH », « tout TECH ») :
 
-1. **Mode** : **medium** par défaut pour une section (light ne lance qu'un `dev`, trop peu pour un lot). **complex** seulement si l'utilisateur le dit, ou si le skill du projet le prévoit pour cette section (sécurité, temps réel, serveur autoritaire) — et alors dis-le avant de lancer.
+1. **Mode** : **medium** par défaut pour une section (light ne lance qu'un `dev`, trop peu pour un lot). **complex** seulement si l'utilisateur le dit, ou si le skill du projet le prévoit pour cette section (sécurité, temps réel, serveur autoritaire) — lance-le alors directement et indique-le dans le rapport, sans demander.
 2. **Liste de travail** : prends la source des exigences et le fichier de suivi du projet (voir ses skills). Garde les exigences de la section qui ne sont pas « complet ». Lance d'abord un `qa` sur la section entière (mode light, critique seulement) pour partir de l'état réel, pas du fichier de suivi.
 3. **Décisions humaines d'abord** : si une exigence de la section dépend d'un choix que le projet réserve à l'utilisateur (architecture, contenu créatif, compte ou secret), arrête-toi **avant** de lancer les `dev` et pose toutes ces questions en une fois. Les autres ambiguïtés, tranche-les et note-les.
 4. **Groupes** : regroupe les exigences qui touchent les mêmes fichiers (un `dev` les enchaîne) ; les groupes indépendants partent en parallèle, chacun en worktree. Ordonne selon les dépendances à l'intérieur de la section.
-5. **Branche de section** : suis le skill du projet. À défaut, une branche par exigence, puis une branche d'intégration de la section où tu merges les branches validées, tu résous les conflits, tu lances toute la suite de tests, puis un `qa` final sur la section complète.
-6. **Un seul point d'arrêt** : à la fin, rends le rapport de section (tableau par exigence : statut QA, branche, commits, choix faits, reste à faire) et les lignes de suivi, puis attends l'accord de l'utilisateur pour pousser et merger, sauf si le projet autorise le merge automatique.
+5. **Branche de section** : suis le skill du projet. À défaut, une branche par exigence, puis une branche d'intégration de la section où tu merges les branches validées, tu résous les conflits, tu lances `bun test`, `typecheck` et `lint` (sortie coupée). Pas de `qa` final de section : chaque exigence a déjà le sien. En complex, la seconde QA indépendante joue ce rôle.
+6. **Un seul point d'arrêt** : à la fin, rends le rapport de section (tableau par exigence : statut QA, branche, commits, choix faits, reste à faire) et les lignes de suivi, puis applique les règles du projet pour le merge. Ne pousse jamais : donne les commandes `git push` prêtes à copier. Les choix faits sans l'utilisateur vont dans la colonne « choix faits », pas dans une question.
 7. **Budget** : medium = 8 agents par **groupe** d'exigences, pas pour la section entière ; annonce le total prévu avant de lancer si la section a plus de 3 groupes.
 
 ## 5. Finir
