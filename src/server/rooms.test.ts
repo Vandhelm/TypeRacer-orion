@@ -329,4 +329,45 @@ describe("SALLE-09 — a room is joined only while waiting or on the results scr
     const room = await roomIn("closed");
     expect((await t.call("POST", "/api/rooms/join", t.guest("Trop_Tard"), { code: room.code })).status).toBe(410);
   });
+
+  test("the host launches the race on the server; a new guest joining by code then gets 409 in_race", async () => {
+    const room = await roomIn("waiting");
+    const launched = await t.call("POST", `/api/rooms/${room.code}/launch`, host.cookie);
+    expect(launched.status).toBe(200);
+    expect(((await launched.json()) as { room: { status: string } }).room.status).toBe("racing");
+    const res = await t.call("POST", "/api/rooms/join", t.guest("Apres_Depart"), { code: room.code });
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ error: "in_race" });
+    expect(await t.db.$count(roomMembers, eq(roomMembers.guestName, "Apres_Depart"))).toBe(0);
+  });
+
+  test("only the host launches: a member gets 403 not_host, a stranger 403 not_member, nobody without a session", async () => {
+    const room = await roomIn("waiting");
+    await t.call("POST", "/api/rooms/join", t.guest("Impatient"), { code: room.code });
+    expect(await (await t.call("POST", `/api/rooms/${room.code}/launch`, t.guest("Impatient"))).json()).toEqual({ error: "not_host" });
+    expect((await t.call("POST", `/api/rooms/${room.code}/launch`, t.guest("Impatient"))).status).toBe(403);
+    expect((await t.call("POST", `/api/rooms/${room.code}/launch`, (await t.signUp("Etranger_1")).cookie)).status).toBe(403);
+    expect((await t.call("POST", `/api/rooms/${room.code}/launch`)).status).toBe(401);
+    const [row] = await t.db.select({ status: rooms.status }).from(rooms).where(eq(rooms.code, room.code));
+    expect(row!.status).toBe("waiting");
+  });
+
+  test("a room already racing or closed is not launched again", async () => {
+    expect((await t.call("POST", `/api/rooms/${(await roomIn("racing")).code}/launch`, host.cookie)).status).toBe(409);
+    expect((await t.call("POST", `/api/rooms/${(await roomIn("closed")).code}/launch`, host.cookie)).status).toBe(410);
+  });
+
+  test("a room on its results screen can be launched again", async () => {
+    expect((await t.call("POST", `/api/rooms/${(await roomIn("results")).code}/launch`, host.cookie)).status).toBe(200);
+  });
+
+  test("a member who reconnects during the race finds the room again", async () => {
+    const room = await roomIn("waiting");
+    const { you } = (await (await t.call("POST", "/api/rooms/join", t.guest("Revenant"), { code: room.code })).json()) as Joined;
+    await t.call("POST", `/api/rooms/${room.code}/launch`, host.cookie);
+    const back = await t.call("POST", "/api/rooms/join", t.guest("Revenant"), { code: room.code });
+    expect(back.status).toBe(200);
+    expect(((await back.json()) as Joined).you).toBe(you);
+    expect((await t.call("POST", "/api/rooms/join", t.freshGuest("revenant"), { code: room.code })).status).toBe(409);
+  });
 });

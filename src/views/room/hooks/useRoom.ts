@@ -106,6 +106,13 @@ export function useRoom() {
   /** SALLE-01 : l'hôte court (participant) ou regarde (spectateur). */
   const setRole = useCallback(async (role: Role) => answer(await roomApi.update(code, { role })), [code, answer]);
 
+  /** SALLE-09 : le serveur passe le salon en course (hôte seulement) ; un refus s'affiche comme les autres. */
+  const launch = useCallback(async () => {
+    const reply = await roomApi.launch(code);
+    if (!reply.ok) answer(reply);
+    return reply.ok;
+  }, [code, answer]);
+
   const seats = useMemo(() => seatsOf({ guests: room.guests, bots: room.bots }, view.members, you), [room.guests, room.bots, view.members, you]);
   const players = useMemo(() => seats.filter(isPlayer), [seats]);
   const me = view.members.find((m) => m.key === you);
@@ -119,6 +126,7 @@ export function useRoom() {
     host,
     role: me?.role ?? "player",
     setRole,
+    launch,
     seats,
     players,
     spectators: view.members.filter((m) => m.role === "spectator"),

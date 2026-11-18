@@ -21,7 +21,7 @@ const VISIBILITY_KEY = { private: "private", semi: "semiPrivate", public: "publi
 export function RoomPage() {
   const { t, i18n } = useTranslation();
   const state = useRoom();
-  const { room, update, host, seats, players, spectators, displayName, ready, error, leave } = state;
+  const { room, update, host, seats, players, spectators, displayName, ready, error, leave, launch: launchOnServer } = state;
   const editor = useRef<TextEditorHandle>(null);
   const launched = useRef(false);
   const [stampOn, setStampOn] = useState(false);
@@ -30,10 +30,14 @@ export function RoomPage() {
     document.title = t("room.pageTitle");
   }, [t]);
 
-  function launch() {
+  async function launch() {
     if (launched.current) return;
     launched.current = true;
-    // À BRANCHER : prévenez le serveur de jeu que la partie démarre.
+    // SALLE-09 : le serveur passe le salon en course ; à BRANCHER (COURSE-*) : le départ de la partie elle-même
+    if (!(await launchOnServer())) {
+      launched.current = false;
+      return;
+    }
     const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (!reduced) setStampOn(true);
     setTimeout(() => { location.href = GAME_PAGE; }, reduced ? 0 : 800);

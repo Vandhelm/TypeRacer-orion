@@ -285,6 +285,26 @@ export async function joinRoom(db: Db, who: Identity, via: JoinVia): Promise<Roo
 }
 
 /**
+ * SALLE-09 : l'hôte lance la course ; le salon passe en « racing » et n'accepte plus de nouvel arrivant.
+ * Sous le même verrou que joinRoom : une entrée simultanée est soit faite avant le lancement, soit refusée.
+ * À BRANCHER (COURSE-*) : le texte, le départ et la fin de la course (passage en « results »).
+ */
+export async function launchRoom(db: Db, code: string, who: Identity): Promise<RoomResult> {
+  const { id } = await roomByCode(db, code);
+  const key = memberKey(who);
+  await db.transaction(async (tx) => {
+    const [room] = await tx.select({ status: rooms.status, hostId: rooms.hostId }).from(rooms).where(eq(rooms.id, id)).for("update");
+    if (!room) throw new RoomRefused("not_found");
+    if (!(await membership(tx, id, key))) throw new RoomRefused("not_member");
+    if (key !== memberKey({ playerId: room.hostId })) throw new RoomRefused("not_host");
+    if (room.status === "closed") throw new RoomRefused("closed");
+    if (!canJoin(room.status)) throw new RoomRefused("in_race");
+    await tx.update(rooms).set({ status: "racing" }).where(eq(rooms.id, id));
+  });
+  return { room: await roomView(db, id, key), you: key };
+}
+
+/**
  * Quitter un salon. Le dernier qui part le ferme.
  * À BRANCHER (SALLE-08) : si l'hôte part, passer le rôle au membre humain présent depuis le plus longtemps.
  */
@@ -295,6 +315,16 @@ export async function leaveRoom(db: Db, code: string, who: Identity): Promise<{ 
     await db.update(rooms).set({ status: "closed" }).where(eq(rooms.id, room.id));
   }
   return { left: removed.length > 0 };
+}
+
+/**
+ * Départ constaté par le temps réel (plus aucune socket) : pendant une course, les membres sont sur /game, sans
+ * socket de salon ; ils restent membres et le salon reste ouvert. Hors course, c'est un départ (leaveRoom).
+ */
+export async function leaveAfterDisconnect(db: Db, code: string, who: Identity): Promise<{ left: boolean }> {
+  const room = await roomByCode(db, code);
+  if (room.status === "racing") return { left: false };
+  return leaveRoom(db, code, who);
 }
 
 /** L'id d'un salon ouvert, ou null s'il n'existe pas ou est fermé. */

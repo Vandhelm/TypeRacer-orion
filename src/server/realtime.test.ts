@@ -99,4 +99,16 @@ describe("SALLE-03 — members are pushed in real time over a WebSocket", () => 
     bob.ws.close();
   });
 
+  test("SALLE-09 — once launched, closing every socket (going to /game) neither removes members nor closes the room", async () => {
+    const racing = ((await (await call("POST", "/api/rooms", hostCookie, { role: "player", settings: { visibility: "public" } })).json()) as { room: { code: string } }).room.code;
+    await call("POST", "/api/rooms/join", guest("Coureur_Live"), { code: racing });
+    const sockets = [connect(url(`/ws/rooms/${racing}`), hostCookie), connect(url(`/ws/rooms/${racing}`), guest("Coureur_Live"))];
+    await Promise.all(sockets.map((s) => s.next()));
+    expect((await call("POST", `/api/rooms/${racing}/launch`, hostCookie)).status).toBe(200);
+    for (const s of sockets) s.ws.close();
+    await Bun.sleep(LEAVE_AFTER_MS * 4);
+    const room = (await (await call("GET", `/api/rooms/${racing}`, hostCookie)).json()) as { room: { status: string; members: unknown[] } };
+    expect(room.room.status).toBe("racing");
+    expect(room.room.members).toHaveLength(2);
+  });
 });

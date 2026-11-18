@@ -15,7 +15,7 @@ const SECRET = "guest-secret-guest-secret-guest-secret";
 type Joined = { room: { code: string; status: string; members: { key: string; seat: number | null }[] }; you: string };
 type Server = NonNullable<Awaited<ReturnType<typeof createServerDatabase>>>;
 
-describe.skipIf(!process.env.DATABASE_URL)("SALLE-03 — simultaneous requests on a real Postgres", () => {
+describe.skipIf(!process.env.DATABASE_URL)("SALLE-03 / SALLE-09 — simultaneous requests on a real Postgres", () => {
   let server: Server;
   let hostCookie: string;
   const call = (method: string, path: string, cookie?: string, body?: unknown) =>
@@ -53,4 +53,20 @@ describe.skipIf(!process.env.DATABASE_URL)("SALLE-03 — simultaneous requests o
     }
   });
 
+  test("SALLE-09 — a join racing the launch never adds a member once the room is racing", async () => {
+    for (let round = 0; round < 10; round++) {
+      const code = await open();
+      const cookie = guest(`Course_${round}`);
+      const [joined, launched] = await Promise.all([call("POST", "/api/rooms/join", cookie, { code }), call("POST", `/api/rooms/${code}/launch`, hostCookie)]);
+      expect(launched.status).toBe(200);
+      const members = await membersOf(code);
+      if (joined.status === 200) {
+        // entré avant le lancement : il fait partie de la course
+        expect(members).toHaveLength(2);
+      } else {
+        expect(joined.status).toBe(409);
+        expect(members).toHaveLength(1);
+      }
+    }
+  });
 });

@@ -27,6 +27,8 @@ export const roomApi = {
   join: (via: { code: string } | { invite: string }) => send("POST", "/api/rooms/join", via),
   /** keepalive : la demande part même si la page se ferme juste après. */
   leave: (code: string) => fetch(`/api/rooms/${code}/leave`, { method: "POST", credentials: "same-origin", keepalive: true }).catch(() => undefined),
+  /** SALLE-09 : l'hôte lance la course ; le serveur ferme alors le salon aux nouveaux arrivants. */
+  launch: (code: string) => send("POST", `/api/rooms/${code}/launch`),
   update: (code: string, body: { role?: Role; settings?: Partial<RoomSettings> }) => send("PATCH", `/api/rooms/${code}`, body),
 };
 
