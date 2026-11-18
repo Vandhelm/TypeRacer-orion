@@ -5,7 +5,9 @@ import { HangingButton } from "../../components/buttons/HangingButton";
 import { Stamp } from "../../components/Stamp";
 import { HangingTabs } from "../../components/tabs/HangingTabs";
 import { languages, type Language } from "../../i18n";
+import { useRealtimeRoom } from "../../realtime/useRealtimeRoom";
 import { FishPond } from "./FishPond";
+import { LiveList } from "./LiveList";
 import { useRoom } from "./hooks/useRoom";
 import { forgetRoom, isPlayer } from "./room";
 import { RoomIntro } from "./RoomIntro";
@@ -25,6 +27,8 @@ export function RoomPage() {
   const editor = useRef<TextEditorHandle>(null);
   const launched = useRef(false);
   const [stampOn, setStampOn] = useState(false);
+  // TECH-06 : les personnes présentes dans ce salon, en direct
+  const { state: live } = useRealtimeRoom(room.code || null);
 
   useEffect(() => {
     document.title = t("room.pageTitle");
@@ -80,6 +84,7 @@ export function RoomPage() {
             }
           />
         </form>
+        <LiveList state={live} className="room-live" />
         <TextEditorDialog ref={editor} text={room.text} onUse={(text) => update({ text, textType: "custom" })} />
         <section className="sr-only" aria-labelledby="players-title">
           <h2 id="players-title">{t("room.players")}</h2>

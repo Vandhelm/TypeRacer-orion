@@ -4,9 +4,11 @@ import { HangingButton } from "../../components/buttons/HangingButton";
 import { buildResults, buildSummary, markSessionStart, saveResults, sessionSeconds, submitRace } from "../podium/results";
 import { useRoom } from "../room/hooks/useRoom";
 import { rememberGuestRace } from "../profile/stats";
+import { useRealtimeRoom } from "../../realtime/useRealtimeRoom";
+import { LiveList } from "../room/LiveList";
 import { useRace } from "./hooks/useRace";
 import { loadRacePoolImages, type RacePoolImages } from "./pool/createRacePool";
-import { laneProgress } from "./race";
+import { laneProgress, myWpm } from "./race";
 import { RacePool } from "./RacePool";
 import { TypingPanel } from "./TypingPanel";
 
@@ -16,6 +18,14 @@ export function GamePage() {
   const { room, players, displayName } = useRoom();
   const [images, setImages] = useState<RacePoolImages | null>(null);
   const { race, onInput, showResults } = useRace(room, players, images !== null);
+
+  // TECH-06 : ma progression part dans le salon (10 envois par seconde au plus), celle des autres arrive en direct
+  const { state: live, sendProgress } = useRealtimeRoom(room.code || null);
+  const mine = laneProgress(race, race.myLane);
+  const wpm = myWpm(race);
+  useEffect(() => {
+    if (race.phase !== "countdown") sendProgress(mine, wpm);
+  }, [race.phase, mine, wpm, sendProgress]);
 
   useEffect(markSessionStart, []);
 
@@ -45,6 +55,7 @@ export function GamePage() {
       <HangingButton className="game-leave" href="/room">{t("room.leave")}</HangingButton>
       <header className="game-header">
         <h1 className="game-title">{displayName}</h1>
+        <LiveList state={live} mine={mine} showMe={false} className="game-live" />
       </header>
 
       {images ? <RacePool players={players} images={images} race={race} label={t("game.poolLabel", { count: players.length })} /> : <div className="race-pool" />}

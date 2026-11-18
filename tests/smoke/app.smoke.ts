@@ -118,10 +118,19 @@ describe("SMOKE — API", () => {
     expect(res.status).toBe(401);
   });
 
+  test("TECH-06 — /api/realtime/ticket refuse un visiteur sans session", async () => {
+    const res = await fetch(`${base}/api/realtime/ticket`, { method: "POST" });
+    expect(res.status).toBe(401);
+  });
+
   // TECH-01 : le catch-all app/api/[...path]/route.ts transmet les routes de better-auth à handleApi.
   test("TECH-01 — /api/auth/get-session répond sous Next.js", async () => {
     const res = await fetch(`${base}/api/auth/get-session`);
     expect(res.status).toBe(200);
+  });
+
+  test("TECH-07 — un identifiant mal encodé répond 400, jamais 500", async () => {
+    expect((await fetch(`${base}/api/players/%E0%A4%A/stats`)).status).toBe(400);
   });
 
   // Les joueurs de démo n'existent que dans la base locale seedée, pas dans celle d'un déploiement.
@@ -149,6 +158,38 @@ describe("SMOKE — API", () => {
     });
     expect(res.status).toBeLessThan(300);
     expect((await fetch(`${base}/api/players/Smoke_Faux_Bot/stats`)).status).toBe(404);
+  });
+
+  // TECH-07 : avec une session d'invité valide, un corps mal formé répond 400, jamais 500. N'écrit rien en base.
+  test("TECH-07 — /api/races refuse un corps invalide (400) avec une session d'invité", async () => {
+    const guest = await fetch(`${base}/api/guest`, { method: "POST", headers: { "content-type": "application/json", origin: base }, body: JSON.stringify({ nickname: "Smoke_Schema" }) });
+    const cookie = (guest.headers.get("set-cookie") ?? "").split(";")[0]!;
+    expect(cookie).toContain("=");
+    const summary = {
+      textType: "words", language: "fr", duration: 60, level: "common", punctuation: false, numbers: false, specials: false, accents: true,
+      excluded: "", mistakes: "fix", botSpeed: "medium", botAccuracy: "high", length: "short", wordCount: 20, sessionSeconds: 90,
+    };
+    for (const body of ["{", JSON.stringify({ id: crypto.randomUUID(), summary, players: [null] })]) {
+      const res = await fetch(`${base}/api/races`, { method: "POST", headers: { "content-type": "application/json", cookie }, body });
+      expect(res.status).toBe(400);
+    }
+  });
+
+  // TECH-07 : la validation de /api/auth/* est celle de Better Auth ; un corps [] ou null ne doit jamais faire un 500.
+  test("TECH-07 — la connexion refuse un corps [] ou null (4xx, jamais 500)", async () => {
+    for (const body of ["[]", "null"]) {
+      const res = await fetch(`${base}/api/auth/sign-in/username`, { method: "POST", headers: { "content-type": "application/json", origin: base }, body });
+      expect(res.status).toBeGreaterThanOrEqual(400);
+      expect(res.status).toBeLessThan(500);
+    }
+  });
+
+  // TECH-07 : sans session, la route refuse (401) avant de lire le corps, même invalide.
+  test("TECH-07 — /api/races sans session et avec un corps invalide répond 401", async () => {
+    for (const body of ["{", "null"]) {
+      const res = await fetch(`${base}/api/races`, { method: "POST", headers: { "content-type": "application/json" }, body });
+      expect(res.status).toBe(401);
+    }
   });
 
   // Crée une session : seulement en local, pas contre un déploiement.
@@ -211,5 +252,13 @@ describe("SMOKE — salon", () => {
   test("AUTH-03 — un invité entre dans un salon par son code", async () => {
     const res = await fetch(`${base}/room?code=ABC234`, { headers: { cookie: await guestCookie() }, redirect: "manual" });
     expect(res.status).toBe(200);
+  });
+
+  test("TECH-06 — un invité reçoit un ticket pour le serveur temps réel", async () => {
+    const res = await fetch(`${base}/api/realtime/ticket`, { method: "POST", headers: { cookie: await guestCookie() } });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ticket?: string; url?: string };
+    expect(body.ticket).toBeString();
+    expect(body.url).toMatch(/^wss?:\/\//);
   });
 });

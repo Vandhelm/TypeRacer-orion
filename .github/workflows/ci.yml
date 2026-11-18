@@ -50,6 +50,11 @@ jobs:
       - name: Tests unitaires et de régression
         run: bun test
 
+      # TECH-06 : le serveur temps réel se regroupe en un seul fichier, comme dans son image Fly.io.
+      # Ses tests d'intégration (bun test) le lancent eux-mêmes : pas de service à démarrer ici.
+      - name: Build du serveur temps réel
+        run: bun run realtime:build
+
       # TECH-01 : l'application est construite et servie par Next.js. Un build en échec arrête la CI.
       - name: Build Next.js
         run: bun run next:build
@@ -60,9 +65,6 @@ jobs:
         env:
           SMOKE_SKIP_BUILD: "1"
 
-      # TECH-02 interdit tout fichier .js/.jsx. Non bloquant tant que les 2 fichiers existants
-      # (createRacePool.js, createScene.js) ne sont pas convertis : retirer
-      # continue-on-error une fois fait.
+      # TECH-02 interdit tout fichier .js/.jsx.
       - name: Aucun fichier JavaScript (TECH-02)
         run: bun run check:no-js
-        continue-on-error: true

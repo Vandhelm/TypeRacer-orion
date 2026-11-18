@@ -198,7 +198,21 @@
     "link": "Lien",
     "copyLink": "Copier le lien d'invitation",
     "linkCopied": "Lien copié",
-    "inviteRoomName": "Salon sur invitation"
+    "inviteRoomName": "Salon sur invitation",
+    "live": {
+      "title": "En direct",
+      "progress": "Progression de {{name}}",
+      "percent": "{{percent}} %",
+      "status": {
+        "connecting": "Connexion au salon…",
+        "reconnecting": "Connexion perdue, nouvelle tentative…",
+        "unauthorized": "Choisis un pseudo pour apparaître en direct.",
+        "closed": "Déconnecté du salon.",
+        "open_zero": "Tu es seul dans le salon.",
+        "open_one": "{{count}} autre personne présente.",
+        "open_other": "{{count}} autres personnes présentes."
+      }
+    }
   },
   "game": {
     "pageTitle": "O.R.I.O.N — L'épreuve",

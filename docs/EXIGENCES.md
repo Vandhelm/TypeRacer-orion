@@ -8,16 +8,16 @@ Les statuts viennent des rapports de l'agent `qa` (skill `criteria-check`). Une 
 
 | ID | Statut | Fichiers principaux | Tests associés | Notes et choix |
 |---|---|---|---|---|
-| TECH-01 | complet | `app/`, `src/next/LegacyPage.tsx`, `src/next/LegacyRoot.tsx`, `next.config.ts`, `vercel.json`, `package.json` | `tests/smoke/app.smoke.ts` (`bun test -t TECH-01`) | Next.js 16.4.6 (dernière stable au 2026-11-17), App Router, React 19.3.1. Choix : migration progressive. Les pages sont l'ancienne app React rendue dans le navigateur (`LegacyPage`, `ssr: false`), avec navigation par rechargement complet. `server.ts`, `*.html`, `main.tsx`, `build.ts` et `server 2.ts` sont encore à retirer. `ignoreBuildErrors: true`, types vérifiés par `tsc` en CI. Déploiement Vercel non vérifié (TECH-05). Vérifié le 2026-11-17 (QA critère, branche `feature/app/tech-01`). |
-| TECH-02 | non vérifié |  |  |  |
-| TECH-03 | non vérifié |  |  |  |
-| TECH-04 | non vérifié |  |  |  |
-| TECH-05 | partiel | `vercel.json`, `app/` | aucun | Application déployée publiquement en HTTPS sur Vercel, pas sur un VPS. Choix assumé : on garde la plateforme utilisée depuis le début. À confirmer avec l'enseignant. Inscrit le 2026-11-17. |
-| TECH-06 | non vérifié |  |  |  |
-| TECH-07 | non vérifié |  |  |  |
-| TECH-08 | non vérifié |  |  |  |
-| TECH-09 | non vérifié |  |  |  |
-| TECH-10 | non vérifié |  |  |  |
+| TECH-01 | complet | `app/`, `src/next/LegacyPage.tsx`, `next.config.ts`, `vercel.json`, `package.json` | `tests/tech/tech-01.test.ts`, `tests/smoke/app.smoke.ts` | Next.js 16.4.6, App Router, React 19.3.1. Ancienne pile Bun retirée. `ignoreBuildErrors: true` (TypeScript 7), types vérifiés par tsc en CI. Vérifié le 2026-11-18 (QA section 3, `feature/section/3-tech`). |
+| TECH-02 | complet | `tsconfig.json`, `.oxlintrc.json`, `src/views/game/pool/createRacePool.ts`, `src/views/home/scene/createScene.ts` | `tests/tech/tech-02.test.ts`, CI `check:no-js` | Choix : oxlint applique la règle ESLint `@typescript-eslint/no-explicit-any` en erreur (typescript-eslint ne supporte pas TypeScript 7). Lint et tsc à 0 sur l'ensemble intégré. Vérifié le 2026-11-18 (QA section 3). |
+| TECH-03 | partiel | `postcss.config.json`, `src/styles/base/tokens.css`, `src/styles/pages/*` | aucun | Tailwind v4 branché (`@theme`, quelques utilitaires) ; l'essentiel du style est en CSS écrit à la main. À trancher. Vérifié le 2026-11-18 (QA section 3). |
+| TECH-04 | complet | `db/schema`, `db/migrations/`, `db/mocks/seed.ts`, `drizzle.config.ts` | `db/mocks/seed.test.ts` | Postgres et Drizzle ; seed avec corpus, comptes et historique (courses, résultats, échantillons). Vérifié le 2026-11-18 (QA section 3). |
+| TECH-05 | partiel | `vercel.json`, `fly.toml`, `Dockerfile.realtime` | aucun | Écart assumé : Vercel et Fly.io, pas de VPS. HTTPS public non vérifié par la QA (smoke avec `BASE_URL` à lancer). Serveur temps réel non déployé. Vérifié le 2026-11-18 (QA section 3). |
+| TECH-06 | partiel | `src/realtime/*`, `src/server/realtime-ticket.ts`, `src/server/guest.ts`, `src/views/room/LiveList.tsx`, `src/views/room/live.ts`, `RoomPage.tsx`, `GamePage.tsx` | `src/realtime/*.test.ts`, `src/server/realtime-ticket.test.ts`, `src/views/room/live.test.ts`, `src/server/guest.test.ts` | Choix : serveur Bun WebSocket séparé (ADR dans `docs/ARCHITECTURE.md`). Progression visible dans la salle et dans l'en-tête de la course. Non déployé (Fly.io préparé) : rien en production. Le canal ne vérifie pas l'appartenance à la salle (à faire avec SALLE). Progression déclarée par le client (documenté, COURSE-06). Vérifié le 2026-11-18 (QA section 3). |
+| TECH-07 | complet | `src/server/races.ts`, `account.ts`, `guest.ts`, `room-gate.ts`, `proxy.ts`, `src/realtime/protocol.ts`, `src/realtime/ticket.ts` | `src/server/inputs.test.ts`, `src/realtime/protocol.test.ts`, `src/server/races.test.ts`, smoke TECH-07 | Routes API, pages serveur, cookies, ticket et messages WebSocket validés par Zod ; corps limité à 512 Ko. Aucune action serveur. Better Auth valide ses propres routes (équivalent). Vérifié le 2026-11-18 (QA section 3). |
+| TECH-08 | partiel | `fly.toml`, `docs/ARCHITECTURE.md` | aucun | Vercel Hobby. Gratuité de Fly.io non établie ; base de production et accès de l'enseignant non documentés. Vérifié le 2026-11-18 (QA section 3). |
+| TECH-09 | complet | `.github/workflows/ci.yml` | toute la suite | Lint, `tsc --noEmit` et `bun test` à chaque push, puis builds, smoke et contrôle no-JS (bloquant). Aucun run GitHub observé. Vérifié le 2026-11-18 (QA section 3). |
+| TECH-10 | partiel | `.env.example`, `.gitignore` | aucun | Aucun secret commité. Manquent `BASE_URL` et `SMOKE_*` (variables des tests smoke). Vérifié le 2026-11-18 (QA section 3). |
 
 ## 4. Identité visuelle et design (DES)
 

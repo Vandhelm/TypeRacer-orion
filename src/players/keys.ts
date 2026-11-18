@@ -1,8 +1,12 @@
+import { z } from "zod";
+
 // Frappes et fautes par touche, pour la heatmap du clavier. La clé est le caractère attendu, en minuscule.
 /** caractère → [frappes, fautes] */
 export type KeyCounts = Record<string, [number, number]>;
 
 const MAX_KEYS = 200;
+/** Entrées acceptées dans le corps reçu (au-delà : 400). Un clavier réel en compte moins de 200 ; on garde de la marge. */
+const MAX_KEY_ENTRIES = 400;
 
 export const keyOf = (char: string) => char.toLowerCase();
 
@@ -43,3 +47,12 @@ export function parseKeys(value: unknown): KeyCounts {
   }
   return keys;
 }
+
+/**
+ * TECH-07 : les compteurs reçus par le serveur. Ce doit être un objet (pas null, un nombre, un texte ou un tableau),
+ * sinon le corps est refusé ; à l'intérieur, une entrée mal formée est écartée, comme pour le stockage.
+ */
+export const KeysSchema = z
+  .record(z.string(), z.unknown())
+  .refine((keys) => Object.keys(keys).length <= MAX_KEY_ENTRIES, "too many keys")
+  .transform(parseKeys);
