@@ -14,7 +14,7 @@ main ← dev ← <type>/<page>/<critère>
 ```
 
 - `<type>` : `feature` pour du nouveau comportement, `fix` pour une correction.
-- `<page>` : la page ou zone concernée, en kebab-case (`home`, `profile-stats`, `room`, `auth`). Prends le nom déjà utilisé dans le dépôt (dossier `src/pages/<page>`, branches existantes) plutôt que d'en inventer un.
+- `<page>` : la page ou zone concernée, en kebab-case (`home`, `profile-stats`, `room`, `auth`). Prends le nom déjà utilisé dans le dépôt (dossier `src/views/<page>`, branches existantes) plutôt que d'en inventer un.
 - `<critère>` : l'identifiant du critère **en minuscules** (`AUTH-06` → `auth-06`). On le trouve dans la demande de l'utilisateur ou dans les commentaires du code (`grep -rn "AUTH-06" src`), où il reste en majuscules.
 
 Le nom entier suit la convention courante sur GitHub : minuscules, chiffres, tirets et `/` seulement. Pas de majuscules, d'espaces, d'accents ni de `_`. Les majuscules posent problème parce que macOS ne distingue pas `AUTH-06` de `auth-06` dans `.git/refs` : deux branches qui ne diffèrent que par la casse finissent par se mélanger.
