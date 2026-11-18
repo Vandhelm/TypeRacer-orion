@@ -226,6 +226,8 @@
     "inviteUnused": "Non utilisé",
     "inviteUsedBy": "Utilisé par {{name}}",
     "inviteRevoked": "Révoqué ({{name}})",
+    "copyManually": "Copie impossible : sélectionne l'adresse.",
+    "inviteUrlN": "Adresse du lien {{n}}",
     "linkCopied": "Lien copié",
     "inviteRoomName": "Salon sur invitation"
   },

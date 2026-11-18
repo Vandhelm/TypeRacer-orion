@@ -60,6 +60,9 @@ body{ height: auto; min-height: 100vh; overflow: visible; font-size: 16px; paddi
 .room-invite-status{ overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-muted); }
 .room-invite-used .room-invite-status{ color: inherit; }
 .room-invite-revoked{ opacity: .6; }
+.room-invite-url{ grid-column: 1 / -1; display: grid; gap: 4px; padding-bottom: 8px; color: var(--color-muted); }
+.room-invite-url input{ min-width: 0; padding: 6px 8px; border: 1px solid var(--color-line-soft); border-radius: 6px; background: transparent; color: #fff; font: inherit; }
+.room-invite-url input:focus-visible{ outline: 2px solid #fff; outline-offset: 2px; }
 
 .room-settings{ grid-area: settings; position: relative; margin-top: clamp(20px, 3.4vh, 36px); padding-top: clamp(16px, 2.6vh, 24px); border-top: 1px dashed var(--color-line-soft); }
 .room-toolbar{ display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px 24px; margin-bottom: clamp(12px, 2vh, 20px); }

@@ -12,6 +12,8 @@ export function RoomInvites({ state }: { state: RoomState }) {
   const { t } = useTranslation();
   const { invites, error, busy, create } = useInvites(state.room.code, state.host, state.members);
   const [copied, setCopied] = useState<string | null>(null);
+  /** Copie impossible (presse-papiers refusé, HTTP) : l'adresse de ce lien s'affiche, à sélectionner. */
+  const [shown, setShown] = useState<string | null>(null);
   const timer = useRef(0);
 
   useEffect(() => () => clearTimeout(timer.current), []);
@@ -22,8 +24,10 @@ export function RoomInvites({ state }: { state: RoomState }) {
     try {
       await navigator.clipboard.writeText(inviteHref(location.origin, token));
     } catch {
+      setShown(token);
       return;
     }
+    setShown(null);
     setCopied(token);
     clearTimeout(timer.current);
     timer.current = window.setTimeout(() => setCopied(null), 1500);
@@ -56,6 +60,12 @@ export function RoomInvites({ state }: { state: RoomState }) {
                   <IconButton label={t(done ? "room.linkCopied" : "room.copyInviteN", { n: index + 1 })} confirmed={done} onClick={() => copy(invite.token)}>
                     {done ? <CheckIcon /> : <LinkIcon />}
                   </IconButton>
+                )}
+                {shown === invite.token && (
+                  <label className="room-invite-url">
+                    <span>{t("room.copyManually")}</span>
+                    <input type="text" readOnly autoFocus value={inviteHref(location.origin, invite.token)} aria-label={t("room.inviteUrlN", { n: index + 1 })} onFocus={(e) => e.currentTarget.select()} />
+                  </label>
                 )}
               </li>
             );

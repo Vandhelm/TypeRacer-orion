@@ -226,6 +226,8 @@
     "inviteUnused": "Unused",
     "inviteUsedBy": "Used by {{name}}",
     "inviteRevoked": "Revoked ({{name}})",
+    "copyManually": "Copy failed: select the address.",
+    "inviteUrlN": "Link {{n}} address",
     "linkCopied": "Link copied",
     "inviteRoomName": "Invite-only room"
   },
