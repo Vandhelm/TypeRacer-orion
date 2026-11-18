@@ -106,9 +106,22 @@ const numbersOf = (value: unknown) => (Array.isArray(value) ? value.map(Number) 
 
 export function parseResults(raw: string | null): RaceResults | null {
   try {
-    const stored = JSON.parse(raw ?? "null");
+    return toResults(JSON.parse(raw ?? "null"));
+  } catch {
+    return null;
+  }
+}
+
+/** Ordre d'arrivée : le rang enregistré s'il y en a un (une course de l'historique), sinon l'ordre reçu. */
+const byRank = (players: Record<string, unknown>[]) =>
+  players.map((p, index) => ({ p, at: Number.isInteger(p.rank) ? Number(p.rank) : index + 1 })).sort((a, b) => a.at - b.at).map(({ p }) => p);
+
+/** Des résultats confiés par le jeu (sessionStorage) ou relus sur le serveur (HIST-02), vérifiés champ par champ. */
+export function toResults(value: unknown): RaceResults | null {
+  try {
+    const stored = value as { summary?: unknown; players?: unknown } | null;
     if (!stored || !stored.summary || !Array.isArray(stored.players) || !stored.players.length) return null;
-    const players = stored.players.map((p: Record<string, unknown>): PlayerResult => {
+    const players = byRank(stored.players).map((p: Record<string, unknown>): PlayerResult => {
       const [correct = 0, wrong = 0, extra = 0, missed = 0] = numbersOf(p.chars);
       return {
         name: String(p.name),
@@ -167,7 +180,42 @@ export function sessionSeconds() {
   try { return Math.round((Date.now() - Number(sessionStorage.getItem(SESSION_KEY))) / 1000) || 0; } catch { return 0; }
 }
 
-export const profileHref = (index: number) => `/profile?player=${index}`;
+/** Le N-ième joueur de la course affichée ; d'une course de l'historique, raceId la garde (HIST-02). */
+export const profileHref = (index: number, raceId?: number | null) => (raceId ? `/profile?race=${raceId}&player=${index}` : `/profile?player=${index}`);
+
+/** Retour au podium de la course affichée, sans nouveau travelling. */
+export const podiumHref = (raceId: number | null) => (raceId ? `/podium?race=${raceId}#arrived` : "/podium#arrived");
+
+/** HIST-02 : une course de l'historique s'ouvre sur sa page de résultats. */
+export const historyHref = (raceId: number) => `/podium?race=${raceId}`;
+export const raceResultsUrl = (raceId: number) => `/api/history/${raceId}`;
+
+/** La course de l'historique demandée par l'adresse (?race=N), ou null : les résultats de la course jouée dans cet onglet. */
+export function historyRaceOf(search: string): number | null {
+  const value = new URLSearchParams(search).get("race");
+  return value && /^[1-9]\d{0,9}$/.test(value) ? Number(value) : null;
+}
+
+/** Erreur de chargement d'une course de l'historique : le code du serveur (not_found, not_your_race…) ou "network". */
+export class RaceLoadError extends Error {
+  constructor(readonly code: string) {
+    super(code);
+  }
+}
+
+const RACE_ERRORS = ["not_found", "not_your_race", "unauthorized", "account_required", "invalid_race", "network"] as const;
+/** Le message traduit d'un refus ; un code inconnu devient une erreur réseau. */
+export const raceErrorKey = (code: string) => `podium.errors.${(RACE_ERRORS as readonly string[]).includes(code) ? code : "network"}`;
+
+/** Les résultats d'une course de l'historique, relus sur le serveur (HIST-02). */
+export async function fetchRaceResults(raceId: number, signal?: AbortSignal): Promise<RaceResults> {
+  const response = await fetch(raceResultsUrl(raceId), { signal });
+  const body: unknown = await response.json().catch(() => null);
+  if (!response.ok) throw new RaceLoadError(String((body as { error?: unknown } | null)?.error ?? "network"));
+  const results = toResults(body);
+  if (!results) throw new RaceLoadError("network");
+  return results;
+}
 
 export const oneDecimal = (language: string, value: number) =>
   new Intl.NumberFormat(language === "en" ? "en-CA" : "fr-CA", { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(value);

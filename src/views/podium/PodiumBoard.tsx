@@ -2,7 +2,7 @@ import { useTranslation } from "react-i18next";
 import { profileHref, type PlayerResult } from "./results";
 
 /** Every player in final order, with the local player's place when the results come from a real race. */
-export function PodiumBoard({ players, showPlace, arrived }: { players: PlayerResult[]; showPlace: boolean; arrived: boolean }) {
+export function PodiumBoard({ players, showPlace, arrived, raceId = null }: { players: PlayerResult[]; showPlace: boolean; arrived: boolean; raceId?: number | null }) {
   const { t } = useTranslation();
   const place = showPlace ? players.findIndex((player) => player.me) : -1;
   const me = players[place];
@@ -21,7 +21,7 @@ export function PodiumBoard({ players, showPlace, arrived }: { players: PlayerRe
       <ol className="podium-list">
         {players.map((player, index) => (
           <li key={player.name}>
-            <a className={player.me ? "podium-row is-me" : "podium-row"} href={profileHref(index)}>
+            <a className={player.me ? "podium-row is-me" : "podium-row"} href={profileHref(index, raceId)}>
               <span>{t(`podium.ranks.${index}`)}</span>
               <span className="podium-row-name">{player.me ? `${player.name} · ${t("room.you")}` : player.name}</span>
               <span className="podium-row-value">{player.wpm} {wpm}</span>
