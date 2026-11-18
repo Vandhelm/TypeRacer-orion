@@ -1,7 +1,10 @@
-// Photo de profil (AUTH-04) : le navigateur l'envoie déjà réduite, le serveur revérifie le format et le poids.
+// Photo de profil (AUTH-04) : le serveur revérifie le format et le poids, puis réduit lui-même l'image,
+// sans se fier à la réduction faite par le navigateur.
+import sharp from "sharp";
 import type { Auth } from "./auth";
 
 export const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
+const AVATAR_SIZE = 256;
 
 /** Le vrai format d'après les premiers octets (le type annoncé par le navigateur ne prouve rien). null : refusé. */
 export function avatarType(bytes: Uint8Array): "image/jpeg" | "image/png" | "image/webp" | null {
@@ -10,6 +13,19 @@ export function avatarType(bytes: Uint8Array): "image/jpeg" | "image/png" | "ima
   if (at(0, 0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)) return "image/png";
   if (at(0, 0x52, 0x49, 0x46, 0x46) && at(8, 0x57, 0x45, 0x42, 0x50)) return "image/webp";
   return null;
+}
+
+/** Carré central de 256 px au plus (jamais agrandi), en WebP, sans métadonnées. null : l'image ne se décode pas. */
+export async function resizeAvatar(bytes: Uint8Array): Promise<Buffer | null> {
+  try {
+    const image = sharp(bytes, { limitInputPixels: 40_000_000, failOn: "error" }).rotate();
+    const { width, height } = await image.metadata();
+    const side = Math.min(AVATAR_SIZE, width ?? 0, height ?? 0);
+    if (!side) return null;
+    return await image.resize(side, side, { fit: "cover", position: "centre" }).webp({ quality: 86 }).toBuffer();
+  } catch {
+    return null;
+  }
 }
 
 /** POST : enregistre la photo (champ « avatar »). DELETE : la retire. La photo est gardée dans user.image. */
@@ -25,9 +41,9 @@ export async function handleAvatar(req: Request, auth: Auth): Promise<Response> 
     if (!(file instanceof Blob)) return Response.json({ error: "missing_file" }, { status: 400 });
     if (file.size > AVATAR_MAX_BYTES) return Response.json({ error: "too_large" }, { status: 413 });
     const bytes = new Uint8Array(await file.arrayBuffer());
-    const type = avatarType(bytes);
-    if (!type) return Response.json({ error: "bad_type" }, { status: 415 });
-    image = `data:${type};base64,${Buffer.from(bytes).toString("base64")}`;
+    const resized = avatarType(bytes) ? await resizeAvatar(bytes) : null;
+    if (!resized) return Response.json({ error: "bad_type" }, { status: 415 });
+    image = `data:image/webp;base64,${resized.toString("base64")}`;
   }
   await auth.api.updateUser({ headers: req.headers, body: { image } });
   return Response.json({ image });
