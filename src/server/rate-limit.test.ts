@@ -4,7 +4,9 @@ import { createMockDatabase, createServerDatabase } from "../../db/mocks/test-da
 import { createAuth } from "./auth";
 import { clientIp } from "./client-ip";
 import { GUEST_COOKIE, signGuest } from "./guest";
-import { hit, JOIN_RULE, joinGuard } from "./rate-limit";
+import en from "../i18n/locales/en.json";
+import fr from "../i18n/locales/fr.json";
+import { hit, ipKey, JOIN_RULE, joinGuard } from "./rate-limit";
 import { handleRoomsApi } from "./rooms-api";
 
 process.env.BETTER_AUTH_SECRET ??= "test-secret-test-secret-test-secret";
@@ -37,6 +39,31 @@ describe("SALLE-10 — client IP behind a proxy", () => {
   });
 });
 
+describe("SALLE-10 — limit key of an IP", () => {
+  test("an IPv4 address is its own key", () => {
+    expect(ipKey("203.0.113.7")).toBe("203.0.113.7");
+  });
+
+  test("an IPv4-mapped IPv6 address shares the IPv4 key", () => {
+    expect(ipKey("::ffff:203.0.113.7")).toBe("203.0.113.7");
+    expect(ipKey("::FFFF:203.0.113.7")).toBe("203.0.113.7");
+  });
+
+  test("IPv6 addresses of one /64 share a key, whatever their spelling", () => {
+    const key = ipKey("2001:db8:0:0::1");
+    expect(key).toBe("2001:db8:0:0::/64");
+    for (const other of ["2001:db8::2", "2001:0DB8:0000:0000:ffff:ffff:ffff:ffff", "2001:db8::1.2.3.4"]) expect(ipKey(other)).toBe(key);
+  });
+
+  test("another /64 gets another key", () => {
+    expect(ipKey("2001:db8:0:1::1")).not.toBe(ipKey("2001:db8:0:0::1"));
+  });
+
+  test("the unknown key stays as is", () => {
+    expect(ipKey("unknown")).toBe("unknown");
+  });
+});
+
 describe("SALLE-10 — attempt counter (10 per minute per IP)", () => {
   let db: Awaited<ReturnType<typeof createMockDatabase>>;
   beforeAll(async () => {
@@ -55,6 +82,11 @@ describe("SALLE-10 — attempt counter (10 per minute per IP)", () => {
 
   test("refused attempts keep counting but do not extend the window", async () => {
     expect(await hit(db, JOIN_RULE, "203.0.113.1", later(59_500))).toEqual({ allowed: false, retryAfter: 1 });
+  });
+
+  test("Retry-After never exceeds the window, even with a clock behind another instance's", async () => {
+    for (let i = 0; i < 11; i++) await hit(db, JOIN_RULE, "203.0.113.3", later(5_000));
+    expect(await hit(db, JOIN_RULE, "203.0.113.3", later(0))).toEqual({ allowed: false, retryAfter: 60 });
   });
 
   test("after the window, attempts are accepted again", async () => {
@@ -99,6 +131,17 @@ describe("SALLE-10 — POST /api/rooms/join is rate limited per IP", () => {
     expect(await res.json()).toEqual({ error: "rate_limited" });
     expect(Number(res.headers.get("retry-after"))).toBeGreaterThan(0);
     expect(Number(res.headers.get("retry-after"))).toBeLessThanOrEqual(60);
+  });
+
+  test("rate_limited is a known room error, translated in fr and en", () => {
+    expect(fr.room.errors.rate_limited).toBeString();
+    expect(en.room.errors.rate_limited).toBeString();
+    expect(fr.room.errors.rate_limited).not.toBe(en.room.errors.rate_limited);
+  });
+
+  test("addresses of one IPv6 /64 share the limit", async () => {
+    for (let i = 0; i < 10; i++) expect((await join(`2001:db8:7::${i + 1}`, "ZZZ222")).status).toBe(404);
+    expect((await join("2001:db8:7::ffff", "ZZZ222")).status).toBe(429);
   });
 
   test("once limited, even a valid code is refused (no oracle)", async () => {
