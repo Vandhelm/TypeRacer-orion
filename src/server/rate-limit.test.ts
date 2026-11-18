@@ -11,6 +11,8 @@ process.env.BETTER_AUTH_SECRET ??= "test-secret-test-secret-test-secret";
 process.env.BETTER_AUTH_URL ??= "http://localhost:3000";
 const SECRET = "guest-secret-guest-secret-guest-secret";
 const T0 = new Date("2026-11-18T12:00:00.000Z");
+// base migrée + mot de passe haché : lent quand toute la suite tourne en parallèle
+const SETUP_TIMEOUT = 20_000;
 const later = (ms: number) => new Date(T0.getTime() + ms);
 
 describe("SALLE-10 — client IP behind a proxy", () => {
@@ -39,7 +41,7 @@ describe("SALLE-10 — attempt counter (10 per minute per IP)", () => {
   let db: Awaited<ReturnType<typeof createMockDatabase>>;
   beforeAll(async () => {
     db = await createMockDatabase();
-  });
+  }, SETUP_TIMEOUT);
 
   test("the 11th attempt in one minute is refused, with a wait under a minute", async () => {
     for (let i = 0; i < 10; i++) expect((await hit(db, JOIN_RULE, "203.0.113.1", later(i * 1000))).allowed).toBe(true);
@@ -73,7 +75,7 @@ describe("SALLE-10 — POST /api/rooms/join is rate limited per IP", () => {
     await auth.api.signUpEmail({ body: { name: "Hote_Garde", email: "hote_garde@orion.test", password: "sushi-roll-42", username: "Hote_Garde", displayUsername: "Hote_Garde" } });
     const { headers } = await auth.api.signInUsername({ body: { username: "Hote_Garde", password: "sushi-roll-42" }, returnHeaders: true });
     hostCookie = headers.get("set-cookie")!.split(";")[0]!;
-  });
+  }, SETUP_TIMEOUT);
   const call = (method: string, path: string, ip: string, cookie: string, body?: unknown) =>
     handleRoomsApi(
       new Request(`http://localhost${path}`, {
@@ -150,7 +152,7 @@ describe.skipIf(!process.env.DATABASE_URL)("SALLE-10 — the limit holds across 
     const schema = await import("../../db/schema");
     const client = postgres(url.toString(), { max: 10, onnotice: () => {} });
     second = { db: drizzle(client, { schema }), close: () => client.end() };
-  });
+  }, SETUP_TIMEOUT);
   afterAll(async () => {
     await second?.close();
     await server?.drop();
