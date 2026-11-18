@@ -1,11 +1,13 @@
 import { describe, expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import sharp from "sharp";
-import { user } from "../../db/schema";
+import { players, user } from "../../db/schema";
+import { MIGRATIONS_DIR } from "../../db/client";
 import { createMockDatabase } from "../../db/mocks/test-database";
 import { placeholderEmail } from "../accounts/username";
 import { createAuth, type Auth } from "./auth";
 import { AVATAR_MAX_BYTES, avatarType, handleAvatar, resizeAvatar, saveAvatar } from "./account";
+import { playerStats } from "./races";
 
 process.env.BETTER_AUTH_SECRET ??= "test-secret-test-secret-test-secret";
 process.env.BETTER_AUTH_URL ??= "http://localhost:3000";
@@ -139,5 +141,35 @@ describe("AUTH-04 — la route enregistre la photo avec le vrai Better Auth", ()
     const removed = await handleAvatar(withCookie(new Request("http://localhost/api/account/avatar", { method: "DELETE" })), auth, saveAvatar(db));
     expect(removed.status).toBe(200);
     expect(await stored()).toBeNull();
+  });
+});
+
+describe("AUTH-04 — les photos enregistrées avant la réduction serveur", () => {
+  const LEGACY = "https://avatars.githubusercontent.com/u/1";
+  const insertAccount = async (db: Awaited<ReturnType<typeof createMockDatabase>>, name: string, image: string | null) => {
+    const [player] = await db.insert(players).values({ name }).returning();
+    await db.insert(user).values({ id: `u-${name}`, name, email: placeholderEmail(name), username: name.toLowerCase(), image, playerId: player!.id });
+  };
+  const imageOf = async (db: Awaited<ReturnType<typeof createMockDatabase>>, name: string) =>
+    (await db.select({ image: user.image }).from(user).where(eq(user.name, name)))[0]!.image;
+
+  test("la migration efface les images qui ne sont pas un WebP réduit par le serveur", async () => {
+    const db = await createMockDatabase();
+    const webp = `data:image/webp;base64,${(await picture(64, 64, "webp")).toString("base64")}`;
+    await insertAccount(db, "Vieux_Github", LEGACY);
+    await insertAccount(db, "Vieux_Png", "data:image/png;base64,iVBORw0KGgo=");
+    await insertAccount(db, "Photo_Webp", webp);
+    await insertAccount(db, "Sans_Photo", null);
+    await db.execute(sql.raw(await Bun.file(`${MIGRATIONS_DIR}/0007_legacy_avatars.sql`).text()));
+    expect(await imageOf(db, "Vieux_Github")).toBeNull();
+    expect(await imageOf(db, "Vieux_Png")).toBeNull();
+    expect(await imageOf(db, "Photo_Webp")).toBe(webp);
+    expect(await imageOf(db, "Sans_Photo")).toBeNull();
+  });
+
+  test("le profil n'affiche jamais une ancienne image non réduite", async () => {
+    const db = await createMockDatabase();
+    await insertAccount(db, "Vieux_Profil", LEGACY);
+    expect((await playerStats(db, "Vieux_Profil"))!.image).toBeNull();
   });
 });

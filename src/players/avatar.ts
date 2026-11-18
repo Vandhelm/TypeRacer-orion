@@ -22,3 +22,11 @@ export function generatedAvatar(name: string): GeneratedAvatar {
     angle: ((h >>> 9) % 61) - 30,
   };
 }
+
+/** AUTH-04 : le seul format que le serveur écrit dans user.image (carré WebP de 256 px au plus, voir server/account.ts). */
+export const STORED_AVATAR_PREFIX = "data:image/webp;base64,";
+
+/** La photo à afficher, ou null : une image qui n'a pas été réduite par le serveur n'est jamais affichée. */
+export function storedAvatar(image: string | null | undefined): string | null {
+  return image && image.startsWith(STORED_AVATAR_PREFIX) ? image : null;
+}
