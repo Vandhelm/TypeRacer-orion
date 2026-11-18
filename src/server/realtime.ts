@@ -26,6 +26,8 @@ export function createRealtime({ db, auth, secret, events, leaveAfterMs = LEAVE_
   /** Sockets ouvertes par membre et par salon : un deuxième onglet ne compte pas double. */
   const open = new Map<string, number>();
   const leaving = new Map<string, ReturnType<typeof setTimeout>>();
+  /** Les sockets ouvertes de chaque salon : celle d'un membre retiré (SALLE-07, expulsé) se ferme. */
+  const sockets = new Map<string, Set<ServerWebSocket<SocketData>>>();
   const presence = (data: SocketData) => `${data.code}|${data.key}`;
 
   /** Pousse l'état courant du salon à toutes ses sockets (sans lien d'invitation : il n'est montré qu'à l'hôte, par HTTP). */
@@ -33,8 +35,13 @@ export function createRealtime({ db, auth, secret, events, leaveAfterMs = LEAVE_
     if (!server) return;
     try {
       const id = await roomIdByCode(db, code);
-      const message: RoomSocketMessage = id === null ? { type: "closed" } : { type: "room", room: await roomView(db, id) };
+      const room = id === null ? null : await roomView(db, id);
+      const message: RoomSocketMessage = room ? { type: "room", room } : { type: "closed" };
       server.publish(topic(code), JSON.stringify(message));
+      // SALLE-07 : une socket dont le membre n'est plus dans le salon (expulsé) ne reçoit plus rien ; la page relit
+      // alors l'état par HTTP et apprend pourquoi (« kicked »)
+      const members = new Set(room?.members.map((m) => m.key));
+      for (const ws of sockets.get(code) ?? []) if (room && !members.has(ws.data.key)) ws.close(4403, "not_member");
     } catch (error) {
       console.error(error);
     }
@@ -73,6 +80,8 @@ export function createRealtime({ db, auth, secret, events, leaveAfterMs = LEAVE_
         leaving.delete(id);
         open.set(id, (open.get(id) ?? 0) + 1);
         ws.subscribe(topic(ws.data.code));
+        if (!sockets.has(ws.data.code)) sockets.set(ws.data.code, new Set());
+        sockets.get(ws.data.code)!.add(ws);
         try {
           const { room } = await readRoom(db, ws.data.code, ws.data.who);
           const message: RoomSocketMessage = { type: "room", room: { ...room, invite: null } };
@@ -85,6 +94,9 @@ export function createRealtime({ db, auth, secret, events, leaveAfterMs = LEAVE_
         // la page n'envoie rien par la socket : ses actions passent par les routes HTTP, validées (TECH-07)
       },
       close(ws: ServerWebSocket<SocketData>) {
+        const room = sockets.get(ws.data.code);
+        room?.delete(ws);
+        if (room && !room.size) sockets.delete(ws.data.code);
         const id = presence(ws.data);
         const left = (open.get(id) ?? 1) - 1;
         if (left > 0) {

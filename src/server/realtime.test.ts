@@ -104,6 +104,23 @@ describe("SALLE-03 — members are pushed in real time over a WebSocket", () => 
     bob.ws.close();
   });
 
+  test("SALLE-07 — a kicked member's socket is closed at once; the others see them gone", async () => {
+    const hostCookie = await signUp("Hote_Expulse_Live");
+    const room = ((await (await call("POST", "/api/rooms", hostCookie, { role: "player", settings: { visibility: "public" } })).json()) as { room: { code: string } }).room.code;
+    const cookie = guest("Expulse_Live");
+    const { you } = (await (await call("POST", "/api/rooms/join", cookie, { code: room })).json()) as { you: string };
+    const host = connect(url(`/ws/rooms/${room}`), hostCookie);
+    const victim = connect(url(`/ws/rooms/${room}`), cookie);
+    await host.next();
+    await victim.next();
+    expect((await call("POST", `/api/rooms/${room}/kick`, hostCookie, { member: you })).status).toBe(200);
+    expect(await victim.closed).toBe(4403);
+    let seen = await host.next();
+    while (seen.room!.members.some((m) => m.key === you)) seen = await host.next();
+    expect(seen.room!.members.map((m) => m.key)).not.toContain(you);
+    host.ws.close();
+  });
+
   test("SALLE-09 — once launched, closing every socket (going to /game) neither removes members nor closes the room", async () => {
     const hostCookie = await signUp("Hote_Course_Live");
     const racing = ((await (await call("POST", "/api/rooms", hostCookie, { role: "player", settings: { visibility: "public" } })).json()) as { room: { code: string } }).room.code;
