@@ -368,15 +368,21 @@ export async function finishRoom(db: Db, code: string, who: Identity): Promise<R
  * Quitter un salon. Le dernier qui part le ferme.
  * À BRANCHER (SALLE-08) : si l'hôte part, passer le rôle au membre humain présent depuis le plus longtemps.
  */
-export async function leaveRoom(db: Db, code: string, who: Identity, options: { unlessRacing?: boolean } = {}): Promise<{ left: boolean }> {
+export async function leaveRoom(db: Db, code: string, who: Identity, options: { unlessRacing?: boolean; unlessLaunchedWithinMs?: number } = {}): Promise<{ left: boolean }> {
   const { id } = await roomByCode(db, code);
   // sous le verrou du salon, comme joinRoom et launchRoom : l'état lu et la fermeture ne croisent ni entrée ni lancement
   return db.transaction(async (tx) => {
     await expireRaces(tx, id);
-    const [room] = await tx.select({ status: rooms.status }).from(rooms).where(eq(rooms.id, id)).for("update");
+    const within = options.unlessLaunchedWithinMs ?? 0;
+    const [room] = await tx
+      .select({ status: rooms.status, launchedRecently: sql<boolean>`coalesce(${rooms.launchedAt} > now() - ${within} * interval '1 millisecond', false)` })
+      .from(rooms)
+      .where(eq(rooms.id, id))
+      .for("update");
     // SALLE-10 : un salon fermé, ou dont on n'est pas membre, répond comme un code inconnu
     if (!room || room.status === "closed") throw new RoomRefused("not_found");
     if (options.unlessRacing && room.status === "racing") return { left: false };
+    if (within > 0 && room.launchedRecently) return { left: false };
     const removed = await tx.delete(roomMembers).where(and(eq(roomMembers.roomId, id), eq(roomMembers.memberKey, memberKey(who)))).returning({ key: roomMembers.memberKey });
     if (!removed.length) throw new RoomRefused("not_found");
     if (removed.length && !(await tx.$count(roomMembers, eq(roomMembers.roomId, id)))) {
@@ -390,11 +396,13 @@ export async function leaveRoom(db: Db, code: string, who: Identity, options: { 
 }
 
 /**
- * Départ constaté par le temps réel (plus aucune socket) : pendant une course, les membres sont sur /game, sans
- * socket de salon ; ils restent membres et le salon reste ouvert. Hors course, c'est un départ (leaveRoom).
+ * Départ constaté par le temps réel (plus aucune socket depuis `awayMs`) : pendant une course, les membres sont sur
+ * /game, sans socket de salon ; ils restent membres et le salon reste ouvert. Une course lancée pendant cette absence,
+ * ou juste avant (la socket s'est fermée en partant courir), garde aussi sa place à un membre, même si elle est déjà
+ * finie. Sinon, c'est un départ (leaveRoom). L'horloge est celle de la base, comme launched_at.
  */
-export function leaveAfterDisconnect(db: Db, code: string, who: Identity): Promise<{ left: boolean }> {
-  return leaveRoom(db, code, who, { unlessRacing: true });
+export function leaveAfterDisconnect(db: Db, code: string, who: Identity, awayMs = 0): Promise<{ left: boolean }> {
+  return leaveRoom(db, code, who, { unlessRacing: true, unlessLaunchedWithinMs: 2 * awayMs });
 }
 
 /** L'id d'un salon ouvert, ou null s'il n'existe pas ou est fermé. */

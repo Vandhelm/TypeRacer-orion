@@ -558,6 +558,20 @@ describe("SALLE-09 — a race nobody finishes ends on its own after the maximum 
     expect(read.room.status).toBe("results");
   });
 
+  test("a disconnect long after the last race is a real departure; one right after a launch is not", async () => {
+    const { room } = (await (await t.call("POST", "/api/rooms", host.cookie, { role: "player", settings: { visibility: "public" } })).json()) as Joined;
+    const cookie = t.freshGuest(`Absent_${room.code}`);
+    const { you } = (await (await t.call("POST", "/api/rooms/join", cookie, { code: room.code })).json()) as Joined;
+    const who = { kind: "guest" as const, name: "Absent", sessionId: you.slice("guest:".length) };
+    await t.call("POST", `/api/rooms/${room.code}/launch`, host.cookie);
+    await t.call("POST", `/api/rooms/${room.code}/finish`, host.cookie);
+    await t.call("POST", `/api/rooms/${room.code}/finish`, cookie);
+    expect(await statusOf(room.code)).toBe("results");
+    expect((await leaveAfterDisconnect(t.db, room.code, who, 15_000)).left).toBe(false);
+    await launchedAgo(room.code, 31_000);
+    expect((await leaveAfterDisconnect(t.db, room.code, who, 15_000)).left).toBe(true);
+  });
+
   test("a member who has finished is marked finished in the room view; the others are not", async () => {
     const code = await abandoned();
     const { room, you } = (await (await t.call("GET", `/api/rooms/${code}`, host.cookie)).json()) as { room: { members: { key: string; finished: boolean }[] }; you: string };

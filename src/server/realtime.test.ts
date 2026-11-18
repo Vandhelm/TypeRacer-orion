@@ -112,3 +112,43 @@ describe("SALLE-03 — members are pushed in real time over a WebSocket", () => 
     expect(room.room.members).toHaveLength(2);
   });
 });
+
+describe("SALLE-09 — going from the room to the race never costs a member their seat", () => {
+  const AWAY_MS = 400;
+  let server: ReturnType<typeof Bun.serve>;
+  let call: (method: string, path: string, cookie?: string, body?: unknown) => Promise<Response>;
+  let hostCookie: string;
+  const runner = `${GUEST_COOKIE}=${signGuest("Sprinteur", SECRET)}`;
+
+  beforeAll(async () => {
+    const db = await createMockDatabase();
+    const auth = createAuth(db);
+    const realtime = createRealtime({ db, auth, secret: SECRET, events: roomEvents, leaveAfterMs: AWAY_MS });
+    server = Bun.serve({ port: 0, fetch: (req, srv) => (realtime.matches(req) ? realtime.upgrade(req, srv) : new Response("not found", { status: 404 })), websocket: realtime.websocket });
+    call = (method, path, cookie, body) =>
+      handleRoomsApi(new Request(`http://localhost${path}`, { method, headers: { ...(cookie ? { cookie } : {}), "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) }), db, auth, SECRET, roomEvents.emit);
+    await auth.api.signUpEmail({ body: { name: "Hote_Sprint", email: placeholderEmail("Hote_Sprint"), password: "sushi-roll-42", username: "Hote_Sprint", displayUsername: "Hote_Sprint" } });
+    const { headers } = await auth.api.signInUsername({ body: { username: "Hote_Sprint", password: "sushi-roll-42" }, returnHeaders: true });
+    hostCookie = headers.get("set-cookie")!.split(";")[0]!;
+  });
+  afterAll(() => server.stop(true));
+
+  test("the socket closes while waiting, the race is launched and finished before the delay: the member stays", async () => {
+    const created = (await (await call("POST", "/api/rooms", hostCookie, { role: "player" })).json()) as { room: { code: string; invite: string } };
+    const code = created.room.code;
+    const { you } = (await (await call("POST", "/api/rooms/join", runner, { invite: created.room.invite })).json()) as { you: string };
+    const socket = connect(`ws://localhost:${server.port}/ws/rooms/${code}`, runner);
+    await socket.next();
+    socket.ws.close();
+    await socket.closed;
+    expect((await call("POST", `/api/rooms/${code}/launch`, hostCookie)).status).toBe(200);
+    await call("POST", `/api/rooms/${code}/finish`, hostCookie);
+    await call("POST", `/api/rooms/${code}/finish`, runner);
+    await Bun.sleep(AWAY_MS * 3);
+    const room = (await (await call("GET", `/api/rooms/${code}`, hostCookie)).json()) as { room: { status: string; members: { key: string }[] } };
+    expect(room.room.status).toBe("results");
+    expect(room.room.members.map((m) => m.key)).toContain(you);
+    // dans une salle privée, « retour au salon » passe par le code : le membre y est toujours
+    expect((await call("POST", "/api/rooms/join", runner, { code })).status).toBe(200);
+  });
+});

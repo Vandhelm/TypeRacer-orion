@@ -1,7 +1,7 @@
 // Temps réel des salons, par WebSocket (Bun.serve). Un adaptateur de transport : la logique reste dans rooms.ts.
 // - /ws/rooms/:code : seul un membre du salon (session vérifiée) ouvre la socket ; il reçoit l'état, puis chaque changement.
 // - Présence : quand la dernière socket d'un membre se ferme et ne revient pas dans le délai, il quitte le salon,
-//   sauf pendant une course (SALLE-09) : les membres sont alors sur /game, sans socket de salon.
+//   sauf pendant une course ou juste après son lancement (SALLE-09) : les membres sont alors sur /game, sans socket de salon.
 // Next.js et Vercel ne gardent pas de socket ouverte : la page y relit l'état par HTTP (voir useRoomLive).
 import type { Server, ServerWebSocket, WebSocketHandler } from "bun";
 import type { Db } from "../../db/client";
@@ -99,7 +99,7 @@ export function createRealtime({ db, auth, secret, events, leaveAfterMs = LEAVE_
             leaving.delete(id);
             if (open.has(id)) return;
             try {
-              if ((await leaveAfterDisconnect(db, code, who)).left) events.emit(code);
+              if ((await leaveAfterDisconnect(db, code, who, leaveAfterMs)).left) events.emit(code);
             } catch (error) {
               if (!(error instanceof RoomRefused)) console.error(error);
             }
