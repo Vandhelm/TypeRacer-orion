@@ -53,8 +53,8 @@ jobs:
       - name: Smoke tests
         run: bun run test:smoke
 
-      # TECH-02 interdit tout fichier .js/.jsx. Non bloquant tant que les 3 fichiers existants
-      # (api/index.js, createRacePool.js, createScene.js) ne sont pas convertis : retirer
+      # TECH-02 interdit tout fichier .js/.jsx. Non bloquant tant que les 2 fichiers existants
+      # (createRacePool.js, createScene.js) ne sont pas convertis : retirer
       # continue-on-error une fois fait.
       - name: Aucun fichier JavaScript (TECH-02)
         run: bun run check:no-js

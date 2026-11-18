@@ -13,7 +13,7 @@
     ".server/**",
     ".vercel/**",
     "db/migrations/**",
-    "api/**"
+    ".next/**"
   ],
   "rules": {
     "@typescript-eslint/no-explicit-any": "error",
