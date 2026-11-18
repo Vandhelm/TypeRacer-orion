@@ -267,7 +267,7 @@ export type JoinVia = { code: string } | { invite: string };
 async function roomFor(db: Db, via: JoinVia) {
   // À BRANCHER (SALLE-04) : un jeton par invité, lié à son IP ; ici, le jeton unique du salon.
   const [room] = await db.select().from(rooms).where("code" in via ? eq(rooms.code, via.code) : eq(rooms.inviteToken, via.invite));
-  // À BRANCHER (SALLE-10) : limiter les essais de code par IP, avant cette lecture, dans la route.
+  // SALLE-10 : les essais sont limités par IP avant cette lecture, dans la route (rate-limit.ts).
   if (!room) throw new RoomRefused("not_found");
   return room;
 }
