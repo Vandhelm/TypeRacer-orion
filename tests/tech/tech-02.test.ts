@@ -16,7 +16,7 @@ describe("TECH-02 TypeScript a 100 %", () => {
   });
 
   test("aucun any explicite", () => {
-    const offenders = sources.filter((f) => /(:\s*any\b|\bas\s+any\b|<any>|<any,|,\s*any>|\bany\[\])/.test(readFileSync(f, "utf8")));
+    const offenders = sources.filter((f) => f !== "tests/tech/tech-02.test.ts" && /(:\s*any\b|\bas\s+any\b|<any>|<any,|,\s*any>|\bany\[\])/.test(readFileSync(f, "utf8")));
     expect(offenders).toEqual([]);
   });
 
