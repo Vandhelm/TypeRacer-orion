@@ -28,7 +28,7 @@ export function joinsRoom(query: URLSearchParams) {
 }
 
 // TECH-07 : les paramètres d'URL reçus par la page sont validés avant d'être lus.
-const RoomParams = z.record(z.string(), z.union([z.string(), z.array(z.string())]).optional());
+const RoomParams = z.record(z.string(), z.union([z.string().max(256), z.array(z.string().max(256))]).optional());
 
 /** Les searchParams de Next.js en requête : la première valeur d'une clé répétée ; une entrée invalide est ignorée. */
 export function roomQuery(params: unknown): URLSearchParams {

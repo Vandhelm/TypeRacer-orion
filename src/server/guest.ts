@@ -25,10 +25,13 @@ export function signGuest(nickname: string, secret: string, now = Date.now()) {
   return `${payload}.${sign(payload, secret)}`;
 }
 
+// TECH-07 : la valeur du cookie vient du client ; une valeur démesurée est refusée avant tout calcul.
+const CookieValue = z.string().min(1).max(1024);
 const Payload = z.object({ n: z.string(), e: z.number() });
 
 /** Le pseudonyme d'un cookie, seulement si la signature, la date et la règle du pseudo sont bonnes. */
 export function verifyGuest(value: string, secret: string, now = Date.now()): string | null {
+  if (!CookieValue.safeParse(value).success) return null;
   const parts = value.split(".");
   if (parts.length !== 2 || !parts[0] || !parts[1]) return null;
   const [payload, signature] = parts as [string, string];
