@@ -210,3 +210,72 @@ describe("AUTH-03 — the server decides who is a bot, never the body", () => {
     expect(res.user).toBeDefined();
   });
 });
+
+describe("TECH-07 — the body of /api/races is checked by a schema", () => {
+  let db: Awaited<ReturnType<typeof createMockDatabase>>;
+  let auth: ReturnType<typeof createAuth>;
+  beforeAll(async () => {
+    db = await createMockDatabase();
+    auth = createAuth(db);
+  });
+
+  const cookie = `${GUEST_COOKIE}=${signGuest("Invite_Schema", GUEST_SECRET)}`;
+  /** Envoie le corps tel quel (texte JSON), avec une session d'invité valide. */
+  const send = (raw: string) =>
+    handleRace(new Request("http://localhost/api/races", { method: "POST", headers: { "content-type": "application/json", cookie }, body: raw }), db, auth, GUEST_SECRET);
+  const post = (body: unknown) => send(JSON.stringify(body));
+  const race = (players: unknown, summary: unknown = SUMMARY) => ({ id: crypto.randomUUID(), summary, players });
+  const keyed = (keys: unknown) => ({ ...result("Wasabi_Bot", true, 50), keys });
+
+  for (const player of [null, 1, "x", []]) {
+    test(`a player sent as ${JSON.stringify(player)} is refused with 400`, async () => {
+      const res = await post(race([player]));
+      expect(res.status).toBe(400);
+      expect((await res.json()).error).toStartWith("Invalid race");
+    });
+  }
+
+  for (const summary of [null, "x", []]) {
+    test(`a summary sent as ${JSON.stringify(summary)} is refused with 400`, async () => {
+      expect((await post(race([result("Ebi_Fry", true, 50)], summary))).status).toBe(400);
+    });
+  }
+
+  for (const keys of ["x", null, 42, []]) {
+    test(`a player's keys sent as ${JSON.stringify(keys)} are refused with 400`, async () => {
+      expect((await post(race([keyed(keys)]))).status).toBe(400);
+    });
+  }
+
+  for (const raw of ["null", "42", '"x"', "{", ""]) {
+    test(`a body sent as ${JSON.stringify(raw)} is refused with 400`, async () => {
+      expect((await send(raw)).status).toBe(400);
+    });
+  }
+
+  test("a number sent instead of a name is refused with 400", async () => {
+    expect((await post(race([{ ...result("Ebi_Fry", true, 50), name: 42 }]))).status).toBe(400);
+  });
+
+  test("a numeric string sent instead of a number is refused with 400", async () => {
+    expect((await post(race([{ ...result("Ebi_Fry", true, 50), wpm: "50" }]))).status).toBe(400);
+  });
+
+  test("a series longer than the race limit is refused with 400", async () => {
+    expect((await post(race([{ ...result("Ebi_Fry", true, 50), wpmSeries: Array(601).fill(1) }]))).status).toBe(400);
+  });
+
+  test("nine players are refused with 400", async () => {
+    expect((await post(race(Array.from({ length: 9 }, () => result("Ebi_Fry", true, 50))))).status).toBe(400);
+  });
+
+  test("a field the schema does not know is ignored, never stored", async () => {
+    const res = await post({ ...race([{ ...result("Ebi_Fry", true, 50), me: true, playerId: 1 }]), admin: true });
+    expect(res.status).toBe(201);
+  });
+
+  test("valid keys are kept and per-key junk is dropped", () => {
+    const parsed = parseRace(race([keyed({ e: [10, 2], ab: [9, 9], z: [-1, 0] })]));
+    expect(parsed.results[0]!.keys).toEqual({ e: [10, 2] });
+  });
+});

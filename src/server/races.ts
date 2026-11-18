@@ -8,7 +8,7 @@ import type { Auth } from "./auth";
 import { guestSecret, readGuest } from "./guest";
 import { storedAvatar } from "../players/avatar";
 import { isBotName } from "../players/bots";
-import { parseKeys, type KeyCounts } from "../players/keys";
+import { KeysSchema, type KeyCounts } from "../players/keys";
 import { players, raceConfigs, raceResults, races, raceSamples, user } from "../../db/schema";
 
 const LANGUAGES = ["fr", "en"] as const;
@@ -26,74 +26,80 @@ export class InvalidRace extends Error {}
 /** La même course, déjà reçue (même identifiant) : un rejeu. */
 export class DuplicateRace extends Error {}
 
-const RaceId = z.uuid();
-
 const fail = (what: string): never => {
   throw new InvalidRace(`Invalid race: ${what}`);
 };
-const oneOf = <T extends string>(list: readonly T[], value: unknown, what: string): T => (list.includes(value as T) ? (value as T) : fail(what));
-const int = (value: unknown, what: string, min = 0, high = 100_000) => {
-  const n = Number(value);
-  return Number.isFinite(n) && n >= min && n <= high ? Math.round(n) : fail(what);
-};
-const decimal = (value: unknown, what: string, min = 0, high = 100) => {
-  const n = Number(value);
-  return Number.isFinite(n) && n >= min && n <= high ? n : fail(what);
-};
-const series = (value: unknown, what: string) =>
-  (Array.isArray(value) && value.length <= MAX_SECONDS ? value : fail(what)).map((n) => int(n, what, 0, 10_000));
 
-/** Vérifie ce que le navigateur envoie : rien d'autre n'entre en base. */
-export function parseRace(body: unknown) {
-  const b = (body ?? {}) as Record<string, unknown>;
-  const s = (b.summary ?? fail("summary")) as Record<string, unknown>;
-  const config = {
-    language: oneOf(LANGUAGES, s.language, "language"),
-    botSpeed: oneOf(BOT_SPEEDS, s.botSpeed, "botSpeed"),
-    botAccuracy: oneOf(BOT_ACCURACIES, s.botAccuracy, "botAccuracy"),
-    textType: oneOf(TEXT_TYPES, s.textType, "textType"),
-    length: oneOf(TEXT_LENGTHS, s.length, "length"),
-    wordCount: int(s.wordCount, "wordCount", 1, 1000),
-    duration: int(s.duration, "duration", 1, MAX_SECONDS),
-    level: oneOf(LEVELS, s.level, "level"),
-    punctuation: !!s.punctuation,
-    numbers: !!s.numbers,
-    specials: !!s.specials,
-    accents: !!s.accents,
-    mistakes: oneOf(MISTAKE_MODES, s.mistakes, "mistakes"),
-    excluded: String(s.excluded ?? "").slice(0, 20),
-  };
-  const list = Array.isArray(b.players) && b.players.length >= 1 && b.players.length <= 8 ? b.players : fail("players");
-  const results = list.map((raw, index) => {
-    const p = raw as Record<string, unknown>;
-    const name = String(p.name ?? "").trim();
-    if (!name || name.length > 20) fail("name");
-    const [correct, wrong, extra, missed] = Array.isArray(p.chars) ? p.chars : fail("chars");
-    return {
-      name,
-      bot: !!p.bot,
-      rank: index + 1,
-      wpm: int(p.wpm, "wpm", 0, 500),
-      raw: int(p.raw, "raw", 0, 1000),
-      accuracy: decimal(p.accuracy, "accuracy"),
-      seconds: decimal(p.seconds, "seconds", 0, MAX_SECONDS),
-      correctChars: int(correct, "chars"),
-      wrongChars: int(wrong, "chars"),
-      extraChars: int(extra, "chars"),
-      missedChars: int(missed, "chars"),
-      consistency: int(p.consistency, "consistency", 0, 100),
-      idle: decimal(p.idle, "idle"),
-      finished: !!p.finished,
-      eliminated: !!p.eliminated,
-      wpmSeries: series(p.wpmSeries, "wpmSeries"),
-      rawSeries: series(p.rawSeries, "rawSeries"),
-      errorSeries: series(p.errorSeries, "errorSeries"),
-      keys: parseKeys(p.keys),
-    };
-  });
+// TECH-07 : le corps de POST /api/races passe par ce schéma, rien d'autre n'entre en base.
+// Un champ inconnu est ignoré (retiré), pas refusé : le navigateur envoie aussi `me` et d'autres réglages de la salle,
+// et rien de ce qui n'est pas lu ici n'atteint la base.
+const int = (min = 0, high = 100_000) => z.number().finite().min(min).max(high).transform(Math.round);
+const decimal = (min = 0, high = 100) => z.number().finite().min(min).max(high);
+const series = z.array(int(0, 10_000)).max(MAX_SECONDS);
+const flag = z.boolean().default(false);
+
+const SummarySchema = z.object({
+  language: z.enum(LANGUAGES),
+  botSpeed: z.enum(BOT_SPEEDS),
+  botAccuracy: z.enum(BOT_ACCURACIES),
+  textType: z.enum(TEXT_TYPES),
+  length: z.enum(TEXT_LENGTHS),
+  wordCount: int(1, 1000),
+  duration: int(1, MAX_SECONDS),
+  level: z.enum(LEVELS),
+  punctuation: flag,
+  numbers: flag,
+  specials: flag,
+  accents: flag,
+  mistakes: z.enum(MISTAKE_MODES),
+  excluded: z.string().default("").transform((value) => value.slice(0, 20)),
+  sessionSeconds: int(0, 10_000_000).default(0),
+});
+
+const PlayerSchema = z.object({
+  name: z.string().trim().min(1).max(20),
+  bot: flag,
+  wpm: int(0, 500),
+  raw: int(0, 1000),
+  accuracy: decimal(),
+  seconds: decimal(0, MAX_SECONDS),
+  chars: z.tuple([int(), int(), int(), int()]),
+  consistency: int(0, 100),
+  idle: decimal(),
+  finished: flag,
+  eliminated: flag,
+  wpmSeries: series,
+  rawSeries: series,
+  errorSeries: series,
+  keys: KeysSchema.default({}),
+});
+
+const RaceSchema = z.object({
   // l'identifiant de la course (AUTH-06) : facultatif ici, exigé par la route
-  const id = b.id === undefined ? null : RaceId.safeParse(b.id).data ?? fail("id");
-  return { id, config, content: String(b.content ?? "").slice(0, 10_000), sessionSeconds: int(s.sessionSeconds ?? 0, "sessionSeconds", 0, 10_000_000), results };
+  id: z.uuid().optional(),
+  summary: SummarySchema,
+  content: z.string().default("").transform((value) => value.slice(0, 10_000)),
+  players: z.array(PlayerSchema).min(1).max(8),
+});
+
+/** Le champ en cause, pour le message d'erreur : la dernière clé nommée du chemin (« players.0.chars.1 » → « chars »). */
+const fieldOf = (path: PropertyKey[]) => [...path].reverse().find((key): key is string => typeof key === "string") ?? "body";
+
+/** Vérifie ce que le navigateur envoie. Toute forme invalide lève InvalidRace (400), jamais une autre erreur. */
+export function parseRace(body: unknown) {
+  const parsed = RaceSchema.safeParse(body);
+  if (!parsed.success) return fail(fieldOf(parsed.error.issues[0]?.path ?? []));
+  const { id, summary, content, players: list } = parsed.data;
+  const { sessionSeconds, ...config } = summary;
+  const results = list.map(({ chars: [correctChars, wrongChars, extraChars, missedChars], ...player }, index) => ({
+    ...player,
+    rank: index + 1,
+    correctChars,
+    wrongChars,
+    extraChars,
+    missedChars,
+  }));
+  return { id: id ?? null, config, content, sessionSeconds, results };
 }
 
 type ParsedRace = ReturnType<typeof parseRace>;
