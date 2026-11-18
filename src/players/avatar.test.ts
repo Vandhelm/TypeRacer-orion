@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { generatedAvatar } from "./avatar";
+import { generatedAvatar, storedAvatar } from "./avatar";
 
 describe("AUTH-03 — generated avatar", () => {
   test("is the same for the same name", () => {
@@ -28,6 +28,18 @@ describe("AUTH-03 — generated avatar", () => {
       expect(hue).toBeLessThan(360);
       expect(angle).toBeGreaterThanOrEqual(-30);
       expect(angle).toBeLessThanOrEqual(30);
+    }
+  });
+});
+
+describe("AUTH-04 — stored photo", () => {
+  test("keeps only the WebP data URI written by the server", () => {
+    expect(storedAvatar("data:image/webp;base64,UklGRg==")).toBe("data:image/webp;base64,UklGRg==");
+  });
+
+  test("drops anything else", () => {
+    for (const image of ["https://avatars.githubusercontent.com/u/1", "data:image/png;base64,iVBORw0KGgo=", "data:image/svg+xml,<svg/>", "", null, undefined]) {
+      expect(storedAvatar(image)).toBeNull();
     }
   });
 });

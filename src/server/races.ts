@@ -6,6 +6,7 @@ import { z } from "zod";
 import type { Db } from "../../db/client";
 import type { Auth } from "./auth";
 import { guestSecret, readGuest } from "./guest";
+import { storedAvatar } from "../players/avatar";
 import { isBotName } from "../players/bots";
 import { parseKeys, type KeyCounts } from "../players/keys";
 import { players, raceConfigs, raceResults, races, raceSamples, user } from "../../db/schema";
@@ -207,7 +208,7 @@ export async function playerStats(db: Db, name: string) {
   return {
     name: player.name,
     bot: player.isBot,
-    image: account?.image ?? null,
+    image: storedAvatar(account?.image),
     races: totals?.races ?? 0,
     wins: totals?.wins ?? 0,
     bestWpm: totals?.best ?? null,

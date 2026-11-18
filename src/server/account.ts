@@ -1,6 +1,6 @@
 // Photo de profil (AUTH-04) : le serveur revérifie le format et le poids, puis réduit lui-même l'image,
 // sans se fier à la réduction faite par le navigateur.
-import { eq } from "drizzle-orm";
+import { eq, isNotNull } from "drizzle-orm";
 import sharp from "sharp";
 import type { Db } from "../../db/client";
 import * as schema from "../../db/schema";
@@ -29,6 +29,32 @@ export async function resizeAvatar(bytes: Uint8Array): Promise<Buffer | null> {
   } catch {
     return null;
   }
+}
+
+/** Une photo déjà réduite par le serveur : un carré WebP de 256 px au plus. */
+async function isReduced(bytes: Uint8Array) {
+  if (avatarType(bytes) !== "image/webp") return false;
+  const { width, height } = await sharp(bytes).metadata().catch(() => ({ width: 0, height: 0 }));
+  return Boolean(width) && width === height && width! <= AVATAR_SIZE;
+}
+
+/**
+ * Lancé après chaque migration (db/cli.ts) : les photos écrites avant la réduction côté serveur sont réduites
+ * à leur tour, celles qui ne se décodent pas (ou qui ne sont pas JPEG, PNG ou WebP) sont effacées.
+ * Une photo déjà réduite n'est pas retouchée : la relancer ne change rien. Renvoie le nombre de comptes modifiés.
+ */
+export async function normalizeStoredAvatars(db: Db): Promise<number> {
+  const rows = await db.select({ id: schema.user.id, image: schema.user.image }).from(schema.user).where(isNotNull(schema.user.image));
+  let changed = 0;
+  for (const { id, image } of rows) {
+    const base64 = /^data:image\/(?:jpeg|png|webp);base64,(.+)$/s.exec(image!)?.[1];
+    const bytes = base64 ? new Uint8Array(Buffer.from(base64, "base64")) : null;
+    if (bytes && (await isReduced(bytes))) continue;
+    const resized = bytes && avatarType(bytes) ? await resizeAvatar(bytes) : null;
+    await saveAvatar(db)(id, resized ? `data:image/webp;base64,${resized.toString("base64")}` : null);
+    changed++;
+  }
+  return changed;
 }
 
 export type SaveAvatar = (userId: string, image: string | null) => Promise<void>;

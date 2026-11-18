@@ -12,6 +12,7 @@ import { CareerStats } from "./CareerStats";
 import { useKeyboardLayout } from "./hooks/useKeyboardLayout";
 import { usePlayerStats } from "./hooks/usePlayerStats";
 import { LastRace } from "./LastRace";
+import { storedAvatar } from "../../players/avatar";
 
 const TABS = ["compte", "stats"] as const;
 type Tab = (typeof TABS)[number];
@@ -38,7 +39,7 @@ export function OwnProfile({ me }: { me: Me }) {
   const [notice] = useState(() => linkNotice(t));
   const [tab, setTab] = useState<Tab>(() => tabOf(location.hash));
   const [name, setName] = useState(me.displayUsername || me.name);
-  const [image, setImage] = useState(me.image ?? null);
+  const [image, setImage] = useState(storedAvatar(me.image));
   const [results] = useState(readResults);
   const result = results?.players.find((player) => player.me) ?? null;
   const stats = usePlayerStats(name);
