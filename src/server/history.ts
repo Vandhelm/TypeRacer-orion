@@ -60,18 +60,18 @@ export type HistoryPage = Awaited<ReturnType<typeof listHistory>>;
 /** Identifiant de course : un entier positif de la colonne integer de Postgres, écrit sans zéro devant. */
 const RaceIdSchema = z.string().regex(/^[1-9]\d{0,9}$/).transform(Number).pipe(z.number().max(2_147_483_647));
 
+/** Course inexistante ou course d'un autre : même refus, pour qu'on ne puisse pas deviner quels ids existent. */
 export class HistoryRefused extends Error {
-  constructor(readonly reason: "not_found" | "not_your_race") {
-    super(reason);
+  readonly reason = "not_found";
+  constructor() {
+    super("not_found");
   }
 }
-
-const REFUSAL_STATUS = { not_found: 404, not_your_race: 403 } as const;
 
 /**
  * Une course de l'historique, au format des résultats que le jeu confie au podium (RaceResults) :
  * les participants enregistrés dans l'ordre d'arrivée, toutes les colonnes de RES-02 et les séries par seconde (RES-03).
- * Refusée si la course n'existe pas, ou si le joueur n'y a pas participé.
+ * Refusée de la même façon si la course n'existe pas ou si le joueur n'y a pas participé.
  */
 export async function raceDetail(db: Db, playerId: number, raceId: number) {
   const [race] = await db
@@ -95,7 +95,7 @@ export async function raceDetail(db: Db, playerId: number, raceId: number) {
     .from(races)
     .innerJoin(raceConfigs, eq(raceConfigs.id, races.configId))
     .where(eq(races.id, raceId));
-  if (!race) throw new HistoryRefused("not_found");
+  if (!race) throw new HistoryRefused();
   const rows = await db
     .select({ result: raceResults, name: players.name, bot: players.isBot })
     .from(raceResults)
@@ -103,7 +103,7 @@ export async function raceDetail(db: Db, playerId: number, raceId: number) {
     .where(eq(raceResults.raceId, raceId))
     .orderBy(asc(raceResults.rank));
   const mine = rows.find((row) => row.result.playerId === playerId);
-  if (!mine) throw new HistoryRefused("not_your_race");
+  if (!mine) throw new HistoryRefused();
   const samples = await db
     .select({ playerId: raceSamples.playerId, wpm: raceSamples.wpm, raw: raceSamples.raw, errors: raceSamples.errors })
     .from(raceSamples)
@@ -160,11 +160,11 @@ export async function handleHistory(req: Request, db: Db, auth: Auth, secret = g
   if (detail) {
     const raceId = RaceIdSchema.safeParse(detail[1]);
     if (!raceId.success) return json({ error: "invalid_race" }, 400);
-    if (who === "none") return json({ error: "not_your_race" }, 403);
+    if (who === "none") return json({ error: "not_found" }, 404);
     try {
       return json(await raceDetail(db, who, raceId.data));
     } catch (error) {
-      if (error instanceof HistoryRefused) return json({ error: error.reason }, REFUSAL_STATUS[error.reason]);
+      if (error instanceof HistoryRefused) return json({ error: error.reason }, 404);
       throw error;
     }
   }

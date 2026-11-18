@@ -166,17 +166,26 @@ describe("HIST-02 — a race of the history shows its full results again", () =>
     expect(body.players[0]).toMatchObject({ wpm: 80, raw: 85, wpmSeries: [78, 80, 81], rawSeries: [80, 85, 86], errorSeries: [0, 1, 0] });
   });
 
-  test("a race of another account is refused (403) and leaks nothing", async () => {
+  test("a race of another account is refused like an unknown one (404) and leaks nothing", async () => {
     const { cookie } = await t.signUp("Detail_Autre");
     const res = await t.call(`/api/history/${raceId}`, cookie);
-    expect(res.status).toBe(403);
-    expect(await res.json()).toEqual({ error: "not_your_race" });
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: "not_found" });
   });
 
-  test("a race the player never ran is refused (403)", async () => {
+  test("a race the player never ran is refused (404)", async () => {
     const other = await t.signUp("Detail_Tiers");
     const theirs = await t.race(other.playerId, "Detail_Tiers", 40);
-    expect((await t.call(`/api/history/${theirs}`, me.cookie)).status).toBe(403);
+    expect((await t.call(`/api/history/${theirs}`, me.cookie)).status).toBe(404);
+  });
+
+  test("someone else's race and a missing race get the same answer: ids cannot be enumerated", async () => {
+    const other = await t.signUp("Detail_Enum");
+    const theirs = await t.race(other.playerId, "Detail_Enum", 40);
+    const foreign = await t.call(`/api/history/${theirs}`, me.cookie);
+    const missing = await t.call("/api/history/2000000001", me.cookie);
+    expect(foreign.status).toBe(missing.status);
+    expect(await foreign.json()).toEqual(await missing.json());
   });
 
   test("an unknown race is not found (404)", async () => {
