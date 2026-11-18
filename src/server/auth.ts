@@ -36,6 +36,9 @@ function withSuffix(name: string, n: number) {
   return name.slice(0, USERNAME_MAX - suffix.length) + suffix;
 }
 
+/** La photo (AUTH-04) ne s'écrit que par /api/account/avatar, qui la vérifie et la réduit. */
+const imageNotAllowed = () => new APIError("BAD_REQUEST", { code: "IMAGE_NOT_ALLOWED", message: "Use /api/account/avatar to change the profile picture." });
+
 const invalidDisplayUsername = () => new APIError("BAD_REQUEST", { code: "INVALID_DISPLAY_USERNAME", message: "Display username is invalid." });
 
 export function createAuth(db: Db) {
@@ -84,7 +87,8 @@ export function createAuth(db: Db) {
               const [player] = await db.insert(schema.players).values({ name }).onConflictDoNothing().returning({ id: schema.players.id });
               if (!player) continue;
               const chosen = external && { username: name.toLowerCase(), displayUsername: name, needsUsername: n > 1 };
-              return { data: { ...data, ...chosen, playerId: player.id } };
+              // Ni l'image envoyée à l'inscription ni l'avatar externe de GitHub ou Discord : rien de vérifié ni de réduit (AUTH-04).
+              return { data: { ...data, ...chosen, image: null, playerId: player.id } };
             }
             throw new APIError("BAD_REQUEST", { message: "Username is already taken." });
           },
@@ -93,6 +97,11 @@ export function createAuth(db: Db) {
           // Changer de pseudo renomme aussi le joueur : le nom en jeu suit le compte.
           // Le pseudo affiché n'est que le pseudo avec sa casse : sans pseudo, il reprend le pseudo ; autre chose est refusé.
           before: async (data, ctx) => {
+            // AUTH-04 : POST /api/auth/update-user écrirait `image` tel quel, il est refusé.
+            // Les autres mises à jour (liaison GitHub ou Discord) ne touchent jamais la photo.
+            // Better Auth fusionne le résultat avec `data` : seul `image: undefined` retire la photo de la mise à jour.
+            if (data.image !== undefined && ctx?.path === "/update-user") throw imageNotAllowed();
+            const noImage = { image: undefined };
             const sessionUser = ctx?.context.session?.user as { playerId?: number; username?: string | null } | undefined;
             const playerId = sessionUser?.playerId;
             // La route accepte n'importe quel JSON et le plugin ne vérifie que les chaînes : null ou 42 sont refusés ici.
@@ -102,14 +111,14 @@ export function createAuth(db: Db) {
             // Le plugin a déjà mis `username` en minuscules : la casse saisie se retrouve dans la requête.
             const typed = (ctx?.body as { username?: unknown } | undefined)?.username;
             const name = data.displayUsername ?? (typeof typed === "string" && typed.toLowerCase() === data.username ? typed : data.username);
-            if (typeof name !== "string" || !playerId) return;
+            if (typeof name !== "string" || !playerId) return { data: { ...data, ...noImage } };
             const usernameAfter = typeof data.username === "string" ? data.username : sessionUser?.username;
             if (!isValidUsername(name) || name.toLowerCase() !== usernameAfter?.toLowerCase()) {
               throw invalidDisplayUsername();
             }
             const renamed = await db.update(schema.players).set({ name }).where(eq(schema.players.id, playerId)).returning({ id: schema.players.id }).catch(() => []);
             if (!renamed.length) throw new APIError("BAD_REQUEST", { code: "USERNAME_IS_ALREADY_TAKEN", message: "Username is already taken." });
-            return { data: { ...data, displayUsername: name, needsUsername: false } };
+            return { data: { ...data, ...noImage, displayUsername: name, needsUsername: false } };
           },
         },
       },
