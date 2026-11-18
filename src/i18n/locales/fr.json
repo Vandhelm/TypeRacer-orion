@@ -25,6 +25,8 @@
     "or": "OU",
     "withGithub": "Continuer avec GitHub",
     "nicknameRule": "3 à 20 lettres, chiffres ou _",
+    "badNickname": "Surnom : 3 à 20 lettres, chiffres ou _.",
+    "guestFailed": "Impossible d'enregistrer ce surnom. Réessaie.",
     "withDiscord": "Continuer avec Discord",
     "socialFailed": "La connexion {{provider}} a échoué. Réessayez.",
     "chooseUsername": "Choisis ton pseudo",

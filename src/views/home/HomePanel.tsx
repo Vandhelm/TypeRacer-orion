@@ -8,7 +8,7 @@ import { DiscordIcon, GithubIcon } from "../../components/icons";
 import { Stamp } from "../../components/Stamp";
 import { ViewTabs } from "../../components/tabs/ViewTabs";
 import { cleanRoomCode } from "../../rooms/access";
-import { NICKNAME_MAX, NICKNAME_PATTERN, saveNickname, storedNickname } from "../../players/nickname";
+import { isValidNickname, NICKNAME_MAX, NICKNAME_PATTERN, startGuestSession, storedNickname } from "../../players/nickname";
 import { authClient, changeUsername, isProvider, linkProvider, PROVIDER_NAMES, signInWith, signInWithUsername, signUpWithUsername, SOCIAL_PROVIDERS, type SocialProvider } from "../../accounts/client";
 import { isValidUsername, PASSWORD_MIN } from "../../accounts/username";
 
@@ -25,6 +25,8 @@ export function HomePanel({ ref }: { ref?: Ref<HTMLElement> }) {
   const [pane, setPane] = useState<Pane>("play");
   const [code, setCode] = useState("");
   const [nickname, setNickname] = useState(() => storedNickname() ?? "");
+  const [playError, setPlayError] = useState("");
+  const nicknameInput = useRef<HTMLInputElement>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -69,10 +71,21 @@ export function HomePanel({ ref }: { ref?: Ref<HTMLElement> }) {
     setStamp((s) => ({ key, on: true, play: s.play + 1 }));
     stampTimer.current = window.setTimeout(() => setStamp((s) => ({ ...s, on: false })), 1700);
   }
-  const submitWith = (key: StampKey) => (e: FormEvent) => {
+  // AUTH-02 : un invité choisit son pseudonyme avant de rejoindre ; le serveur le valide et pose le cookie signé
+  async function ensurePlayer() {
+    setPlayError("");
+    if (me) return true;
+    const ok = isValidNickname(nickname) && (await startGuestSession(nickname));
+    if (!ok) {
+      setPlayError(t(isValidNickname(nickname) ? "home.guestFailed" : "home.badNickname"));
+      nicknameInput.current?.focus();
+    }
+    return ok;
+  }
+  async function play(e: FormEvent) {
     e.preventDefault();
-    showStamp(key);
-  };
+    if (await ensurePlayer()) showStamp("stampPlay");
+  }
   // AUTH-03 : un invité ne crée pas de salon, on l'envoie vers l'onglet compte
   function createRoom() {
     if (me) location.href = "/room?new";
@@ -117,10 +130,11 @@ export function HomePanel({ ref }: { ref?: Ref<HTMLElement> }) {
   }
 
   // code saisi : on rejoint le salon avec le code déjà inscrit
-  function enterCode() {
+  async function enterCode() {
+    if (code.length !== 6) return codeInput.current?.focus();
+    if (!(await ensurePlayer())) return;
     showStamp("stampCode");
-    if (code.length === 6) setTimeout(() => { location.href = "/room?code=" + code; }, 900);
-    else codeInput.current?.focus();
+    setTimeout(() => { location.href = "/room?code=" + code; }, 900);
   }
 
   return (
@@ -141,7 +155,7 @@ export function HomePanel({ ref }: { ref?: Ref<HTMLElement> }) {
         />
 
         <div className="panes grid grid-cols-[minmax(0,1fr)]">
-          <form className={pane === "play" ? FORM : `is-hidden ${FORM}`} id="pane-play" aria-hidden={pane !== "play"} onSubmit={submitWith("stampPlay")}>
+          <form className={pane === "play" ? FORM : `is-hidden ${FORM}`} id="pane-play" aria-hidden={pane !== "play"} onSubmit={(e) => void play(e)}>
             <TextField
               id="nickname"
               num="01"
@@ -155,12 +169,14 @@ export function HomePanel({ ref }: { ref?: Ref<HTMLElement> }) {
                 title: t("home.nicknameRule"),
                 placeholder: "Corail_418",
                 value: nickname,
-                onChange: (e) => {
-                  setNickname(e.target.value);
-                  saveNickname(e.target.value);
-                },
+                ref: nicknameInput,
+                required: !me,
+                "aria-invalid": playError ? true : undefined,
+                "aria-describedby": "play-error",
+                onChange: (e) => setNickname(e.target.value),
               }}
             />
+            <p id="play-error" role="alert" className="min-h-[1.4em] font-mono text-[max(11px,1.3vh)] tracking-[.08em] text-red-text">{playError}</p>
 
             <div className="flex flex-col gap-[1.3vh]">
               <FlipButton type="submit" label={t("home.play")} backLabel={t("home.playBack")} />
@@ -183,11 +199,11 @@ export function HomePanel({ ref }: { ref?: Ref<HTMLElement> }) {
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.preventDefault();
-                      enterCode();
+                      void enterCode();
                     }
                   }}
                 />
-                <OutlineButton id="enter-code" onClick={enterCode}>{t("home.enterCode")}</OutlineButton>
+                <OutlineButton id="enter-code" onClick={() => void enterCode()}>{t("home.enterCode")}</OutlineButton>
               </div>
             </TextField>
           </form>

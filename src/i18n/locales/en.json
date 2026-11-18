@@ -25,6 +25,8 @@
     "or": "OR",
     "withGithub": "Continue with GitHub",
     "nicknameRule": "3 to 20 letters, digits or _",
+    "badNickname": "Nickname: 3 to 20 letters, digits or _.",
+    "guestFailed": "Could not save this nickname. Try again.",
     "withDiscord": "Continue with Discord",
     "socialFailed": "{{provider}} sign-in failed. Try again.",
     "chooseUsername": "Choose your username",

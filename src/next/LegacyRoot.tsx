@@ -4,6 +4,7 @@
 import { lazy, StrictMode, Suspense, type ComponentType } from "react";
 import { I18nextProvider } from "react-i18next";
 import i18n from "../i18n";
+import { setPlayerName } from "../players/nickname";
 
 export type LegacyPageName = "home" | "room" | "game" | "podium" | "profile";
 
@@ -16,7 +17,8 @@ const pages: Record<LegacyPageName, ComponentType> = {
   profile: lazy(() => import("../views/profile/ProfilePage").then((m) => ({ default: m.ProfilePage }))),
 };
 
-export default function LegacyRoot({ name }: { name: LegacyPageName }) {
+export default function LegacyRoot({ name, player }: { name: LegacyPageName; player?: string }) {
+  setPlayerName(player ?? null);
   const Page = pages[name];
   return (
     <StrictMode>

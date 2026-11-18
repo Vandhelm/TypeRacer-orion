@@ -1,15 +1,18 @@
-// Le surnom d'un invité (AUTH-02) : choisi à l'accueil, gardé le temps de la session (cet onglet).
-// À BRANCHER : la session d'invité passera par un cookie signé côté serveur.
+// Le pseudonyme d'un invité (AUTH-02). Choix : ASCII seulement — lettres sans accent, chiffres et _,
+// la même règle que les pseudos de compte (src/accounts/username.ts), pour qu'un nom reste lisible et
+// tapable partout et sans homoglyphes. Le serveur (src/server/guest.ts) revalide et le garde dans un cookie
+// signé ; sessionStorage ne sert qu'à pré-remplir le champ de l'accueil.
 export const NICKNAME_MIN = 3;
 export const NICKNAME_MAX = 20;
 export const NICKNAME_PATTERN = `[A-Za-z0-9_]{${NICKNAME_MIN},${NICKNAME_MAX}}`;
+const NICKNAME = new RegExp(`^${NICKNAME_PATTERN}$`);
 const KEY = "orion-nickname";
 
 export function isValidNickname(value: string) {
-  return new RegExp(`^${NICKNAME_PATTERN}$`).test(value);
+  return NICKNAME.test(value);
 }
 
-/** Le surnom choisi, s'il y en a un. */
+/** Le dernier pseudonyme accepté par le serveur dans cet onglet, pour pré-remplir le champ. */
 export function storedNickname() {
   try {
     const value = sessionStorage.getItem(KEY) ?? "";
@@ -25,11 +28,22 @@ export function saveNickname(value: string) {
   return true;
 }
 
-/** Mon nom en jeu : le surnom choisi, sinon un nom d'invité tiré une fois pour la session. */
+/** Ouvre la session d'invité : le serveur valide le pseudonyme et pose le cookie signé. */
+export async function startGuestSession(nickname: string) {
+  if (!isValidNickname(nickname)) return false;
+  const res = await fetch("/api/guest", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ nickname }) }).catch(() => null);
+  if (!res?.ok) return false;
+  saveNickname(nickname);
+  return true;
+}
+
+let playerName: string | null = null;
+/** Le nom vérifié par le serveur pour cette page (compte connecté ou cookie d'invité). */
+export function setPlayerName(name: string | null) {
+  playerName = name;
+}
+
+/** Mon nom en jeu : celui que le serveur a vérifié. Jamais de nom inventé à la place d'un pseudonyme. */
 export function myName() {
-  const chosen = storedNickname();
-  if (chosen) return chosen;
-  const guest = `Invite_${Math.floor(1000 + Math.random() * 9000)}`;
-  saveNickname(guest);
-  return guest;
+  return playerName ?? "";
 }
