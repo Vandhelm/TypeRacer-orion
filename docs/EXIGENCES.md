@@ -23,12 +23,12 @@ Les statuts viennent des rapports de l'agent `qa` (skill `criteria-check`). Une 
 
 | ID | Statut | Fichiers principaux | Tests associés | Notes et choix |
 |---|---|---|---|---|
-| DES-01 | non vérifié |  |  |  |
-| DES-02 | non vérifié |  |  |  |
-| DES-03 | non vérifié |  |  |  |
-| DES-04 | non vérifié |  |  |  |
-| DES-05 | non vérifié |  |  |  |
-| DES-06 | non vérifié |  |  |  |
+| DES-01 | non fait | — | aucun | `docs/DEMARCHE-CREATIVE.md` absent. Vérifié le 2026-11-18 (QA site, light). |
+| DES-02 | partiel | `src/components/brand/LogoTitle.tsx` | aucun | Logo SVG dans l'appli ; favicon et croquis absents. Vérifié le 2026-11-18 (QA site, light). |
+| DES-03 | non fait | — | aucun | Moodboard, palette et typographies non documentés (`docs/design-system.html` non suivi). Vérifié le 2026-11-18 (QA site, light). |
+| DES-04 | partiel | `src/styles/base/tokens.css`, `src/views/game/RacePool.tsx` | aucun | Piste dédiée, pas de shadcn ; rendu non vérifié (light). Vérifié le 2026-11-18 (QA site, light). |
+| DES-05 | non fait | `src/styles/base/tokens.css` | aucun | Sombre seulement, pas de sélecteur, pas de justification mono-thème. Vérifié le 2026-11-18 (QA site, light). |
+| DES-06 | partiel | `src/styles/pages/game/game.css` | aucun | Pas de message « clavier physique » sur mobile ; 360 px non vérifié. Vérifié le 2026-11-18 (QA site, light). |
 
 ## 5. Fonctionnalités
 
@@ -47,101 +47,101 @@ Les statuts viennent des rapports de l'agent `qa` (skill `criteria-check`). Une 
 
 | ID | Statut | Fichiers principaux | Tests associés | Notes et choix |
 |---|---|---|---|---|
-| SALLE-01 | non vérifié |  |  |  |
-| SALLE-02 | non vérifié |  |  |  |
-| SALLE-03 | non vérifié |  |  |  |
-| SALLE-04 | non vérifié |  |  |  |
-| SALLE-05 | non vérifié |  |  |  |
-| SALLE-06 | non vérifié |  |  |  |
-| SALLE-07 | non vérifié |  |  |  |
-| SALLE-08 | non vérifié |  |  |  |
-| SALLE-09 | non vérifié |  |  |  |
-| SALLE-10 | non vérifié |  |  |  |
+| SALLE-01 | partiel | `src/views/room/room.ts`, `app/room/page.tsx`, `src/server/room-gate.ts` | `src/server/room-gate.test.ts` | Salle créée seulement dans le navigateur (`localStorage`), aucune route serveur. Choix participant/spectateur absent. Vérifié le 2026-11-18 (QA site, light). |
+| SALLE-02 | partiel | `src/rooms/access.ts`, `db/schema/rooms.ts` | `src/rooms/access.test.ts` | Format et alphabet bons ; code tiré dans le navigateur (`Math.random`) et jamais inséré : unicité non garantie. Vérifié le 2026-11-18 (QA site, light). |
+| SALLE-03 | partiel | `src/rooms/access.ts`, `src/views/room/room.ts` | `src/rooms/access.test.ts` | Tableau des droits défini mais appliqué nulle part : tout `?code=`/`?invite=` ouvre une salle simulée. Vérifié le 2026-11-18 (QA site, light). |
+| SALLE-04 | partiel | `src/rooms/access.ts`, `src/views/room/RoomTicket.tsx` | aucun | Un seul jeton par salle (UUID, 122 bits < 128). Ni lien par invité, statut, liaison IP, révocation ni invalidation. Vérifié le 2026-11-18 (QA site, light). |
+| SALLE-05 | partiel | `src/views/room/room.ts`, `src/views/room/RoomIntro.tsx`, `db/schema/rooms.ts` | aucun | Capacité 2..8 au lieu de 2..30 (contrainte de base comprise). Pas de spectateurs. Vérifié le 2026-11-18 (QA site, light). |
+| SALLE-06 | non fait | `db/schema/rooms.ts` | aucun | Pas de contrainte « une salle par personne ». Vérifié le 2026-11-18 (QA site, light). |
+| SALLE-07 | non fait | — | aucun | Pas d'expulsion. Vérifié le 2026-11-18 (QA site, light). |
+| SALLE-08 | non fait | — | aucun | Pas de passation d'hôte ni de fermeture. Vérifié le 2026-11-18 (QA site, light). |
+| SALLE-09 | non fait | `db/schema/rooms.ts` | aucun | Colonne `status` non utilisée. Vérifié le 2026-11-18 (QA site, light). |
+| SALLE-10 | non fait | — | aucun | Aucune limite de tentatives par IP. Vérifié le 2026-11-18 (QA site, light). |
 
 ### 5.4 Rejoindre une course (JOIN)
 
 | ID | Statut | Fichiers principaux | Tests associés | Notes et choix |
 |---|---|---|---|---|
-| JOIN-01 | non vérifié |  |  |  |
-| JOIN-02 | non vérifié |  |  |  |
-| JOIN-03 | non vérifié |  |  |  |
+| JOIN-01 | partiel | `src/views/home/HomePanel.tsx`, `src/rooms/access.ts` | `src/rooms/access.test.ts` | Champ présent ; un code inexistant ouvre une salle simulée, aucune vérification serveur. Vérifié le 2026-11-18 (QA site, light). |
+| JOIN-02 | partiel | `src/views/home/RoomsView.tsx`, `src/views/home/rooms.ts` | aucun | Liste fixe ; ni filtres, ni hôte/état/complexité, ni mise à jour. Vérifié le 2026-11-18 (QA site, light). |
+| JOIN-03 | non fait | — | aucun | Pas de « Faire une course » fonctionnel. Vérifié le 2026-11-18 (QA site, light). |
 
 ### 5.5 Configuration de la course (CONF)
 
 | ID | Statut | Fichiers principaux | Tests associés | Notes et choix |
 |---|---|---|---|---|
-| CONF-01 | non vérifié |  |  |  |
-| CONF-02 | non vérifié |  |  |  |
-| CONF-03 | non vérifié |  |  |  |
-| CONF-04 | non vérifié |  |  |  |
-| CONF-05 | non vérifié |  |  |  |
-| CONF-06 | non vérifié |  |  |  |
-| CONF-07 | non vérifié |  |  |  |
-| CONF-08 | non vérifié |  |  |  |
-| CONF-09 | non vérifié |  |  |  |
-| CONF-10 | non vérifié |  |  |  |
-| CONF-11 | non vérifié |  |  |  |
-| CONF-12 | non vérifié |  |  |  |
+| CONF-01 | partiel | `src/views/room/RoomSettings.tsx`, `src/views/room/room.ts`, `src/server/races.ts` | aucun | Bornes 10..600 s (serveur 1..) au lieu de 30..600 s ; option « aucun » absente. Vérifié le 2026-11-18 (QA site, light). |
+| CONF-02 | complet | `src/views/room/RoomSettings.tsx`, `src/views/game/course.ts` | aucun | Langue du texte fr/en, séparée de l'interface. Vérifié le 2026-11-18 (QA site, light). |
+| CONF-03 | partiel | `src/views/game/course.ts`, `src/views/game/lexicon.ts`, `db/schema/texts.ts` | aucun | Texte cohérent en dur dans le code, `corpus_texts` non utilisée. Vérifié le 2026-11-18 (QA site, light). |
+| CONF-04 | partiel | `src/views/game/course.ts`, `src/views/room/RoomSettings.tsx` | aucun | Respecté en aléatoire ; dépassé en cohérent, ignoré en citation. Vérifié le 2026-11-18 (QA site, light). |
+| CONF-05 | partiel | `src/views/game/lexicon.ts`, `src/views/room/RoomSettings.tsx` | aucun | Trois niveaux, critères mesurables non documentés. Vérifié le 2026-11-18 (QA site, light). |
+| CONF-06 | partiel | `src/views/game/course.ts`, `src/views/room/RoomSettings.tsx` | aucun | Option majuscules absente. Vérifié le 2026-11-18 (QA site, light). |
+| CONF-07 | partiel | `src/views/game/course.ts`, `src/views/room/RoomSettings.tsx` | aucun | Exclusion seulement ; comportement en cohérent non documenté. Vérifié le 2026-11-18 (QA site, light). |
+| CONF-08 | complet | `src/views/game/race.ts` | `src/views/game/race.test.ts` | Correction obligatoire et libre ; mode « fatal » en plus. Vérifié le 2026-11-18 (QA site, light). |
+| CONF-09 | non fait | — | aucun | Pas d'option de bonus. Vérifié le 2026-11-18 (QA site, light). |
+| CONF-10 | partiel | `src/views/room/RoomSettings.tsx`, `src/views/room/room.ts` | aucun | Bots pour toute la salle, niveau commun ; pas d'ajout individuel. Vérifié le 2026-11-18 (QA site, light). |
+| CONF-11 | partiel | voir SALLE-03, SALLE-05 | — | Renvoie à SALLE-03 et SALLE-05 (partiels). Vérifié le 2026-11-18 (QA site, light). |
+| CONF-12 | non fait | `src/realtime/protocol.ts` | aucun | Configuration en `localStorage`, aucun message temps réel. Vérifié le 2026-11-18 (QA site, light). |
 
 ### 5.6 Déroulement d'une course (COURSE)
 
 | ID | Statut | Fichiers principaux | Tests associés | Notes et choix |
 |---|---|---|---|---|
-| COURSE-01 | non vérifié |  |  |  |
-| COURSE-02 | non vérifié |  |  |  |
-| COURSE-03 | non vérifié |  |  |  |
-| COURSE-04 | non vérifié |  |  |  |
-| COURSE-05 | non vérifié |  |  |  |
-| COURSE-06 | non vérifié |  |  |  |
-| COURSE-07 | non vérifié |  |  |  |
-| COURSE-08 | non vérifié |  |  |  |
-| COURSE-09 | non vérifié |  |  |  |
-| COURSE-10 | non vérifié |  |  |  |
-| COURSE-11 | non vérifié |  |  |  |
+| COURSE-01 | partiel | `src/views/game/race.ts`, `src/views/game/hooks/useRace.ts` | `src/views/game/race.test.ts` | Phases client countdown/racing/done seulement ; machine à états complète absente et non documentée. Vérifié le 2026-11-18 (QA site, light). |
+| COURSE-02 | partiel | `src/views/room/RoomPage.tsx` | aucun | Règle `>= 2` côté client seulement ; « 1 humain » et spectateurs non gérés ; `/game` accessible directement. Vérifié le 2026-11-18 (QA site, light). |
+| COURSE-03 | partiel | `src/views/game/hooks/useRace.ts`, `src/views/game/GamePage.tsx` | aucun | Décompte local non synchronisé ; texte tiré par chaque client. Vérifié le 2026-11-18 (QA site, light). |
+| COURSE-04 | complet | `src/views/game/TypingPanel.tsx`, `src/views/game/TypingText.tsx`, `src/views/game/race.ts` | `src/views/game/race.test.ts` | Coller bloqué ; glisser-déposer non bloqué ; rendu non vérifié. Vérifié le 2026-11-18 (QA site, light). |
+| COURSE-05 | partiel | `src/views/game/RacePool.tsx`, `src/views/game/pool/createRacePool.ts` | aucun | Manquent MPM par participant, vrais adversaires et vue spectateur. Vérifié le 2026-11-18 (QA site, light). |
+| COURSE-06 | non fait | `src/realtime/server.ts`, `src/realtime/protocol.ts` | `src/realtime/server.test.ts` | Progression déclarée par le client et relayée ; aucun serveur autoritaire. Vérifié le 2026-11-18 (QA site, light). |
+| COURSE-07 | non fait | — | aucun | Pas d'abandon. Vérifié le 2026-11-18 (QA site, light). |
+| COURSE-08 | non fait | — | aucun | Pas de reprise ni délai de 30 s. Vérifié le 2026-11-18 (QA site, light). |
+| COURSE-09 | partiel | `src/views/game/race.ts`, `src/views/game/hooks/useRace.ts` | `src/views/game/race.test.ts` | Fin calculée côté client ; cas « tous abandonné » absent. Vérifié le 2026-11-18 (QA site, light). |
+| COURSE-10 | partiel | `src/views/podium/results.ts` | `src/views/podium/results.test.ts` | Catégorie « abandon » absente. Vérifié le 2026-11-18 (QA site, light). |
+| COURSE-11 | partiel | `src/views/podium/PodiumScene.tsx` | aucun | « Rejouer » ouvert à tous ; fermeture de salle absente. Vérifié le 2026-11-18 (QA site, light). |
 
 ### 5.7 Bots (BOT)
 
 | ID | Statut | Fichiers principaux | Tests associés | Notes et choix |
 |---|---|---|---|---|
-| BOT-01 | non vérifié |  |  |  |
-| BOT-02 | non vérifié |  |  |  |
-| BOT-03 | non vérifié |  |  |  |
-| BOT-04 | non vérifié |  |  |  |
-| BOT-05 | non vérifié |  |  |  |
+| BOT-01 | partiel | `src/views/game/race.ts`, `src/views/room/room.ts` | `src/views/game/race.test.ts` | 4 réglages (25–100 MPM) au lieu de 5 niveaux ; non documentés. Vérifié le 2026-11-18 (QA site, light). |
+| BOT-02 | partiel | `src/views/game/race.ts` | aucun | Ni hésitation ni ralentissement sur mots difficiles. Vérifié le 2026-11-18 (QA site, light). |
+| BOT-03 | partiel | `src/views/game/race.ts` | `src/views/game/race.test.ts` | Fautes sans temps de correction ; mode d'erreur ignoré. Vérifié le 2026-11-18 (QA site, light). |
+| BOT-04 | partiel | `src/views/room/RoomPage.tsx`, `src/views/game/GamePage.tsx` | aucun | Pas de marqueur bot sur la piste. Vérifié le 2026-11-18 (QA site, light). |
+| BOT-05 | partiel | `src/views/game/race.ts`, `src/views/game/hooks/useRace.ts` | `src/views/game/race.test.ts` | Aléa injectable mais pas de graine. Vérifié le 2026-11-18 (QA site, light). |
 
 ### 5.8 Bonus de remontée (BONUS)
 
 | ID | Statut | Fichiers principaux | Tests associés | Notes et choix |
 |---|---|---|---|---|
-| BONUS-01 | non vérifié |  |  |  |
-| BONUS-02 | non vérifié |  |  |  |
-| BONUS-03 | non vérifié |  |  |  |
-| BONUS-04 | non vérifié |  |  |  |
+| BONUS-01 | non fait | — | aucun | Aucun code de bonus. Vérifié le 2026-11-18 (QA site, light). |
+| BONUS-02 | non fait | — | aucun | Aucun code de bonus. Vérifié le 2026-11-18 (QA site, light). |
+| BONUS-03 | non fait | — | aucun | Aucun code de bonus. Vérifié le 2026-11-18 (QA site, light). |
+| BONUS-04 | non fait | — | aucun | Aucun code de bonus. Vérifié le 2026-11-18 (QA site, light). |
 
 ### 5.9 Résultats et statistiques (RES)
 
 | ID | Statut | Fichiers principaux | Tests associés | Notes et choix |
 |---|---|---|---|---|
-| RES-01 | non vérifié |  |  |  |
-| RES-02 | non vérifié |  |  |  |
-| RES-03 | non vérifié |  |  |  |
-| RES-04 | non vérifié |  |  |  |
-| RES-05 | non vérifié |  |  |  |
+| RES-01 | complet | `src/views/podium/PodiumScene.tsx`, `src/views/podium/results.ts` | `src/views/podium/results.test.ts` | Vérifié le 2026-11-18 (QA site, light). |
+| RES-02 | partiel | `src/views/podium/PodiumBoard.tsx`, `src/views/podium/results.ts` | aucun | Manquent MPM brut, erreurs, temps, statut et bonus ; `<ol>` au lieu de `<table>`. Vérifié le 2026-11-18 (QA site, light). |
+| RES-03 | partiel | `src/views/profile/SpeedChart.tsx`, `src/views/profile/KeyboardHeatmap.tsx` | `src/views/profile/chart.test.ts`, `src/views/profile/keyboard.test.ts` | Graphique MPM à un seul joueur ; carte de chaleur cumulée sur la carrière. Vérifié le 2026-11-18 (QA site, light). |
+| RES-04 | non fait | — | aucun | Aucun indicateur de record personnel. Vérifié le 2026-11-18 (QA site, light). |
+| RES-05 | partiel | `src/server/races.ts`, `db/schema/races.ts` | `src/server/races.test.ts` | Sans bonus ni statut détaillé ; valeurs crues du navigateur. Vérifié le 2026-11-18 (QA site, light). |
 
 ### 5.10 Historique (HIST)
 
 | ID | Statut | Fichiers principaux | Tests associés | Notes et choix |
 |---|---|---|---|---|
-| HIST-01 | non vérifié |  |  |  |
-| HIST-02 | non vérifié |  |  |  |
+| HIST-01 | non fait | — | aucun | Ni route, ni liste, ni pagination. Vérifié le 2026-11-18 (QA site, light). |
+| HIST-02 | non fait | — | aucun | `race_samples` jamais relu. Vérifié le 2026-11-18 (QA site, light). |
 
 ### 5.11 Internationalisation (I18N)
 
 | ID | Statut | Fichiers principaux | Tests associés | Notes et choix |
 |---|---|---|---|---|
-| I18N-01 | non vérifié |  |  |  |
-| I18N-02 | non vérifié |  |  |  |
-| I18N-03 | non vérifié |  |  |  |
+| I18N-01 | partiel | `src/i18n/index.ts`, `src/i18n/locales/*.json`, `app/*/page.tsx` | aucun | `<title>` en dur en français ; `lang="fr"` fixé côté serveur. Vérifié le 2026-11-18 (QA site, light). |
+| I18N-02 | partiel | `src/i18n/index.ts`, `src/views/home/HomePage.tsx`, `src/views/room/RoomPage.tsx` | aucun | Sélecteur absent de game, podium et profile. Vérifié le 2026-11-18 (QA site, light). |
+| I18N-03 | complet | `src/views/podium/results.ts`, `src/views/profile/ProgressChart.tsx`, `src/views/profile/KeyboardHeatmap.tsx` | aucun | Intl selon la langue (fr-CA/en-CA). Vérifié le 2026-11-18 (QA site, light). |
 
 ## 6. Qualité
 
@@ -149,31 +149,31 @@ Les statuts viennent des rapports de l'agent `qa` (skill `criteria-check`). Une 
 
 | ID | Statut | Fichiers principaux | Tests associés | Notes et choix |
 |---|---|---|---|---|
-| TEST-01 | non vérifié |  |  |  |
-| TEST-02 | non vérifié |  |  |  |
-| TEST-03 | non vérifié |  |  |  |
+| TEST-01 | complet | `src/**/*.test.ts`, `db/mocks/seed.test.ts`, `tests/tech/` | `bun test` (295 réussis) | Vérifié le 2026-11-18 (QA site, light). |
+| TEST-02 | non fait | — | aucun | Pas de Playwright. Vérifié le 2026-11-18 (QA site, light). |
+| TEST-03 | non fait | — | aucun | Dépend de TEST-02. Vérifié le 2026-11-18 (QA site, light). |
 
 ### 6.2 Performance (PERF)
 
 | ID | Statut | Fichiers principaux | Tests associés | Notes et choix |
 |---|---|---|---|---|
-| PERF-01 | non vérifié |  |  |  |
-| PERF-02 | non vérifié |  |  |  |
-| PERF-03 | non vérifié |  |  |  |
+| PERF-01 | partiel | `app/home/page.tsx` | aucun | Lighthouse non mesuré. Vérifié le 2026-11-18 (QA site, light). |
+| PERF-02 | complet | `src/realtime/server.ts`, `src/realtime/client.ts`, `src/realtime/protocol.ts` | `src/realtime/server.test.ts` | 10 envois/s max ; écriture en base en fin de course. Vérifié le 2026-11-18 (QA site, light). |
+| PERF-03 | partiel | `src/views/game/pool/createRacePool.ts` | aucun | Fluidité à 8 couloirs non mesurée. Vérifié le 2026-11-18 (QA site, light). |
 
 ### 6.3 Accessibilité (A11Y)
 
 | ID | Statut | Fichiers principaux | Tests associés | Notes et choix |
 |---|---|---|---|---|
-| A11Y-01 | non vérifié |  |  |  |
-| A11Y-02 | non vérifié |  |  |  |
-| A11Y-03 | non vérifié |  |  |  |
-| A11Y-04 | non vérifié |  |  |  |
+| A11Y-01 | partiel | `src/styles/base/tokens.css` | aucun | Un seul thème ; contraste non mesuré. Vérifié le 2026-11-18 (QA site, light). |
+| A11Y-02 | partiel | `src/views/*/…Page.tsx`, `src/views/podium/PodiumBoard.tsx` | aucun | Pas de `<footer>` ; podium en `<ol>` ; `/game` sans `<main>`. Vérifié le 2026-11-18 (QA site, light). |
+| A11Y-03 | partiel | `src/views/room/TextEditorDialog.tsx` | aucun | Champ nom du texte sans libellé (l.100). Vérifié le 2026-11-18 (QA site, light). |
+| A11Y-04 | partiel | `src/styles/components/**` | aucun | `:focus-visible` présent ; parcours clavier non vérifié ; `.name-input` en `outline: none`. Vérifié le 2026-11-18 (QA site, light). |
 
 ### 6.4 Sécurité (SEC)
 
 | ID | Statut | Fichiers principaux | Tests associés | Notes et choix |
 |---|---|---|---|---|
-| SEC-01 | non vérifié |  |  |  |
-| SEC-02 | non vérifié |  |  |  |
-| SEC-03 | non vérifié |  |  |  |
+| SEC-01 | non fait | `src/realtime/server.ts`, `src/views/room/room.ts`, `src/views/room/RoomPage.tsx` | aucun | Aucune action d'hôte côté serveur. Vérifié le 2026-11-18 (QA site, light). |
+| SEC-02 | complet | `src/server/account.ts`, `src/server/auth.ts` | `src/server/account.test.ts` | Type par octets, 2 Mo max, sharp. Sans `content-length`, lecture complète avant contrôle (mineur). Vérifié le 2026-11-18 (QA site, light). |
+| SEC-03 | complet | `src/server/auth.ts` | `src/server/auth.test.ts` (indirect) | argon2id via `Bun.password`. Vérifié le 2026-11-18 (QA site, light). |
