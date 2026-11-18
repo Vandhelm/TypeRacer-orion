@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { DEFAULT_SETTINGS, type Role, type RoomSettings } from "../../../rooms/settings";
 import type { RoomResult } from "../../../server/rooms";
 import { roomApi, watchRoom, type Answer, type RoomError } from "../api";
+import { keepPresence } from "../presence";
 import { arrivalOf, isPlayer, roomOf, seatsOf, type Room, type RoomView } from "../room";
 
 /** Le temps d'attendre la fin d'une saisie avant d'envoyer les réglages au serveur. */
@@ -73,6 +74,9 @@ export function useRoom(page: "room" | "game" = "room") {
   }, [arrival, page, answer, joinRole, attempt]);
 
   useEffect(() => () => clearTimeout(timer.current), []);
+
+  // SALLE-08 : sur /room comme sur /game, la page donne signe de vie, socket ou pas
+  useEffect(() => (code ? keepPresence(code) : undefined), [code]);
 
   // En direct : les arrivées, les départs et les réglages de l'hôte. Le lien d'invitation reste celui reçu par HTTP.
   // /game ne suit pas le salon : sa socket fermée hors course ferait sortir le joueur (leaveAfterDisconnect)
