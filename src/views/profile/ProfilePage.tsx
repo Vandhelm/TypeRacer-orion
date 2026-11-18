@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { authClient } from "../../accounts/client";
 import { HangingButton } from "../../components/buttons/HangingButton";
 import { useRaceResults } from "../podium/hooks/useRaceResults";
-import { podiumHref, raceErrorKey, type PlayerResult, type RaceResults } from "../podium/results";
+import { podiumHref, raceErrorKey, rankLabel, type PlayerResult, type RaceResults } from "../podium/results";
 import { CareerStats } from "./CareerStats";
 import { useKeyboardLayout } from "./hooks/useKeyboardLayout";
 import { usePlayerStats, type StatsState } from "./hooks/usePlayerStats";
@@ -98,8 +98,8 @@ function PlayerView({ session, results, raceId, error }: ViewProps) {
     );
   }
 
-  const { result, index } = subject;
-  const place = t("profile.place", { rank: t(`podium.ranks.${index}`) });
+  const { result } = subject;
+  const place = result ? t("profile.place", { rank: rankLabel(t, result.rank) }) : "";
 
   return (
     <main className="profile" aria-labelledby="profile-name">

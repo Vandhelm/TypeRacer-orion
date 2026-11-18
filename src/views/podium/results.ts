@@ -1,10 +1,13 @@
 // Résultats d'une course, confiés par le jeu au podium et aux profils : tout vient de ce que chaque couloir a vraiment tapé pendant la course.
 import { CHARS_PER_WORD, laneElapsedMs, laneProgress, laneWpm, myAccuracy, type Race, type Sample } from "../game/race";
 import { parseKeys, roundKeys, type KeyCounts } from "../../players/keys";
+import type { TFunction } from "i18next";
 import type { Player, Room } from "../room/room";
 
 export type PlayerResult = {
   name: string;
+  /** Place à l'arrivée, à partir de 1. */
+  rank: number;
   me: boolean;
   /** Un bot du jeu : ses courses sont enregistrées et son profil est public. */
   bot: boolean;
@@ -81,10 +84,11 @@ export function buildResults(race: Race, players: Player[]): PlayerResult[] {
     .map((_, lane) => lane)
     .filter((lane) => !race.arrivals.includes(lane))
     .sort((a, b) => laneProgress(race, b) - laneProgress(race, a));
-  return [...race.arrivals, ...others].map((lane) => {
+  return [...race.arrivals, ...others].map((lane, index) => {
     const mine = lane === race.myLane;
     return {
       name: players[lane]!.name,
+      rank: index + 1,
       me: !!players[lane]!.me,
       bot: !!players[lane]!.bot,
       wpm: laneWpm(race, lane),
@@ -114,17 +118,18 @@ export function parseResults(raw: string | null): RaceResults | null {
 
 /** Ordre d'arrivée : le rang enregistré s'il y en a un (une course de l'historique), sinon l'ordre reçu. */
 const byRank = (players: Record<string, unknown>[]) =>
-  players.map((p, index) => ({ p, at: Number.isInteger(p.rank) ? Number(p.rank) : index + 1 })).sort((a, b) => a.at - b.at).map(({ p }) => p);
+  players.map((p, index) => ({ p, rank: Number.isInteger(p.rank) && Number(p.rank) >= 1 ? Number(p.rank) : index + 1 })).sort((a, b) => a.rank - b.rank);
 
 /** Des résultats confiés par le jeu (sessionStorage) ou relus sur le serveur (HIST-02), vérifiés champ par champ. */
 export function toResults(value: unknown): RaceResults | null {
   try {
     const stored = value as { summary?: unknown; players?: unknown } | null;
     if (!stored || !stored.summary || !Array.isArray(stored.players) || !stored.players.length) return null;
-    const players = byRank(stored.players).map((p: Record<string, unknown>): PlayerResult => {
+    const players = byRank(stored.players).map(({ p, rank }): PlayerResult => {
       const [correct = 0, wrong = 0, extra = 0, missed = 0] = numbersOf(p.chars);
       return {
         name: String(p.name),
+        rank,
         me: !!p.me,
         bot: !!p.bot,
         wpm: Number(p.wpm) || 0,
@@ -219,3 +224,8 @@ export async function fetchRaceResults(raceId: number, signal?: AbortSignal): Pr
 
 export const oneDecimal = (language: string, value: number) =>
   new Intl.NumberFormat(language === "en" ? "en-CA" : "fr-CA", { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(value);
+/** Le joueur classé à ce rang, s'il est connu : une marche du podium reste vide plutôt que d'y monter le suivant. */
+export const playerAt = (players: PlayerResult[], rank: number) => players.find((player) => player.rank === rank);
+
+/** Un rang en ordinal traduit (1re, 2e… / 1st, 2nd…), quelle que soit la taille de la salle. */
+export const rankLabel = (t: TFunction, rank: number) => t("podium.rank", { count: rank, ordinal: true });

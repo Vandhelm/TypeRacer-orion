@@ -1,5 +1,7 @@
 // HIST-01 : l'historique des courses du compte connecté, lu page par page sur le serveur.
+import type { TFunction } from "i18next";
 import { z } from "zod";
+import { rankLabel } from "../podium/results";
 
 const HistoryRaceSchema = z.object({
   id: z.number().int(),
@@ -50,3 +52,5 @@ export async function fetchHistory(page: number, signal?: AbortSignal): Promise<
 /** Même libellé que la carte de la dernière course. */
 export const outcomeKey = (race: Pick<HistoryRace, "finished" | "eliminated">) =>
   race.eliminated ? "profile.out" : race.finished ? "profile.finished" : "profile.notFinished";
+/** « 2e sur 3 » : le rang parmi tous les participants de la course. */
+export const historyRankText = (t: TFunction, race: Pick<HistoryRace, "rank" | "players">) => t("profile.history.rank", { rank: rankLabel(t, race.rank), players: race.players });

@@ -1,7 +1,7 @@
 import { useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useCameraTravel } from "./hooks/useCameraTravel";
-import { oneDecimal, profileHref, type PlayerResult } from "./results";
+import { oneDecimal, playerAt, profileHref, rankLabel, type PlayerResult } from "./results";
 import { SideFace } from "./SideFace";
 
 const RANKS = [1, 2, 3] as const;
@@ -31,12 +31,12 @@ export function PodiumScene({ players, arrived, raceId = null }: { players: Play
       <div className="podium-layer podium-layer--stand" data-depth="4.5">
         <div className="podium-stand" aria-label={t("podium.label")}>
           {RANKS.map((rank) => {
-            const player = players[rank - 1];
+            const player = playerAt(players, rank);
             const side = SIDE_FACES[rank];
             return (
               <div key={rank} className={`podium-block podium-block--${rank}${player ? "" : " is-hidden"}`}>
                 <span>{rank}</span>
-                {player && <a className="podium-name" href={profileHref(rank - 1, raceId)} aria-label={t("podium.viewStats", { name: player.name })}>{player.name}</a>}
+                {player && <a className="podium-name" href={profileHref(players.indexOf(player), raceId)} aria-label={t("podium.viewStats", { name: player.name })}>{player.name}</a>}
                 <span className="podium-speed">{player && `${wordsPerSecond(player)} ${t("podium.wordsPerSecond")}`}</span>
                 {side && <SideFace points={side} />}
                 {rank === 1 && (
@@ -50,10 +50,10 @@ export function PodiumScene({ players, arrived, raceId = null }: { players: Play
           })}
         </div>
         {AVATAR_ORDER.map((rank) => {
-          const player = players[rank - 1];
+          const player = playerAt(players, rank);
           if (!player) return null;
-          const label = t("podium.avatar", { name: player.name, rank: t(`podium.ranks.${rank - 1}`), speed: wordsPerSecond(player) });
-          return <a key={rank} className={`podium-avatar podium-avatar--${rank}`} href={profileHref(rank - 1, raceId)} tabIndex={-1} aria-label={label} />;
+          const label = t("podium.avatar", { name: player.name, rank: rankLabel(t, rank), speed: wordsPerSecond(player) });
+          return <a key={rank} className={`podium-avatar podium-avatar--${rank}`} href={profileHref(players.indexOf(player), raceId)} tabIndex={-1} aria-label={label} />;
         })}
         <div className="podium-reflection" aria-hidden="true"><div /><div /><div /></div>
       </div>

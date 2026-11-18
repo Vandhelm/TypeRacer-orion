@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { historyHref, historyRaceOf, podiumHref, profileHref, raceErrorKey, raceResultsUrl, toResults } from "./results";
+import { translate } from "../../i18n/test-instance";
+import { historyHref, historyRaceOf, playerAt, podiumHref, profileHref, raceErrorKey, raceResultsUrl, rankLabel, toResults } from "./results";
 
 const SUMMARY = {
   textType: "words", language: "fr", duration: 60, level: "common", punctuation: false, numbers: false, specials: false, accents: true,
@@ -37,8 +38,26 @@ describe("HIST-02 — a race of the history opens its results page", () => {
     const results = toResults({ id: 42, at: "2026-11-18T20:00:00.000Z", summary: SUMMARY, players: [player("Moi", 2, true), player("Nori_Ninja", 1)] });
     expect(results!.summary).toEqual(SUMMARY as never);
     expect(results!.players.map((p) => [p.name, p.me])).toEqual([["Nori_Ninja", false], ["Moi", true]]);
-    const { rank: _rank, ...me } = player("Moi", 2, true);
-    expect(results!.players[1]).toEqual(me as never);
+    expect(results!.players[1]).toEqual(player("Moi", 2, true) as never);
+  });
+
+  test("keeps each player's recorded rank, even when the race has gaps", () => {
+    // une course enregistrée avant que les invités soient gardés : le 1er manque
+    const results = toResults({ summary: SUMMARY, players: [player("Nori_Ninja", 3), player("Moi", 2, true)] });
+    expect(results!.players.map((p) => [p.name, p.rank])).toEqual([["Moi", 2], ["Nori_Ninja", 3]]);
+  });
+
+  test("results from the game, without ranks, rank players in the order received", () => {
+    const strip = ({ rank: _rank, ...rest }: ReturnType<typeof player>) => rest;
+    const results = toResults({ summary: SUMMARY, players: [strip(player("A", 5)), strip(player("B", 9))] });
+    expect(results!.players.map((p) => p.rank)).toEqual([1, 2]);
+  });
+
+  test("the podium steps hold the players of those ranks, never the first ones of the list", () => {
+    const players = toResults({ summary: SUMMARY, players: [player("Moi", 2, true), player("Nori_Ninja", 3)] })!.players;
+    expect(playerAt(players, 1)).toBeUndefined();
+    expect(playerAt(players, 2)?.name).toBe("Moi");
+    expect(playerAt(players, 3)?.name).toBe("Nori_Ninja");
   });
 
   test("explains a refused race with a translated message, never the raw server code", () => {
@@ -51,5 +70,17 @@ describe("HIST-02 — a race of the history opens its results page", () => {
   test("refuses a body that is not a race", () => {
     expect(toResults({ error: "not_your_race" })).toBeNull();
     expect(toResults(null)).toBeNull();
+  });
+});
+
+describe("I18N-01 — a rank reads as a translated ordinal, whatever the room size", () => {
+  test("in French", () => {
+    const t = translate("fr");
+    expect([1, 2, 3, 8, 9, 10, 21, 30].map((rank) => rankLabel(t, rank))).toEqual(["1re", "2e", "3e", "8e", "9e", "10e", "21e", "30e"]);
+  });
+
+  test("in English", () => {
+    const t = translate("en");
+    expect([1, 2, 3, 4, 9, 11, 12, 13, 21, 22, 23, 30].map((rank) => rankLabel(t, rank))).toEqual(["1st", "2nd", "3rd", "4th", "9th", "11th", "12th", "13th", "21st", "22nd", "23rd", "30th"]);
   });
 });
