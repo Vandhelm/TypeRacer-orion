@@ -22,6 +22,8 @@ export function useRoom(page: "room" | "game" = "room") {
   const [room, setRoom] = useState<Room>(() => roomOf(EMPTY_VIEW));
   const [error, setError] = useState<RoomError | null>(null);
   const [ready, setReady] = useState(false);
+  /** SALLE-05 : un salon complet s'ouvre encore comme spectateur, à la demande. */
+  const [joinRole, setJoinRole] = useState<Role | undefined>();
   const pending = useRef<Partial<RoomSettings>>({});
   const timer = useRef(0);
   const code = view.code;
@@ -52,7 +54,7 @@ export function useRoom(page: "room" | "game" = "room") {
     let live = true;
     // SALLE-03 : le serveur décide si ce code ou ce lien ouvre le salon ; un membre qui revient le retrouve
     const request =
-      arrival.action === "create" ? roomApi.create("player") : arrival.action === "join" ? roomApi.join(arrival.via) : roomApi.read(arrival.code);
+      arrival.action === "create" ? roomApi.create("player") : arrival.action === "join" ? roomApi.join({ ...arrival.via, ...(joinRole ? { role: joinRole } : {}) }) : roomApi.read(arrival.code);
     request.then((reply) => {
       if (!live) return;
       answer(reply);
@@ -62,7 +64,7 @@ export function useRoom(page: "room" | "game" = "room") {
     return () => {
       live = false;
     };
-  }, [arrival, page, answer]);
+  }, [arrival, page, answer, joinRole]);
 
   useEffect(() => () => clearTimeout(timer.current), []);
 
@@ -86,6 +88,12 @@ export function useRoom(page: "room" | "game" = "room") {
   }, [code]);
 
   const host = ready && view.host === you;
+
+  /** SALLE-05 : le salon est complet ; on y entre comme spectateur, sans place. */
+  const watchInstead = useCallback(() => {
+    setError(null);
+    setJoinRole("spectator");
+  }, []);
 
   const flush = useCallback(async () => {
     const settings = pending.current;
@@ -129,6 +137,8 @@ export function useRoom(page: "room" | "game" = "room") {
   return {
     ready: ready && !error,
     error,
+    /** SALLE-05 : entrer comme spectateur quand le salon est complet ; null sinon. */
+    watchInstead: error === "full" && arrival?.action === "join" && !joinRole ? watchInstead : null,
     leave,
     finish,
     /** waiting, racing, results, closed : l'état du salon selon le serveur. */

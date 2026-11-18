@@ -99,6 +99,7 @@
     "role_spectator": "Spectator",
     "helpRole": "Player: you take a seat and race. Spectator: you watch the race without taking part.",
     "spectators": "Spectators",
+    "watchInstead": "Watch as a spectator",
     "loading": "Opening the room…",
     "errors": {
       "not_found": "This room doesn't exist, or it needs an invitation.",

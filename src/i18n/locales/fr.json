@@ -99,6 +99,7 @@
     "role_spectator": "Spectateur",
     "helpRole": "Participant : tu as une place et tu cours. Spectateur : tu regardes la course sans y prendre part.",
     "spectators": "Spectateurs",
+    "watchInstead": "Regarder en spectateur",
     "loading": "Ouverture du salon…",
     "errors": {
       "not_found": "Ce salon n'existe pas, ou il faut une invitation pour y entrer.",

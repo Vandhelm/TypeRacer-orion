@@ -92,3 +92,8 @@ body{ height: auto; min-height: 100vh; overflow: visible; font-size: 16px; paddi
     .room-settings{ margin-top: 26px; padding-top: 22px; }
     .room-toolbar{ margin-bottom: 22px; }
 }
+
+/* Actions d'un refus (SALLE-05 : regarder en spectateur) et de la liste des membres (SALLE-07) */
+.room-refusal-action{ all: unset; box-sizing: border-box; display: inline-flex; align-items: center; min-height: 42px; margin: 12px 0 0 12px; padding: 0 16px; border: 1px dashed var(--color-line-soft); font: 400 12px/1 var(--font-mono); letter-spacing: .16em; text-transform: uppercase; color: #fff; background: #000; cursor: pointer; }
+.room-refusal-action:hover{ border-color: #fff; }
+.room-refusal-action:focus-visible{ outline: 2px solid var(--color-red-text); outline-offset: 3px; }

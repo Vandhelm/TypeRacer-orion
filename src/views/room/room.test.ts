@@ -37,6 +37,26 @@ describe("SALLE-01 — seats come from the server's members", () => {
   });
 });
 
+describe("SALLE-05 — a room of up to 30 seats", () => {
+  const player = (seat: number) => ({ key: `guest:${seat}`, name: `n${seat}`, guest: true, host: false, role: "player" as const, seat, color: null, finished: false });
+
+  test("30 seated participants each get a color, all distinct", () => {
+    const seats = seatsOf({ guests: 30, bots: false }, Array.from({ length: 30 }, (_, i) => player(i)), "");
+    expect(seats).toHaveLength(30);
+    const colors = seats.map((s) => ("color" in s ? s.color : undefined));
+    expect(colors.every(Boolean)).toBe(true);
+    expect(new Set(colors).size).toBe(30);
+  });
+
+  test("with bots on, a 30-seat room gets at most one bot per bot name; the rest stay free, never an unnamed bot", () => {
+    const seats = seatsOf({ guests: 30, bots: true }, [player(0)], "guest:0");
+    expect(seats).toHaveLength(30);
+    const bots = seats.filter((s) => "bot" in s && s.bot);
+    expect(bots.every((b) => "name" in b && typeof b.name === "string" && b.name.length > 0)).toBe(true);
+    expect(new Set(bots.map((b) => ("name" in b ? b.name : ""))).size).toBe(bots.length);
+  });
+});
+
 describe("SALLE-09 — /game finds the launched room and never creates one", () => {
   const searches = ["", "?new", "?code=ABC234", "?invite=abc", "?code=bad!"];
 
