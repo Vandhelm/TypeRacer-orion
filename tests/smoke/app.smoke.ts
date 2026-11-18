@@ -124,6 +124,10 @@ describe("SMOKE — API", () => {
     expect(res.status).toBe(200);
   });
 
+  test("TECH-07 — un identifiant mal encodé répond 400, jamais 500", async () => {
+    expect((await fetch(`${base}/api/players/%E0%A4%A/stats`)).status).toBe(400);
+  });
+
   // Les joueurs de démo n'existent que dans la base locale seedée, pas dans celle d'un déploiement.
   test.skipIf(Boolean(remote))("AUTH-06 — les stats d'un joueur de démo répondent", async () => {
     const res = await fetch(`${base}/api/players/Corail_418/stats`);
