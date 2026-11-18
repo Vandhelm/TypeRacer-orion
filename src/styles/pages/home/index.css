@@ -16,13 +16,6 @@
 @import "./home.css";
 @import "./rooms.css";
 
-@import "../../components/navigation/navbar.css";
-@import "../../components/tabs/hanging-tabs.css";
-@import "../../components/buttons/hanging-button.css";
-@import "../../components/brand/logo-title.css";
-@import "../../components/tabs/view-tabs.css";
-@import "../../components/forms/text-field.css";
-@import "../../components/buttons/outline-button.css";
 @import "../../components/buttons/flip-button.css";
 @import "../../components/stamp.css";
 @import "../../components/cards/ticket.css";

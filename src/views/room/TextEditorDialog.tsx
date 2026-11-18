@@ -1,6 +1,6 @@
 import { useImperativeHandle, useRef, useState, type ChangeEvent, type Ref } from "react";
 import { useTranslation } from "react-i18next";
-import { SmallButton } from "../../components/buttons/SmallButton";
+import { SMALL_BUTTON, SmallButton } from "../../components/buttons/SmallButton";
 import { countWords, MAX_TEXT_LENGTH, readSavedTexts, writeSavedTexts, type SavedText } from "./room";
 
 const TEXT_TOOLS = {
@@ -99,7 +99,7 @@ export function TextEditorDialog({ text, onUse, ref }: TextEditorDialogProps) {
         <div className="room-editor-save">
           <input type="text" maxLength={40} autoComplete="off" placeholder={t("room.textName")} value={saveName} onChange={(e) => setSaveName(e.target.value)} />
           <SmallButton onClick={save}>{t("room.save")}</SmallButton>
-          <label className="small-button room-import">
+          <label className={`${SMALL_BUTTON} room-import`}>
             <span>{t("room.import")}</span>
             <input type="file" accept=".txt,text/plain" onChange={importFile} />
           </label>

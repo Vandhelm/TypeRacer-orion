@@ -185,7 +185,7 @@ export function HomePanel({ ref }: { ref?: Ref<HTMLElement> }) {
             </div>
 
             <TextField id="code" num="02" label={t("home.code")}>
-              <div className="code-field">
+              <div className="flex items-end gap-[1.6vh] [&_.outline-button]:h-[4.4vh] [&_.outline-button]:min-h-[40px] [&_.outline-button]:pr-[1.8vh] [&_.outline-button]:pl-[2.1vh] [&_.text-field-input]:min-w-0 [&_.text-field-input]:grow [&_input]:font-mono [&_input]:tracking-[.5em] [&_input]:uppercase">
                 <TextInput
                   ref={codeInput}
                   id="code"
@@ -262,7 +262,9 @@ export function HomePanel({ ref }: { ref?: Ref<HTMLElement> }) {
               label={t("home.password")}
               inputProps={{ name: "password", type: showPassword ? "text" : "password", autoComplete: "current-password", value: password, onChange: (e) => setPassword(e.target.value) }}
               action={
-                <button className="text-field-action" type="button" id="reveal-password" aria-pressed={showPassword} onClick={() => setShowPassword((v) => !v)}>
+                <button
+                  className="unset min-h-[36px] cursor-pointer pl-3 font-mono text-[max(10px,1.1vh)] leading-none font-normal tracking-[.2em] text-line-soft hover:text-white focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-white"
+                  type="button" id="reveal-password" aria-pressed={showPassword} onClick={() => setShowPassword((v) => !v)}>
                   {t(showPassword ? "home.hide" : "home.show")}
                 </button>
               }

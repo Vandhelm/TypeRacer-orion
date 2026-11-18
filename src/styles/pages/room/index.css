@@ -11,14 +11,7 @@
 @import "../../base/animations.css";
 @import "../../base/utilities.css";
 
-@import "../../components/tabs/hanging-tabs.css";
-@import "../../components/tabs/section-tabs.css";
-@import "../../components/buttons/hanging-button.css";
 @import "../../components/buttons/flip-button.css";
-@import "../../components/buttons/icon-button.css";
-@import "../../components/buttons/small-button.css";
-@import "../../components/forms/text-choice.css";
-@import "../../components/forms/number-field.css";
 @import "../../components/info-tip.css";
 @import "../../components/stamp.css";
 @import "../../components/live-list.css";
