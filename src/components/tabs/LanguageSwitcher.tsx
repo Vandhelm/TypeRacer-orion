@@ -5,7 +5,7 @@ import { HangingTabs } from "./HangingTabs";
 const TABS = (["fr", "en"] as const).map((code) => ({ value: code, label: code.toUpperCase(), ariaLabel: languages[code] }));
 
 /** I18N-02: FR / EN switcher hanging from the top edge, shared by every page (styles: components/tabs/hanging-tabs.css). */
-export function LanguageSwitcher({ className = "" }: { className?: string }) {
+export function LanguageSwitcher({ className = "", onChanged }: { className?: string; onChanged?: () => void }) {
   const { t, i18n } = useTranslation();
   return (
     <HangingTabs
@@ -13,7 +13,7 @@ export function LanguageSwitcher({ className = "" }: { className?: string }) {
       ariaLabel={t("home.langChoice")}
       options={TABS}
       value={i18n.resolvedLanguage as Language | undefined}
-      onChange={(lng) => void setLanguage(lng)}
+      onChange={(lng) => void setLanguage(lng).then(onChanged)}
     />
   );
 }

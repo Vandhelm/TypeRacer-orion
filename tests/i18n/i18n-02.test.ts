@@ -44,6 +44,19 @@ describe("I18N-02 — langue choisie, conservée, sinon celle du navigateur", ()
     expect(wrapper.indexOf("<LanguageSwitcher")).toBeLessThan(wrapper.indexOf("<OwnProfile"));
   });
 
+  test("la page 404 a le sélecteur, un titre traduit et aucune couleur en dur", () => {
+    const source = readFileSync("app/not-found.tsx", "utf8");
+    expect(source).toContain("NotFoundLanguage");
+    expect(source).toContain("generateMetadata");
+    expect(source).not.toMatch(/#[0-9a-f]{3,6}\b/i);
+  });
+
+  test("l'en-tête du profil laisse la place au sélecteur flottant", () => {
+    const css = readFileSync("src/styles/pages/profile/profile.css", "utf8");
+    const head = /\.profile-head\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
+    expect(head).toMatch(/padding-top:\s*(8\d|9\d|1\d\d)px/);
+  });
+
   test("chaque page lit sa langue et son titre côté serveur depuis le cookie", () => {
     for (const page of ["page", "room/page", "game/page", "podium/page", "profile/page"]) {
       expect(readFileSync(`app/${page}.tsx`, "utf8")).toContain("titleFor(");
