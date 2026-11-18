@@ -133,14 +133,11 @@ Si tu as commité sur la mauvaise branche par erreur et que ce n'est pas poussé
 
 ## Déléguer à l'agent dev
 
-Pour coder un critère entier, ou corriger les problèmes d'un rapport QA, la conversation principale peut confier le travail à l'agent **`dev`** (`.claude/agents/dev.md`). Il crée la branche selon ce skill, code, teste, commite, puis rend un rapport ; il ne pousse pas et ne merge pas.
+Pour coder un critère entier, ou corriger les problèmes d'un rapport QA, la conversation principale peut confier le travail à l'agent **`dev`** (`.claude/agents/dev.md`, générique). Il charge les skills du projet (`orion-conventions`, ce skill, `criteria-check`), crée la branche, code test d'abord, commite, puis **fait lui-même vérifier son travail par un agent `qa`** et corrige ce qu'il relève, en deux tours au plus. Il ne pousse pas et ne merge pas.
 
-Boucle conseillée :
-
-1. `dev` sur le critère (« Implémente AUTH-02 », avec la ligne de matrice et, s'il existe, le dernier rapport QA).
-2. `qa` sur le même critère et la même branche (voir « Fin de feature »), sans lui transmettre le rapport de `dev`.
-3. Si la QA trouve des problèmes : renvoie-les à `dev` (même branche), puis relance `qa`. Après deux allers-retours sans verdict « Rempli », arrête-toi et montre les deux rapports à l'utilisateur.
-4. Verdict « Rempli » : continue avec « Fin de feature ».
+1. Lance `dev` sur le critère (« Implémente AUTH-02 », avec la ligne de matrice et, s'il existe, le dernier rapport QA).
+2. Lis son rapport : verdict QA, tests de régression ajoutés, choix faits.
+3. Verdict QA « Rempli » : continue avec « Fin de feature ». Sinon, montre les rapports à l'utilisateur avant d'aller plus loin.
 
 Deux agents `dev` peuvent travailler en parallèle sur deux critères indépendants seulement s'ils ne touchent pas les mêmes fichiers ; sinon, l'un après l'autre.
 
@@ -149,7 +146,7 @@ Deux agents `dev` peuvent travailler en parallèle sur deux critères indépenda
 Une feature est terminée quand le critère est implémenté et que l'utilisateur le dit (« c'est bon », « fini », « on merge ») ou valide le résultat. Ne pousse pas au fil des commits.
 
 1. Vérifie que tout est commité (`git status --short`), puis lance la suite de régression (`bun test`) et les smoke tests (`bun run test:smoke`, avec Postgres démarré par `bun run db:up`). Un test rouge bloque le push : montre-le à l'utilisateur plutôt que de le contourner.
-2. **QA du critère.** Lance l'agent `qa` sur le critère de la branche (portée « critère », ex. « Vérifie AUTH-03 sur `fix/home/auth-03` »), sans lui dire ce que tu penses avoir fait : il doit le constater lui-même. Pendant qu'il tourne, ne pousse rien.
+2. **QA du critère.** Si le rapport de `dev` contient déjà un verdict « Rempli » de son agent `qa` sur cette branche, et que rien n'a été commité depuis, utilise-le. Sinon, lance l'agent `qa` sur le critère de la branche (portée « critère », ex. « Vérifie AUTH-03 sur `fix/home/auth-03` »), sans lui dire ce que tu penses avoir fait : il doit le constater lui-même. Pendant qu'il tourne, ne pousse rien.
    - Verdict « Rempli » : reporte sa ligne de matrice dans `docs/EXIGENCES.md` (statut, fichiers, tests, notes), commite-la sur la branche (`docs: update requirement matrix` + `Refs: <ID>`), puis passe à l'étape suivante.
    - Tout autre verdict : arrête-toi. Montre le rapport (parties ⚠️ / ❌, hors scope) et demande s'il faut corriger d'abord ou pousser quand même. Si l'utilisateur pousse quand même, la ligne de matrice prend le statut de la QA (`partiel`, `non fait`), jamais `complet`.
    - Si l'agent `qa` n'existe pas dans ce dépôt, dis-le et passe à l'étape suivante.
@@ -174,5 +171,5 @@ Une feature est terminée quand le critère est implémenté et que l'utilisateu
 | Branche parente `feature/<page>` existe | proposer de la renommer en `.../base` |
 | Commit | Conventional Commits, anglais, sujet ≤ 50 caractères, footer `Refs: <CRITÈRE>`, sans co-auteur, sur la branche du critère |
 | Travail non commité de la branche courante | stash, puis pop au retour (pas de commit à la place de l'utilisateur) |
-| Coder un critère | agent `dev` → agent `qa` → corrections au besoin (2 tours max) |
+| Coder un critère | agent `dev` (il lance `qa` et corrige, 2 tours max) |
 | Feature terminée | QA du critère (agent `qa`) → matrice → confirmer → push → merge `--no-ff` dans dev |

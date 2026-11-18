@@ -7,8 +7,8 @@ if printf '%s' "$cmd" | grep -Eq '(^|[;&|(]\s*)git\s+(-C\s+\S+\s+)?(push|merge|r
   echo "Agent dev : commande réservée à la conversation principale ($cmd). Commite sur ta branche et rapporte ; le push et le merge passent par la QA." >&2
   exit 2
 fi
-if printf '%s' "$cmd" | grep -Eq '(^|[;&|(]\s*)git\s+(-C\s+\S+\s+)?(switch|checkout)\s+(main|dev)\s*($|[;&|])'; then
-  echo "Agent dev : ne travaille pas sur main ou dev directement. Crée ou reprends la branche du critère." >&2
+if printf '%s' "$cmd" | grep -Eq '(^|[;&|(]\s*)git\s+(-C\s+\S+\s+)?(switch|checkout)\s+(main|master|dev|develop)\s*($|[;&|])'; then
+  echo "Agent dev : ne travaille pas directement sur la branche principale ni sur la branche d'intégration. Crée ou reprends la branche du critère." >&2
   exit 2
 fi
 exit 0
