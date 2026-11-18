@@ -2,9 +2,15 @@
 // createRacePool construit les couloirs dans `root` et renvoie de quoi les piloter,
 // ainsi que destroy() pour tout arrêter (appelé quand le composant React est démonté).
 import M from 'matter-js';
-import fishHalfOpenUrl from '../../../assets/game/fish-half-open.png';
-import fishOpenUrl from '../../../assets/game/fish-open.png';
-import pipeUrl from '../../../assets/game/pipe.png';
+import fishHalfOpenImage from '../../../assets/game/fish-half-open.png';
+import fishOpenImage from '../../../assets/game/fish-open.png';
+import pipeImage from '../../../assets/game/pipe.png';
+
+// Bun donne l'URL de l'image (chaîne) ; Next.js donne un objet { src, width, height }.
+const assetUrl = (image) => (typeof image === 'string' ? image : image.src);
+const fishHalfOpenUrl = assetUrl(fishHalfOpenImage);
+const fishOpenUrl = assetUrl(fishOpenImage);
+const pipeUrl = assetUrl(pipeImage);
 
 const SCOOP_SHARE = 0.2;        // une boule de glace par tranche de 20 % du texte (5 boules par course)
 
