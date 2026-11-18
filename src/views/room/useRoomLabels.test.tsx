@@ -8,7 +8,7 @@ let i18n: I18n;
 let useRoomLabels: typeof import("./useRoomLabels").useRoomLabels;
 
 beforeAll(async () => {
-  (globalThis as { document?: unknown }).document ??= { documentElement: {} };
+  (globalThis as { document?: unknown }).document ??= { documentElement: {}, cookie: "" };
   i18n = (await import("../../i18n")).default;
   ({ useRoomLabels } = await import("./useRoomLabels"));
 });
