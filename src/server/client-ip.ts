@@ -4,6 +4,8 @@
 // Sur Vercel, le proxy remplace x-forwarded-for par l'adresse du client (il ne garde pas une valeur envoyée par le
 // navigateur) : la première valeur est la bonne. En local, server.ts n'a pas de proxy devant lui : il écrase ces
 // en-têtes avec l'adresse de la socket (withClientIp), sinon n'importe qui pourrait choisir son IP.
+// Attention : `next start` sans proxy devant lui garde le x-forwarded-for envoyé par le client. Un hébergement
+// autonome (VPS) doit donc passer par un proxy (nginx, Caddy…) qui remplace cet en-tête par l'adresse réelle.
 
 /** Une adresse IPv4 ou IPv6 plausible : chiffres hexadécimaux, points et deux-points, 45 caractères au plus. */
 const IP_PATTERN = /^[0-9A-Fa-f:.]{2,45}$/;
