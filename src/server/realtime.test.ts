@@ -61,8 +61,16 @@ describe("SALLE-03 — members are pushed in real time over a WebSocket", () => 
     };
     hostCookie = await signUp("Hote_Direct");
     code = ((await (await call("POST", "/api/rooms", hostCookie, { role: "player", settings: { visibility: "public" } })).json()) as { room: { code: string } }).room.code;
+    // l'hôte garde un onglet ouvert pendant toute la suite : fermer la socket d'un test ne le fait pas partir
+    // (SALLE-08 : sans hôte ni autre compte, le salon fermerait entre deux tests)
+    hostTab = connect(url(`/ws/rooms/${code}`), hostCookie);
+    await hostTab.next();
   });
-  afterAll(() => server.stop(true));
+  afterAll(() => {
+    hostTab.ws.close();
+    server.stop(true);
+  });
+  let hostTab: ReturnType<typeof connect>;
 
   const url = (path: string) => `ws://localhost:${server.port}${path}`;
 
