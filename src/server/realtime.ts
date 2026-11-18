@@ -1,6 +1,7 @@
 // Temps réel des salons, par WebSocket (Bun.serve). Un adaptateur de transport : la logique reste dans rooms.ts.
 // - /ws/rooms/:code : seul un membre du salon (session vérifiée) ouvre la socket ; il reçoit l'état, puis chaque changement.
 // - Présence : quand la dernière socket d'un membre se ferme et ne revient pas dans le délai, il quitte le salon,
+//   (SALLE-08 : à défaut, son silence au-delà de MEMBER_AWAY_MS le retire ; une socket ouverte vaut signe de vie)
 //   sauf pendant une course ou juste après son lancement (SALLE-09) : les membres sont alors sur /game, sans socket de salon.
 // Next.js et Vercel ne gardent pas de socket ouverte : la page y relit l'état par HTTP (voir useRoomLive).
 import type { Server, ServerWebSocket, WebSocketHandler } from "bun";
@@ -8,20 +9,25 @@ import type { Db } from "../../db/client";
 import { isRoomCode } from "../rooms/access";
 import type { Auth } from "./auth";
 import { roomIdentity } from "./room-gate";
-import { leaveAfterDisconnect, readRoom, RoomRefused, roomIdByCode, roomView, type Identity } from "./rooms";
+import { leaveAfterDisconnect, readRoom, refreshRoom, RoomRefused, roomIdByCode, roomView, type Identity } from "./rooms";
 
 export type SocketData = { code: string; who: Identity; key: string };
 export type RoomSocketMessage = { type: "room"; room: Awaited<ReturnType<typeof roomView>> } | { type: "closed" };
 
 type Events = { on(listener: (code: string) => void): () => void; emit(code: string): void };
-type Options = { db: Db; auth: Auth; secret?: string; events: Events; leaveAfterMs?: number };
+type Options = { db: Db; auth: Auth; secret?: string; events: Events; leaveAfterMs?: number; refreshMs?: number };
 
 /** Assez long pour un rechargement de page ou une coupure brève du réseau. */
 const LEAVE_AFTER_MS = 15_000;
+/**
+ * SALLE-08 / SALLE-09 : à ce rythme, chaque salon suivi par une socket est mis à jour (échéance de course, membres
+ * silencieux, hôte) et le changement poussé, sans attendre qu'un membre agisse. Une socket ouverte vaut signe de vie.
+ */
+const REFRESH_MS = 5_000;
 const topic = (code: string) => `room:${code}`;
 const PATH = /^\/ws\/rooms\/([^/]+)$/;
 
-export function createRealtime({ db, auth, secret, events, leaveAfterMs = LEAVE_AFTER_MS }: Options) {
+export function createRealtime({ db, auth, secret, events, leaveAfterMs = LEAVE_AFTER_MS, refreshMs = REFRESH_MS }: Options) {
   let server: Server<SocketData> | null = null;
   /** Sockets ouvertes par membre et par salon : un deuxième onglet ne compte pas double. */
   const open = new Map<string, number>();
@@ -47,6 +53,23 @@ export function createRealtime({ db, auth, secret, events, leaveAfterMs = LEAVE_
     }
   }
   events.on((code) => void publish(code));
+
+  let refreshing = false;
+  const refresh = setInterval(async () => {
+    if (refreshing) return;
+    refreshing = true;
+    try {
+      for (const [code, open] of sockets) {
+        const present = [...new Set([...open].map((ws) => ws.data.key))];
+        if (await refreshRoom(db, code, present)) await publish(code);
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      refreshing = false;
+    }
+  }, refreshMs);
+  refresh.unref?.();
 
   return {
     /** La requête vise-t-elle le temps réel d'un salon ? */

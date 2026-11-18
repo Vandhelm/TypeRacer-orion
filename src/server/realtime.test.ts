@@ -1,5 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { eq, sql } from "drizzle-orm";
+import { roomMembers, rooms } from "../../db/schema";
 import { createMockDatabase } from "../../db/mocks/test-database";
+import { MEMBER_AWAY_MS, raceDeadlineMs } from "./rooms";
 import { placeholderEmail } from "../accounts/username";
 import { createAuth } from "./auth";
 import { GUEST_COOKIE, signGuest } from "./guest";
@@ -181,5 +184,57 @@ describe("SALLE-09 — going from the room to the race never costs a member thei
     expect(room.room.members.map((m) => m.key)).toContain(you);
     // dans une salle privée, « retour au salon » passe par le code : le membre y est toujours
     expect((await call("POST", "/api/rooms/join", runner, { code })).status).toBe(200);
+  });
+});
+
+describe("SALLE-08 / SALLE-09 — what changes with time alone is announced to the sockets", () => {
+  let server: ReturnType<typeof Bun.serve>;
+  let db: Awaited<ReturnType<typeof createMockDatabase>>;
+  let auth: ReturnType<typeof createAuth>;
+  let call: (method: string, path: string, cookie?: string, body?: unknown) => Promise<Response>;
+  const signUp = async (name: string) => {
+    await auth.api.signUpEmail({ body: { name, email: placeholderEmail(name), password: "sushi-roll-42", username: name, displayUsername: name } });
+    const { headers } = await auth.api.signInUsername({ body: { username: name, password: "sushi-roll-42" }, returnHeaders: true });
+    return headers.get("set-cookie")!.split(";")[0]!;
+  };
+  const url = (path: string) => `ws://localhost:${server.port}${path}`;
+  type Seen = { room: { status: string; host: string } };
+
+  beforeAll(async () => {
+    db = await createMockDatabase();
+    auth = createAuth(db);
+    const realtime = createRealtime({ db, auth, secret: SECRET, events: roomEvents, refreshMs: 40 });
+    server = Bun.serve({ port: 0, fetch: (req, srv) => (realtime.matches(req) ? realtime.upgrade(req, srv) : new Response("not found", { status: 404 })), websocket: realtime.websocket });
+    call = (method, path, cookie, body) =>
+      handleRoomsApi(new Request(`http://localhost${path}`, { method, headers: { ...(cookie ? { cookie } : {}), "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) }), db, auth, SECRET, roomEvents.emit);
+  });
+  afterAll(() => server.stop(true));
+
+  test("a race past its deadline goes to results on the sockets, with no HTTP request from anyone", async () => {
+    const host = await signUp("Hote_Echeance");
+    const code = ((await (await call("POST", "/api/rooms", host, { role: "player", settings: { visibility: "public", duration: 10 } })).json()) as { room: { code: string } }).room.code;
+    await call("POST", "/api/rooms/join", `${GUEST_COOKIE}=${signGuest("Lambin", SECRET)}`, { code });
+    await call("POST", `/api/rooms/${code}/launch`, host);
+    const socket = connect(url(`/ws/rooms/${code}`), host);
+    expect(((await socket.next()) as unknown as Seen).room.status).toBe("racing");
+    await db.update(rooms).set({ launchedAt: sql`now() - ${raceDeadlineMs(10) + 1_000} * interval '1 millisecond'` }).where(eq(rooms.code, code));
+    let seen = (await socket.next()) as unknown as Seen;
+    while (seen.room.status === "racing") seen = (await socket.next()) as unknown as Seen;
+    expect(seen.room.status).toBe("results");
+    socket.ws.close();
+  });
+
+  test("a silent host is replaced, and the members' sockets learn the new host", async () => {
+    const host = await signUp("Hote_Silence");
+    const heir = await signUp("Heritier");
+    const code = ((await (await call("POST", "/api/rooms", host, { role: "player", settings: { visibility: "public" } })).json()) as { room: { code: string } }).room.code;
+    const { you } = (await (await call("POST", "/api/rooms/join", heir, { code })).json()) as { you: string };
+    const socket = connect(url(`/ws/rooms/${code}`), heir);
+    await socket.next();
+    await db.update(roomMembers).set({ lastSeenAt: sql`now() - ${MEMBER_AWAY_MS + 1_000} * interval '1 millisecond'` }).where(sql`${roomMembers.memberKey} <> ${you}`);
+    let seen = (await socket.next()) as unknown as Seen;
+    while (seen.room.host !== you) seen = (await socket.next()) as unknown as Seen;
+    expect(seen.room.host).toBe(you);
+    socket.ws.close();
   });
 });

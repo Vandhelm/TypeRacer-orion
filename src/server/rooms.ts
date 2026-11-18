@@ -1,6 +1,6 @@
 // Salons, côté serveur (SALLE-01, 02, 03, 09). Indépendant du transport : les routes HTTP (api.ts) et le temps réel
 // (realtime.ts) appellent ces fonctions ; rien ici ne connaît Request, WebSocket ou Next.js.
-import { and, asc, desc, eq, isNull, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import type { z } from "zod";
 import type { Db } from "../../db/client";
 import { players, raceConfigs, roomBans, roomMembers, rooms } from "../../db/schema";
@@ -390,9 +390,10 @@ export const MEMBER_AWAY_MS = 90_000;
  * - SALLE-08 : un membre silencieux depuis MEMBER_AWAY_MS est retiré, puis afterDeparture (hôte, fermeture, course).
  * Renvoie true si quelque chose a changé.
  */
-async function sweep(tx: Db, roomId: number, actor?: string): Promise<boolean> {
+async function sweep(tx: Db, roomId: number, actor?: string | string[]): Promise<boolean> {
   await tx.select({ id: rooms.id }).from(rooms).where(eq(rooms.id, roomId)).for("update");
-  if (actor) await tx.update(roomMembers).set({ lastSeenAt: sql`now()` }).where(and(eq(roomMembers.roomId, roomId), eq(roomMembers.memberKey, actor)));
+  const present = actor === undefined ? [] : [actor].flat();
+  if (present.length) await tx.update(roomMembers).set({ lastSeenAt: sql`now()` }).where(and(eq(roomMembers.roomId, roomId), inArray(roomMembers.memberKey, present)));
   const deadline = sql`${rooms.launchedAt} + (select ${raceConfigs.duration} from ${raceConfigs} where ${raceConfigs.id} = ${rooms.configId}) * interval '1 second' + ${RACE_GRACE_MS} * interval '1 millisecond'`;
   const ended = await tx.update(rooms).set({ status: "results" }).where(and(eq(rooms.id, roomId), eq(rooms.status, "racing"), sql`${deadline} <= now()`)).returning({ id: rooms.id });
   const gone = await tx
@@ -452,11 +453,12 @@ async function afterDeparture(tx: Db, roomId: number): Promise<RoomStatus> {
 
 /**
  * SALLE-08 / SALLE-09 : met un salon à jour (échéance de course, membres silencieux, hôte) sans qu'aucun membre n'agisse.
- * Le temps réel l'appelle à intervalle régulier pour annoncer ces changements à ses sockets. True si quelque chose a changé.
+ * Le temps réel l'appelle à intervalle régulier pour annoncer ces changements à ses sockets ; `present` : les membres
+ * dont une socket est ouverte, qui donnent ainsi signe de vie. True si quelque chose a changé.
  */
-export async function refreshRoom(db: Db, code: string): Promise<boolean> {
+export async function refreshRoom(db: Db, code: string, present: string[] = []): Promise<boolean> {
   const id = await roomIdByCode(db, code);
-  return id === null ? false : db.transaction((tx) => sweep(tx, id));
+  return id === null ? false : db.transaction((tx) => sweep(tx, id, present));
 }
 
 /** SALLE-09 : plus aucun participant humain en course (fini ou parti) : le salon passe aux résultats. Sous le verrou. */
