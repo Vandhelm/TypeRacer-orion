@@ -2,7 +2,8 @@
 // - Par défaut : crée (ou remet à zéro) une base jetable `<base>_smoke` à côté de DATABASE_URL, la seede avec
 //   les données de démo, construit l'application (`next build`) puis la lance (`next start`) dessus.
 //   Ta base de développement n'est jamais touchée. SMOKE_SKIP_BUILD=1 réutilise le build déjà présent (CI).
-// - Avec BASE_URL=https://… : vise un déploiement (preview ou production), en lecture seule.
+// - Avec BASE_URL=https://… : vise un déploiement (preview ou production), en lecture seule, sauf la photo de profil
+//   si SMOKE_USERNAME et SMOKE_PASSWORD désignent un compte de test.
 // Lancement : bun run test:smoke   (ou BASE_URL=https://… bun run test:smoke)
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import type { Subprocess } from "bun";
@@ -162,12 +163,19 @@ describe("SMOKE — API", () => {
   });
 
   // sharp doit se charger dans l'application construite par Next.js, pas seulement sous `bun test`.
-  test.skipIf(Boolean(remote))("AUTH-04 — l'application construite réduit la photo envoyée", async () => {
+  // Contre un déploiement, il faut un compte de test : SMOKE_USERNAME et SMOKE_PASSWORD (sa photo est remplacée).
+  const photoAccount = remote
+    ? process.env.SMOKE_USERNAME && process.env.SMOKE_PASSWORD
+      ? { username: process.env.SMOKE_USERNAME, password: process.env.SMOKE_PASSWORD }
+      : null
+    : { username: "corail_418", password: DEMO_PASSWORD };
+  test.skipIf(!photoAccount)("AUTH-04 — l'application construite réduit la photo envoyée", async () => {
     const signIn = await fetch(`${base}/api/auth/sign-in/username`, {
       method: "POST",
       headers: { "content-type": "application/json", origin: base },
-      body: JSON.stringify({ username: "corail_418", password: DEMO_PASSWORD }),
+      body: JSON.stringify(photoAccount),
     });
+    expect(signIn.status).toBe(200);
     const cookie = (signIn.headers.get("set-cookie") ?? "").split(";")[0]!;
     const png = await sharp({ create: { width: 1000, height: 1000, channels: 3, background: "#f80" } }).png().toBuffer();
     const form = new FormData();
