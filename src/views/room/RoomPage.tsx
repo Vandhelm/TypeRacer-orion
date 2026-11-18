@@ -7,7 +7,7 @@ import { HangingTabs } from "../../components/tabs/HangingTabs";
 import { languages, type Language } from "../../i18n";
 import { FishPond } from "./FishPond";
 import { useRoom } from "./hooks/useRoom";
-import { forgetRoom, isPlayer } from "./room";
+import { isPlayer } from "./room";
 import { RoomIntro } from "./RoomIntro";
 import { RoomSettings } from "./RoomSettings";
 import { RoomTicket } from "./RoomTicket";
@@ -21,7 +21,7 @@ const VISIBILITY_KEY = { private: "private", semi: "semiPrivate", public: "publi
 export function RoomPage() {
   const { t, i18n } = useTranslation();
   const state = useRoom();
-  const { room, update, host, seats, players, displayName } = state;
+  const { room, update, host, seats, players, spectators, displayName, ready, error } = state;
   const editor = useRef<TextEditorHandle>(null);
   const launched = useRef(false);
   const [stampOn, setStampOn] = useState(false);
@@ -40,7 +40,19 @@ export function RoomPage() {
   }
 
   const openEditor = () => editor.current?.open();
-  const ready = players.length >= 2;
+  const enough = players.length >= 2;
+
+  // le salon vient du serveur : rien à montrer tant qu'il n'a pas répondu, ou s'il refuse
+  if (!ready) {
+    return (
+      <main className="relative z-1 isolate">
+        <div className="room-shade room-name" role={error ? "alert" : "status"}>
+          <p>{t(error ? `room.errors.${error}` : "room.loading")}</p>
+          {error && <HangingButton className="room-leave" href="/home#rooms">{t("room.leave")}</HangingButton>}
+        </div>
+      </main>
+    );
+  }
 
   return (
     <>
@@ -55,7 +67,7 @@ export function RoomPage() {
       <Stamp className="room-stamp" label={t("home.stampPlay")} visible={stampOn} playKey={0} />
 
       <header className="relative z-1 isolate mb-[clamp(20px,4vh,40px)] flex flex-wrap items-center justify-between gap-x-6 gap-y-3 pr-[124px] phone:mb-[14px] phone:pr-0">
-        <HangingButton className="room-leave" href={host ? "/home" : "/home#rooms"} onClick={host ? forgetRoom : undefined}>
+        <HangingButton className="room-leave" href={host ? "/home" : "/home#rooms"}>
           {t("room.leave")}
         </HangingButton>
         <div className="room-shade text-right phone:w-full">
@@ -73,8 +85,8 @@ export function RoomPage() {
             onEditText={openEditor}
             action={
               <div className="room-action">
-                <FlipButton label={t("room.start")} backLabel={t("room.startBack")} disabled={!ready} hidden={!host} onClick={launch} />
-                <p className="room-missing" hidden={!host || ready}>{t("room.notEnough")}</p>
+                <FlipButton label={t("room.start")} backLabel={t("room.startBack")} disabled={!enough} hidden={!host} onClick={launch} />
+                <p className="room-missing" hidden={!host || enough}>{t("room.notEnough")}</p>
                 <p className="room-waiting" role="status" hidden={host}>{t("room.waiting")}</p>
               </div>
             }
@@ -93,6 +105,16 @@ export function RoomPage() {
               </li>
             ))}
           </ol>
+          {spectators.length > 0 && (
+            <>
+              <h3>{t("room.spectators")}</h3>
+              <ul>
+                {spectators.map((m) => (
+                  <li key={m.key}>{[m.name, m.host ? t("room.host") : ""].filter(Boolean).join(", ")}</li>
+                ))}
+              </ul>
+            </>
+          )}
         </section>
       </main>
     </>

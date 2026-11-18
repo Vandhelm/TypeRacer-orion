@@ -6,6 +6,7 @@ import { NumberField } from "../../components/forms/NumberField";
 import { TextChoice } from "../../components/forms/TextChoice";
 import { InfoTip } from "../../components/InfoTip";
 import { SectionTabs } from "../../components/tabs/SectionTabs";
+import { ROLES } from "../../rooms/settings";
 import type { RoomState } from "./hooks/useRoom";
 import { cleanExcluded, countWords, type Room, type TextLength } from "./room";
 import { LENGTH_KEY, useRoomLabels } from "./useRoomLabels";
@@ -130,6 +131,13 @@ export function RoomSettings({ state, onEditText, action }: RoomSettingsProps) {
         <Row id="label-visibility" label={t("room.visibility")} help={help.visibility}>
           {radios("visibility", [["private", "private"], ["semi", "semiPrivate"], ["public", "public"]])}
         </Row>
+        {host && (
+          <Row id="label-role" label={t("room.role")} help={t("room.helpRole")}>
+            {ROLES.map((role) => (
+              <TextChoice key={role} type="radio" name="role" value={role} label={t(`room.role_${role}`)} checked={state.role === role} onChange={() => state.setRole(role)} />
+            ))}
+          </Row>
+        )}
         <Row id="label-duration" label={t("room.raceLength")} help={t("room.helpRaceLength")}>
           {host ? (
             <>

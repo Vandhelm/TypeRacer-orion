@@ -1,40 +1,112 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { isPlayer, newRoom, readSession, saveRoom, seatsOf, type Room } from "../room";
+import { DEFAULT_SETTINGS, type Role, type RoomSettings } from "../../../rooms/settings";
+import type { RoomResult } from "../../../server/rooms";
+import { roomApi, type Answer, type RoomError } from "../api";
+import { isPlayer, readSession, roomOf, seatsOf, type Room, type RoomView } from "../room";
 
-/** The room shown on this page: who we are in it, its settings, its seats. Only the host's room is saved. */
+/** Le temps d'attendre la fin d'une saisie avant d'envoyer les réglages au serveur. */
+const SAVE_DELAY_MS = 400;
+const EMPTY_VIEW: RoomView = { code: "", status: "waiting", host: "", settings: DEFAULT_SETTINGS, invite: null, members: [] };
+
+/**
+ * The room shown on this page, as the server knows it: its settings, its members, who we are in it.
+ * The host's changes are sent to the server (which checks they come from the host); nothing is kept in this browser.
+ */
 export function useRoom() {
   const { t } = useTranslation();
-  const [session] = useState(() => readSession(location.search, t));
-  // AUTH-03 : un invité sans salon à rejoindre n'a rien à faire ici (le serveur l'a déjà renvoyé) ; en attendant
-  // de repartir, il voit un salon en lecture seule, jamais comme hôte.
-  const { room: initialRoom, host, present } = session ?? { room: newRoom(t), host: false, present: 1 };
-  const [room, setRoom] = useState(initialRoom);
+  const [session] = useState(() => readSession(location.search));
+  const [view, setView] = useState<RoomView>(EMPTY_VIEW);
+  const [you, setYou] = useState("");
+  const [room, setRoom] = useState<Room>(() => roomOf(EMPTY_VIEW));
+  const [error, setError] = useState<RoomError | null>(null);
+  const [ready, setReady] = useState(false);
+  const pending = useRef<Partial<RoomSettings>>({});
+  const timer = useRef(0);
+  const code = view.code;
 
+  const apply = useCallback((result: RoomResult) => {
+    setView(result.room);
+    setYou(result.you);
+    setRoom(roomOf(result.room));
+    setReady(true);
+  }, []);
+
+  const answer = useCallback(
+    (reply: Answer) => {
+      if (reply.ok) apply(reply.result);
+      else if (reply.error === "unauthorized") location.replace("/");
+      else setError(reply.error);
+    },
+    [apply],
+  );
+
+  // Arrivée : créer son salon (hôte) ou retrouver celui de l'adresse. AUTH-03 : un invité sans salon repart.
   useEffect(() => {
-    if (!session) location.replace("/home#rooms");
-  }, [session]);
+    if (!session) {
+      location.replace("/home#rooms");
+      return;
+    }
+    let live = true;
+    const request = session.host ? roomApi.create("player") : session.code ? roomApi.read(session.code) : null;
+    if (!request) {
+      setError("not_found");
+      return;
+    }
+    request.then((reply) => {
+      if (!live) return;
+      answer(reply);
+      // recharger la page retrouve le même salon, par son code
+      if (reply.ok) history.replaceState(null, "", `${location.pathname}?code=${reply.result.room.code}`);
+    });
+    return () => {
+      live = false;
+    };
+  }, [session, answer]);
 
-  // recharger la page garde le même salon
-  useEffect(() => {
-    if (host && new URLSearchParams(location.search).has("new")) history.replaceState(null, "", location.pathname);
-  }, [host]);
+  useEffect(() => () => clearTimeout(timer.current), []);
 
-  useEffect(() => {
-    if (host) saveRoom(room);
-  }, [host, room]);
+  const host = ready && view.host === you;
 
-  const update = useCallback((patch: Partial<Room>) => setRoom((current) => ({ ...current, ...patch })), []);
-  const seats = useMemo(() => seatsOf({ guests: room.guests, bots: room.bots }, host, present), [room.guests, room.bots, host, present]);
+  const flush = useCallback(async () => {
+    const settings = pending.current;
+    pending.current = {};
+    const reply = await roomApi.update(code, { settings });
+    // une saisie plus récente part bientôt : on garde l'affichage local jusqu'à sa réponse
+    if (!reply.ok || !Object.keys(pending.current).length) answer(reply);
+  }, [code, answer]);
+
+  const update = useCallback(
+    (patch: Partial<Room>) => {
+      setRoom((current) => ({ ...current, ...patch }));
+      if (!host) return;
+      const { code: _code, invite: _invite, ...settings } = patch;
+      Object.assign(pending.current, settings);
+      clearTimeout(timer.current);
+      timer.current = window.setTimeout(flush, SAVE_DELAY_MS);
+    },
+    [host, flush],
+  );
+
+  /** SALLE-01 : l'hôte court (participant) ou regarde (spectateur). */
+  const setRole = useCallback(async (role: Role) => answer(await roomApi.update(code, { role })), [code, answer]);
+
+  const seats = useMemo(() => seatsOf({ guests: room.guests, bots: room.bots }, view.members, you), [room.guests, room.bots, view.members, you]);
   const players = useMemo(() => seats.filter(isPlayer), [seats]);
+  const me = view.members.find((m) => m.key === you);
 
   return {
+    ready,
+    error,
     room,
     update,
     host,
+    role: me?.role ?? "player",
+    setRole,
     seats,
     players,
-    humans: host ? 1 : present,
+    spectators: view.members.filter((m) => m.role === "spectator"),
+    humans: view.members.filter((m) => m.role === "player").length,
     displayName: room.autoName ? t("room.defaultName") : room.name,
   };
 }
