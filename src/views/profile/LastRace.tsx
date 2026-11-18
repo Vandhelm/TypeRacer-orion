@@ -1,5 +1,6 @@
 import { Fragment } from "react";
 import { useTranslation } from "react-i18next";
+import { formatNumber } from "../../i18n/format";
 import { oneDecimal, type PlayerResult, type RaceSummary } from "../podium/results";
 import { SpeedChart } from "./SpeedChart";
 import { StatBlock, Swatch, Unit } from "./StatBlock";
@@ -56,23 +57,23 @@ export function LastRace({ player, summary }: { player: PlayerResult; summary: R
       </p>
 
       <div className="profile-card profile-card--race">
-        <StatBlock hero marker={<Swatch series="wpm" />} label={t("game.wpm")} value={player.wpm} />
-        <StatBlock hero label={t("profile.accuracy")} value={<>{player.accuracy}<Unit>%</Unit></>} />
-        <StatBlock marker={<Swatch series="raw" />} label={t("profile.raw")} value={player.raw} />
-        <StatBlock label={t("profile.consistency")} value={<>{player.consistency}<Unit>%</Unit></>} />
+        <StatBlock hero marker={<Swatch series="wpm" />} label={t("game.wpm")} value={formatNumber(i18n.language, player.wpm)} />
+        <StatBlock hero label={t("profile.accuracy")} value={<>{formatNumber(i18n.language, player.accuracy)}<Unit>%</Unit></>} />
+        <StatBlock marker={<Swatch series="raw" />} label={t("profile.raw")} value={formatNumber(i18n.language, player.raw)} />
+        <StatBlock label={t("profile.consistency")} value={<>{formatNumber(i18n.language, player.consistency)}<Unit>%</Unit></>} />
         <StatBlock
           label={t("profile.time")}
-          value={<>{player.seconds}<Unit>s</Unit></>}
+          value={<>{formatNumber(i18n.language, player.seconds)}<Unit>s</Unit></>}
           notes={[`${oneDecimal(i18n.language, player.idle)} % ${t("profile.idle")}`]}
         />
         <StatBlock
           label={t("profile.correctChars")}
-          value={player.chars[0]}
+          value={formatNumber(i18n.language, player.chars[0])}
           notes={[
             <>
               <i className="chart-cross">×</i>{NBSP}
               {errors.map(([count, word], i) => (
-                <Fragment key={i}>{i > 0 && `${NBSP}· `}<b className="stat-error">{count}</b>{NBSP}{keep(word)}</Fragment>
+                <Fragment key={i}>{i > 0 && `${NBSP}· `}<b className="stat-error">{formatNumber(i18n.language, count)}</b>{NBSP}{keep(word)}</Fragment>
               ))}
             </>,
           ]}

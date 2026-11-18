@@ -2,6 +2,7 @@ import { useMemo, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import { ViewTabs } from "../../components/tabs/ViewTabs";
 import type { KeyCounts } from "../../players/keys";
+import { formatNumber } from "../../i18n/format";
 import { heatOf, LAYOUTS, MIN_TYPED, RATE_MAX, rowsOf, weakest, type Layout } from "./keyboard";
 
 type Props = { keys: KeyCounts; layout: Layout; onLayout: (layout: Layout) => void };
@@ -14,7 +15,7 @@ export function KeyboardHeatmap({ keys, layout, onLayout }: Props) {
   const { t, i18n } = useTranslation();
   const heat = useMemo(() => heatOf(layout, keys), [layout, keys]);
   const worst = useMemo(() => weakest(heat), [heat]);
-  const percent = (rate: number) => `${new Intl.NumberFormat(i18n.language, { maximumFractionDigits: 1 }).format(rate * 100)} %`;
+  const percent = (rate: number) => `${formatNumber(i18n.language, rate * 100)} %`;
   const nameOf = (label: string) => label || t("profile.keys.space");
 
   return (
