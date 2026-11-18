@@ -78,6 +78,8 @@ export const roomMembers = pgTable(
   (table) => [
     primaryKey({ columns: [table.roomId, table.memberKey] }),
     unique("room_members_room_seat_unique").on(table.roomId, table.seat),
+    // SALLE-06 : une personne (compte ou session d'invité) n'est membre que d'un salon à la fois, garanti par la base
+    unique("room_members_member_unique").on(table.memberKey),
     index("room_members_player").on(table.playerId),
     check("room_members_seat_range", sql`${table.seat} between 0 and 29`),
     check("room_members_identity", sql`(${table.playerId} is null) <> (${table.guestName} is null)`),

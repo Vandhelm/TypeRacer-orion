@@ -8,7 +8,10 @@ import { guestSecret } from "./guest";
 import { roomIdentity } from "./room-gate";
 import { CodeExhausted, createRoom, finishRoom, joinRoom, launchRoom, leaveRoom, listPublicRooms, readRoom, RoomRefused, updateRoom, type RefusalReason, type RoomResult } from "./rooms";
 
-const STATUS: Record<RefusalReason, number> = { not_found: 404, not_member: 403, not_host: 403, full: 409, in_race: 409, closed: 410 };
+const STATUS: Record<RefusalReason, number> = { not_found: 404, not_member: 403, not_host: 403, full: 409, in_race: 409, closed: 410, already_in_room: 409 };
+
+/** Un refus attendu, en réponse HTTP. SALLE-06 : « already_in_room » donne le salon actuel, pour proposer d'en sortir. */
+const refusal = (error: RoomRefused) => json(error.room ? { error: error.reason, room: error.room } : { error: error.reason }, STATUS[error.reason]);
 
 const json = (body: unknown, status = 200) => Response.json(body, { status });
 
@@ -23,7 +26,7 @@ async function run(action: () => Promise<RoomResult>, status = 200, done?: (resu
     done?.(result);
     return json(result, status);
   } catch (error) {
-    if (error instanceof RoomRefused) return json({ error: error.reason }, STATUS[error.reason]);
+    if (error instanceof RoomRefused) return refusal(error);
     if (error instanceof CodeExhausted) return json({ error: "no_free_code" }, 503);
     throw error;
   }
@@ -66,7 +69,7 @@ export async function handleRoomsApi(req: Request, db: Db, auth: Auth, secret = 
       if (result.left) changed(code);
       return json(result);
     } catch (error) {
-      if (error instanceof RoomRefused) return json({ error: error.reason }, STATUS[error.reason]);
+      if (error instanceof RoomRefused) return refusal(error);
       throw error;
     }
   }

@@ -49,14 +49,14 @@ type MockRoom = {
   bots: boolean;
   status: "waiting" | "racing" | "closed";
   config?: Partial<typeof raceConfigs.$inferInsert>;
-  /** Le premier est l'hôte ; l'indice est la place. */
+  /** Le premier est l'hôte ; l'indice est la place. SALLE-06 : personne dans deux salons ouverts ; un salon fermé n'a plus de membre (la liste sert à son historique). */
   members: PlayerName[];
 };
 
 export const ROOMS: MockRoom[] = [
   { code: "CRABE7", name: "Le bassin du matin", visibility: "public", guests: 4, bots: true, status: "waiting", members: ["Corail_418", "Thon_Rouge"] },
-  { code: "NAGE42", name: "Fast fingers", visibility: "public", guests: 6, bots: false, status: "waiting", config: { language: "en", length: "short" }, members: ["Maki_77", "Ikura_21", "Tamago_8"] },
-  { code: "SECRET", name: "Entre amis", visibility: "private", guests: 2, bots: false, status: "waiting", config: { punctuation: true, mistakes: "fatal" }, members: ["Ikura_21"] },
+  { code: "NAGE42", name: "Fast fingers", visibility: "public", guests: 6, bots: false, status: "waiting", config: { language: "en", length: "short" }, members: ["Ikura_21"] },
+  { code: "SECRET", name: "Entre amis", visibility: "private", guests: 2, bots: false, status: "waiting", config: { punctuation: true, mistakes: "fatal" }, members: ["Tamago_8"] },
   { code: "RACE88", name: "Course en cours", visibility: "semi", guests: 3, bots: true, status: "racing", members: ["Maki_77", "Wasabi99", "Saba_Sensei"] },
   { code: "SVR234", name: "Salon du soir", visibility: "public", guests: 4, bots: true, status: "closed", members: ["Corail_418", "Maki_77", "Thon_Rouge", "Wasabi99"] },
   { code: "SVR235", name: "Le grand large", visibility: "public", guests: 4, bots: true, status: "closed", members: ["Corail_418", "Ikura_21", "Tamago_8", "Saba_Sensei"] },

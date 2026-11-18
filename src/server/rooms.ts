@@ -16,14 +16,15 @@ export class CodeExhausted extends Error {}
 
 const CODE_ATTEMPTS = 8;
 
-/** Une violation d'unicité sur le code du salon, quel que soit le pilote (postgres-js, PGlite) et l'enveloppe de Drizzle. */
-function isCodeCollision(error: unknown): boolean {
+/** Une violation de cette contrainte d'unicité, quel que soit le pilote (postgres-js, PGlite) et l'enveloppe de Drizzle. */
+function isUniqueViolation(error: unknown, name: string): boolean {
   for (let e: unknown = error; e && typeof e === "object"; e = (e as { cause?: unknown }).cause) {
     const { code, constraint, constraint_name } = e as { code?: string; constraint?: string; constraint_name?: string };
-    if (code === "23505" && (constraint ?? constraint_name) === "rooms_code_unique") return true;
+    if (code === "23505" && (constraint ?? constraint_name) === name) return true;
   }
   return false;
 }
+const isCodeCollision = (error: unknown) => isUniqueViolation(error, "rooms_code_unique");
 
 /**
  * SALLE-02 : insère avec un code neuf ; si la base le refuse parce qu'il existe déjà, on en tire un autre.
@@ -88,11 +89,30 @@ function placeFor(role: Role, taken: (number | null)[], capacity: number) {
 
 /** Un refus attendu (pas une panne) : la route le traduit en statut HTTP, le temps réel en message. */
 export class RoomRefused extends Error {
-  constructor(readonly reason: RefusalReason) {
+  /** room : pour « already_in_room », le code du salon où la personne est déjà (SALLE-06 : on lui propose d'en sortir). */
+  constructor(
+    readonly reason: RefusalReason,
+    readonly room?: string,
+  ) {
     super(`Room refused: ${reason}`);
   }
 }
-export type RefusalReason = "not_found" | "not_member" | "not_host" | "full" | "in_race" | "closed";
+export type RefusalReason = "not_found" | "not_member" | "not_host" | "full" | "in_race" | "closed" | "already_in_room";
+
+/** SALLE-06 : le code du salon dont cette personne est membre, s'il y en a un (au plus un, par la contrainte en base). */
+async function currentRoomOf(db: Db, key: string): Promise<string | null> {
+  const [row] = await db.select({ code: rooms.code }).from(roomMembers).innerJoin(rooms, eq(rooms.id, roomMembers.roomId)).where(eq(roomMembers.memberKey, key));
+  return row?.code ?? null;
+}
+
+/**
+ * SALLE-06 : la contrainte room_members_member_unique a refusé une deuxième salle (deux demandes simultanées vers deux
+ * salons) ; c'est un refus attendu, avec le salon actuel, jamais une erreur 500.
+ */
+async function refuseSecondRoom(db: Db, key: string, error: unknown): Promise<never> {
+  if (!isUniqueViolation(error, "room_members_member_unique")) throw error;
+  throw new RoomRefused("already_in_room", (await currentRoomOf(db, key)) ?? undefined);
+}
 
 const settingsOf = (room: typeof rooms.$inferSelect, config: typeof raceConfigs.$inferSelect): RoomSettings => ({
   name: room.name,
@@ -181,6 +201,9 @@ async function membership(db: Db, roomId: number, key: string) {
 export async function createRoom(db: Db, host: { playerId: number }, input: CreateRoomInput, draw: () => string = newRoomCode): Promise<RoomResult> {
   const settings = { ...DEFAULT_SETTINGS, ...input.settings };
   const key = memberKey(host);
+  // SALLE-06 : déjà membre d'un salon, on ne crée pas le deuxième ; la page propose de quitter le premier
+  const current = await currentRoomOf(db, key);
+  if (current) throw new RoomRefused("already_in_room", current);
   const roomId = await withFreshCode(
     (code) =>
       db.transaction(async (tx) => {
@@ -193,7 +216,7 @@ export async function createRoom(db: Db, host: { playerId: number }, input: Crea
         return room!.id;
       }),
     draw,
-  );
+  ).catch((error: unknown) => refuseSecondRoom(db, key, error));
   return { room: await roomView(db, roomId, key), you: key };
 }
 
@@ -278,13 +301,14 @@ async function roomFor(db: Db, via: JoinVia) {
 
 /**
  * Entrer dans un salon comme participant, ou comme spectateur (SALLE-05 : il ne prend pas de place). Un membre qui revient (rechargement, autre onglet) le retrouve sans doublon.
- * SALLE-05 : la capacité (rooms.guests) est lue sous le verrou. Points d'extension : SALLE-06 (une salle à la fois), SALLE-07 (expulsés) se vérifient ici,
+ * SALLE-05 : la capacité (rooms.guests) est lue sous le verrou. SALLE-06 : une salle à la fois (contrainte en base,
+ * refus « already_in_room » avec le salon actuel). Point d'extension : SALLE-07 (expulsés) se vérifie ici,
  * avant l'insertion ; SALLE-09 (état du salon) aussi.
  */
 export async function joinRoom(db: Db, who: Identity, via: JoinVia): Promise<RoomResult> {
   const { id } = await roomFor(db, via);
   const key = memberKey(who);
-  await db.transaction(async (tx) => {
+  const entered = db.transaction(async (tx) => {
     await expireRaces(tx, id);
     // Verrou sur la ligne du salon : les entrées simultanées et le lancement passent l'un après l'autre.
     // L'état (SALLE-09) et les places prises (SALLE-03) sont lus sous ce verrou, jamais avant.
@@ -297,11 +321,15 @@ export async function joinRoom(db: Db, who: Identity, via: JoinVia): Promise<Roo
     // la visibilité est lue sous le verrou : l'hôte a pu rendre le salon privé entre-temps
     if ("code" in via && !allows(room.visibility, "code")) throw new RoomRefused("not_found");
     if (!canJoin(room.status)) throw new RoomRefused("in_race");
+    // SALLE-06 : membre d'un autre salon ; vérifié après l'accès, pour ne rien dire d'un salon qu'on ne peut pas ouvrir
+    const current = await currentRoomOf(tx, key);
+    if (current) throw new RoomRefused("already_in_room", current);
     const taken = (await tx.select({ seat: roomMembers.seat }).from(roomMembers).where(eq(roomMembers.roomId, id))).map((m) => m.seat);
     const identity = who.kind === "account" ? { playerId: who.playerId } : { guestName: who.name };
     const role = via.role ?? "player";
     await tx.insert(roomMembers).values({ roomId: id, memberKey: key, ...identity, role, ...placeFor(role, taken, room.guests) });
   });
+  await entered.catch((error: unknown) => refuseSecondRoom(db, key, error));
   return { room: await roomView(db, id, key), you: key };
 }
 
