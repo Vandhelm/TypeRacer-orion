@@ -67,3 +67,16 @@ export function guestStats(name: string): PlayerStats {
     progress: races.slice(-PROGRESS_POINTS).map(({ at, wpm, accuracy: acc }) => ({ at, wpm, accuracy: acc })),
   };
 }
+
+export type SessionState = "pending" | "signed-in" | "signed-out";
+
+/**
+ * D'où viennent les statistiques d'un profil : l'historique du serveur, ou celles de la session pour un invité (AUTH-03).
+ * Invité ou connecté se lit dans la session, pas dans le résultat de course (« me » est vrai aussi pour un compte connecté).
+ * null : la session se charge encore, on ne sait pas.
+ */
+export function statsSource(subject: { me: boolean }, session: SessionState): "server" | "session" | null {
+  if (!subject.me) return "server";
+  if (session === "pending") return null;
+  return session === "signed-in" ? "server" : "session";
+}
