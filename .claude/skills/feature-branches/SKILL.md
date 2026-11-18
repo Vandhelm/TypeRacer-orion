@@ -133,7 +133,9 @@ Si tu as commité sur la mauvaise branche par erreur et que ce n'est pas poussé
 
 ## Déléguer à l'agent dev
 
-Pour coder un critère entier, ou corriger les problèmes d'un rapport QA, la conversation principale peut confier le travail à l'agent **`dev`** (`.claude/agents/dev.md`, générique). Il charge les skills du projet (`orion-conventions`, ce skill, `criteria-check`), crée la branche, code test d'abord, commite, puis **fait lui-même vérifier son travail par un agent `qa`** et corrige ce qu'il relève, en deux tours au plus. Il ne pousse pas et ne merge pas.
+Pour coder un critère entier, ou corriger les problèmes d'un rapport QA, la conversation principale peut confier le travail à l'agent **`dev`** (`.claude/agents/dev.md`, générique). Il charge les skills du projet (`orion-conventions`, ce skill, `criteria-check`), crée la branche, code test d'abord, commite, puis **fait lui-même vérifier son travail par un agent `qa`** et corrige ce qu'il relève, dans la limite de tours de son mode (light : 1, medium : 3, complex : 10). Il ne pousse pas et ne merge pas.
+
+**Mode.** Par défaut, tout part en **light** : un seul `dev`, une QA rapide sur le critique, une correction au plus. **medium** et **complex** seulement si l'utilisateur les nomme (« en medium », « go for it »). Pour plusieurs critères à la fois, ou un mode medium ou complex, confie plutôt la demande à l'agent **`overseer`**, qui répartit le travail entre plusieurs `dev` et `qa` selon le mode. Dans ce projet, l'`overseer` suit ce skill : pas de push ni de merge sans l'accord de l'utilisateur.
 
 1. Lance `dev` sur le critère (« Implémente AUTH-02 », avec la ligne de matrice et, s'il existe, le dernier rapport QA).
 2. Lis son rapport : verdict QA, tests de régression ajoutés, choix faits.
@@ -171,5 +173,5 @@ Une feature est terminée quand le critère est implémenté et que l'utilisateu
 | Branche parente `feature/<page>` existe | proposer de la renommer en `.../base` |
 | Commit | Conventional Commits, anglais, sujet ≤ 50 caractères, footer `Refs: <CRITÈRE>`, sans co-auteur, sur la branche du critère |
 | Travail non commité de la branche courante | stash, puis pop au retour (pas de commit à la place de l'utilisateur) |
-| Coder un critère | agent `dev` (il lance `qa` et corrige, 2 tours max) |
+| Coder un critère | agent `dev` en light (il lance `qa` et corrige, 1 tour) ; `overseer` pour plusieurs critères ou en medium / complex |
 | Feature terminée | QA du critère (agent `qa`) → matrice → confirmer → push → merge `--no-ff` dans dev |
