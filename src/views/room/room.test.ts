@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { TFunction } from "i18next";
-import { arrivalOf, raceHref, readSession, seatsOf } from "./room";
+import { arrivalOf, raceHref, readSession, roomHrefOutsideRace, seatsOf } from "./room";
 
 const t = ((key: string) => key) as unknown as TFunction;
 
@@ -68,5 +68,16 @@ describe("SALLE-09 — /game finds the launched room and never creates one", () 
     expect(raceHref("waiting", "ABC234")).toBeNull();
     expect(raceHref("results", "ABC234")).toBeNull();
     expect(raceHref("racing", "")).toBeNull();
+  });
+});
+
+describe("SALLE-09 — /game runs a race only while the room is racing", () => {
+  test("a waiting room or one on its results sends /game back to the room", () => {
+    expect(roomHrefOutsideRace("waiting", "ABC234")).toBe("/room?code=ABC234");
+    expect(roomHrefOutsideRace("results", "ABC234")).toBe("/room?code=ABC234");
+  });
+
+  test("a racing room stays on /game", () => {
+    expect(roomHrefOutsideRace("racing", "ABC234")).toBeNull();
   });
 });

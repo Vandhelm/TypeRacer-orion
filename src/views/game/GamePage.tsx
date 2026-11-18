@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { HangingButton } from "../../components/buttons/HangingButton";
 import { buildResults, buildSummary, markSessionStart, saveResults, sessionSeconds, submitRace } from "../podium/results";
 import { useRoom, type RoomState } from "../room/hooks/useRoom";
+import { roomHrefOutsideRace } from "../room/room";
 import { rememberGuestRace } from "../profile/stats";
 import { useRace } from "./hooks/useRace";
 import { loadRacePoolImages, type RacePoolImages } from "./pool/createRacePool";
@@ -19,8 +20,14 @@ export function GamePage() {
     document.title = t("game.pageTitle");
   }, [t]);
 
+  // SALLE-09 : pas de course hors du statut « racing » (salle en attente ou déjà aux résultats)
+  const elsewhere = state.ready ? roomHrefOutsideRace(state.status, state.room.code) : null;
+  useEffect(() => {
+    if (elsewhere) location.replace(elsewhere);
+  }, [elsewhere]);
+
   // la course part des réglages et des joueurs du salon : rien à lancer tant que le serveur n'a pas répondu
-  if (!state.ready) {
+  if (!state.ready || elsewhere) {
     return (
       <div className="game-root" role={state.error ? "alert" : "status"}>
         <p>{t(state.error ? `room.errors.${state.error}` : "room.loading")}</p>

@@ -81,6 +81,11 @@ export function raceHref(status: RoomView["status"], code: string): string | nul
   return status === "racing" && code ? `/game?code=${code}` : null;
 }
 
+/** SALLE-09 : /game ne fait courir que pendant la course ; sinon, retour à la salle. Null : la course est en cours. */
+export function roomHrefOutsideRace(status: RoomView["status"], code: string): string | null {
+  return status === "racing" ? null : `/room?code=${code}`;
+}
+
 /** La copie locale d'un salon reçu du serveur. */
 export function roomOf(view: RoomView): Room {
   return { ...view.settings, code: view.code, invite: view.invite ?? "" };
