@@ -211,3 +211,59 @@ describe("HIST-02 — a race of the history shows its full results again", () =>
     expect((await t.call(`/api/history/${raceId}`, me.cookie, "DELETE")).status).toBe(405);
   });
 });
+
+describe("HIST-02 — a past race shows every participant at their real rank, humans without history included", () => {
+  let t: Awaited<ReturnType<typeof setup>>;
+  let a: { cookie: string; playerId: number };
+  let raceId: number;
+  beforeAll(async () => {
+    t = await setup();
+    a = await t.signUp("Mixte_Compte");
+    // un invité humain gagne, le compte finit 2e, un bot 3e
+    raceId = (await recordRace(t.db, parseRace({ summary: SUMMARY, content: "le riz attend", players: [result("Invite_Corail", false, 90), result("Mixte_Compte", false, 60), result("Nori_Ninja", true, 40)] }), { playerId: a.playerId }))!;
+  });
+
+  test("the detail lists the guest first, the account second and the bot third", async () => {
+    const body = (await (await t.call(`/api/history/${raceId}`, a.cookie)).json()) as DetailBody;
+    expect(body.players.map((player) => [player.name, player.rank, player.me, player.bot])).toEqual([
+      ["Invite_Corail", 1, false, false],
+      ["Mixte_Compte", 2, true, false],
+      ["Nori_Ninja", 3, false, true],
+    ]);
+    // l'invité garde toutes ses colonnes et ses séries
+    const { bot: _bot, ...sent } = result("Invite_Corail", false, 90);
+    expect(body.players[0]).toMatchObject(sent);
+  });
+
+  test("the list counts every participant, so the rank never exceeds the count", async () => {
+    const body = (await (await t.call("/api/history", a.cookie)).json()) as ListBody;
+    const row = body.races.find((race) => race.id === raceId)!;
+    expect(row).toMatchObject({ rank: 2, players: 3 });
+    expect(row.rank).toBeLessThanOrEqual(row.players);
+  });
+
+  test("an account that beat a guest sees both counted", async () => {
+    const b = await t.signUp("Mixte_Second");
+    const id = (await recordRace(t.db, parseRace({ summary: SUMMARY, content: "x", players: [result("Mixte_Second", false, 80), result("Invite_Perle", false, 30)] }), { playerId: b.playerId }))!;
+    const list = (await (await t.call("/api/history", b.cookie)).json()) as ListBody;
+    expect(list.races.find((race) => race.id === id)).toMatchObject({ rank: 1, players: 2 });
+  });
+
+  test("a human cannot pass for a bot in the replay: an unknown name sent as a bot is shown as a human", async () => {
+    const c = await t.signUp("Mixte_Triche");
+    const id = (await recordRace(t.db, parseRace({ summary: SUMMARY, content: "x", players: [result("Pas_Un_Bot", true, 99), result("Mixte_Triche", false, 50)] }), { playerId: c.playerId }))!;
+    const body = (await (await t.call(`/api/history/${id}`, c.cookie)).json()) as DetailBody;
+    expect(body.players.map((player) => [player.name, player.rank, player.bot])).toEqual([["Pas_Un_Bot", 1, false], ["Mixte_Triche", 2, false]]);
+  });
+
+  test("another account in the race is shown but gets no history row from someone else's upload", async () => {
+    const owner = await t.signUp("Mixte_Hote");
+    const friend = await t.signUp("Mixte_Ami");
+    const id = (await recordRace(t.db, parseRace({ summary: SUMMARY, content: "x", players: [result("Mixte_Ami", false, 99), result("Mixte_Hote", false, 50)] }), { playerId: owner.playerId }))!;
+    const body = (await (await t.call(`/api/history/${id}`, owner.cookie)).json()) as DetailBody;
+    expect(body.players.map((player) => [player.name, player.rank, player.me])).toEqual([["Mixte_Ami", 1, false], ["Mixte_Hote", 2, true]]);
+    const theirs = (await (await t.call("/api/history", friend.cookie)).json()) as ListBody;
+    expect(theirs.races).toEqual([]);
+    expect((await t.call(`/api/history/${id}`, friend.cookie)).status).toBe(404);
+  });
+});

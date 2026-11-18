@@ -9,7 +9,7 @@ import { guestSecret, readGuest } from "./guest";
 import { storedAvatar } from "../players/avatar";
 import { isBotName } from "../players/bots";
 import { parseKeys, type KeyCounts } from "../players/keys";
-import { players, raceConfigs, raceResults, races, raceSamples, user } from "../../db/schema";
+import { players, raceConfigs, raceResults, races, raceSamples, user, type RaceOther } from "../../db/schema";
 
 const LANGUAGES = ["fr", "en"] as const;
 const BOT_SPEEDS = ["slow", "medium", "fast", "mixed"] as const;
@@ -113,7 +113,8 @@ const sameName = (a: string, b: string | null | undefined) => !!b && a.toLowerCa
 
 /**
  * Enregistre la course. Gardés : le résultat du compte connecté (repéré par le nom de son joueur, jamais par le flag « bot »)
- * et les bots. Un invité n'a pas d'historique (AUTH-03), même s'il se dit bot, et les autres humains non plus.
+ * et les bots. Un invité n'a pas d'historique (AUTH-03), même s'il se dit bot, et les autres humains non plus :
+ * ils sont seulement gardés avec la course (`others`, sans le flag « bot »), pour la réafficher en entier (HIST-02).
  * Renvoie l'id de la course, ou null s'il n'y avait rien à garder.
  */
 export async function recordRace(db: Db, race: ParsedRace, requester: Requester = {}) {
@@ -121,6 +122,7 @@ export async function recordRace(db: Db, race: ParsedRace, requester: Requester 
     ? await db.select({ id: players.id, name: players.name }).from(players).where(eq(players.id, requester.playerId))
     : [];
   const kept: (ParsedRace["results"][number] & { playerId: number })[] = [];
+  const others: RaceOther[] = [];
   let accountKept = false;
   for (const result of race.results) {
     let playerId: number | null = null;
@@ -130,6 +132,10 @@ export async function recordRace(db: Db, race: ParsedRace, requester: Requester 
       playerId = account.id;
     } else if (result.bot && !sameName(result.name, requester.guest)) playerId = await botPlayer(db, result.name);
     if (playerId) kept.push({ ...result, playerId });
+    else {
+      const { bot: _bot, ...other } = result;
+      others.push(other);
+    }
   }
   if (!kept.length) return null;
 
@@ -138,7 +144,7 @@ export async function recordRace(db: Db, race: ParsedRace, requester: Requester 
     const longest = Math.max(...kept.map((result) => result.seconds));
     const [row] = await tx
       .insert(races)
-      .values({ clientId: race.id, configId: config!.id, content: race.content, startedAt: new Date(Date.now() - longest * 1000), finishedAt: new Date() })
+      .values({ clientId: race.id, configId: config!.id, content: race.content, others, startedAt: new Date(Date.now() - longest * 1000), finishedAt: new Date() })
       .onConflictDoNothing({ target: races.clientId })
       .returning({ id: races.id });
     if (!row) throw new DuplicateRace("Race already recorded");

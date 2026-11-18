@@ -4,6 +4,28 @@ import { players } from "./players";
 import { raceConfigs, rooms } from "./rooms";
 import { corpusTexts } from "./texts";
 
+/** Le bilan d'un participant sans joueur enregistré, tel que reçu après la course. */
+export type RaceOther = {
+  name: string;
+  rank: number;
+  wpm: number;
+  raw: number;
+  accuracy: number;
+  seconds: number;
+  correctChars: number;
+  wrongChars: number;
+  extraChars: number;
+  missedChars: number;
+  consistency: number;
+  idle: number;
+  finished: boolean;
+  eliminated: boolean;
+  wpmSeries: number[];
+  rawSeries: number[];
+  errorSeries: number[];
+  keys: Record<string, [number, number]>;
+};
+
 /** L'historique survit à la fermeture du salon. `content` garde le texte joué, même s'il sort du corpus. */
 export const races = pgTable(
   "races",
@@ -17,6 +39,8 @@ export const races = pgTable(
     finishedAt: timestamp("finished_at", { withTimezone: true }),
     // Identifiant tiré par le navigateur pour chaque course envoyée : la même course renvoyée est refusée (AUTH-06).
     clientId: uuid("client_id").unique("races_client_id_unique"),
+    // Les participants sans historique (invités, autres humains) : de quoi réafficher toute la course, chacun à son rang (HIST-02).
+    others: jsonb("others").$type<RaceOther[]>().notNull().default([]),
   },
   (table) => [index("races_room").on(table.roomId)],
 );
