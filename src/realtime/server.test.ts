@@ -150,6 +150,23 @@ describe("TECH-06 — presence in a room", () => {
     b.ws.close();
   });
 
+  test("joining twice or leaving twice neither duplicates nor breaks presence", async () => {
+    const code = room();
+    const a = await joined(player("Alpha_09"), code);
+    const b = await joined(player("Bravo_09"), code);
+    send(b, { type: "join", room: code });
+    send(b, { type: "join", room: code });
+    await settle();
+    expect(a.messages.findLast((m) => m.type === "presence")).toEqual({ type: "presence", room: code, players: [player("Alpha_09"), player("Bravo_09")] });
+    send(b, { type: "leave" });
+    send(b, { type: "leave" });
+    await settle();
+    expect(a.messages.findLast((m) => m.type === "presence")).toEqual({ type: "presence", room: code, players: [player("Alpha_09")] });
+    expect(b.messages.filter((m) => m.type === "error")).toEqual([]);
+    a.ws.close();
+    b.ws.close();
+  });
+
   test("the same player with two tabs appears once, and stays while one tab is open", async () => {
     const code = room();
     const a = await joined(player("Alpha_07"), code);
