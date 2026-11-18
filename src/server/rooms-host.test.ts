@@ -156,7 +156,7 @@ describe("SALLE-08 / SALLE-09 — presence is per member, without sockets; a rac
     expect(raceDeadlineMs(30)).toBeLessThan(2 * 60_000);
   });
 
-  test("a race keeps the duration it was launched with, even if a setting changes afterwards", async () => {
+  test("a long race (600 s) is not cut at the deadline of a shorter one", async () => {
     const { room, host } = await t.open("Pres_Fige", { duration: 600 });
     await t.join(t.guest("Coureur_Fige"), { code: room.code });
     await t.call("POST", `/api/rooms/${room.code}/launch`, host.cookie);
