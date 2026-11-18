@@ -3,7 +3,7 @@ import type { Role, RoomSettings } from "../../rooms/settings";
 import type { RoomSocketMessage } from "../../server/realtime";
 import type { RefusalReason, RoomResult, RoomView } from "../../server/rooms";
 
-export type RoomError = RefusalReason | "unauthorized" | "account_required" | "invalid_body" | "no_free_code" | "network";
+export type RoomError = RefusalReason | "unauthorized" | "account_required" | "invalid_body" | "no_free_code" | "rate_limited" | "network";
 export type Answer = { ok: true; result: RoomResult } | { ok: false; error: RoomError };
 
 async function send(method: string, path: string, body?: unknown): Promise<Answer> {
