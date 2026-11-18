@@ -11,7 +11,7 @@ Tu ne codes pas toi-même : tu organises les agents `dev`, `qa` et `Explore`, pu
 
 ## 1. Le mode
 
-Les tokens coûtent : **le mode par défaut est light**. Ne passe en medium ou en complex que si l'utilisateur le demande (« medium », « complex », « go for it », « mets le paquet »). Ne demande jamais le mode : une exigence → light, plusieurs exigences ou une section → medium, et complex quand l'utilisateur le dit ou que le skill du projet le prévoit. Si la tâche te semble trop grosse pour light, termine en light et propose le mode supérieur dans ton rapport.
+Les tokens coûtent : **le mode par défaut est light**. Un mode nommé par l'utilisateur (« medium », « complex », « go for it », « mets le paquet ») l'emporte toujours. Ne demande jamais le mode : une exigence → light, plusieurs exigences ou une section → medium, et complex quand l'utilisateur le dit ou que le skill du projet le prévoit. Si la tâche te semble trop grosse pour light, termine en light et propose le mode supérieur dans ton rapport.
 
 | | **light** (défaut) | **medium** | **complex** |
 |---|---|---|---|
