@@ -50,6 +50,20 @@ jobs:
       - name: Tests unitaires et de régression
         run: bun test
 
+      # Tests rattachés à chaque exigence par l'ID de leur nom (`describe("AUTH-02 — …")`) :
+      # tableau dans le résumé du job, JSON pour la QA. Tourne même si l'étape précédente a échoué.
+      - name: Tests par exigence
+        if: ${{ !cancelled() }}
+        run: bun run test:requirements
+
+      - name: Rapport des tests par exigence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: requirement-tests
+          path: reports/requirement-tests.json
+          if-no-files-found: ignore
+
       # TECH-06 : le serveur temps réel se regroupe en un seul fichier, comme dans son image Fly.io.
       # Ses tests d'intégration (bun test) le lancent eux-mêmes : pas de service à démarrer ici.
       - name: Build du serveur temps réel
