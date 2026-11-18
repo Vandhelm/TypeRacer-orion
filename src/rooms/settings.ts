@@ -4,8 +4,8 @@ import { z } from "zod";
 import { isRoomCode, VISIBILITIES } from "./access";
 
 export const MIN_GUESTS = 2;
-// À BRANCHER (SALLE-05) : la capacité passera à 30 ; la contrainte rooms_guests_range et les places (0 à 7) suivront.
-export const MAX_GUESTS = 8;
+/** SALLE-05 : capacité en participants (les spectateurs n'y comptent pas) ; rooms_guests_range et les places suivent. */
+export const MAX_GUESTS = 30;
 export const MAX_NAME_LENGTH = 28;
 export const MAX_TEXT_LENGTH = 5000;
 
@@ -75,7 +75,8 @@ export const CreateRoomSchema = z.object({ role: z.enum(ROLES), settings: RoomSe
 /** PATCH /api/rooms/:code : l'hôte change ses réglages ou son propre rôle. */
 export const UpdateRoomSchema = z.object({ role: z.enum(ROLES).optional(), settings: RoomSettingsSchema.partial().optional() }).strict();
 /** POST /api/rooms/join : un code de salon, ou un jeton d'invitation, jamais les deux. */
+/** SALLE-05 : on entre comme participant (par défaut) ou comme spectateur, qui ne prend pas de place. */
 export const JoinRoomSchema = z.union([
-  z.object({ code: z.string().refine(isRoomCode) }).strict(),
-  z.object({ invite: z.string().regex(/^[A-Za-z0-9_-]{8,128}$/) }).strict(),
+  z.object({ code: z.string().refine(isRoomCode), role: z.enum(ROLES).optional() }).strict(),
+  z.object({ invite: z.string().regex(/^[A-Za-z0-9_-]{8,128}$/), role: z.enum(ROLES).optional() }).strict(),
 ]);

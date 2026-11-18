@@ -5,7 +5,7 @@ import type { z } from "zod";
 import type { Db } from "../../db/client";
 import { players, raceConfigs, roomMembers, rooms } from "../../db/schema";
 import { allows, canJoin, newInviteToken, newRoomCode } from "../rooms/access";
-import { SEAT_COLORS } from "../rooms/seats";
+import { seatColor } from "../rooms/seats";
 import { DEFAULT_SETTINGS, type CreateRoomSchema, type Role, type RoomSettings, type UpdateRoomSchema } from "../rooms/settings";
 
 export type CreateRoomInput = z.infer<typeof CreateRoomSchema>;
@@ -72,18 +72,18 @@ export type RoomStatus = (typeof rooms.$inferSelect)["status"];
 /** Ce que renvoie une action réussie : l'état du salon, et la clé de celui qui l'a demandée. */
 export type RoomResult = { room: RoomView; you: string };
 
-/** La première place libre (0 à 7) ; null si le salon est plein. */
-function freeSeat(taken: (number | null)[]): number | null {
-  for (let seat = 0; seat < SEAT_COLORS.length; seat++) if (!taken.includes(seat)) return seat;
-  return null;
-}
-
-/** Une place pour un participant, aucune pour un spectateur. */
-function placeFor(role: Role, taken: (number | null)[]) {
+/**
+ * SALLE-05 : une place pour un participant, aucune pour un spectateur (il ne compte pas dans la capacité).
+ * `taken` : les places des participants déjà assis ; `capacity` : rooms.guests, lu sous le verrou du salon.
+ * Plein quand il y a déjà `capacity` participants ; sinon la première place libre.
+ */
+function placeFor(role: Role, taken: (number | null)[], capacity: number) {
   if (role === "spectator") return { seat: null, color: null };
-  const seat = freeSeat(taken);
-  if (seat === null) throw new RoomRefused("full");
-  return { seat, color: SEAT_COLORS[seat]! };
+  const seats = taken.filter((seat) => seat !== null);
+  if (seats.length >= capacity) throw new RoomRefused("full");
+  let seat = 0;
+  while (seats.includes(seat)) seat++;
+  return { seat, color: seatColor(seat) };
 }
 
 /** Un refus attendu (pas une panne) : la route le traduit en statut HTTP, le temps réel en message. */
@@ -189,7 +189,7 @@ export async function createRoom(db: Db, host: { playerId: number }, input: Crea
           .insert(rooms)
           .values({ code, inviteToken: newInviteToken(), ...roomColumnsOf(settings), hostId: host.playerId, configId: config!.id })
           .returning({ id: rooms.id });
-        await tx.insert(roomMembers).values({ roomId: room!.id, memberKey: key, playerId: host.playerId, role: input.role, ...placeFor(input.role, []) });
+        await tx.insert(roomMembers).values({ roomId: room!.id, memberKey: key, playerId: host.playerId, role: input.role, ...placeFor(input.role, [], settings.guests) });
         return room!.id;
       }),
     draw,
@@ -224,15 +224,19 @@ export async function updateRoom(db: Db, code: string, who: Identity, input: Upd
     // SALLE-09 : pendant la course, ni place prise par l'hôte spectateur, ni réglage changé
     if (room.status === "closed") throw new RoomRefused("not_found");
     if (!canJoin(room.status)) throw new RoomRefused("in_race");
+    const taken = (await tx.select({ seat: roomMembers.seat }).from(roomMembers).where(eq(roomMembers.roomId, id))).map((m) => m.seat);
+    let capacity = room.guests;
     if (input.settings) {
       const [config] = await tx.select().from(raceConfigs).where(eq(raceConfigs.id, room.configId));
       const settings = { ...settingsOf(room, config!), ...input.settings };
+      // SALLE-05 : la capacité ne descend pas sous le nombre de participants déjà assis
+      if (settings.guests < taken.filter((seat) => seat !== null).length) throw new RoomRefused("full");
+      capacity = settings.guests;
       const [next] = await tx.insert(raceConfigs).values(configOf(settings)).returning({ id: raceConfigs.id });
       await tx.update(rooms).set({ ...roomColumnsOf(settings), configId: next!.id }).where(eq(rooms.id, id));
     }
     if (input.role && input.role !== member.role) {
-      const taken = (await tx.select({ seat: roomMembers.seat }).from(roomMembers).where(eq(roomMembers.roomId, id))).map((m) => m.seat);
-      await tx.update(roomMembers).set({ role: input.role, ...placeFor(input.role, taken) }).where(and(eq(roomMembers.roomId, id), eq(roomMembers.memberKey, key)));
+      await tx.update(roomMembers).set({ role: input.role, ...placeFor(input.role, taken, capacity) }).where(and(eq(roomMembers.roomId, id), eq(roomMembers.memberKey, key)));
     }
   });
   return { room: await roomView(db, id, key), you: key };
@@ -258,7 +262,7 @@ export async function listPublicRooms(db: Db, limit = 50): Promise<ListedRoom[]>
 }
 
 /** Comment on entre : par le code du salon, ou par un lien d'invitation. */
-export type JoinVia = { code: string } | { invite: string };
+export type JoinVia = ({ code: string } | { invite: string }) & { role?: Role };
 
 /**
  * Le salon visé par ce code ou ce lien. La visibilité se vérifie ensuite, sous le verrou, après l'appartenance :
@@ -273,8 +277,8 @@ async function roomFor(db: Db, via: JoinVia) {
 }
 
 /**
- * Entrer dans un salon comme participant. Un membre qui revient (rechargement, autre onglet) le retrouve sans doublon.
- * Points d'extension : SALLE-05 (capacité), SALLE-06 (une salle à la fois), SALLE-07 (expulsés) se vérifient ici,
+ * Entrer dans un salon comme participant, ou comme spectateur (SALLE-05 : il ne prend pas de place). Un membre qui revient (rechargement, autre onglet) le retrouve sans doublon.
+ * SALLE-05 : la capacité (rooms.guests) est lue sous le verrou. Points d'extension : SALLE-06 (une salle à la fois), SALLE-07 (expulsés) se vérifient ici,
  * avant l'insertion ; SALLE-09 (état du salon) aussi.
  */
 export async function joinRoom(db: Db, who: Identity, via: JoinVia): Promise<RoomResult> {
@@ -284,7 +288,7 @@ export async function joinRoom(db: Db, who: Identity, via: JoinVia): Promise<Roo
     await expireRaces(tx, id);
     // Verrou sur la ligne du salon : les entrées simultanées et le lancement passent l'un après l'autre.
     // L'état (SALLE-09) et les places prises (SALLE-03) sont lus sous ce verrou, jamais avant.
-    const [room] = await tx.select({ status: rooms.status, visibility: rooms.visibility }).from(rooms).where(eq(rooms.id, id)).for("update");
+    const [room] = await tx.select({ status: rooms.status, visibility: rooms.visibility, guests: rooms.guests }).from(rooms).where(eq(rooms.id, id)).for("update");
     // SALLE-10 : un salon fermé répond comme un code inconnu, pour ne pas révéler qu'un code a servi
     if (!room || room.status === "closed") throw new RoomRefused("not_found");
     // un membre qui revient (rechargement, autre onglet) n'est pas un nouvel arrivant, même pendant la course,
@@ -295,7 +299,8 @@ export async function joinRoom(db: Db, who: Identity, via: JoinVia): Promise<Roo
     if (!canJoin(room.status)) throw new RoomRefused("in_race");
     const taken = (await tx.select({ seat: roomMembers.seat }).from(roomMembers).where(eq(roomMembers.roomId, id))).map((m) => m.seat);
     const identity = who.kind === "account" ? { playerId: who.playerId } : { guestName: who.name };
-    await tx.insert(roomMembers).values({ roomId: id, memberKey: key, ...identity, role: "player", ...placeFor("player", taken) });
+    const role = via.role ?? "player";
+    await tx.insert(roomMembers).values({ roomId: id, memberKey: key, ...identity, role, ...placeFor(role, taken, room.guests) });
   });
   return { room: await roomView(db, id, key), you: key };
 }

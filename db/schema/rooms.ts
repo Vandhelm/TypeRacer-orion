@@ -51,7 +51,7 @@ export const rooms = pgTable(
     /** SALLE-09 : départ de la course en cours ; elle prend fin d'elle-même après RACE_MAX_MS (src/server/rooms.ts). */
     launchedAt: timestamp("launched_at", { withTimezone: true }),
   },
-  (table) => [index("rooms_lobby").on(table.status, table.visibility), check("rooms_guests_range", sql`${table.guests} between 2 and 8`),
+  (table) => [index("rooms_lobby").on(table.status, table.visibility), check("rooms_guests_range", sql`${table.guests} between 2 and 30`),
     check("rooms_code_format", sql`${table.code} ~ ${sql.raw(`'${CODE_PATTERN}'`)}`),
   ],
 );
@@ -79,7 +79,7 @@ export const roomMembers = pgTable(
     primaryKey({ columns: [table.roomId, table.memberKey] }),
     unique("room_members_room_seat_unique").on(table.roomId, table.seat),
     index("room_members_player").on(table.playerId),
-    check("room_members_seat_range", sql`${table.seat} between 0 and 7`),
+    check("room_members_seat_range", sql`${table.seat} between 0 and 29`),
     check("room_members_identity", sql`(${table.playerId} is null) <> (${table.guestName} is null)`),
     check("room_members_seat_role", sql`(${table.role} = 'player') = (${table.seat} is not null)`),
   ],

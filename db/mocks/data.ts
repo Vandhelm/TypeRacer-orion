@@ -4,8 +4,7 @@ import { CORPUS } from "./corpus";
 
 export const DEMO_PASSWORD = "orion";
 
-const SEAT_COLORS = ["hsl(6, 71%, 58%)", "hsl(266, 85%, 59%)", "hsl(54, 100%, 74%)", "hsl(25, 100%, 63%)", "hsl(326, 47%, 47%)", "hsl(161, 65%, 60%)", "hsl(220, 85%, 65%)", "hsl(0, 0%, 72%)"];
-export const seatColor = (seat: number) => SEAT_COLORS[seat]!;
+export { seatColor } from "../../src/rooms/seats";
 
 /** account: false pour un invité. wpm et accuracy : le niveau du joueur dans l'historique. */
 export const PLAYERS = [
