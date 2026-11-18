@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import { connect, MIGRATIONS_DIR } from "./client";
 import { seed } from "./mocks/seed";
+import { normalizeStoredAvatars } from "../src/server/account";
 
 const command = process.argv[2];
 const usesDemoData = command === "seed" || command === "reset";
@@ -24,6 +25,9 @@ try {
     await db.execute(sql`CREATE SCHEMA public`);
   }
   await migrate(db, { migrationsFolder: MIGRATIONS_DIR });
+  // AUTH-04 : les photos enregistrées avant la réduction côté serveur sont réduites (sans effet si déjà fait).
+  const avatars = await normalizeStoredAvatars(db);
+  if (avatars) console.log(`Profile photos resized or removed: ${avatars}.`);
   if (usesDemoData) await seed(db);
   console.log(usesDemoData ? "Database seeded." : "Database migrated.");
 } catch (error) {

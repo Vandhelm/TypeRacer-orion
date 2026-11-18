@@ -6,7 +6,7 @@ import { MIGRATIONS_DIR } from "../../db/client";
 import { createMockDatabase } from "../../db/mocks/test-database";
 import { placeholderEmail } from "../accounts/username";
 import { createAuth, type Auth } from "./auth";
-import { AVATAR_MAX_BYTES, avatarType, handleAvatar, resizeAvatar, saveAvatar } from "./account";
+import { AVATAR_MAX_BYTES, avatarType, handleAvatar, normalizeStoredAvatars, resizeAvatar, saveAvatar } from "./account";
 import { playerStats } from "./races";
 
 process.env.BETTER_AUTH_SECRET ??= "test-secret-test-secret-test-secret";
@@ -153,18 +153,48 @@ describe("AUTH-04 — les photos enregistrées avant la réduction serveur", () 
   const imageOf = async (db: Awaited<ReturnType<typeof createMockDatabase>>, name: string) =>
     (await db.select({ image: user.image }).from(user).where(eq(user.name, name)))[0]!.image;
 
-  test("la migration efface les images qui ne sont pas un WebP réduit par le serveur", async () => {
+  const dataUri = (buffer: Buffer, type = "webp") => `data:image/${type};base64,${buffer.toString("base64")}`;
+  const sizeOf = async (image: string | null) => {
+    const meta = await sharp(Buffer.from(image!.split(",")[1]!, "base64")).metadata();
+    return [meta.format, meta.width, meta.height];
+  };
+
+  test("la migration efface les URL externes", async () => {
     const db = await createMockDatabase();
-    const webp = `data:image/webp;base64,${(await picture(64, 64, "webp")).toString("base64")}`;
     await insertAccount(db, "Vieux_Github", LEGACY);
-    await insertAccount(db, "Vieux_Png", "data:image/png;base64,iVBORw0KGgo=");
-    await insertAccount(db, "Photo_Webp", webp);
     await insertAccount(db, "Sans_Photo", null);
     await db.execute(sql.raw(await Bun.file(`${MIGRATIONS_DIR}/0007_legacy_avatars.sql`).text()));
     expect(await imageOf(db, "Vieux_Github")).toBeNull();
-    expect(await imageOf(db, "Vieux_Png")).toBeNull();
-    expect(await imageOf(db, "Photo_Webp")).toBe(webp);
     expect(await imageOf(db, "Sans_Photo")).toBeNull();
+  });
+
+  test("les anciennes images non réduites sont réduites, même en WebP", async () => {
+    const db = await createMockDatabase();
+    await insertAccount(db, "Grand_Webp", dataUri(await picture(1000, 1000, "webp")));
+    await insertAccount(db, "Vieux_Png", dataUri(await picture(600, 400, "png"), "png"));
+    await insertAccount(db, "Vieux_Jpeg", dataUri(await picture(300, 900, "jpeg"), "jpeg"));
+    expect(await normalizeStoredAvatars(db)).toBe(3);
+    expect(await sizeOf(await imageOf(db, "Grand_Webp"))).toEqual(["webp", 256, 256]);
+    expect(await sizeOf(await imageOf(db, "Vieux_Png"))).toEqual(["webp", 256, 256]);
+    expect(await sizeOf(await imageOf(db, "Vieux_Jpeg"))).toEqual(["webp", 256, 256]);
+  });
+
+  test("une image déjà réduite par le serveur n'est pas retouchée", async () => {
+    const db = await createMockDatabase();
+    const reduced = dataUri((await resizeAvatar(await picture(900, 600, "jpeg")))!);
+    await insertAccount(db, "Photo_Webp", reduced);
+    expect(await normalizeStoredAvatars(db)).toBe(0);
+    expect(await imageOf(db, "Photo_Webp")).toBe(reduced);
+    expect(await normalizeStoredAvatars(db)).toBe(0);
+  });
+
+  test("une image indécodable, un GIF ou une URL est effacée", async () => {
+    const db = await createMockDatabase();
+    await insertAccount(db, "Webp_Casse", "data:image/webp;base64,UklGRgAAAABXRUJQ");
+    await insertAccount(db, "Vieux_Gif", "data:image/gif;base64,R0lGODlhAQABAAAAACw=");
+    await insertAccount(db, "Vieux_Lien", LEGACY);
+    expect(await normalizeStoredAvatars(db)).toBe(3);
+    for (const name of ["Webp_Casse", "Vieux_Gif", "Vieux_Lien"]) expect(await imageOf(db, name)).toBeNull();
   });
 
   test("le profil n'affiche jamais une ancienne image non réduite", async () => {
