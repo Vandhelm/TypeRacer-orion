@@ -217,6 +217,21 @@
 .acc-msg.is-error{ color: var(--color-red-text); }
 .acc-msg.is-ok{ color: #fff; }
 
+/* Historique (HIST-01) : une ligne par course, filets comme la liste des liens ; pagination sous la liste */
+.history-list{ display: grid; gap: 1px; list-style: none; background: var(--color-line-faint) padding-box; border: 1px solid var(--color-line-faint); }
+.history-item{
+    display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) auto auto minmax(0, 2fr); align-items: baseline; gap: 6px 20px;
+    padding: 14px clamp(14px, 2vh, 20px); background: var(--color-face-front-a); color: var(--color-muted); font: 400 max(12px, 1.4vh)/1.4 var(--font-mono);
+}
+.history-date, .history-value{ color: #fff; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.history-meta{ min-width: 0; overflow-wrap: anywhere; }
+.history-pages{ display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px 20px; margin-top: 16px; }
+.history-page{ color: var(--color-muted); font: 400 12px/1 var(--font-mono); font-variant-numeric: tabular-nums; }
+@media (max-width: 700px){
+    .history-item{ grid-template-columns: 1fr auto auto; }
+    .history-date, .history-meta{ grid-column: 1 / -1; }
+}
+
 /* Boutons contour, comme Lier / Délier */
 .acc-btn{
     all: unset; box-sizing: border-box; cursor: pointer; height: 34px; padding: 0 16px; display: inline-grid; place-items: center;
