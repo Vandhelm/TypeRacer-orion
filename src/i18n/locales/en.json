@@ -198,7 +198,21 @@
     "link": "Link",
     "copyLink": "Copy invite link",
     "linkCopied": "Link copied",
-    "inviteRoomName": "Invite-only room"
+    "inviteRoomName": "Invite-only room",
+    "live": {
+      "title": "Live",
+      "progress": "{{name}}'s progress",
+      "percent": "{{percent}}%",
+      "status": {
+        "connecting": "Connecting to the room…",
+        "reconnecting": "Connection lost, trying again…",
+        "unauthorized": "Choose a nickname to show up live.",
+        "closed": "Disconnected from the room.",
+        "open_zero": "You are alone in the room.",
+        "open_one": "{{count}} other person here.",
+        "open_other": "{{count}} other people here."
+      }
+    }
   },
   "game": {
     "pageTitle": "O.R.I.O.N — The race",

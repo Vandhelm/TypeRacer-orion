@@ -118,6 +118,11 @@ describe("SMOKE — API", () => {
     expect(res.status).toBe(401);
   });
 
+  test("TECH-06 — /api/realtime/ticket refuse un visiteur sans session", async () => {
+    const res = await fetch(`${base}/api/realtime/ticket`, { method: "POST" });
+    expect(res.status).toBe(401);
+  });
+
   // TECH-01 : le catch-all app/api/[...path]/route.ts transmet les routes de better-auth à handleApi.
   test("TECH-01 — /api/auth/get-session répond sous Next.js", async () => {
     const res = await fetch(`${base}/api/auth/get-session`);
@@ -247,5 +252,13 @@ describe("SMOKE — salon", () => {
   test("AUTH-03 — un invité entre dans un salon par son code", async () => {
     const res = await fetch(`${base}/room?code=ABC234`, { headers: { cookie: await guestCookie() }, redirect: "manual" });
     expect(res.status).toBe(200);
+  });
+
+  test("TECH-06 — un invité reçoit un ticket pour le serveur temps réel", async () => {
+    const res = await fetch(`${base}/api/realtime/ticket`, { method: "POST", headers: { cookie: await guestCookie() } });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ticket?: string; url?: string };
+    expect(body.ticket).toBeString();
+    expect(body.url).toMatch(/^wss?:\/\//);
   });
 });

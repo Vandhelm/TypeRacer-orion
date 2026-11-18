@@ -21,6 +21,7 @@
 @import "../../components/forms/number-field.css";
 @import "../../components/info-tip.css";
 @import "../../components/stamp.css";
+@import "../../components/live-list.css";
 
 @import "./room.css";
 @import "./ticket.css";

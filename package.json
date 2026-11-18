@@ -31,7 +31,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun --bun next dev",
+    "dev": "bun run --parallel next:dev realtime",
+    "next:dev": "bun --bun next dev",
+    "realtime": "bun src/realtime/main.ts",
+    "realtime:build": "bun build src/realtime/main.ts --target bun --minify --outfile dist/realtime.js",
     "next:build": "bun --bun next build",
     "next:start": "bun --bun next start",
     "typecheck": "tsc --noEmit",

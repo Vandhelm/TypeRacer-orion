@@ -1,5 +1,6 @@
+import { createHmac } from "node:crypto";
 import { describe, expect, test } from "bun:test";
-import { GUEST_COOKIE, guestCookie, guestSecret, handleGuest, readGuest, signGuest, verifyGuest } from "./guest";
+import { GUEST_COOKIE, GUEST_TTL_MS, guestCookie, guestSecret, handleGuest, readGuest, readGuestSession, signGuest, verifyGuest } from "./guest";
 
 const SECRET = "guest-secret-guest-secret-guest-secret";
 const NOW = 1_800_000_000_000;
@@ -122,5 +123,42 @@ describe("AUTH-02 — /api/guest", () => {
 
   test("other methods are refused", async () => {
     expect((await handleGuest(new Request("http://localhost/api/guest", { method: "PUT" }), env)).status).toBe(405);
+  });
+});
+
+describe("TECH-06 — each guest session has its own random id", () => {
+  const legacy = (nickname: string) => {
+    const payload = Buffer.from(JSON.stringify({ n: nickname, e: NOW + 1000 })).toString("base64url");
+    return `${payload}.${createHmac("sha256", SECRET).update(payload).digest("base64url")}`;
+  };
+
+  test("two guests with the same nickname, whatever the case, get different ids", () => {
+    const a = readGuestSession(withCookie(signGuest("Alice_01", SECRET, NOW)), SECRET, NOW);
+    const b = readGuestSession(withCookie(signGuest("alice_01", SECRET, NOW)), SECRET, NOW);
+    expect(a?.id).toBeString();
+    expect(b?.id).toBeString();
+    expect(a?.id).not.toBe(b?.id);
+  });
+
+  test("the id is stable for the same cookie", () => {
+    const cookie = signGuest("Corail_418", SECRET, NOW);
+    expect(readGuestSession(withCookie(cookie), SECRET, NOW)?.id).toBe(readGuestSession(withCookie(cookie), SECRET, NOW)?.id!);
+  });
+
+  test("an id that is not a UUID is refused", () => {
+    const payload = Buffer.from(JSON.stringify({ n: "Corail_418", e: NOW + 1000, i: "alice" })).toString("base64url");
+    const value = `${payload}.${createHmac("sha256", SECRET).update(payload).digest("base64url")}`;
+    expect(readGuestSession(withCookie(value), SECRET, NOW)).toBeNull();
+  });
+
+  test("an older cookie without id still opens the session, with no id", () => {
+    const session = readGuestSession(withCookie(legacy("Corail_418")), SECRET, NOW);
+    expect(session).toEqual({ nickname: "Corail_418", id: null, expires: NOW + 1000 });
+    expect(readGuest(withCookie(legacy("Corail_418")), SECRET, NOW)).toBe("Corail_418");
+  });
+
+  test("an older cookie can be re-signed with an id, keeping its nickname and expiry", () => {
+    const value = signGuest("Corail_418", SECRET, NOW + 1000 - GUEST_TTL_MS, "6f1c2a52-6a8d-4b8a-9f0e-0c1d2e3f4a5b");
+    expect(readGuestSession(withCookie(value), SECRET, NOW)).toEqual({ nickname: "Corail_418", id: "6f1c2a52-6a8d-4b8a-9f0e-0c1d2e3f4a5b", expires: NOW + 1000 });
   });
 });
