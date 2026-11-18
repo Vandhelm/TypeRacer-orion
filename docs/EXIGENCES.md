@@ -17,7 +17,7 @@ Les statuts viennent des rapports de l'agent `qa` (skill `criteria-check`). Une 
 | TECH-07 | complet | `src/server/races.ts`, `account.ts`, `guest.ts`, `room-gate.ts`, `proxy.ts`, `src/realtime/protocol.ts`, `src/realtime/ticket.ts` | `src/server/inputs.test.ts`, `src/realtime/protocol.test.ts`, `src/server/races.test.ts`, smoke TECH-07 | Routes API, pages serveur, cookies, ticket et messages WebSocket validés par Zod ; corps limité à 512 Ko. Aucune action serveur. Better Auth valide ses propres routes (équivalent). Vérifié le 2026-11-18 (QA section 3). |
 | TECH-08 | partiel | `fly.toml`, `docs/ARCHITECTURE.md` | aucun | Vercel Hobby. Gratuité de Fly.io non établie ; base de production et accès de l'enseignant non documentés. Vérifié le 2026-11-18 (QA section 3). |
 | TECH-09 | complet | `.github/workflows/ci.yml` | toute la suite | Lint, `tsc --noEmit` et `bun test` à chaque push, puis builds, smoke et contrôle no-JS (bloquant). Aucun run GitHub observé. Vérifié le 2026-11-18 (QA section 3). |
-| TECH-10 | partiel | `.env.example`, `.gitignore` | aucun | Aucun secret commité. Manquent `BASE_URL` et `SMOKE_*` (variables des tests smoke). Vérifié le 2026-11-18 (QA section 3). |
+| TECH-10 | complet | `.env.example`, `.gitignore` | `tests/tech/tech-10.test.ts` (`bun test -t TECH-10`) | 25 variables lues par le code et la config, documentées (dont celles des smoke tests), plus les variables de plateforme en commentaire. Un test échoue si une variable lue n'est pas dans `.env.example` ou si un `.env*` autre que l'exemple est suivi. Aucun secret commité. Vérifié le 2026-11-18 (QA critère, branche `fix/env/tech-10`). |
 
 ## 4. Identité visuelle et design (DES)
 
