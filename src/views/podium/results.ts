@@ -36,6 +36,7 @@ export type RaceResults = { players: PlayerResult[]; summary: RaceSummary };
 
 const RESULTS_KEY = "orion-results";
 const SESSION_KEY = "orion-session-start";
+const SUBMIT_KEY = "orion-submit-failed";
 
 const sum = (values: number[]) => values.reduce((total, value) => total + value, 0);
 
@@ -164,23 +165,43 @@ export function raceBody(results: RaceResults, content: string) {
 
 /** Les navigateurs refusent un corps keepalive de plus de 64 Kio : une longue course à 8 joueurs le dépasse. */
 export const KEEPALIVE_LIMIT = 65_536;
-/** Au-delà, le jeu attend la réponse avant de passer au podium, mais pas plus longtemps que ceci. */
+/** Un envoi keepalive survit au passage au podium : le jeu n'attend sa réponse qu'un instant, pour signaler un refus. */
+const KEEPALIVE_WAIT_MS = 1_500;
+/** Au-delà de la limite, le jeu attend la réponse avant de passer au podium, mais pas plus longtemps que ceci. */
 const SUBMIT_WAIT_MS = 10_000;
+
+/** Ce qu'est devenu l'envoi : enregistré, refusé (400, hors ligne…), ou sans réponse à temps. */
+export type SubmitOutcome = "saved" | "failed" | "unconfirmed";
 
 /**
  * Envoie la course au serveur, qui garde l'historique des bots et du compte connecté (sa session, pas le corps).
  * Un petit corps part en keepalive (l'envoi survit au passage au podium) ; un gros part sans, et la promesse
- * ne se résout qu'à la réponse : quitter la page avant couperait l'envoi.
+ * attend sa réponse : quitter la page avant couperait l'envoi.
+ * Limite connue : sans réponse au bout de SUBMIT_WAIT_MS, le passage au podium coupe un gros envoi, qui peut se perdre
+ * ("unconfirmed") ; aucune API du navigateur ne garde un corps de plus de 64 Kio en vie après la page.
  */
-export function submitRace(results: RaceResults, content: string): Promise<void> {
+export function submitRace(results: RaceResults, content: string): Promise<SubmitOutcome> {
   const body = JSON.stringify(raceBody(results, content));
   const keepalive = new TextEncoder().encode(body).length <= KEEPALIVE_LIMIT;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<SubmitOutcome>((resolve) => (timer = setTimeout(resolve, keepalive ? KEEPALIVE_WAIT_MS : SUBMIT_WAIT_MS, "unconfirmed")));
   const sent = fetch("/api/races", { method: "POST", keepalive, headers: { "content-type": "application/json" }, body }).then(
-    () => undefined,
-    () => undefined, // hors ligne : la course n'entre pas dans l'historique
+    (response): SubmitOutcome => (response.ok ? "saved" : "failed"),
+    (): SubmitOutcome => "failed", // hors ligne : la course n'entre pas dans l'historique
   );
-  if (keepalive) return Promise.resolve();
-  return Promise.race([sent, new Promise<void>((resolve) => setTimeout(resolve, SUBMIT_WAIT_MS))]);
+  return Promise.race([sent, late]).finally(() => clearTimeout(timer));
+}
+
+/** Un refus de la course jouée dans cet onglet, gardé pour que le podium le dise ; un envoi suivant l'efface. */
+export function rememberSubmit(outcome: SubmitOutcome) {
+  try {
+    if (outcome === "failed") sessionStorage.setItem(SUBMIT_KEY, "1");
+    else sessionStorage.removeItem(SUBMIT_KEY);
+  } catch { /* stockage indisponible */ }
+}
+
+export function submitFailed() {
+  try { return sessionStorage.getItem(SUBMIT_KEY) === "1"; } catch { return false; }
 }
 
 export function readResults() {

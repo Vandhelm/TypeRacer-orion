@@ -241,6 +241,7 @@
     "rank_ordinal_other": "{{count}}th",
     "viewStats": "See stats for {{name}}",
     "loading": "Loading results…",
+    "notSaved": "This race could not be saved to the history.",
     "backToHistory": "History",
     "errors": {
       "not_found": "This race does not exist.",

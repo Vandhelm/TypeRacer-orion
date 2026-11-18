@@ -3,13 +3,14 @@ import { useTranslation } from "react-i18next";
 import { useRaceResults } from "./hooks/useRaceResults";
 import { PodiumBoard } from "./PodiumBoard";
 import { PodiumScene } from "./PodiumScene";
-import { raceErrorKey } from "./results";
+import { raceErrorKey, submitFailed } from "./results";
 
 /** After the race, or for a race of the history (?race=N, HIST-02): the top three on the podium, then every player. */
 export function PodiumPage() {
   const { t } = useTranslation();
   const loaded = useRaceResults();
   const [arrived] = useState(() => location.hash === "#arrived"); // de retour d'un profil : pas de nouveau travelling
+  const [notSaved] = useState(submitFailed); // le serveur a refusé la course jouée dans cet onglet
 
   useEffect(() => {
     // pas de course jouée dans cet onglet, ni de course de l'historique : rien à classer
@@ -35,6 +36,7 @@ export function PodiumPage() {
 
   return (
     <>
+      {raceId === null && notSaved ? <p className="podium-notice" role="alert">{t("podium.notSaved")}</p> : null}
       <PodiumScene players={results.players} arrived={arrived} raceId={raceId} />
       <PodiumBoard players={results.players} showPlace arrived={arrived} raceId={raceId} />
     </>
