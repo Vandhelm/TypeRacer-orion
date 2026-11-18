@@ -111,6 +111,11 @@ describe("SMOKE — API", () => {
     expect(res.status).toBe(401);
   });
 
+  test("AUTH-06 — /api/races refuse une course envoyée sans session", async () => {
+    const res = await fetch(`${base}/api/races`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+    expect(res.status).toBe(401);
+  });
+
   // TECH-01 : le catch-all app/api/[...path]/route.ts transmet les routes de better-auth à handleApi.
   test("TECH-01 — /api/auth/get-session répond sous Next.js", async () => {
     const res = await fetch(`${base}/api/auth/get-session`);
@@ -121,6 +126,27 @@ describe("SMOKE — API", () => {
   test.skipIf(Boolean(remote))("AUTH-06 — les stats d'un joueur de démo répondent", async () => {
     const res = await fetch(`${base}/api/players/Corail_418/stats`);
     expect(res.status).toBe(200);
+  });
+
+  // Écrit en base : seulement en local, pas contre un déploiement.
+  test.skipIf(Boolean(remote))("AUTH-03 — un nom libre envoyé comme bot n'obtient aucun historique", async () => {
+    const guest = await fetch(`${base}/api/guest`, { method: "POST", headers: { "content-type": "application/json", origin: base }, body: JSON.stringify({ nickname: "Smoke_Invite" }) });
+    const cookie = (guest.headers.get("set-cookie") ?? "").split(";")[0]!;
+    const summary = {
+      textType: "words", language: "fr", duration: 60, level: "common", punctuation: false, numbers: false, specials: false, accents: true,
+      excluded: "", mistakes: "fix", botSpeed: "medium", botAccuracy: "high", length: "short", wordCount: 20, sessionSeconds: 90,
+    };
+    const player = {
+      name: "Smoke_Faux_Bot", bot: true, wpm: 200, raw: 205, accuracy: 100, seconds: 3, chars: [40, 0, 0, 0], consistency: 90, idle: 0,
+      finished: true, eliminated: false, wpmSeries: [200], rawSeries: [205], errorSeries: [0],
+    };
+    const res = await fetch(`${base}/api/races`, {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie },
+      body: JSON.stringify({ id: crypto.randomUUID(), summary, players: [player] }),
+    });
+    expect(res.status).toBeLessThan(300);
+    expect((await fetch(`${base}/api/players/Smoke_Faux_Bot/stats`)).status).toBe(404);
   });
 
   // Crée une session : seulement en local, pas contre un déploiement.

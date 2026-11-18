@@ -1,9 +1,9 @@
 // Room model. À BRANCHER : sans serveur de jeu, le salon est gardé dans ce navigateur et les autres joueurs sont simulés.
 import type { TFunction } from "i18next";
+import { BOT_NAMES } from "../../players/bots";
 import { isGuestPlayer, myName } from "../../players/nickname";
 import { cleanRoomCode, newInviteToken, newRoomCode, VISIBILITIES, type Visibility } from "../../rooms/access";
 
-const BOT_NAMES = ["Thon_Rouge", "Wasabi99", "Saba_Sensei", "Nori_Ninja", "Ebi_Fry", "Uni_Kun", "Tako_San"];
 const PLAYER_NAMES = ["Maki_77", "Ikura_21", "Tamago_8", "Sake_Bomb", "Kani_404", "Hotate_3", "Toro_19"];
 // Une couleur par joueur : celle de son poisson et de sa puce sur le billet
 const PLAYER_COLORS = ["hsl(6, 71%, 58%)", "hsl(266, 85%, 59%)", "hsl(54, 100%, 74%)", "hsl(25, 100%, 63%)", "hsl(326, 47%, 47%)", "hsl(161, 65%, 60%)", "hsl(220, 85%, 65%)", "hsl(0, 0%, 72%)"];

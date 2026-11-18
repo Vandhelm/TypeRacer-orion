@@ -1,7 +1,12 @@
 // Enregistrer une course terminée et lire les statistiques d'un joueur (AUTH-06).
 // À BRANCHER : le navigateur envoie lui-même les résultats ; le serveur de jeu devra les produire pour qu'on ne puisse pas les inventer.
+// D'ici là, qui envoie la course vient de sa session (compte ou cookie d'invité signé), jamais du corps de la requête.
 import { avg, count, desc, eq, max, sql } from "drizzle-orm";
+import { z } from "zod";
 import type { Db } from "../../db/client";
+import type { Auth } from "./auth";
+import { guestSecret, readGuest } from "./guest";
+import { isBotName } from "../players/bots";
 import { parseKeys, type KeyCounts } from "../players/keys";
 import { players, raceConfigs, raceResults, races, raceSamples, user } from "../../db/schema";
 
@@ -17,6 +22,10 @@ const MAX_SECONDS = 600;
 export const PROGRESS_LIMIT = 50;
 
 export class InvalidRace extends Error {}
+/** La même course, déjà reçue (même identifiant) : un rejeu. */
+export class DuplicateRace extends Error {}
+
+const RaceId = z.uuid();
 
 const fail = (what: string): never => {
   throw new InvalidRace(`Invalid race: ${what}`);
@@ -81,26 +90,44 @@ export function parseRace(body: unknown) {
       keys: parseKeys(p.keys),
     };
   });
-  return { config, content: String(b.content ?? "").slice(0, 10_000), sessionSeconds: int(s.sessionSeconds ?? 0, "sessionSeconds", 0, 10_000_000), results };
+  // l'identifiant de la course (AUTH-06) : facultatif ici, exigé par la route
+  const id = b.id === undefined ? null : RaceId.safeParse(b.id).data ?? fail("id");
+  return { id, config, content: String(b.content ?? "").slice(0, 10_000), sessionSeconds: int(s.sessionSeconds ?? 0, "sessionSeconds", 0, 10_000_000), results };
 }
 
 type ParsedRace = ReturnType<typeof parseRace>;
 
-/** Le joueur d'un bot : créé à sa première course. Un nom pris par un humain n'est jamais repris. */
+/** Le joueur d'un bot : créé à sa première course, seulement pour un nom de la liste des bots. Un nom pris par un humain n'est jamais repris. */
 async function botPlayer(db: Db, name: string) {
+  if (!isBotName(name)) return null;
   await db.insert(players).values({ name, isBot: true }).onConflictDoNothing();
   const [row] = await db.select({ id: players.id, isBot: players.isBot }).from(players).where(sql`lower(${players.name}) = lower(${name})`);
   return row?.isBot ? row.id : null;
 }
 
+/** Qui envoie la course, d'après sa session : le joueur de son compte, ou son pseudonyme d'invité. */
+export type Requester = { playerId?: number | null; guest?: string | null };
+
+const sameName = (a: string, b: string | null | undefined) => !!b && a.toLowerCase() === b.toLowerCase();
+
 /**
- * Enregistre la course. Seuls les bots y laissent un historique pour l'instant : un invité n'en a pas (AUTH-03)
- * et un compte connecté s'ajoutera ici avec l'authentification. Renvoie l'id de la course, ou null s'il n'y avait rien à garder.
+ * Enregistre la course. Gardés : le résultat du compte connecté (repéré par le nom de son joueur, jamais par le flag « bot »)
+ * et les bots. Un invité n'a pas d'historique (AUTH-03), même s'il se dit bot, et les autres humains non plus.
+ * Renvoie l'id de la course, ou null s'il n'y avait rien à garder.
  */
-export async function recordRace(db: Db, race: ParsedRace) {
+export async function recordRace(db: Db, race: ParsedRace, requester: Requester = {}) {
+  const [account] = requester.playerId
+    ? await db.select({ id: players.id, name: players.name }).from(players).where(eq(players.id, requester.playerId))
+    : [];
   const kept: (ParsedRace["results"][number] & { playerId: number })[] = [];
+  let accountKept = false;
   for (const result of race.results) {
-    const playerId = result.bot ? await botPlayer(db, result.name) : null;
+    let playerId: number | null = null;
+    if (account && sameName(result.name, account.name)) {
+      if (accountKept) continue;
+      accountKept = true;
+      playerId = account.id;
+    } else if (result.bot && !sameName(result.name, requester.guest)) playerId = await botPlayer(db, result.name);
     if (playerId) kept.push({ ...result, playerId });
   }
   if (!kept.length) return null;
@@ -110,9 +137,11 @@ export async function recordRace(db: Db, race: ParsedRace) {
     const longest = Math.max(...kept.map((result) => result.seconds));
     const [row] = await tx
       .insert(races)
-      .values({ configId: config!.id, content: race.content, startedAt: new Date(Date.now() - longest * 1000), finishedAt: new Date() })
+      .values({ clientId: race.id, configId: config!.id, content: race.content, startedAt: new Date(Date.now() - longest * 1000), finishedAt: new Date() })
+      .onConflictDoNothing({ target: races.clientId })
       .returning({ id: races.id });
-    const raceId = row!.id;
+    if (!row) throw new DuplicateRace("Race already recorded");
+    const raceId = row.id;
     for (const { playerId, wpmSeries, rawSeries, errorSeries, name: _name, bot: _bot, ...result } of kept) {
       await tx.insert(raceResults).values({ ...result, raceId, playerId, sessionSeconds: race.sessionSeconds });
       if (wpmSeries.length) {
@@ -121,6 +150,30 @@ export async function recordRace(db: Db, race: ParsedRace) {
     }
     return raceId;
   });
+}
+
+/**
+ * POST /api/races : refusé sans session (compte ou invité signé) ; le compte est celui de la session.
+ * Chaque course porte un identifiant unique tiré par le navigateur : le même envoi rejoué est refusé (409).
+ * Limite : un client qui tire un nouvel identifiant peut encore inventer une course ; MPM et rang viennent du navigateur
+ * tant que le serveur de jeu (COURSE-06) ne les calcule pas.
+ */
+export async function handleRace(req: Request, db: Db, auth: Auth, secret = guestSecret()): Promise<Response> {
+  if (req.method !== "POST") return Response.json({ error: "method_not_allowed" }, { status: 405 });
+  const session = await auth.api.getSession({ headers: req.headers }).catch(() => null);
+  const playerId = (session?.user as { playerId?: number | null } | undefined)?.playerId ?? null;
+  const guest = session ? null : readGuest(req.headers, secret);
+  if (!session && !guest) return Response.json({ error: "unauthorized" }, { status: 401 });
+  try {
+    const race = parseRace(await req.json());
+    if (!race.id) fail("id");
+    const raceId = await recordRace(db, race, { playerId, guest });
+    return Response.json({ raceId }, { status: raceId ? 201 : 200 });
+  } catch (error) {
+    if (error instanceof DuplicateRace) return Response.json({ error: "duplicate_race" }, { status: 409 });
+    if (error instanceof InvalidRace || error instanceof SyntaxError) return Response.json({ error: error.message }, { status: 400 });
+    throw error;
+  }
 }
 
 /** postgres-js (en ligne) renvoie un tableau de lignes, PGlite (tests) un objet { rows }. */

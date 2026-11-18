@@ -139,13 +139,18 @@ export function saveResults(results: RaceResults) {
   try { sessionStorage.setItem(RESULTS_KEY, JSON.stringify(results)); } catch { /* stockage indisponible */ }
 }
 
-/** Envoie la course au serveur, qui garde l'historique des bots. keepalive : l'envoi survit au passage au podium. */
+/** Le corps envoyé au serveur : la course et son identifiant unique, pour que le serveur refuse un rejeu (AUTH-06). */
+export function raceBody(results: RaceResults, content: string) {
+  return { id: crypto.randomUUID(), ...results, content };
+}
+
+/** Envoie la course au serveur, qui garde l'historique des bots et du compte connecté (sa session, pas le corps). keepalive : l'envoi survit au passage au podium. */
 export function submitRace(results: RaceResults, content: string) {
   fetch("/api/races", {
     method: "POST",
     keepalive: true,
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ ...results, content }),
+    body: JSON.stringify(raceBody(results, content)),
   }).catch(() => { /* hors ligne : la course n'entre pas dans l'historique */ });
 }
 

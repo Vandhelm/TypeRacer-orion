@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { authClient } from "../../accounts/client";
 import { HangingButton } from "../../components/buttons/HangingButton";
@@ -9,7 +9,7 @@ import { usePlayerStats, type StatsState } from "./hooks/usePlayerStats";
 import { LastRace } from "./LastRace";
 import { OwnProfile, type Me } from "./OwnProfile";
 import { ProfileAvatar } from "./ProfileAvatar";
-import { guestStats } from "./stats";
+import { guestStats, statsSource, type SessionState } from "./stats";
 
 const PODIUM_HREF = "/podium#arrived";
 
@@ -43,18 +43,19 @@ export function ProfilePage() {
   const { data: session, isPending } = authClient.useSession();
   if (own && isPending) return <main className="profile" aria-busy="true" />;
   if (own && session) return <OwnProfile me={session.user as Me} />;
-  return <PlayerProfile />;
+  return <PlayerProfile session={isPending ? "pending" : session ? "signed-in" : "signed-out"} />;
 }
 
 /** Un joueur : le détail de la dernière course s'il y était, puis ses statistiques sur toutes ses courses. */
-function PlayerProfile() {
+function PlayerProfile({ session }: { session: SessionState }) {
   const { t } = useTranslation();
   const [results] = useState(readResults);
   const [subject] = useState(() => subjectOf(results));
-  // un invité n'a pas d'historique sur le serveur (AUTH-03) : ses stats viennent de sa session
-  const guest = !!subject?.result?.me;
-  const remote = usePlayerStats(subject && !guest ? subject.name : null);
-  const [local] = useState<StatsState | null>(() => (guest && subject ? { status: "ready", stats: guestStats(subject.name) } : null));
+  // un invité n'a pas d'historique sur le serveur (AUTH-03) : ses stats viennent de sa session. Invité ou non : d'après la session.
+  const source = subject ? statsSource({ me: !!subject.result?.me }, session) : null;
+  const guest = source === "session";
+  const remote = usePlayerStats(subject && source === "server" ? subject.name : null);
+  const local = useMemo<StatsState | null>(() => (guest && subject ? { status: "ready", stats: guestStats(subject.name) } : null), [guest, subject]);
   const stats = local ?? remote;
   const [layout, setLayout] = useKeyboardLayout();
 
