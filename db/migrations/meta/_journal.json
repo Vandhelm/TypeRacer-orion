@@ -99,6 +99,13 @@
       "when": 1795040620953,
       "tag": "0013_crazy_maximus",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1795041467740,
+      "tag": "0014_wet_killmonger",
+      "breakpoints": true
     }
   ]
 }

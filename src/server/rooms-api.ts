@@ -2,13 +2,13 @@
 // refus → statut HTTP. Toute règle (hôte, accès, état) est dans rooms.ts, appliquée par le serveur (SEC-01).
 import type { Db } from "../../db/client";
 import { isRoomCode } from "../rooms/access";
-import { CreateRoomSchema, JoinRoomSchema, UpdateRoomSchema } from "../rooms/settings";
+import { CreateRoomSchema, JoinRoomSchema, KickSchema, UpdateRoomSchema } from "../rooms/settings";
 import type { Auth } from "./auth";
 import { guestSecret } from "./guest";
 import { roomIdentity } from "./room-gate";
-import { CodeExhausted, createRoom, finishRoom, joinRoom, launchRoom, leaveRoom, listPublicRooms, readRoom, RoomRefused, updateRoom, type RefusalReason, type RoomResult } from "./rooms";
+import { CodeExhausted, createRoom, finishRoom, joinRoom, kickMember, launchRoom, leaveRoom, listPublicRooms, readRoom, RoomRefused, updateRoom, type RefusalReason, type RoomResult } from "./rooms";
 
-const STATUS: Record<RefusalReason, number> = { not_found: 404, not_member: 403, not_host: 403, full: 409, in_race: 409, closed: 410, already_in_room: 409 };
+const STATUS: Record<RefusalReason, number> = { not_found: 404, not_member: 403, not_host: 403, full: 409, in_race: 409, closed: 410, already_in_room: 409, kicked: 403, invalid_target: 400, unknown_member: 404 };
 
 /** Un refus attendu, en réponse HTTP. SALLE-06 : « already_in_room » donne le salon actuel, pour proposer d'en sortir. */
 const refusal = (error: RoomRefused) => json(error.room ? { error: error.reason, room: error.room } : { error: error.reason }, STATUS[error.reason]);
@@ -72,6 +72,13 @@ export async function handleRoomsApi(req: Request, db: Db, auth: Auth, secret = 
       if (error instanceof RoomRefused) return refusal(error);
       throw error;
     }
+  }
+  // POST /api/rooms/:code/kick — SALLE-07 : l'hôte expulse un membre, qui ne peut plus revenir
+  if (code && isRoomCode(code) && action === "kick" && req.method === "POST") {
+    if (!who) return json({ error: "unauthorized" }, 401);
+    const input = KickSchema.safeParse(await bodyOf(req));
+    if (!input.success) return json({ error: "invalid_body" }, 400);
+    return run(() => kickMember(db, code, who, input.data.member), 200, () => changed(code));
   }
   // POST /api/rooms/:code/launch — SALLE-09 : l'hôte lance la course ; le salon n'accepte plus d'arrivant
   if (code && isRoomCode(code) && action === "launch" && req.method === "POST") {

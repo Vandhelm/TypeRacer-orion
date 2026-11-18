@@ -86,3 +86,17 @@ export const roomMembers = pgTable(
     check("room_members_seat_role", sql`(${table.role} = 'player') = (${table.seat} is not null)`),
   ],
 );
+
+/**
+ * SALLE-07 : les personnes expulsées d'un salon (même clé que room_members) ; elles ne peuvent plus y entrer,
+ * ni par code, ni par lien. Disparaît avec le salon.
+ */
+export const roomBans = pgTable(
+  "room_bans",
+  {
+    roomId: integer("room_id").notNull().references(() => rooms.id, { onDelete: "cascade" }),
+    memberKey: text("member_key").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.roomId, table.memberKey] })],
+);

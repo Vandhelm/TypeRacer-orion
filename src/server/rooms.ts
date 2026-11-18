@@ -3,7 +3,7 @@
 import { and, asc, desc, eq, isNull, ne, sql } from "drizzle-orm";
 import type { z } from "zod";
 import type { Db } from "../../db/client";
-import { players, raceConfigs, roomMembers, rooms } from "../../db/schema";
+import { players, raceConfigs, roomBans, roomMembers, rooms } from "../../db/schema";
 import { allows, canJoin, newInviteToken, newRoomCode } from "../rooms/access";
 import { seatColor } from "../rooms/seats";
 import { DEFAULT_SETTINGS, type CreateRoomSchema, type Role, type RoomSettings, type UpdateRoomSchema } from "../rooms/settings";
@@ -97,7 +97,12 @@ export class RoomRefused extends Error {
     super(`Room refused: ${reason}`);
   }
 }
-export type RefusalReason = "not_found" | "not_member" | "not_host" | "full" | "in_race" | "closed" | "already_in_room";
+export type RefusalReason = "not_found" | "not_member" | "not_host" | "full" | "in_race" | "closed" | "already_in_room" | "kicked" | "invalid_target" | "unknown_member";
+
+/** SALLE-07 : cette personne a été expulsée de ce salon. */
+async function isKicked(db: Db, roomId: number, key: string): Promise<boolean> {
+  return (await db.$count(roomBans, and(eq(roomBans.roomId, roomId), eq(roomBans.memberKey, key)))) > 0;
+}
 
 /** SALLE-06 : le code du salon dont cette personne est membre, s'il y en a un (au plus un, par la contrainte en base). */
 async function currentRoomOf(db: Db, key: string): Promise<string | null> {
@@ -224,7 +229,11 @@ export async function createRoom(db: Db, host: { playerId: number }, input: Crea
 export async function readRoom(db: Db, code: string, who: Identity): Promise<RoomResult> {
   const room = await roomByCode(db, code);
   const key = memberKey(who);
-  if (!(await membership(db, room.id, key))) throw new RoomRefused("not_found"); // SALLE-10 : un non-membre ne sait pas si le salon existe
+  if (!(await membership(db, room.id, key))) {
+    // SALLE-07 : la page d'un expulsé le lui dit ; il connaissait déjà le salon, rien n'est révélé (SALLE-10)
+    if (room.status !== "closed" && (await isKicked(db, room.id, key))) throw new RoomRefused("kicked");
+    throw new RoomRefused("not_found"); // SALLE-10 : un non-membre ne sait pas si le salon existe
+  }
   await expireRaces(db, room.id);
   return { room: await roomView(db, room.id, key), you: key };
 }
@@ -302,8 +311,8 @@ async function roomFor(db: Db, via: JoinVia) {
 /**
  * Entrer dans un salon comme participant, ou comme spectateur (SALLE-05 : il ne prend pas de place). Un membre qui revient (rechargement, autre onglet) le retrouve sans doublon.
  * SALLE-05 : la capacité (rooms.guests) est lue sous le verrou. SALLE-06 : une salle à la fois (contrainte en base,
- * refus « already_in_room » avec le salon actuel). Point d'extension : SALLE-07 (expulsés) se vérifie ici,
- * avant l'insertion ; SALLE-09 (état du salon) aussi.
+ * refus « already_in_room » avec le salon actuel). SALLE-07 : un expulsé est refusé (« kicked »). SALLE-09 (état du
+ * salon) se vérifie aussi ici, avant l'insertion.
  */
 export async function joinRoom(db: Db, who: Identity, via: JoinVia): Promise<RoomResult> {
   const { id } = await roomFor(db, via);
@@ -318,6 +327,8 @@ export async function joinRoom(db: Db, who: Identity, via: JoinVia): Promise<Roo
     // un membre qui revient (rechargement, autre onglet) n'est pas un nouvel arrivant, même pendant la course,
     // et il retrouve son salon par son code même si l'hôte l'a rendu privé (SALLE-03)
     if (await membership(tx, id, key)) return;
+    // SALLE-07 : un expulsé ne revient pas, ni par code ni par lien, quel que soit le rôle demandé
+    if (await isKicked(tx, id, key)) throw new RoomRefused("kicked");
     // la visibilité est lue sous le verrou : l'hôte a pu rendre le salon privé entre-temps
     if ("code" in via && !allows(room.visibility, "code")) throw new RoomRefused("not_found");
     if (!canJoin(room.status)) throw new RoomRefused("in_race");
@@ -393,6 +404,31 @@ export async function finishRoom(db: Db, code: string, who: Identity): Promise<R
     if (room.status !== "racing") return;
     await tx.update(roomMembers).set({ finishedAt: sql`now()` }).where(and(eq(roomMembers.roomId, id), eq(roomMembers.memberKey, key), isNull(roomMembers.finishedAt)));
     await endIfAllFinished(tx, id);
+  });
+  return { room: await roomView(db, id, key), you: key };
+}
+
+/**
+ * SALLE-07 : l'hôte expulse un participant ou un spectateur. Le membre est retiré et noté dans room_bans, sous le
+ * verrou du salon : il ne peut plus y entrer (joinRoom), et sa page reçoit « kicked » (readRoom). Pendant une course,
+ * le retrait d'un coureur ne la retient pas. Seul l'hôte expulse, jamais lui-même.
+ */
+export async function kickMember(db: Db, code: string, who: Identity, target: string): Promise<RoomResult> {
+  const { id } = await roomByCode(db, code);
+  const key = memberKey(who);
+  await db.transaction(async (tx) => {
+    await expireRaces(tx, id);
+    const [room] = await tx.select({ status: rooms.status, hostId: rooms.hostId }).from(rooms).where(eq(rooms.id, id)).for("update");
+    if (!room || room.status === "closed") throw new RoomRefused("not_found");
+    if (!(await membership(tx, id, key))) throw new RoomRefused("not_found"); // SALLE-10 : un non-membre ne sait pas si le salon existe
+    if (key !== memberKey({ playerId: room.hostId })) throw new RoomRefused("not_host");
+    if (target === key) throw new RoomRefused("invalid_target");
+    const removed = await tx.delete(roomMembers).where(and(eq(roomMembers.roomId, id), eq(roomMembers.memberKey, target))).returning({ key: roomMembers.memberKey });
+    if (!removed.length) throw new RoomRefused("unknown_member");
+    await tx.insert(roomBans).values({ roomId: id, memberKey: target }).onConflictDoNothing();
+    // À BRANCHER (SALLE-04) : révoquer ici, dans la même transaction, le lien d'invitation personnel de `target`.
+    // room_bans suffit déjà à le refuser à l'entrée, quel que soit le lien ; la révocation nettoie le jeton.
+    if (room.status === "racing") await endIfAllFinished(tx, id);
   });
   return { room: await roomView(db, id, key), you: key };
 }

@@ -74,6 +74,8 @@ export const DEFAULT_SETTINGS: RoomSettings = {
 export const CreateRoomSchema = z.object({ role: z.enum(ROLES), settings: RoomSettingsSchema.partial().optional() }).strict();
 /** PATCH /api/rooms/:code : l'hôte change ses réglages ou son propre rôle. */
 export const UpdateRoomSchema = z.object({ role: z.enum(ROLES).optional(), settings: RoomSettingsSchema.partial().optional() }).strict();
+/** POST /api/rooms/:code/kick — SALLE-07 : la clé du membre à expulser (« player:<id> » ou « guest:<id de session> »). */
+export const KickSchema = z.object({ member: z.string().min(1).max(200) }).strict();
 /** POST /api/rooms/join : un code de salon, ou un jeton d'invitation, jamais les deux. */
 /** SALLE-05 : on entre comme participant (par défaut) ou comme spectateur, qui ne prend pas de place. */
 export const JoinRoomSchema = z.union([
