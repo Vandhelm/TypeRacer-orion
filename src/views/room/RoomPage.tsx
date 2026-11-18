@@ -20,7 +20,7 @@ const VISIBILITY_KEY = { private: "private", semi: "semiPrivate", public: "publi
 export function RoomPage() {
   const { t, i18n } = useTranslation();
   const state = useRoom();
-  const { room, update, host, seats, players, spectators, displayName, ready, error, leave, status, launch: launchOnServer } = state;
+  const { room, update, host, seats, players, spectators, displayName, ready, error, leave, status, finished, launch: launchOnServer } = state;
   const editor = useRef<TextEditorHandle>(null);
   const launched = useRef(false);
   const [stampOn, setStampOn] = useState(false);
@@ -30,7 +30,7 @@ export function RoomPage() {
   }, [t]);
 
   // SALLE-09 : le salon est lancé (par l'hôte, ou avant un rechargement) : chaque membre rejoint la course
-  const race = raceHref(status, room.code);
+  const race = raceHref(status, room.code, finished);
   useEffect(() => {
     if (race && !launched.current) location.replace(race);
   }, [race]);

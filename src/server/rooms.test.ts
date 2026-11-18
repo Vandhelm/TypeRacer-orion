@@ -560,7 +560,7 @@ describe("SALLE-09 — a race nobody finishes ends on its own after the maximum 
 
   test("a member who has finished is marked finished in the room view; the others are not", async () => {
     const code = await abandoned();
-    const { room, you } = (await (await t.call("GET", `/api/rooms/${code}`, host.cookie)).json()) as Joined & { room: { members: { key: string; finished: boolean }[] } };
+    const { room, you } = (await (await t.call("GET", `/api/rooms/${code}`, host.cookie)).json()) as { room: { members: { key: string; finished: boolean }[] }; you: string };
     expect(room.members.find((m) => m.key === you)?.finished).toBe(true);
     expect(room.members.filter((m) => m.key !== you).map((m) => m.finished)).toEqual([false]);
   });

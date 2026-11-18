@@ -23,7 +23,7 @@ describe("AUTH-03 — a guest is never the host of a room", () => {
 });
 
 describe("SALLE-01 — seats come from the server's members", () => {
-  const member = (key: string, role: "player" | "spectator", seat: number | null, host = false) => ({ key, name: key, guest: false, host, role, seat, color: seat === null ? null : `c${seat}` });
+  const member = (key: string, role: "player" | "spectator", seat: number | null, host = false) => ({ key, name: key, guest: false, host, role, seat, color: seat === null ? null : `c${seat}`, finished: false });
 
   test("the host who spectates has no seat; the other players keep theirs", () => {
     const seats = seatsOf({ guests: 3, bots: false }, [member("player:1", "spectator", null, true), member("player:2", "player", 0)], "player:1");
@@ -68,6 +68,11 @@ describe("SALLE-09 — /game finds the launched room and never creates one", () 
     expect(raceHref("waiting", "ABC234")).toBeNull();
     expect(raceHref("results", "ABC234")).toBeNull();
     expect(raceHref("racing", "")).toBeNull();
+  });
+
+  test("a member who has already finished, back on /room while others still race, is not sent to /game", () => {
+    expect(raceHref("racing", "ABC234", true)).toBeNull();
+    expect(raceHref("racing", "ABC234", false)).toBe("/game?code=ABC234");
   });
 });
 

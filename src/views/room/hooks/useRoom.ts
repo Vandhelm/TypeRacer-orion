@@ -137,6 +137,8 @@ export function useRoom(page: "room" | "game" = "room") {
     update,
     host,
     role: me?.role ?? "player",
+    /** SALLE-09 : ce membre a déjà fini la course en cours. */
+    finished: me?.finished ?? false,
     setRole,
     launch,
     seats,

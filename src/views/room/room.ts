@@ -76,9 +76,12 @@ export function arrivalOf(search: string, page: "room" | "game", guest = isGuest
   return { action: "join", via: session.invite ? { invite: session.invite } : { code: session.code ?? "" } };
 }
 
-/** SALLE-09 : la page de course d'un salon lancé ; chaque membre y suit l'hôte. Null hors course. */
-export function raceHref(status: RoomView["status"], code: string): string | null {
-  return status === "racing" && code ? `/game?code=${code}` : null;
+/**
+ * SALLE-09 : la page de course d'un salon lancé ; chaque membre y suit l'hôte. Null hors course, et pour un membre qui
+ * a déjà fini (revenu du podium pendant que les autres courent) : /game lui relancerait une course.
+ */
+export function raceHref(status: RoomView["status"], code: string, finished = false): string | null {
+  return status === "racing" && code && !finished ? `/game?code=${code}` : null;
 }
 
 /** SALLE-09 : /game ne fait courir que pendant la course ; sinon, retour à la salle. Null : la course est en cours. */
