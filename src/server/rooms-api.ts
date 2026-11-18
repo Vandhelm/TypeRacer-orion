@@ -6,7 +6,7 @@ import { CreateRoomSchema, JoinRoomSchema, UpdateRoomSchema } from "../rooms/set
 import type { Auth } from "./auth";
 import { guestSecret } from "./guest";
 import { roomIdentity } from "./room-gate";
-import { CodeExhausted, createRoom, joinRoom, launchRoom, leaveRoom, listPublicRooms, readRoom, RoomRefused, updateRoom, type RefusalReason, type RoomResult } from "./rooms";
+import { CodeExhausted, createRoom, finishRoom, joinRoom, launchRoom, leaveRoom, listPublicRooms, readRoom, RoomRefused, updateRoom, type RefusalReason, type RoomResult } from "./rooms";
 
 const STATUS: Record<RefusalReason, number> = { not_found: 404, not_member: 403, not_host: 403, full: 409, in_race: 409, closed: 410 };
 
@@ -74,6 +74,11 @@ export async function handleRoomsApi(req: Request, db: Db, auth: Auth, secret = 
   if (code && isRoomCode(code) && action === "launch" && req.method === "POST") {
     if (!who) return json({ error: "unauthorized" }, 401);
     return run(() => launchRoom(db, code, who), 200, () => changed(code));
+  }
+  // POST /api/rooms/:code/finish — SALLE-09 : la course est finie, le salon passe aux résultats
+  if (code && isRoomCode(code) && action === "finish" && req.method === "POST") {
+    if (!who) return json({ error: "unauthorized" }, 401);
+    return run(() => finishRoom(db, code, who), 200, () => changed(code));
   }
   if (code && isRoomCode(code) && !action) {
     if (!who) return json({ error: "unauthorized" }, 401);

@@ -101,7 +101,7 @@ describe.skipIf(!process.env.DATABASE_URL)("SALLE-03 / SALLE-09 — simultaneous
       const members = await membersOf(code);
       if (status === "closed") {
         expect(members).toHaveLength(0);
-        expect(joined.status).toBe(410);
+        expect(joined.status).toBe(404); // SALLE-10 : un salon fermé répond comme un code inconnu
       } else {
         expect(joined.status).toBe(200);
         expect(members).toHaveLength(1);

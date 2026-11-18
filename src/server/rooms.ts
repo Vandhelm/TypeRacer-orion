@@ -218,6 +218,9 @@ export async function updateRoom(db: Db, code: string, who: Identity, input: Upd
     const member = await membership(tx, id, key);
     if (!member) throw new RoomRefused("not_member");
     if (key !== memberKey({ playerId: room.hostId })) throw new RoomRefused("not_host");
+    // SALLE-09 : pendant la course, ni place prise par l'hôte spectateur, ni réglage changé
+    if (room.status === "closed") throw new RoomRefused("closed");
+    if (!canJoin(room.status)) throw new RoomRefused("in_race");
     if (input.settings) {
       const [config] = await tx.select().from(raceConfigs).where(eq(raceConfigs.id, room.configId));
       const settings = { ...settingsOf(room, config!), ...input.settings };
@@ -253,13 +256,15 @@ export async function listPublicRooms(db: Db, limit = 50): Promise<ListedRoom[]>
 /** Comment on entre : par le code du salon, ou par un lien d'invitation. */
 export type JoinVia = { code: string } | { invite: string };
 
-/** Le salon visé, seulement si ce moyen d'entrée l'ouvre (SALLE-03). Un refus ne dit pas si le salon existe. */
+/**
+ * Le salon visé par ce code ou ce lien. La visibilité se vérifie ensuite, sous le verrou, après l'appartenance :
+ * un membre retrouve son salon par son code même s'il est privé (SALLE-03).
+ */
 async function roomFor(db: Db, via: JoinVia) {
   // À BRANCHER (SALLE-04) : un jeton par invité, lié à son IP ; ici, le jeton unique du salon.
   const [room] = await db.select().from(rooms).where("code" in via ? eq(rooms.code, via.code) : eq(rooms.inviteToken, via.invite));
-  if (!room) throw new RoomRefused("not_found");
   // À BRANCHER (SALLE-10) : limiter les essais de code par IP, avant cette lecture, dans la route.
-  if ("code" in via && !allows(room.visibility, "code")) throw new RoomRefused("not_found");
+  if (!room) throw new RoomRefused("not_found");
   return room;
 }
 
@@ -275,12 +280,13 @@ export async function joinRoom(db: Db, who: Identity, via: JoinVia): Promise<Roo
     // Verrou sur la ligne du salon : les entrées simultanées et le lancement passent l'un après l'autre.
     // L'état (SALLE-09) et les places prises (SALLE-03) sont lus sous ce verrou, jamais avant.
     const [room] = await tx.select({ status: rooms.status, visibility: rooms.visibility }).from(rooms).where(eq(rooms.id, id)).for("update");
-    if (!room) throw new RoomRefused("not_found");
-    // la visibilité aussi : l'hôte a pu rendre le salon privé entre-temps
-    if ("code" in via && !allows(room.visibility, "code")) throw new RoomRefused("not_found");
-    if (room.status === "closed") throw new RoomRefused("closed");
-    // un membre qui revient (rechargement, autre onglet) n'est pas un nouvel arrivant, même pendant la course
+    // SALLE-10 : un salon fermé répond comme un code inconnu, pour ne pas révéler qu'un code a servi
+    if (!room || room.status === "closed") throw new RoomRefused("not_found");
+    // un membre qui revient (rechargement, autre onglet) n'est pas un nouvel arrivant, même pendant la course,
+    // et il retrouve son salon par son code même si l'hôte l'a rendu privé (SALLE-03)
     if (await membership(tx, id, key)) return;
+    // la visibilité est lue sous le verrou : l'hôte a pu rendre le salon privé entre-temps
+    if ("code" in via && !allows(room.visibility, "code")) throw new RoomRefused("not_found");
     if (!canJoin(room.status)) throw new RoomRefused("in_race");
     const taken = (await tx.select({ seat: roomMembers.seat }).from(roomMembers).where(eq(roomMembers.roomId, id))).map((m) => m.seat);
     const identity = who.kind === "account" ? { playerId: who.playerId } : { guestName: who.name };
@@ -292,7 +298,7 @@ export async function joinRoom(db: Db, who: Identity, via: JoinVia): Promise<Roo
 /**
  * SALLE-09 : l'hôte lance la course ; le salon passe en « racing » et n'accepte plus de nouvel arrivant.
  * Sous le même verrou que joinRoom : une entrée simultanée est soit faite avant le lancement, soit refusée.
- * À BRANCHER (COURSE-*) : le texte, le départ et la fin de la course (passage en « results »).
+ * À BRANCHER (COURSE-*) : le texte et le départ de la course. La fin : finishRoom.
  */
 export async function launchRoom(db: Db, code: string, who: Identity): Promise<RoomResult> {
   const { id } = await roomByCode(db, code);
@@ -305,6 +311,23 @@ export async function launchRoom(db: Db, code: string, who: Identity): Promise<R
     if (room.status === "closed") throw new RoomRefused("closed");
     if (!canJoin(room.status)) throw new RoomRefused("in_race");
     await tx.update(rooms).set({ status: "racing" }).where(eq(rooms.id, id));
+  });
+  return { room: await roomView(db, id, key), you: key };
+}
+
+/**
+ * SALLE-09 : la course est finie, le salon passe en « results » et accepte de nouveau des arrivants.
+ * La course se joue dans chaque navigateur (COURSE-* pas encore côté serveur) : le premier membre dont l'écran
+ * passe aux résultats le signale. Seul un membre le peut ; hors course, rien ne change (appel répété sans effet).
+ */
+export async function finishRoom(db: Db, code: string, who: Identity): Promise<RoomResult> {
+  const { id } = await roomByCode(db, code);
+  const key = memberKey(who);
+  await db.transaction(async (tx) => {
+    const [room] = await tx.select({ status: rooms.status }).from(rooms).where(eq(rooms.id, id)).for("update");
+    if (!room) throw new RoomRefused("not_found");
+    if (!(await membership(tx, id, key))) throw new RoomRefused("not_member");
+    if (room.status === "racing") await tx.update(rooms).set({ status: "results" }).where(eq(rooms.id, id));
   });
   return { room: await roomView(db, id, key), you: key };
 }

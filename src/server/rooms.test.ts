@@ -325,9 +325,12 @@ describe("SALLE-09 — a room is joined only while waiting or on the results scr
     expect((await t.call("POST", "/api/rooms/join", t.guest("Apres_Course"), { code: room.code })).status).toBe(200);
   });
 
-  test("a closed room refuses (410)", async () => {
+  test("a closed room refuses like an unknown code (404 not_found, SALLE-10)", async () => {
     const room = await roomIn("closed");
-    expect((await t.call("POST", "/api/rooms/join", t.guest("Trop_Tard"), { code: room.code })).status).toBe(410);
+    const res = await t.call("POST", "/api/rooms/join", t.guest("Trop_Tard"), { code: room.code });
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: "not_found" });
+    expect(await t.db.$count(roomMembers, eq(roomMembers.guestName, "Trop_Tard"))).toBe(0);
   });
 
   test("the host launches the race on the server; a new guest joining by code then gets 409 in_race", async () => {
@@ -369,5 +372,156 @@ describe("SALLE-09 — a room is joined only while waiting or on the results scr
     expect(back.status).toBe(200);
     expect(((await back.json()) as Joined).you).toBe(you);
     expect((await t.call("POST", "/api/rooms/join", t.freshGuest("revenant"), { code: room.code })).status).toBe(409);
+  });
+});
+
+describe("SALLE-03 — a member finds their room again by its code, whatever its visibility", () => {
+  let t: Awaited<ReturnType<typeof setup>>;
+  let host: { cookie: string; playerId: number };
+  beforeAll(async () => {
+    t = await setup();
+    host = await t.signUp("Hote_Retour");
+  });
+
+  test("the host of a default (private) room reloads with ?code: 200, same key, one member", async () => {
+    const created = (await (await t.call("POST", "/api/rooms", host.cookie, { role: "player" })).json()) as Joined & { room: { settings: { visibility: string } } };
+    expect(created.room.settings.visibility).toBe("private");
+    const res = await t.call("POST", "/api/rooms/join", host.cookie, { code: created.room.code });
+    expect(res.status).toBe(200);
+    const { room, you } = (await res.json()) as Joined;
+    expect(you).toBe(created.you);
+    expect(room.members).toHaveLength(1);
+  });
+
+  test("a guest who came by invitation reloads with ?code: 200, no duplicate; a fresh guest gets 404", async () => {
+    const created = (await (await t.call("POST", "/api/rooms", host.cookie, { role: "player" })).json()) as Joined;
+    const invite = created.room.invite!;
+    const first = (await (await t.call("POST", "/api/rooms/join", t.guest("Invite_Recharge"), { invite })).json()) as Joined;
+    const res = await t.call("POST", "/api/rooms/join", t.guest("Invite_Recharge"), { code: created.room.code });
+    expect(res.status).toBe(200);
+    const { room, you } = (await res.json()) as Joined;
+    expect(you).toBe(first.you);
+    expect(room.members.filter((m) => m.key === you)).toHaveLength(1);
+    const stranger = await t.call("POST", "/api/rooms/join", t.freshGuest("Invite_Recharge"), { code: created.room.code });
+    expect(stranger.status).toBe(404);
+    expect(await stranger.json()).toEqual({ error: "not_found" });
+  });
+
+  test("a member who entered a public room by code keeps it after the host makes it private; a newcomer gets 404", async () => {
+    const { room: pub } = (await (await t.call("POST", "/api/rooms", host.cookie, { role: "player", settings: { visibility: "public" } })).json()) as Joined;
+    const first = (await (await t.call("POST", "/api/rooms/join", t.guest("Membre_Fidele"), { code: pub.code })).json()) as Joined;
+    expect((await t.call("PATCH", `/api/rooms/${pub.code}`, host.cookie, { settings: { visibility: "private" } })).status).toBe(200);
+    const back = await t.call("POST", "/api/rooms/join", t.guest("Membre_Fidele"), { code: pub.code });
+    expect(back.status).toBe(200);
+    expect(((await back.json()) as Joined).you).toBe(first.you);
+    expect((await t.call("POST", "/api/rooms/join", t.guest("Nouveau_Venu"), { code: pub.code })).status).toBe(404);
+    expect(await t.db.$count(roomMembers, eq(roomMembers.guestName, "Nouveau_Venu"))).toBe(0);
+  });
+});
+
+describe("SALLE-09 — the race ends on the server: racing → results", () => {
+  let t: Awaited<ReturnType<typeof setup>>;
+  let host: { cookie: string; playerId: number };
+  const launched = async () => {
+    const { room } = (await (await t.call("POST", "/api/rooms", host.cookie, { role: "player", settings: { visibility: "public" } })).json()) as Joined;
+    await t.call("POST", "/api/rooms/join", t.guest(`Coureur_${room.code}`), { code: room.code });
+    expect((await t.call("POST", `/api/rooms/${room.code}/launch`, host.cookie)).status).toBe(200);
+    return room;
+  };
+  const statusOf = async (code: string) => (await t.db.select({ status: rooms.status }).from(rooms).where(eq(rooms.code, code)))[0]!.status;
+  beforeAll(async () => {
+    t = await setup();
+    host = await t.signUp("Hote_Fin");
+  });
+
+  test("a member reaching the end moves the room to results; a newcomer can then join (200)", async () => {
+    const room = await launched();
+    const res = await t.call("POST", `/api/rooms/${room.code}/finish`, t.guest(`Coureur_${room.code}`));
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { room: { status: string } }).room.status).toBe("results");
+    expect(await statusOf(room.code)).toBe("results");
+    expect((await t.call("POST", "/api/rooms/join", t.guest("Arrivant_Resultats"), { code: room.code })).status).toBe(200);
+  });
+
+  test("finishing twice is harmless: the room stays on results", async () => {
+    const room = await launched();
+    await t.call("POST", `/api/rooms/${room.code}/finish`, host.cookie);
+    expect((await t.call("POST", `/api/rooms/${room.code}/finish`, host.cookie)).status).toBe(200);
+    expect(await statusOf(room.code)).toBe("results");
+  });
+
+  test("a waiting room is not moved to results", async () => {
+    const { room } = (await (await t.call("POST", "/api/rooms", host.cookie, { role: "player" })).json()) as Joined;
+    await t.call("POST", `/api/rooms/${room.code}/finish`, host.cookie);
+    expect(await statusOf(room.code)).toBe("waiting");
+  });
+
+  test("a stranger cannot end the race (403), nor anyone without a session (401)", async () => {
+    const room = await launched();
+    expect((await t.call("POST", `/api/rooms/${room.code}/finish`, t.freshGuest("Saboteur"))).status).toBe(403);
+    expect((await t.call("POST", `/api/rooms/${room.code}/finish`, (await t.signUp("Saboteur_2")).cookie)).status).toBe(403);
+    expect((await t.call("POST", `/api/rooms/${room.code}/finish`)).status).toBe(401);
+    expect(await statusOf(room.code)).toBe("racing");
+  });
+});
+
+describe("SALLE-09 — role and settings are frozen during a race", () => {
+  let t: Awaited<ReturnType<typeof setup>>;
+  let host: { cookie: string; playerId: number };
+  beforeAll(async () => {
+    t = await setup();
+    host = await t.signUp("Hote_Gel");
+  });
+
+  test("the spectating host cannot take a seat (409 in_race) and stays seatless", async () => {
+    const { room } = (await (await t.call("POST", "/api/rooms", host.cookie, { role: "spectator", settings: { visibility: "public" } })).json()) as Joined;
+    await t.call("POST", "/api/rooms/join", t.guest("Joueur_A"), { code: room.code });
+    await t.call("POST", "/api/rooms/join", t.guest("Joueur_B"), { code: room.code });
+    expect((await t.call("POST", `/api/rooms/${room.code}/launch`, host.cookie)).status).toBe(200);
+    const res = await t.call("PATCH", `/api/rooms/${room.code}`, host.cookie, { role: "player" });
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ error: "in_race" });
+    const [me] = await t.db.select().from(roomMembers).where(eq(roomMembers.memberKey, `player:${host.playerId}`));
+    expect(me!.role).toBe("spectator");
+    expect(me!.seat).toBeNull();
+  });
+
+  test("a setting cannot change during the race (409 in_race), the config stays", async () => {
+    const { room } = (await (await t.call("POST", "/api/rooms", host.cookie, { role: "player", settings: { visibility: "public" } })).json()) as Joined;
+    await t.call("POST", "/api/rooms/join", t.guest("Joueur_C"), { code: room.code });
+    await t.call("POST", `/api/rooms/${room.code}/launch`, host.cookie);
+    const [before] = await t.db.select({ configId: rooms.configId, visibility: rooms.visibility }).from(rooms).where(eq(rooms.code, room.code));
+    const res = await t.call("PATCH", `/api/rooms/${room.code}`, host.cookie, { settings: { visibility: "private", language: "en" } });
+    expect(res.status).toBe(409);
+    const [after] = await t.db.select({ configId: rooms.configId, visibility: rooms.visibility }).from(rooms).where(eq(rooms.code, room.code));
+    expect(after).toEqual(before!);
+  });
+
+  test("on the results screen the host can change settings again", async () => {
+    const { room } = (await (await t.call("POST", "/api/rooms", host.cookie, { role: "player" })).json()) as Joined;
+    await t.db.update(rooms).set({ status: "results" }).where(eq(rooms.code, room.code));
+    expect((await t.call("PATCH", `/api/rooms/${room.code}`, host.cookie, { settings: { language: "en" } })).status).toBe(200);
+  });
+});
+
+describe("SALLE-10 — a closed room's code answers exactly like an unknown code", () => {
+  let t: Awaited<ReturnType<typeof setup>>;
+  beforeAll(async () => {
+    t = await setup();
+  });
+
+  test("same status and body for a closed code and a never-used code", async () => {
+    const host = await t.signUp("Hote_Ferme");
+    const { room } = (await (await t.call("POST", "/api/rooms", host.cookie, { role: "player", settings: { visibility: "public" } })).json()) as Joined;
+    await t.call("POST", `/api/rooms/${room.code}/leave`, host.cookie);
+    const [row] = await t.db.select({ status: rooms.status }).from(rooms).where(eq(rooms.code, room.code));
+    expect(row!.status).toBe("closed");
+    let unknown = "ZZZZZZ";
+    while ((await t.db.$count(rooms, eq(rooms.code, unknown))) > 0) unknown = unknown.replace("Z", "Y");
+    const closed = await t.call("POST", "/api/rooms/join", t.guest("Curieux_Ferme"), { code: room.code });
+    const never = await t.call("POST", "/api/rooms/join", t.guest("Curieux_Ferme"), { code: unknown });
+    expect(closed.status).toBe(never.status);
+    expect(await closed.json()).toEqual(await never.json());
+    expect(never.status).toBe(404);
   });
 });
