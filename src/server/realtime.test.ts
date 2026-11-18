@@ -1,5 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { eq, sql } from "drizzle-orm";
+import { roomMembers, rooms } from "../../db/schema";
 import { createMockDatabase } from "../../db/mocks/test-database";
+import { MEMBER_AWAY_MS, raceDeadlineMs } from "./rooms";
 import { placeholderEmail } from "../accounts/username";
 import { createAuth } from "./auth";
 import { GUEST_COOKIE, signGuest } from "./guest";
@@ -36,6 +39,8 @@ describe("SALLE-03 — members are pushed in real time over a WebSocket", () => 
   let call: (method: string, path: string, cookie?: string, body?: unknown) => Promise<Response>;
   let hostCookie: string;
   let code: string;
+  /** SALLE-06 : un compte n'est que dans un salon à la fois ; un deuxième salon a son propre hôte. */
+  let signUp: (name: string) => Promise<string>;
   // un invité garde son cookie : le même pseudo signé une autre fois est une autre session (SALLE-03)
   const sessions = new Map<string, string>();
   const freshGuest = (name: string) => `${GUEST_COOKIE}=${signGuest(name, SECRET)}`;
@@ -52,12 +57,23 @@ describe("SALLE-03 — members are pushed in real time over a WebSocket", () => 
     });
     call = (method, path, cookie, body) =>
       handleRoomsApi(new Request(`http://localhost${path}`, { method, headers: { ...(cookie ? { cookie } : {}), "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) }), db, auth, SECRET, roomEvents.emit);
-    await auth.api.signUpEmail({ body: { name: "Hote_Direct", email: placeholderEmail("Hote_Direct"), password: "sushi-roll-42", username: "Hote_Direct", displayUsername: "Hote_Direct" } });
-    const { headers } = await auth.api.signInUsername({ body: { username: "Hote_Direct", password: "sushi-roll-42" }, returnHeaders: true });
-    hostCookie = headers.get("set-cookie")!.split(";")[0]!;
+    signUp = async (name) => {
+      await auth.api.signUpEmail({ body: { name, email: placeholderEmail(name), password: "sushi-roll-42", username: name, displayUsername: name } });
+      const { headers } = await auth.api.signInUsername({ body: { username: name, password: "sushi-roll-42" }, returnHeaders: true });
+      return headers.get("set-cookie")!.split(";")[0]!;
+    };
+    hostCookie = await signUp("Hote_Direct");
     code = ((await (await call("POST", "/api/rooms", hostCookie, { role: "player", settings: { visibility: "public" } })).json()) as { room: { code: string } }).room.code;
+    // l'hôte garde un onglet ouvert pendant toute la suite : fermer la socket d'un test ne le fait pas partir
+    // (SALLE-08 : sans hôte ni autre compte, le salon fermerait entre deux tests)
+    hostTab = connect(url(`/ws/rooms/${code}`), hostCookie);
+    await hostTab.next();
   });
-  afterAll(() => server.stop(true));
+  afterAll(() => {
+    hostTab.ws.close();
+    server.stop(true);
+  });
+  let hostTab: ReturnType<typeof connect>;
 
   const url = (path: string) => `ws://localhost:${server.port}${path}`;
 
@@ -99,7 +115,25 @@ describe("SALLE-03 — members are pushed in real time over a WebSocket", () => 
     bob.ws.close();
   });
 
+  test("SALLE-07 — a kicked member's socket is closed at once; the others see them gone", async () => {
+    const hostCookie = await signUp("Hote_Expulse_Live");
+    const room = ((await (await call("POST", "/api/rooms", hostCookie, { role: "player", settings: { visibility: "public" } })).json()) as { room: { code: string } }).room.code;
+    const cookie = guest("Expulse_Live");
+    const { you } = (await (await call("POST", "/api/rooms/join", cookie, { code: room })).json()) as { you: string };
+    const host = connect(url(`/ws/rooms/${room}`), hostCookie);
+    const victim = connect(url(`/ws/rooms/${room}`), cookie);
+    await host.next();
+    await victim.next();
+    expect((await call("POST", `/api/rooms/${room}/kick`, hostCookie, { member: you })).status).toBe(200);
+    expect(await victim.closed).toBe(4403);
+    let seen = await host.next();
+    while (seen.room!.members.some((m) => m.key === you)) seen = await host.next();
+    expect(seen.room!.members.map((m) => m.key)).not.toContain(you);
+    host.ws.close();
+  });
+
   test("SALLE-09 — once launched, closing every socket (going to /game) neither removes members nor closes the room", async () => {
+    const hostCookie = await signUp("Hote_Course_Live");
     const racing = ((await (await call("POST", "/api/rooms", hostCookie, { role: "player", settings: { visibility: "public" } })).json()) as { room: { code: string } }).room.code;
     await call("POST", "/api/rooms/join", guest("Coureur_Live"), { code: racing });
     const sockets = [connect(url(`/ws/rooms/${racing}`), hostCookie), connect(url(`/ws/rooms/${racing}`), guest("Coureur_Live"))];
@@ -150,5 +184,57 @@ describe("SALLE-09 — going from the room to the race never costs a member thei
     expect(room.room.members.map((m) => m.key)).toContain(you);
     // dans une salle privée, « retour au salon » passe par le code : le membre y est toujours
     expect((await call("POST", "/api/rooms/join", runner, { code })).status).toBe(200);
+  });
+});
+
+describe("SALLE-08 / SALLE-09 — what changes with time alone is announced to the sockets", () => {
+  let server: ReturnType<typeof Bun.serve>;
+  let db: Awaited<ReturnType<typeof createMockDatabase>>;
+  let auth: ReturnType<typeof createAuth>;
+  let call: (method: string, path: string, cookie?: string, body?: unknown) => Promise<Response>;
+  const signUp = async (name: string) => {
+    await auth.api.signUpEmail({ body: { name, email: placeholderEmail(name), password: "sushi-roll-42", username: name, displayUsername: name } });
+    const { headers } = await auth.api.signInUsername({ body: { username: name, password: "sushi-roll-42" }, returnHeaders: true });
+    return headers.get("set-cookie")!.split(";")[0]!;
+  };
+  const url = (path: string) => `ws://localhost:${server.port}${path}`;
+  type Seen = { room: { status: string; host: string } };
+
+  beforeAll(async () => {
+    db = await createMockDatabase();
+    auth = createAuth(db);
+    const realtime = createRealtime({ db, auth, secret: SECRET, events: roomEvents, refreshMs: 40 });
+    server = Bun.serve({ port: 0, fetch: (req, srv) => (realtime.matches(req) ? realtime.upgrade(req, srv) : new Response("not found", { status: 404 })), websocket: realtime.websocket });
+    call = (method, path, cookie, body) =>
+      handleRoomsApi(new Request(`http://localhost${path}`, { method, headers: { ...(cookie ? { cookie } : {}), "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) }), db, auth, SECRET, roomEvents.emit);
+  });
+  afterAll(() => server.stop(true));
+
+  test("a race past its deadline goes to results on the sockets, with no HTTP request from anyone", async () => {
+    const host = await signUp("Hote_Echeance");
+    const code = ((await (await call("POST", "/api/rooms", host, { role: "player", settings: { visibility: "public", duration: 10 } })).json()) as { room: { code: string } }).room.code;
+    await call("POST", "/api/rooms/join", `${GUEST_COOKIE}=${signGuest("Lambin", SECRET)}`, { code });
+    await call("POST", `/api/rooms/${code}/launch`, host);
+    const socket = connect(url(`/ws/rooms/${code}`), host);
+    expect(((await socket.next()) as unknown as Seen).room.status).toBe("racing");
+    await db.update(rooms).set({ launchedAt: sql`now() - ${raceDeadlineMs(10) + 1_000} * interval '1 millisecond'` }).where(eq(rooms.code, code));
+    let seen = (await socket.next()) as unknown as Seen;
+    while (seen.room.status === "racing") seen = (await socket.next()) as unknown as Seen;
+    expect(seen.room.status).toBe("results");
+    socket.ws.close();
+  });
+
+  test("a silent host is replaced, and the members' sockets learn the new host", async () => {
+    const host = await signUp("Hote_Silence");
+    const heir = await signUp("Heritier");
+    const code = ((await (await call("POST", "/api/rooms", host, { role: "player", settings: { visibility: "public" } })).json()) as { room: { code: string } }).room.code;
+    const { you } = (await (await call("POST", "/api/rooms/join", heir, { code })).json()) as { you: string };
+    const socket = connect(url(`/ws/rooms/${code}`), heir);
+    await socket.next();
+    await db.update(roomMembers).set({ lastSeenAt: sql`now() - ${MEMBER_AWAY_MS + 1_000} * interval '1 millisecond'` }).where(sql`${roomMembers.memberKey} <> ${you}`);
+    let seen = (await socket.next()) as unknown as Seen;
+    while (seen.room.host !== you) seen = (await socket.next()) as unknown as Seen;
+    expect(seen.room.host).toBe(you);
+    socket.ws.close();
   });
 });

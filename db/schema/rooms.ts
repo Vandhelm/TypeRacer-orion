@@ -48,10 +48,10 @@ export const rooms = pgTable(
     hostId: integer("host_id").notNull().references(() => players.id),
     configId: integer("config_id").notNull().references(() => raceConfigs.id),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    /** SALLE-09 : départ de la course en cours ; elle prend fin d'elle-même après RACE_MAX_MS (src/server/rooms.ts). */
+    /** SALLE-09 : départ de la course en cours ; elle prend fin d'elle-même à raceDeadlineMs(durée) (src/server/rooms.ts). */
     launchedAt: timestamp("launched_at", { withTimezone: true }),
   },
-  (table) => [index("rooms_lobby").on(table.status, table.visibility), check("rooms_guests_range", sql`${table.guests} between 2 and 8`),
+  (table) => [index("rooms_lobby").on(table.status, table.visibility), check("rooms_guests_range", sql`${table.guests} between 2 and 30`),
     check("rooms_code_format", sql`${table.code} ~ ${sql.raw(`'${CODE_PATTERN}'`)}`),
   ],
 );
@@ -74,13 +74,31 @@ export const roomMembers = pgTable(
     joinedAt: timestamp("joined_at", { withTimezone: true }).notNull().defaultNow(),
     /** SALLE-09 : ce membre a fini la course en cours ; remis à null à chaque lancement. */
     finishedAt: timestamp("finished_at", { withTimezone: true }),
+    /** SALLE-08 : dernier signe de vie (lecture du salon, action) ; silencieux trop longtemps, le membre est parti. */
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     primaryKey({ columns: [table.roomId, table.memberKey] }),
     unique("room_members_room_seat_unique").on(table.roomId, table.seat),
+    // SALLE-06 : une personne (compte ou session d'invité) n'est membre que d'un salon à la fois, garanti par la base
+    unique("room_members_member_unique").on(table.memberKey),
     index("room_members_player").on(table.playerId),
-    check("room_members_seat_range", sql`${table.seat} between 0 and 7`),
+    check("room_members_seat_range", sql`${table.seat} between 0 and 29`),
     check("room_members_identity", sql`(${table.playerId} is null) <> (${table.guestName} is null)`),
     check("room_members_seat_role", sql`(${table.role} = 'player') = (${table.seat} is not null)`),
   ],
+);
+
+/**
+ * SALLE-07 : les personnes expulsées d'un salon (même clé que room_members) ; elles ne peuvent plus y entrer,
+ * ni par code, ni par lien. Disparaît avec le salon.
+ */
+export const roomBans = pgTable(
+  "room_bans",
+  {
+    roomId: integer("room_id").notNull().references(() => rooms.id, { onDelete: "cascade" }),
+    memberKey: text("member_key").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.roomId, table.memberKey] })],
 );

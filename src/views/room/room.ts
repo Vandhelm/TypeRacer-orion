@@ -4,7 +4,7 @@ import { cleanRoomCode, isRoomCode, type Visibility } from "../../rooms/access";
 import { MAX_GUESTS, MIN_GUESTS, MAX_TEXT_LENGTH, type Role, type RoomSettings } from "../../rooms/settings";
 import type { MemberView, RoomView } from "../../server/rooms";
 import { BOT_NAMES } from "../../players/bots";
-import { SEAT_COLORS } from "../../rooms/seats";
+import { seatColor } from "../../rooms/seats";
 
 const TEXTS_KEY = "orion-texts";
 
@@ -99,10 +99,12 @@ export function seatsOf(room: Pick<Room, "guests" | "bots">, members: MemberView
   const seats: Seat[] = members
     .filter((m) => m.role === "player" && m.seat !== null)
     .sort((a, b) => a.seat! - b.seat!)
-    .map((m) => ({ name: m.name, color: m.color ?? SEAT_COLORS[m.seat!]!, host: m.host || undefined, me: m.key === you || undefined }));
+    .map((m) => ({ name: m.name, color: m.color ?? seatColor(m.seat!), host: m.host || undefined, me: m.key === you || undefined }));
   let bot = 0;
   while (seats.length < room.guests) {
-    seats.push(room.bots ? { name: BOT_NAMES[bot++]!, color: SEAT_COLORS[seats.length % SEAT_COLORS.length]!, bot: true } : { free: true });
+    // SALLE-05 : un bot par nom de la liste fermée (le serveur ne reconnaît qu'elle) ; au-delà, des places libres
+    const name = room.bots ? BOT_NAMES[bot++] : undefined;
+    seats.push(name ? { name, color: seatColor(seats.length), bot: true } : { free: true });
   }
   return seats;
 }

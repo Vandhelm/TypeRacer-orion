@@ -1,5 +1,5 @@
 // Requêtes simultanées sur un vrai Postgres (voir createServerDatabase) : sans DATABASE_URL, ces tests ne tournent pas.
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { roomMembers, rooms } from "../../db/schema";
 import { createServerDatabase } from "../../db/mocks/test-database";
@@ -16,7 +16,9 @@ const SECRET = "guest-secret-guest-secret-guest-secret";
 type Joined = { room: { code: string; status: string; members: { key: string; seat: number | null }[] }; you: string };
 type Server = NonNullable<Awaited<ReturnType<typeof createServerDatabase>>>;
 
-describe.skipIf(!process.env.DATABASE_URL)("SALLE-03 / SALLE-09 — simultaneous requests on a real Postgres", () => {
+setDefaultTimeout(30_000); // SALLE-06 : un compte neuf (mot de passe haché) par salon
+
+describe.skipIf(!process.env.DATABASE_URL)("SALLE-03 / SALLE-06 / SALLE-09 — simultaneous requests on a real Postgres", () => {
   let server: Server;
   let hostCookie: string;
   const call = (method: string, path: string, cookie?: string, body?: unknown) =>
@@ -27,15 +29,23 @@ describe.skipIf(!process.env.DATABASE_URL)("SALLE-03 / SALLE-09 — simultaneous
       SECRET,
     );
   const guest = (name: string) => `${GUEST_COOKIE}=${signGuest(name, SECRET)}`;
-  const open = async () => ((await (await call("POST", "/api/rooms", hostCookie, { role: "player", settings: { visibility: "public" } })).json()) as Joined).room.code;
+  let hosts = 0;
+  /**
+   * SALLE-06 : un compte n'est hôte que d'un salon à la fois ; chaque salon a donc son propre hôte, qui devient
+   * `hostCookie` jusqu'au salon suivant.
+   */
+  const open = async (role: "player" | "spectator" = "player") => {
+    const auth = createAuth(server.db);
+    const name = `Hote_Course_${++hosts}`;
+    await auth.api.signUpEmail({ body: { name, email: placeholderEmail(name), password: "sushi-roll-42", username: name, displayUsername: name } });
+    const { headers } = await auth.api.signInUsername({ body: { username: name, password: "sushi-roll-42" }, returnHeaders: true });
+    hostCookie = headers.get("set-cookie")!.split(";")[0]!;
+    return ((await (await call("POST", "/api/rooms", hostCookie, { role, settings: { visibility: "public", guests: 8 } })).json()) as Joined).room.code;
+  };
   const membersOf = (code: string) => server.db.select({ key: roomMembers.memberKey, seat: roomMembers.seat }).from(roomMembers).innerJoin(rooms, eq(rooms.id, roomMembers.roomId)).where(eq(rooms.code, code));
 
   beforeAll(async () => {
     server = (await createServerDatabase())!;
-    const auth = createAuth(server.db);
-    await auth.api.signUpEmail({ body: { name: "Hote_Course", email: placeholderEmail("Hote_Course"), password: "sushi-roll-42", username: "Hote_Course", displayUsername: "Hote_Course" } });
-    const { headers } = await auth.api.signInUsername({ body: { username: "Hote_Course", password: "sushi-roll-42" }, returnHeaders: true });
-    hostCookie = headers.get("set-cookie")!.split(";")[0]!;
   });
   afterAll(async () => {
     await server?.drop();
@@ -129,7 +139,7 @@ describe.skipIf(!process.env.DATABASE_URL)("SALLE-03 / SALLE-09 — simultaneous
   });
 
   test("SALLE-03 — the host taking a seat while a guest is being seated gets another seat, never a 500", async () => {
-    const code = ((await (await call("POST", "/api/rooms", hostCookie, { role: "spectator", settings: { visibility: "public" } })).json()) as Joined).room.code;
+    const code = await open("spectator");
     const patched = await whileLocked(
       code,
       (tx, id) => tx.insert(roomMembers).values({ roomId: id, memberKey: "guest:00000000-0000-4000-8000-000000000000", guestName: "En_Cours", role: "player", seat: 0, color: "#000" }),
@@ -139,5 +149,21 @@ describe.skipIf(!process.env.DATABASE_URL)("SALLE-03 / SALLE-09 — simultaneous
     const seats = (await membersOf(code)).map((m) => m.seat);
     expect(seats).toHaveLength(2);
     expect(new Set(seats).size).toBe(2);
+  });
+
+  test("SALLE-06 — the same person joining two rooms at once ends up in exactly one, the other answer is 409, never a 500", async () => {
+    for (let round = 0; round < 10; round++) {
+      const a = await open();
+      const b = await open();
+      const cookie = guest(`Ubiquite_${round}`);
+      const answers = await Promise.all([call("POST", "/api/rooms/join", cookie, { code: a }), call("POST", "/api/rooms/join", cookie, { code: b })]);
+      expect(answers.map((res) => res.status).sort()).toEqual([200, 409]);
+      const refused = (await answers.find((res) => res.status === 409)!.json()) as { error: string; room: string };
+      expect(refused.error).toBe("already_in_room");
+      const inA = (await membersOf(a)).length - 1;
+      const inB = (await membersOf(b)).length - 1;
+      expect(inA + inB).toBe(1);
+      expect(refused.room).toBe(inA ? a : b);
+    }
   });
 });

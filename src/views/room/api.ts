@@ -4,7 +4,8 @@ import type { RoomSocketMessage } from "../../server/realtime";
 import type { RefusalReason, RoomResult, RoomView } from "../../server/rooms";
 
 export type RoomError = RefusalReason | "unauthorized" | "account_required" | "invalid_body" | "no_free_code" | "network";
-export type Answer = { ok: true; result: RoomResult } | { ok: false; error: RoomError };
+/** current : SALLE-06, le salon où l'on est déjà quand le serveur répond « already_in_room ». */
+export type Answer = { ok: true; result: RoomResult } | { ok: false; error: RoomError; current?: string };
 
 async function send(method: string, path: string, body?: unknown): Promise<Answer> {
   try {
@@ -14,8 +15,9 @@ async function send(method: string, path: string, body?: unknown): Promise<Answe
       headers: body === undefined ? undefined : { "content-type": "application/json" },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
-    const data = (await res.json().catch(() => ({}))) as RoomResult & { error?: RoomError };
-    return res.ok ? { ok: true, result: data } : { ok: false, error: data.error ?? "network" };
+    const data = (await res.json().catch(() => ({}))) as RoomResult & { error?: RoomError; room?: unknown };
+    if (res.ok) return { ok: true, result: data };
+    return { ok: false, error: data.error ?? "network", ...(typeof data.room === "string" ? { current: data.room } : {}) };
   } catch {
     return { ok: false, error: "network" };
   }
@@ -32,7 +34,19 @@ export const roomApi = {
   /** SALLE-09 : la course est finie, le salon repasse aux résultats. keepalive : la page part au podium juste après. */
   finish: (code: string) => fetch(`/api/rooms/${code}/finish`, { method: "POST", credentials: "same-origin", keepalive: true }).catch(() => undefined),
   update: (code: string, body: { role?: Role; settings?: Partial<RoomSettings> }) => send("PATCH", `/api/rooms/${code}`, body),
+  /** SALLE-07 : l'hôte expulse un membre (sa clé) ; le serveur vérifie que c'est bien l'hôte. */
+  kick: (code: string, member: string) => send("POST", `/api/rooms/${code}/kick`, { member }),
 };
+
+/**
+ * SALLE-06 : la demande d'arrivée (créer, entrer, relire) part une seule fois par tentative (`key`), même si l'effet
+ * de la page tourne deux fois (React StrictMode en dev) : une deuxième création serait refusée, « déjà dans un salon »,
+ * avec le salon que la première vient de créer. `holder` : un useRef de la page.
+ */
+export function arrivalRequest<T>(holder: { current: { key: string; request: Promise<T> } | null }, key: string, make: () => Promise<T>): Promise<T> {
+  if (holder.current?.key !== key) holder.current = { key, request: make() };
+  return holder.current.request;
+}
 
 /** Sans WebSocket (Next.js, Vercel), on relit l'état à ce rythme. */
 const POLL_MS = 3000;
