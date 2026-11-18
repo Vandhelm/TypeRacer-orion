@@ -62,7 +62,7 @@ export async function seed(db: Db) {
         .values({ code: room.code, inviteToken: demoInviteToken(room.code), name: room.name, visibility: room.visibility, guests: room.guests, bots: room.bots, status: room.status, hostId: idOf(room.members[0]!), configId })
         .returning({ id: rooms.id });
       roomIds.set(room.code, row!.id);
-      await tx.insert(roomMembers).values(room.members.map((member, seat) => ({ roomId: row!.id, playerId: idOf(member), seat, color: seatColor(seat) })));
+      await tx.insert(roomMembers).values(room.members.map((member, seat) => ({ roomId: row!.id, memberKey: `player:${idOf(member)}`, playerId: idOf(member), seat, color: seatColor(seat) })));
     }
 
     const random = seededRandom(418);

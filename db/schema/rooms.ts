@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import { boolean, check, index, integer, pgTable, primaryKey, text, timestamp, unique } from "drizzle-orm/pg-core";
-import { botAccuracy, botSpeed, language, level, mistakeMode, roomStatus, textLength, textType, visibility } from "./enums";
+import { botAccuracy, botSpeed, language, level, memberRole, mistakeMode, roomStatus, textLength, textType, visibility } from "./enums";
 import { players } from "./players";
 import { CODE_PATTERN } from "../../src/rooms/access";
 
@@ -54,20 +54,29 @@ export const rooms = pgTable(
   ],
 );
 
-/** Qui occupe quelle place. La couleur dépend de la place, pas du joueur. */
+/**
+ * Qui est dans quel salon. Un membre est un compte (player_id) ou un invité (guest_name, son pseudonyme signé) :
+ * member_key ("player:<id>" ou "guest:<pseudo en minuscules>") les identifie tous les deux, pour la clé primaire
+ * et pour la règle « une seule salle à la fois » (SALLE-06). Un participant a une place (et sa couleur), un spectateur non.
+ */
 export const roomMembers = pgTable(
   "room_members",
   {
     roomId: integer("room_id").notNull().references(() => rooms.id, { onDelete: "cascade" }),
-    playerId: integer("player_id").notNull().references(() => players.id, { onDelete: "cascade" }),
-    seat: integer("seat").notNull(),
-    color: text("color").notNull(),
+    memberKey: text("member_key").notNull(),
+    playerId: integer("player_id").references(() => players.id, { onDelete: "cascade" }),
+    guestName: text("guest_name"),
+    role: memberRole("role").notNull().default("player"),
+    seat: integer("seat"),
+    color: text("color"),
     joinedAt: timestamp("joined_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    primaryKey({ columns: [table.roomId, table.playerId] }),
+    primaryKey({ columns: [table.roomId, table.memberKey] }),
     unique("room_members_room_seat_unique").on(table.roomId, table.seat),
     index("room_members_player").on(table.playerId),
     check("room_members_seat_range", sql`${table.seat} between 0 and 7`),
+    check("room_members_identity", sql`(${table.playerId} is null) <> (${table.guestName} is null)`),
+    check("room_members_seat_role", sql`(${table.role} = 'player') = (${table.seat} is not null)`),
   ],
 );

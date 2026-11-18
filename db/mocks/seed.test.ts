@@ -82,7 +82,7 @@ describe("demo data", () => {
   test("refuses two players on one seat", async () => {
     const [member] = await db.select().from(roomMembers).limit(1);
     const [stranger] = await db.select().from(players).where(eq(players.name, "Saba_Sensei"));
-    await fails(db.insert(roomMembers).values({ roomId: member!.roomId, playerId: stranger!.id, seat: member!.seat, color: "red" }));
+    await fails(db.insert(roomMembers).values({ roomId: member!.roomId, memberKey: `player:${stranger!.id}`, playerId: stranger!.id, seat: member!.seat, color: "red" }));
   });
 });
 
