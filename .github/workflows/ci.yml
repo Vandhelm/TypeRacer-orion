@@ -60,9 +60,6 @@ jobs:
         env:
           SMOKE_SKIP_BUILD: "1"
 
-      # TECH-02 interdit tout fichier .js/.jsx. Non bloquant tant que les 2 fichiers existants
-      # (createRacePool.js, createScene.js) ne sont pas convertis : retirer
-      # continue-on-error une fois fait.
+      # TECH-02 interdit tout fichier .js/.jsx.
       - name: Aucun fichier JavaScript (TECH-02)
         run: bun run check:no-js
-        continue-on-error: true
