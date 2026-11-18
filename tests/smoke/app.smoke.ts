@@ -76,7 +76,7 @@ describe("SMOKE — pages", () => {
       const res = await fetch(`${base}${path}`);
       expect(res.status).toBe(200);
       expect(res.headers.get("content-type") ?? "").toContain("text/html");
-      expect(await res.text()).toContain("<div id=");
+      expect(await res.text()).toContain("<title>O.R.I.O.N");
     });
   }
 });
