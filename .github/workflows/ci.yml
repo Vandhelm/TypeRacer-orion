@@ -50,6 +50,11 @@ jobs:
       - name: Tests unitaires et de régression
         run: bun test
 
+      # TECH-06 : le serveur temps réel se regroupe en un seul fichier, comme dans son image Fly.io.
+      # Ses tests d'intégration (bun test) le lancent eux-mêmes : pas de service à démarrer ici.
+      - name: Build du serveur temps réel
+        run: bun run realtime:build
+
       # TECH-01 : l'application est construite et servie par Next.js. Un build en échec arrête la CI.
       - name: Build Next.js
         run: bun run next:build
