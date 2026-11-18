@@ -20,15 +20,18 @@ export function guestSecret(env: Env = process.env) {
 
 const sign = (payload: string, secret: string) => createHmac("sha256", secret).update(payload).digest("base64url");
 
-export function signGuest(nickname: string, secret: string, now = Date.now()) {
-  const payload = Buffer.from(JSON.stringify({ n: nickname, e: now + GUEST_TTL_MS })).toString("base64url");
+/**
+ * Signe le pseudonyme et l'id de la session. L'id (aléatoire, impossible à deviner) identifie l'invité dans un salon
+ * (SALLE-03) : deux cookies au même pseudonyme sont deux personnes différentes.
+ */
+export function signGuest(nickname: string, secret: string, now = Date.now(), id: string = crypto.randomUUID()) {
+  const payload = Buffer.from(JSON.stringify({ n: nickname, e: now + GUEST_TTL_MS, i: id })).toString("base64url");
   return `${payload}.${sign(payload, secret)}`;
 }
 
-const Payload = z.object({ n: z.string(), e: z.number() });
+const Payload = z.object({ n: z.string(), e: z.number(), i: z.uuid().optional() });
 
-/** Le pseudonyme d'un cookie, seulement si la signature, la date et la règle du pseudo sont bonnes. */
-export function verifyGuest(value: string, secret: string, now = Date.now()): string | null {
+function verifiedPayload(value: string, secret: string, now: number) {
   const parts = value.split(".");
   if (parts.length !== 2 || !parts[0] || !parts[1]) return null;
   const [payload, signature] = parts as [string, string];
@@ -38,10 +41,23 @@ export function verifyGuest(value: string, secret: string, now = Date.now()): st
   try {
     const data = Payload.safeParse(JSON.parse(Buffer.from(payload, "base64url").toString("utf8")));
     if (!data.success || data.data.e <= now || !isValidNickname(data.data.n)) return null;
-    return data.data.n;
+    return data.data;
   } catch {
     return null;
   }
+}
+
+/** Le pseudonyme d'un cookie, seulement si la signature, la date et la règle du pseudo sont bonnes. */
+export function verifyGuest(value: string, secret: string, now = Date.now()): string | null {
+  return verifiedPayload(value, secret, now)?.n ?? null;
+}
+
+export type GuestSession = { nickname: string; id: string };
+
+/** Le pseudonyme et l'id de session d'un cookie valide ; null sans id (cookie d'avant SALLE-03 : on redemande le pseudo). */
+export function verifyGuestSession(value: string, secret: string, now = Date.now()): GuestSession | null {
+  const data = verifiedPayload(value, secret, now);
+  return data?.i ? { nickname: data.n, id: data.i } : null;
 }
 
 export function guestCookie(value: string, secure: boolean, maxAge?: number) {
@@ -51,13 +67,24 @@ export function guestCookie(value: string, secure: boolean, maxAge?: number) {
   return parts.join("; ");
 }
 
-/** Le pseudonyme vérifié de l'invité qui envoie ces en-têtes, ou null. */
-export function readGuest(headers: Headers, secret = guestSecret(), now = Date.now()) {
+function guestCookieValue(headers: Headers) {
   for (const pair of (headers.get("cookie") ?? "").split(";")) {
     const [name, ...rest] = pair.trim().split("=");
-    if (name === GUEST_COOKIE) return verifyGuest(rest.join("="), secret, now);
+    if (name === GUEST_COOKIE) return rest.join("=");
   }
   return null;
+}
+
+/** Le pseudonyme vérifié de l'invité qui envoie ces en-têtes, ou null. */
+export function readGuest(headers: Headers, secret = guestSecret(), now = Date.now()) {
+  const value = guestCookieValue(headers);
+  return value === null ? null : verifyGuest(value, secret, now);
+}
+
+/** La session vérifiée (pseudonyme et id) de l'invité qui envoie ces en-têtes, ou null. */
+export function readGuestSession(headers: Headers, secret = guestSecret(), now = Date.now()) {
+  const value = guestCookieValue(headers);
+  return value === null ? null : verifyGuestSession(value, secret, now);
 }
 
 const GuestBody = z

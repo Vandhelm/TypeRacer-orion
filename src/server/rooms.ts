@@ -44,12 +44,15 @@ export async function withFreshCode<T>(insert: (code: string) => Promise<T>, dra
 // Membres et vues
 
 /** Qui agit, d'après sa session vérifiée par le serveur (jamais d'après le corps de la requête). */
-export type Identity = { kind: "account"; playerId: number; name: string } | { kind: "guest"; name: string };
+export type Identity = { kind: "account"; playerId: number; name: string } | { kind: "guest"; name: string; sessionId: string };
 
-/** La clé d'un membre : la même personne a la même clé dans tous les salons (SALLE-06 pourra la rendre unique). */
+/**
+ * La clé d'un membre : la même personne a la même clé dans tous les salons (SALLE-06 pourra la rendre unique).
+ * Un invité est sa session signée (id aléatoire du cookie), jamais son pseudonyme, que n'importe qui peut reprendre.
+ */
 export function memberKey(who: Identity | { playerId: number }): string {
   if ("playerId" in who) return `player:${who.playerId}`;
-  return `guest:${who.name.toLowerCase()}`;
+  return `guest:${who.sessionId}`;
 }
 
 export type MemberView = { key: string; name: string; guest: boolean; host: boolean; role: Role; seat: number | null; color: string | null };

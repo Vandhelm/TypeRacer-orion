@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { GUEST_COOKIE, guestCookie, guestSecret, handleGuest, readGuest, signGuest, verifyGuest } from "./guest";
+import { createHmac } from "node:crypto";
+import { GUEST_COOKIE, guestCookie, guestSecret, handleGuest, readGuest, readGuestSession, signGuest, verifyGuest, verifyGuestSession } from "./guest";
 
 const SECRET = "guest-secret-guest-secret-guest-secret";
 const NOW = 1_800_000_000_000;
@@ -122,5 +123,34 @@ describe("AUTH-02 — /api/guest", () => {
 
   test("other methods are refused", async () => {
     expect((await handleGuest(new Request("http://localhost/api/guest", { method: "PUT" }), env)).status).toBe(405);
+  });
+});
+
+describe("SALLE-03 — a guest session has its own unguessable id, signed in the cookie", () => {
+  test("each signed cookie carries a fresh random id, even for the same nickname", () => {
+    const first = verifyGuestSession(signGuest("Corail_418", SECRET, NOW), SECRET, NOW);
+    const second = verifyGuestSession(signGuest("Corail_418", SECRET, NOW), SECRET, NOW);
+    expect(first?.nickname).toBe("Corail_418");
+    expect(first?.id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(second?.id).not.toBe(first?.id);
+  });
+
+  test("the id cannot be swapped without breaking the signature", () => {
+    const [, sig] = signGuest("Corail_418", SECRET, NOW, "11111111-1111-4111-8111-111111111111").split(".");
+    const forged = `${Buffer.from(JSON.stringify({ n: "Corail_418", e: NOW + 1000, i: "22222222-2222-4222-8222-222222222222" })).toString("base64url")}.${sig}`;
+    expect(verifyGuestSession(forged, SECRET, NOW)).toBeNull();
+  });
+
+  test("a signed cookie without an id (older format) opens no room session", () => {
+    const payload = Buffer.from(JSON.stringify({ n: "Corail_418", e: NOW + 1000 })).toString("base64url");
+    const old = `${payload}.${createHmac("sha256", SECRET).update(payload).digest("base64url")}`;
+    expect(verifyGuest(old, SECRET, NOW)).toBe("Corail_418");
+    expect(verifyGuestSession(old, SECRET, NOW)).toBeNull();
+  });
+
+  test("readGuestSession reads the id from the request cookies", () => {
+    const value = signGuest("Corail_418", SECRET, NOW, "33333333-3333-4333-8333-333333333333");
+    expect(readGuestSession(withCookie(value), SECRET, NOW)).toEqual({ nickname: "Corail_418", id: "33333333-3333-4333-8333-333333333333" });
+    expect(readGuestSession(new Headers(), SECRET, NOW)).toBeNull();
   });
 });

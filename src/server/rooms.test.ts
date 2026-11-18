@@ -59,7 +59,10 @@ async function setup() {
     const [account] = await db.select({ playerId: user.playerId }).from(user).where(eq(user.displayUsername, name));
     return { cookie: headers.get("set-cookie")!.split(";")[0]!, playerId: account!.playerId };
   };
-  const guest = (name: string) => `${GUEST_COOKIE}=${signGuest(name, SECRET)}`;
+  // un invité garde son cookie : le même pseudo signé une autre fois est une autre session (SALLE-03)
+  const sessions = new Map<string, string>();
+  const freshGuest = (name: string) => `${GUEST_COOKIE}=${signGuest(name, SECRET)}`;
+  const guest = (name: string) => sessions.get(name) ?? sessions.set(name, freshGuest(name)).get(name)!;
   const call = (method: string, path: string, cookie?: string, body?: unknown) =>
     handleRoomsApi(
       new Request(`http://localhost${path}`, {
@@ -71,7 +74,7 @@ async function setup() {
       auth,
       SECRET,
     );
-  return { db, auth, signUp, guest, call };
+  return { db, auth, signUp, guest, freshGuest, call };
 }
 
 describe("SALLE-01 — a signed-in user creates a room and hosts it", () => {
@@ -196,7 +199,7 @@ describe("SALLE-03 — visibility decides who sees and enters a room", () => {
     const res = await t.call("POST", "/api/rooms/join", t.guest("Codeur_1"), { code: semi.code });
     expect(res.status).toBe(200);
     const { room, you } = (await res.json()) as Joined;
-    expect(you).toBe("guest:codeur_1");
+    expect(you).toStartWith("guest:");
     expect(room.members.map((m) => m.key)).toContain(you);
     expect(room.invite).toBeNull();
   });
@@ -229,10 +232,11 @@ describe("SALLE-03 — visibility decides who sees and enters a room", () => {
 
   test("joining twice does not duplicate the member", async () => {
     const pub = await open("public");
-    await t.call("POST", "/api/rooms/join", t.guest("Deux_Fois"), { code: pub.code });
+    const first = (await (await t.call("POST", "/api/rooms/join", t.guest("Deux_Fois"), { code: pub.code })).json()) as Joined;
     const res = await t.call("POST", "/api/rooms/join", t.guest("Deux_Fois"), { code: pub.code });
-    const { room } = (await res.json()) as Joined;
-    expect(room.members.filter((m) => m.key === "guest:deux_fois")).toHaveLength(1);
+    const { room, you } = (await res.json()) as Joined;
+    expect(you).toBe(first.you);
+    expect(room.members.filter((m) => m.key === you)).toHaveLength(1);
   });
 
   test("a member who is not the host cannot change the settings (403)", async () => {
@@ -251,11 +255,29 @@ describe("SALLE-03 — visibility decides who sees and enters a room", () => {
 
   test("leaving removes the member", async () => {
     const pub = await open("public");
-    await t.call("POST", "/api/rooms/join", t.guest("Partant"), { code: pub.code });
+    const { you } = (await (await t.call("POST", "/api/rooms/join", t.guest("Partant"), { code: pub.code })).json()) as Joined;
     const res = await t.call("POST", `/api/rooms/${pub.code}/leave`, t.guest("Partant"));
     expect(res.status).toBe(200);
     const room = ((await (await t.call("GET", `/api/rooms/${pub.code}`, host.cookie)).json()) as Joined).room;
-    expect(room.members.map((m) => m.key)).not.toContain("guest:partant");
+    expect(room.members.map((m) => m.key)).not.toContain(you);
+  });
+
+  test("a guest is their signed session, not their nickname: another cookie named bob cannot act as Bob", async () => {
+    const priv = await open("private");
+    const bob = (await (await t.call("POST", "/api/rooms/join", t.guest("Bob"), { invite: await inviteOf(priv.code) })).json()) as Joined;
+    const impostor = t.freshGuest("bob");
+    expect((await t.call("GET", `/api/rooms/${priv.code}`, impostor)).status).toBe(403);
+    expect(await (await t.call("POST", `/api/rooms/${priv.code}/leave`, impostor)).json()).toEqual({ left: false });
+    const room = ((await (await t.call("GET", `/api/rooms/${priv.code}`, t.guest("Bob"))).json()) as Joined).room;
+    expect(room.members.map((m) => m.key)).toContain(bob.you);
+  });
+
+  test("the same nickname in another session joins as another member, never as the first one", async () => {
+    const pub = await open("public");
+    const first = (await (await t.call("POST", "/api/rooms/join", t.guest("Homonyme"), { code: pub.code })).json()) as Joined;
+    const second = (await (await t.call("POST", "/api/rooms/join", t.freshGuest("homonyme"), { code: pub.code })).json()) as Joined;
+    expect(second.you).not.toBe(first.you);
+    expect(second.room.members.map((m) => m.key)).toEqual(expect.arrayContaining([first.you, second.you]));
   });
 });
 
