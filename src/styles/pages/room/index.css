@@ -14,8 +14,6 @@
 @import "../../components/buttons/flip-button.css";
 @import "../../components/info-tip.css";
 @import "../../components/stamp.css";
-@import "../../components/live-list.css";
 
 @import "./room.css";
 @import "./ticket.css";
-@import "./text-editor.css";

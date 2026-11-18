@@ -2,6 +2,7 @@ import { useImperativeHandle, useRef, useState, type ChangeEvent, type Ref } fro
 import { useTranslation } from "react-i18next";
 import { SMALL_BUTTON, SmallButton } from "../../components/buttons/SmallButton";
 import { countWords, MAX_TEXT_LENGTH, readSavedTexts, writeSavedTexts, type SavedText } from "./room";
+import { LABEL } from "./styles";
 
 const TEXT_TOOLS = {
   typography: (v: string) => v.replace(/[‘’‚‛]/g, "'").replace(/[“”„‟«»]/g, '"').replace(/[–—―]/g, "-").replace(/…/g, "...").replace(/ /g, " "),
@@ -26,6 +27,8 @@ const TOOLS: { title: string; help: string; buttons: [ToolName, string][] }[] = 
   { title: "toolLines", help: "helpLines", buttons: [["space", "space"], ["period", "periodSpace"]] },
   { title: "toolOther", help: "helpOther", buttons: [["lowercase", "lowercase"], ["shuffle", "shuffle"]] },
 ];
+
+const SAVED = "flex items-center gap-2 border-b border-b-line-faint [border-bottom-style:dashed] font-mono text-[12px] leading-[1.3] font-normal";
 
 export type TextEditorHandle = { open(): void };
 type TextEditorDialogProps = { text: string; onUse: (text: string) => void; ref?: Ref<TextEditorHandle> };
@@ -77,15 +80,17 @@ export function TextEditorDialog({ text, onUse, ref }: TextEditorDialogProps) {
   }
 
   return (
-    <dialog ref={dialog} className="room-editor" aria-labelledby="editor-title" onClick={(e) => e.target === dialog.current && close()}>
-      <div className="room-editor-body">
-        <h2 id="editor-title">{t("room.editorTitle")}</h2>
-        <div className="room-editor-tools">
+    <dialog
+      ref={dialog}
+      className="fixed inset-0 m-auto max-h-[calc(100vh-32px)] w-[min(780px,calc(100vw-32px))] overflow-y-auto border border-line bg-black p-0 text-white backdrop:bg-[rgba(0,0,0,.82)]" aria-labelledby="editor-title" onClick={(e) => e.target === dialog.current && close()}>
+      <div className="p-[clamp(18px,3vh,28px)]">
+        <h2 className="mb-[14px] font-sans text-[clamp(20px,3vh,28px)] leading-[1.1] font-light tracking-[.1em]" id="editor-title">{t("room.editorTitle")}</h2>
+        <div className="mb-4 grid grid-cols-[repeat(2,minmax(0,1fr))] gap-x-6 gap-y-3 phone:grid-cols-[minmax(0,1fr)]">
           {TOOLS.map((tool) => (
-            <div className="room-editor-tool" key={tool.title}>
-              <span className="room-label">{t(`room.${tool.title}`)}</span>
-              <p>{t(`room.${tool.help}`)}</p>
-              <div className="room-editor-tool-buttons">
+            <div className="grid grid-rows-[auto_1fr_auto] [&_.small-button]:flex-1 [&_.small-button]:justify-center" key={tool.title}>
+              <span className={LABEL}>{t(`room.${tool.title}`)}</span>
+              <p className="mt-1 mb-2.5 font-mono text-[max(11px,1.2vh)] leading-[1.4] font-normal text-muted">{t(`room.${tool.help}`)}</p>
+              <div className="flex gap-2">
                 {tool.buttons.map(([name, label]) => (
                   <SmallButton key={name} onClick={() => setDraft(TEXT_TOOLS[name](draft))}>{t(`room.${label}`)}</SmallButton>
                 ))}
@@ -94,27 +99,36 @@ export function TextEditorDialog({ text, onUse, ref }: TextEditorDialogProps) {
           ))}
         </div>
         <label className="sr-only" htmlFor="editor-text">{t("room.editorTitle")}</label>
-        <textarea ref={area} className="room-editor-text" id="editor-text" maxLength={MAX_TEXT_LENGTH} spellCheck={false} value={draft} onChange={(e) => setDraft(e.target.value)} />
-        <p className="room-editor-count"><span>{`${words} ${t("room.wordsUnit")}`}</span><span>{t("room.maxChars", { n: MAX_TEXT_LENGTH })}</span></p>
-        <div className="room-editor-save">
-          <input type="text" maxLength={40} autoComplete="off" placeholder={t("room.textName")} value={saveName} onChange={(e) => setSaveName(e.target.value)} />
+        <textarea
+          ref={area}
+          className="block h-[clamp(120px,26vh,260px)] w-full resize-y rounded-none border border-line bg-black p-3 font-mono text-[max(15px,1.9vh)] leading-[1.5] font-normal text-white caret-red-text focus:outline focus:outline-offset-2 focus:outline-white"
+          id="editor-text" maxLength={MAX_TEXT_LENGTH} spellCheck={false} value={draft} onChange={(e) => setDraft(e.target.value)} />
+        <p className="mt-2 mb-[14px] flex items-center justify-between gap-3 font-mono text-[max(11px,1.2vh)] leading-[1.4] font-normal text-muted"><span>{`${words} ${t("room.wordsUnit")}`}</span><span>{t("room.maxChars", { n: MAX_TEXT_LENGTH })}</span></p>
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <input
+            className="unset box-border h-10 min-w-0 flex-[1_1_180px] border-b border-b-line-soft [border-bottom-style:dashed] font-mono text-[14px] leading-none font-normal text-white placeholder:text-[rgba(255,255,255,.35)] focus:border-b-white"
+            type="text" maxLength={40} autoComplete="off" placeholder={t("room.textName")} value={saveName} onChange={(e) => setSaveName(e.target.value)} />
           <SmallButton onClick={save}>{t("room.save")}</SmallButton>
-          <label className={`${SMALL_BUTTON} room-import`}>
+          <label className={`${SMALL_BUTTON} relative overflow-hidden`}>
             <span>{t("room.import")}</span>
-            <input type="file" accept=".txt,text/plain" onChange={importFile} />
+            <input className="absolute inset-0 size-full cursor-pointer opacity-0" type="file" accept=".txt,text/plain" onChange={importFile} />
           </label>
         </div>
-        <span className="room-label">{t("room.savedTexts")}</span>
-        <ul className="room-saved">
-          {saved?.length === 0 && <li className="min-h-[36px] text-muted">{t("room.noSavedText")}</li>}
+        <span className={LABEL}>{t("room.savedTexts")}</span>
+        <ul className="mb-[14px] list-none">
+          {saved?.length === 0 && <li className={`${SAVED} min-h-[36px] text-muted`}>{t("room.noSavedText")}</li>}
           {saved?.map((entry, i) => (
-            <li key={entry.name}>
-              <button className="room-saved-load" type="button" onClick={() => setDraft(String(entry.text))}>{String(entry.name)}</button>
-              <button className="room-saved-delete" type="button" aria-label={`${t("room.delete")} ${entry.name}`} onClick={() => remove(i)}>×</button>
+            <li className={SAVED} key={entry.name}>
+              <button
+                className="unset flex min-h-[36px] min-w-0 flex-1 cursor-pointer items-center truncate hover:underline focus-visible:outline focus-visible:outline-white"
+                type="button" onClick={() => setDraft(String(entry.text))}>{String(entry.name)}</button>
+              <button
+                className="unset flex min-h-[36px] cursor-pointer items-center px-1.5 text-muted hover:text-red-text focus-visible:outline focus-visible:outline-white"
+                type="button" aria-label={`${t("room.delete")} ${entry.name}`} onClick={() => remove(i)}>×</button>
             </li>
           ))}
         </ul>
-        <div className="room-editor-end">
+        <div className="room-editor-end flex justify-end gap-2.5">
           <SmallButton onClick={close}>{t("room.cancel")}</SmallButton>
           <SmallButton className="room-editor-use" disabled={!words} onClick={use}>{t("room.useText")}</SmallButton>
         </div>
