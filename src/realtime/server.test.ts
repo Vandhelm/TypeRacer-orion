@@ -94,6 +94,18 @@ describe("TECH-06 — connecting needs a valid ticket", () => {
     first.ws.close();
   });
 
+  test("after a restart, a ticket issued before the server started is refused (used nonces were lost)", async () => {
+    const captured = ticketFor(player("Corail_418"), Date.now() - 1_000);
+    const restarted = createRealtimeServer({ port: 0, secret: SECRET });
+    try {
+      await expect(open(`ws://localhost:${restarted.port}/?ticket=${encodeURIComponent(captured)}`)).rejects.toThrow("refused");
+      const fresh = await open(`ws://localhost:${restarted.port}/?ticket=${encodeURIComponent(ticketFor(player("Corail_418")))}`);
+      fresh.ws.close();
+    } finally {
+      restarted.stop(true);
+    }
+  });
+
   test("a connection from another site is refused", async () => {
     const ticket = encodeURIComponent(ticketFor(player("Corail_418")));
     await expect(open(`${url}/?ticket=${ticket}`, { origin: "https://evil.example" })).rejects.toThrow("refused");

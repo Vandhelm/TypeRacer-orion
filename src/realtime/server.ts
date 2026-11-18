@@ -1,12 +1,13 @@
 // Serveur temps réel (TECH-06) : Bun.serve + WebSocket, séparé de Next.js, état des salles en mémoire.
 // - Connexion : ticket signé à usage unique (src/realtime/ticket.ts) en paramètre `ticket`, Origin autorisée.
+//   Un ticket émis avant le démarrage du serveur est refusé : les nonces vus sont perdus au redémarrage.
 // - Chaque message reçu est validé par le schéma du protocole (TECH-07) ; un message invalide reçoit
 //   une erreur, n'est jamais diffusé et ne ferme pas la connexion. Un déluge de messages la ferme (1008).
 // - Progression : diffusée aux autres membres de la salle, au plus 10 fois par seconde par joueur (PERF-02).
 //   Les messages en trop sont fusionnés : la dernière valeur part dès que la limite le permet.
 import type { Server, ServerWebSocket } from "bun";
 import { MAX_MESSAGE_BYTES, parseClientMessage, type Player, PROGRESS_INTERVAL_MS, type ServerMessage } from "./protocol";
-import { verifyTicket } from "./ticket";
+import { TICKET_TTL_MS, verifyTicket } from "./ticket";
 
 /** Au-delà, sur une fenêtre d'une seconde, la connexion est fermée : aucun client honnête n'en envoie autant. */
 export const MAX_MESSAGES_PER_SECOND = 60;
@@ -35,6 +36,8 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
   const throttles = new Map<string, Throttle>();
   /** Nonces des tickets déjà utilisés, jusqu'à leur expiration. */
   const usedNonces = new Map<string, number>();
+  /** Les nonces vivent en mémoire : un ticket émis avant ce démarrage a pu servir avant un redémarrage, il est refusé. */
+  const startedAt = Date.now();
 
   const throttleKey = (room: string, playerId: string) => `${room}\n${playerId}`;
 
@@ -126,7 +129,7 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
     if (!value) return null;
     const now = Date.now();
     const ticket = verifyTicket(value, secret, now);
-    if (!ticket || usedNonces.has(ticket.nonce)) return null;
+    if (!ticket || usedNonces.has(ticket.nonce) || ticket.expires - TICKET_TTL_MS < startedAt) return null;
     for (const [nonce, expires] of usedNonces) if (expires <= now) usedNonces.delete(nonce);
     usedNonces.set(ticket.nonce, ticket.expires);
     return ticket.player;
