@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
-import { roomBans, roomMembers, rooms } from "../../db/schema";
+import { eq, inArray } from "drizzle-orm";
+import { roomBans, roomInvites, roomMembers, rooms } from "../../db/schema";
 import { roomsFixture } from "./rooms.fixture";
 
 describe("SALLE-07 — the host kicks a participant or a spectator, who can no longer join this room", () => {
@@ -113,5 +113,20 @@ describe("SALLE-07 — the host kicks a participant or a spectator, who can no l
     expect((await kick(room.code, host.cookie, { member: body.you })).status).toBe(200);
     expect((await t.read(host.cookie, room.code)).body.room.status).toBe("results");
     expect((await kick(room.code, host.cookie, { member: body.you })).status).toBe(404);
+  });
+
+  test("SALLE-04 — kicking a member revokes the invite link they used, which is refused afterwards", async () => {
+    const { room, host } = await t.open("Exp_Lien", { visibility: "private" });
+    const cookie = t.guest("Lien_Revoque");
+    const kept = await t.invite(room.code, host.cookie);
+    const token = await t.invite(room.code, host.cookie);
+    await t.join(t.guest("Lien_Garde"), { invite: kept });
+    const { body } = await t.join(cookie, { invite: token });
+    expect((await kick(room.code, host.cookie, { member: body.you })).status).toBe(200);
+    const statuses = await t.db.select({ token: roomInvites.token, revokedAt: roomInvites.revokedAt }).from(roomInvites).where(inArray(roomInvites.token, [kept, token]));
+    expect(Object.fromEntries(statuses.map((row) => [row.token, row.revokedAt !== null]))).toEqual({ [token]: true, [kept]: false });
+    const again = await t.join(cookie, { invite: token });
+    expect(again.status).toBe(404);
+    expect(await keysOf(room.code)).not.toContain(body.you);
   });
 });

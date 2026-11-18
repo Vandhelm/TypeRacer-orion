@@ -6,7 +6,7 @@ import type { Db } from "../../db/client";
 import { players, raceConfigs, roomBans, roomMembers, rooms } from "../../db/schema";
 import { allows, canJoin, newRoomCode } from "../rooms/access";
 import { seatColor } from "../rooms/seats";
-import { claimInvite, roomOfInvite } from "./room-invites";
+import { claimInvite, revokeInvitesOf, roomOfInvite } from "./room-invites";
 import { DEFAULT_SETTINGS, type CreateRoomSchema, type Role, type RoomSettings, type UpdateRoomSchema } from "../rooms/settings";
 
 export type CreateRoomInput = z.infer<typeof CreateRoomSchema>;
@@ -521,8 +521,9 @@ export async function kickMember(db: Db, code: string, who: Identity, target: st
     const [account] = removed.playerId === null ? [] : await tx.select({ name: players.name }).from(players).where(eq(players.id, removed.playerId));
     const name = removed.guestName ?? account?.name;
     await tx.insert(roomBans).values([{ roomId: id, memberKey: target }, ...(name ? [{ roomId: id, memberKey: nameBan(name) }] : [])]).onConflictDoNothing();
-    // À BRANCHER (SALLE-04) : révoquer ici, dans la même transaction, le lien d'invitation personnel de `target`.
-    // room_bans suffit déjà à le refuser à l'entrée, quel que soit le lien ; la révocation nettoie le jeton.
+    // SALLE-04 : son lien d'invitation personnel est révoqué dans la même transaction. room_bans suffit déjà à le
+    // refuser à l'entrée, quel que soit le lien ; la révocation retire le jeton et l'hôte le voit « révoqué ».
+    await revokeInvitesOf(tx, id, target);
     await afterDeparture(tx, id);
   });
   return { room: await roomView(db, id, key), you: key };
