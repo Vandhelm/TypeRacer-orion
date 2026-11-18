@@ -30,6 +30,14 @@ export function clientIp(headers: Headers): string | null {
   return clean(headers.get("x-real-ip"));
 }
 
+/** Ce que Bun.serve passe à un handler : de quoi lire l'adresse de la socket. */
+type SocketServer = { requestIP(req: Request): { address: string } | null };
+
+/** Le handler de server.ts : l'API reçoit l'adresse de la socket à la place des en-têtes IP du client. */
+export function withSocketIp(handler: (req: Request) => Response | Promise<Response>) {
+  return (req: Request, server: SocketServer) => handler(withClientIp(req, server.requestIP(req)?.address));
+}
+
 /** Sans proxy (Bun.serve local) : la requête avec l'adresse de la socket à la place des en-têtes envoyés par le client. */
 export function withClientIp(req: Request, address: string | undefined): Request {
   const headers = new Headers(req.headers);

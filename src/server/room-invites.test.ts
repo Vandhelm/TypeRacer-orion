@@ -7,6 +7,7 @@ import { newInviteToken } from "../rooms/access";
 import { createAuth } from "./auth";
 import { GUEST_COOKIE, signGuest } from "./guest";
 import { MAX_INVITES, revokeInvitesOf, type InviteView } from "./room-invites";
+import { withSocketIp } from "./client-ip";
 import { handleRoomsApi } from "./rooms-api";
 
 process.env.BETTER_AUTH_SECRET ??= "test-secret-test-secret-test-secret";
@@ -348,4 +349,27 @@ describe("SALLE-04 — one invitation link per guest, single use, bound to an IP
     expect((await t.call("GET", `/api/rooms/${code}/invites`, host.cookie)).status).toBe(404);
     expect((await t.call("POST", `/api/rooms/${code}/invites`, host.cookie)).status).toBe(404);
   });
+});
+
+describe("SALLE-04 — the local Bun server (server.ts) binds a link to the socket address, never to a forged header", () => {
+  test("x-forwarded-for: 9.9.9.9 sent by the client → used_ip is 127.0.0.1", async () => {
+    const t = await setup();
+    const host = await t.signUp("Hote_Socket");
+    const { room } = (await (await t.call("POST", "/api/rooms", host.cookie, { role: "player" })).json()) as Joined;
+    const { invite } = (await (await t.call("POST", `/api/rooms/${room.code}/invites`, host.cookie)).json()) as { invite: InviteView };
+    // le handler de server.ts, autour de la route des salons de cette base de test
+    const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: withSocketIp((req) => handleRoomsApi(req, t.db, createAuth(t.db), SECRET)) });
+    try {
+      const res = await fetch(`http://127.0.0.1:${server.port}/api/rooms/join`, {
+        method: "POST",
+        headers: { cookie: t.guest("Faussaire_IP"), "content-type": "application/json", "x-forwarded-for": "9.9.9.9", "x-real-ip": "9.9.9.9" },
+        body: JSON.stringify({ invite: invite.token }),
+      });
+      expect(res.status).toBe(200);
+    } finally {
+      server.stop(true);
+    }
+    const [row] = await t.db.select({ usedIp: roomInvites.usedIp }).from(roomInvites).where(eq(roomInvites.token, invite.token));
+    expect(row!.usedIp).toBe("127.0.0.1");
+  }, 30_000);
 });

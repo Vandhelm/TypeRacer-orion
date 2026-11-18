@@ -5,7 +5,7 @@ import podium from "./podium.html";
 import profile from "./profile.html";
 import room from "./room.html";
 import { auth, db, handleApi } from "./src/server/api";
-import { withClientIp } from "./src/server/client-ip";
+import { withSocketIp } from "./src/server/client-ip";
 import { createRealtime, type SocketData } from "./src/server/realtime";
 import { roomEvents } from "./src/server/room-events";
 
@@ -23,7 +23,7 @@ const server = Bun.serve<SocketData>({
     "/podium": podium,
     "/profile": profile,
     // pas de proxy devant ce serveur : l'IP du client est celle de la socket (SALLE-04)
-    "/api/*": (req: Request, srv: Bun.Server<SocketData>) => handleApi(withClientIp(req, srv.requestIP(req)?.address)),
+    "/api/*": withSocketIp(handleApi),
   },
   fetch(req, srv) {
     return realtime.matches(req) ? realtime.upgrade(req, srv) : new Response("Not found", { status: 404 });
