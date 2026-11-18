@@ -1,7 +1,7 @@
 // Toutes les routes /api/*. Le même code tourne en local (server.ts) et sous Next.js (app/api/[...path]/route.ts), en local comme sur Vercel.
 import { sql } from "drizzle-orm";
 import { connect } from "../../db/client";
-import { handleRace, playerStats } from "./races";
+import { handleRace, handleStats } from "./races";
 import { handleAvatar, saveAvatar } from "./account";
 import { handleGuest } from "./guest";
 import { createAuth, type Auth } from "./auth";
@@ -33,18 +33,13 @@ const routes: Record<string, Handler> = {
   },
 };
 
-async function getStats(name: string) {
-  const stats = await playerStats(db(), name);
-  return stats ? Response.json(stats) : Response.json({ error: "not_found" }, { status: 404 });
-}
-
 export async function handleApi(req: Request): Promise<Response> {
   const { pathname } = new URL(req.url);
   if (pathname === "/api/races") return handleRace(req, db(), auth());
   if (pathname === "/api/account/avatar") return handleAvatar(req, auth(), saveAvatar(db()));
   if (pathname === "/api/guest") return handleGuest(req);
   const stats = pathname.match(/^\/api\/players\/([^/]+)\/stats$/);
-  if (stats) return getStats(decodeURIComponent(stats[1]!));
+  if (stats) return handleStats(stats[1]!, db());
   if (pathname.startsWith("/api/auth/")) return auth().handler(req);
   const route = routes[pathname.replace(/\/$/, "")];
   return route ? route(req) : Response.json({ error: "not_found" }, { status: 404 });

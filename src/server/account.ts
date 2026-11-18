@@ -2,6 +2,7 @@
 // sans se fier à la réduction faite par le navigateur.
 import { eq, isNotNull } from "drizzle-orm";
 import sharp from "sharp";
+import { z } from "zod";
 import type { Db } from "../../db/client";
 import * as schema from "../../db/schema";
 import type { Auth } from "./auth";
@@ -66,6 +67,10 @@ export const saveAvatar =
     await db.update(schema.user).set({ image, updatedAt: new Date() }).where(eq(schema.user.id, userId));
   };
 
+// TECH-07 : en-tête content-length (entier décimal) et champ de formulaire « avatar » (un fichier, pas du texte).
+const ContentLength = z.string().regex(/^\d{1,15}$/).optional();
+const AvatarFile = z.instanceof(Blob);
+
 /** POST : enregistre la photo (champ « avatar »). DELETE : la retire. La photo est gardée dans user.image. */
 export async function handleAvatar(req: Request, auth: Auth, save: SaveAvatar): Promise<Response> {
   if (req.method !== "POST" && req.method !== "DELETE") return Response.json({ error: "method_not_allowed" }, { status: 405 });
@@ -74,9 +79,12 @@ export async function handleAvatar(req: Request, auth: Auth, save: SaveAvatar): 
 
   let image: string | null = null;
   if (req.method === "POST") {
-    if (Number(req.headers.get("content-length") ?? 0) > AVATAR_MAX_BYTES + 64 * 1024) return Response.json({ error: "too_large" }, { status: 413 });
-    const file = (await req.formData().catch(() => null))?.get("avatar");
-    if (!(file instanceof Blob)) return Response.json({ error: "missing_file" }, { status: 400 });
+    const length = ContentLength.safeParse(req.headers.get("content-length") ?? undefined);
+    if (!length.success) return Response.json({ error: "bad_request" }, { status: 400 });
+    if (Number(length.data ?? 0) > AVATAR_MAX_BYTES + 64 * 1024) return Response.json({ error: "too_large" }, { status: 413 });
+    const field = AvatarFile.safeParse((await req.formData().catch(() => null))?.get("avatar"));
+    if (!field.success) return Response.json({ error: "missing_file" }, { status: 400 });
+    const file = field.data;
     if (file.size > AVATAR_MAX_BYTES) return Response.json({ error: "too_large" }, { status: 413 });
     const bytes = new Uint8Array(await file.arrayBuffer());
     const resized = avatarType(bytes) ? await resizeAvatar(bytes) : null;

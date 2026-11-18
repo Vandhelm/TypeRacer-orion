@@ -219,4 +219,21 @@ export async function playerStats(db: Db, name: string) {
   };
 }
 
+// TECH-07 : l'identifiant de /api/players/:name/stats vient de l'URL ; un nom reste court et sans caractère de contrôle.
+const PlayerName = z.string().min(1).max(64).regex(/^[^\u0000-\u001f\u007f]+$/);
+
+/** GET /api/players/:name/stats : `raw` est le segment d'URL encore encodé. Mal encodé ou mal formé : 400 ; inconnu : 404. */
+export async function handleStats(raw: string, db: Db): Promise<Response> {
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(raw);
+  } catch {
+    return Response.json({ error: "bad_name" }, { status: 400 });
+  }
+  const name = PlayerName.safeParse(decoded);
+  if (!name.success) return Response.json({ error: "bad_name" }, { status: 400 });
+  const stats = await playerStats(db, name.data);
+  return stats ? Response.json(stats) : Response.json({ error: "not_found" }, { status: 404 });
+}
+
 export type PlayerStats = NonNullable<Awaited<ReturnType<typeof playerStats>>>;
