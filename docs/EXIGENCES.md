@@ -132,8 +132,8 @@ Les statuts viennent des rapports de l'agent `qa` (skill `criteria-check`). Une 
 
 | ID | Statut | Fichiers principaux | Tests associés | Notes et choix |
 |---|---|---|---|---|
-| HIST-01 | non vérifié |  |  |  |
-| HIST-02 | non vérifié |  |  |  |
+| HIST-01 | partiel | `src/server/history.ts`, `src/server/races.ts`, `src/views/profile/RaceHistory.tsx`, `src/views/profile/history.ts`, `src/views/podium/results.ts`, `src/views/game/race.ts` | `src/server/history.test.ts`, `src/views/profile/history.test.ts`, `src/views/podium/results.test.ts`, `src/views/game/race.test.ts` | Liste paginée par 10 côté serveur, joueur pris dans la session (invité 403, sans session 401). Grosse course envoyée sans keepalive ; temps et séries bornés à la durée ; refus signalé sur le podium. Partiel : ces derniers correctifs (tour 3) ne sont pas encore revérifiés par une QA ; limite documentée : grosse course sans réponse en 10 s. Migration 0008 à appliquer sur la base de dev. QA 2026-11-18, feature/section/5-10-hist. |
+| HIST-02 | partiel | `src/server/history.ts`, `db/schema/races.ts`, `db/migrations/0008_race_others.sql`, `src/views/podium/hooks/useRaceResults.ts`, `src/views/podium/PodiumPage.tsx`, `src/views/profile/ProfilePage.tsx` | `src/server/history.test.ts`, `src/views/podium/history.test.ts`, `src/views/podium/PodiumScene.test.tsx` | `/podium?race=N` relu via `/api/history/N` : tous les participants à leur rang (`races.others`), course d'un autre = 404 comme inexistante, pas de « Rejouer ». Rendu vu au tour 2 ; partiel car les changements de podium des tours 2 et 3 n'ont pas été revus dans le navigateur. Courses antérieures à 0008 sans invités. Complet de la page dépend de RES-02/03/04. QA 2026-11-18. |
 
 ### 5.11 Internationalisation (I18N)
 
