@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import { connect } from "../../db/client";
 import { InvalidRace, parseRace, playerStats, recordRace } from "./races";
 import { handleAvatar } from "./account";
+import { handleGuest } from "./guest";
 import { createAuth, type Auth } from "./auth";
 
 let database: ReturnType<typeof connect> | null = null;
@@ -53,6 +54,7 @@ export async function handleApi(req: Request): Promise<Response> {
   const { pathname } = new URL(req.url);
   if (pathname === "/api/races") return postRace(req);
   if (pathname === "/api/account/avatar") return handleAvatar(req, auth());
+  if (pathname === "/api/guest") return handleGuest(req);
   const stats = pathname.match(/^\/api\/players\/([^/]+)\/stats$/);
   if (stats) return getStats(decodeURIComponent(stats[1]!));
   if (pathname.startsWith("/api/auth/")) return auth().handler(req);
