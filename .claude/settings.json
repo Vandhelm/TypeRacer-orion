@@ -18,10 +18,18 @@
       "Bash(git stash:*)",
       "Bash(git merge --no-ff:*)",
       "Bash(git worktree:*)",
-      "Bash(git cherry-pick:*)"
+      "Bash(git cherry-pick:*)",
+      "Bash(bash .claude/hooks/worktree-setup.sh:*)"
     ],
     "deny": [
       "Bash(git push:*)"
     ]
+  },
+  "enabledPlugins": {
+    "figma@synced": false,
+    "design@synced": false,
+    "engineering@synced": false,
+    "informatica-for-claude-platform@synced": false,
+    "pdf-viewer@synced": false
   }
 }

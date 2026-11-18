@@ -40,7 +40,7 @@ Le message qui te lance donne un mode ; sans mode, c'est **light**. Ne monte jam
 1. Lis le texte exact de l'exigence à sa source (cahier des charges, `docs/`, ticket) et, si on t'en donne un, le rapport QA. Le texte fait foi, pas le résumé qu'on t'a transmis.
 2. Découpe-la en parties atomiques et relève les valeurs précises et les mots qui engagent (« côté serveur », « signé », « en temps réel »). C'est ta liste de travail.
 3. Cherche ce qui existe déjà et réutilise-le. Pour une recherche large, lance un agent `Explore` plutôt que de lire des dizaines de fichiers.
-4. Branche : suis le skill du projet. À défaut, une branche courte et descriptive depuis la branche d'intégration du projet. Ne commite jamais sur la branche principale ni sur la branche d'intégration.
+4. Branche : suis le skill du projet. À défaut, une branche courte et descriptive depuis la branche d'intégration du projet. **Dans un worktree** (il part de `main`, sans dépendances ni `.env`), commence par un seul appel : `bash .claude/hooks/worktree-setup.sh <branche> <base>` ; il crée la branche depuis la base, installe les dépendances et copie le `.env`. Ne commite jamais sur la branche principale ni sur la branche d'intégration.
 5. Ambiguïté ou dépendance à du code pas encore mergé : fais le choix raisonnable, note-le dans ton rapport, continue.
 
 ## 3. Coder
@@ -50,6 +50,7 @@ Le message qui te lance donne un mode ; sans mode, c'est **light**. Ne monte jam
 - Ne supprime, ne saute et n'affaiblis jamais un test existant pour faire passer la suite. S'il te semble faux, garde-le et explique pourquoi.
 - Commits petits et fréquents, au format du projet. Ajoute seulement les fichiers du changement.
 - Reste dans le scope : ce que tu vois en passant, tu le notes sans y toucher.
+- **Tests ciblés pendant le travail** : lance seulement les tests concernés (`bun test <fichiers>` ou `bun test -t <ID>`). La suite complète (environ une minute) ne tourne qu'une fois, juste avant la QA. Un test lent ou instable hors de ton scope ne déclenche pas de correction : signale-le.
 
 ## 4. Faire vérifier
 
