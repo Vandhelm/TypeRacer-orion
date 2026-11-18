@@ -308,23 +308,26 @@ export async function launchRoom(db: Db, code: string, who: Identity): Promise<R
  * Quitter un salon. Le dernier qui part le ferme.
  * À BRANCHER (SALLE-08) : si l'hôte part, passer le rôle au membre humain présent depuis le plus longtemps.
  */
-export async function leaveRoom(db: Db, code: string, who: Identity): Promise<{ left: boolean }> {
-  const room = await roomByCode(db, code);
-  const removed = await db.delete(roomMembers).where(and(eq(roomMembers.roomId, room.id), eq(roomMembers.memberKey, memberKey(who)))).returning({ key: roomMembers.memberKey });
-  if (removed.length && !(await db.$count(roomMembers, eq(roomMembers.roomId, room.id)))) {
-    await db.update(rooms).set({ status: "closed" }).where(eq(rooms.id, room.id));
-  }
-  return { left: removed.length > 0 };
+export async function leaveRoom(db: Db, code: string, who: Identity, options: { unlessRacing?: boolean } = {}): Promise<{ left: boolean }> {
+  const { id } = await roomByCode(db, code);
+  // sous le verrou du salon, comme joinRoom et launchRoom : l'état lu et la fermeture ne croisent ni entrée ni lancement
+  return db.transaction(async (tx) => {
+    const [room] = await tx.select({ status: rooms.status }).from(rooms).where(eq(rooms.id, id)).for("update");
+    if (!room || (options.unlessRacing && room.status === "racing")) return { left: false };
+    const removed = await tx.delete(roomMembers).where(and(eq(roomMembers.roomId, id), eq(roomMembers.memberKey, memberKey(who)))).returning({ key: roomMembers.memberKey });
+    if (removed.length && !(await tx.$count(roomMembers, eq(roomMembers.roomId, id)))) {
+      await tx.update(rooms).set({ status: "closed" }).where(eq(rooms.id, id));
+    }
+    return { left: removed.length > 0 };
+  });
 }
 
 /**
  * Départ constaté par le temps réel (plus aucune socket) : pendant une course, les membres sont sur /game, sans
  * socket de salon ; ils restent membres et le salon reste ouvert. Hors course, c'est un départ (leaveRoom).
  */
-export async function leaveAfterDisconnect(db: Db, code: string, who: Identity): Promise<{ left: boolean }> {
-  const room = await roomByCode(db, code);
-  if (room.status === "racing") return { left: false };
-  return leaveRoom(db, code, who);
+export function leaveAfterDisconnect(db: Db, code: string, who: Identity): Promise<{ left: boolean }> {
+  return leaveRoom(db, code, who, { unlessRacing: true });
 }
 
 /** L'id d'un salon ouvert, ou null s'il n'existe pas ou est fermé. */

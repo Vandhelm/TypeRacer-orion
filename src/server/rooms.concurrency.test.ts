@@ -6,6 +6,7 @@ import { createServerDatabase } from "../../db/mocks/test-database";
 import { placeholderEmail } from "../accounts/username";
 import { createAuth } from "./auth";
 import { GUEST_COOKIE, signGuest } from "./guest";
+import { leaveAfterDisconnect, leaveRoom, type Identity } from "./rooms";
 import { handleRoomsApi } from "./rooms-api";
 
 process.env.BETTER_AUTH_SECRET ??= "test-secret-test-secret-test-secret";
@@ -65,6 +66,44 @@ describe.skipIf(!process.env.DATABASE_URL)("SALLE-03 / SALLE-09 — simultaneous
         expect(members).toHaveLength(2);
       } else {
         expect(joined.status).toBe(409);
+        expect(members).toHaveLength(1);
+      }
+    }
+  });
+
+  const statusOf = async (code: string) => (await server.db.select({ status: rooms.status }).from(rooms).where(eq(rooms.code, code)))[0]!.status;
+  const joinAs = async (name: string, code: string) => {
+    const cookie = guest(name);
+    const { you } = (await (await call("POST", "/api/rooms/join", cookie, { code })).json()) as Joined;
+    return { cookie, who: { kind: "guest", name, sessionId: you.slice("guest:".length) } satisfies Identity };
+  };
+
+  test("SALLE-09 — a disconnection timing out while the host launches never removes a member from the race", async () => {
+    for (let round = 0; round < 10; round++) {
+      const code = await open();
+      const { who } = await joinAs(`Absent_${round}`, code);
+      const [, launched] = await Promise.all([leaveAfterDisconnect(server.db, code, who), call("POST", `/api/rooms/${code}/launch`, hostCookie)]);
+      expect(launched.status).toBe(200);
+      const { room } = (await launched.json()) as Joined;
+      // présent au moment du lancement : il est toujours là
+      if (room.members.length === 2) expect(await membersOf(code)).toHaveLength(2);
+      expect(await statusOf(code)).toBe("racing");
+    }
+  });
+
+  test("SALLE-09 — the last member leaving while someone joins never leaves a closed room with members", async () => {
+    for (let round = 0; round < 10; round++) {
+      const code = await open();
+      const [hostMember] = await membersOf(code);
+      const hostWho = { kind: "account", playerId: Number(hostMember!.key.slice("player:".length)), name: "Hote_Course" } satisfies Identity;
+      const [, joined] = await Promise.all([leaveRoom(server.db, code, hostWho), call("POST", "/api/rooms/join", guest(`Arrivant_${round}`), { code })]);
+      const status = await statusOf(code);
+      const members = await membersOf(code);
+      if (status === "closed") {
+        expect(members).toHaveLength(0);
+        expect(joined.status).toBe(410);
+      } else {
+        expect(joined.status).toBe(200);
         expect(members).toHaveLength(1);
       }
     }
