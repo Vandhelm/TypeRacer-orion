@@ -5,6 +5,7 @@ import { handleRace, playerStats } from "./races";
 import { handleAvatar, saveAvatar } from "./account";
 import { handleGuest } from "./guest";
 import { createAuth, type Auth } from "./auth";
+import { joinGuard } from "./rate-limit";
 import { handleRoomsApi } from "./rooms-api";
 import { roomEvents } from "./room-events";
 
@@ -45,7 +46,7 @@ export async function handleApi(req: Request): Promise<Response> {
   if (pathname === "/api/races") return handleRace(req, db(), auth());
   if (pathname === "/api/account/avatar") return handleAvatar(req, auth(), saveAvatar(db()));
   if (pathname === "/api/guest") return handleGuest(req);
-  if (pathname === "/api/rooms" || pathname.startsWith("/api/rooms/")) return handleRoomsApi(req, db(), auth(), undefined, roomEvents.emit);
+  if (pathname === "/api/rooms" || pathname.startsWith("/api/rooms/")) return handleRoomsApi(req, db(), auth(), undefined, roomEvents.emit, joinGuard(db()));
   const stats = pathname.match(/^\/api\/players\/([^/]+)\/stats$/);
   if (stats) return getStats(decodeURIComponent(stats[1]!));
   if (pathname.startsWith("/api/auth/")) return auth().handler(req);

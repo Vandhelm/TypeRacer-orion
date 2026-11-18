@@ -4,6 +4,7 @@ import type { Db } from "../../db/client";
 import { isRoomCode } from "../rooms/access";
 import { CreateRoomSchema, JoinRoomSchema, UpdateRoomSchema } from "../rooms/settings";
 import type { Auth } from "./auth";
+import type { Guard } from "./rate-limit";
 import { guestSecret } from "./guest";
 import { roomIdentity } from "./room-gate";
 import { CodeExhausted, createRoom, finishRoom, joinRoom, launchRoom, leaveRoom, listPublicRooms, readRoom, RoomRefused, updateRoom, type RefusalReason, type RoomResult } from "./rooms";
@@ -32,7 +33,8 @@ async function run(action: () => Promise<RoomResult>, status = 200, done?: (resu
 /** Notifié après chaque changement d'un salon : le temps réel s'y abonne pour pousser le nouvel état aux membres. */
 export type RoomChanged = (code: string) => void;
 
-export async function handleRoomsApi(req: Request, db: Db, auth: Auth, secret = guestSecret(), changed: RoomChanged = () => {}): Promise<Response> {
+/** `joinLimit` (SALLE-10) : la limite de tentatives par IP sur /join ; api.ts la branche toujours, les tests la passent. */
+export async function handleRoomsApi(req: Request, db: Db, auth: Auth, secret = guestSecret(), changed: RoomChanged = () => {}, joinLimit?: Guard): Promise<Response> {
   const { pathname } = new URL(req.url);
   const parts = pathname.replace(/\/$/, "").split("/").slice(3); // après /api/rooms
   const who = await roomIdentity(req.headers, auth, secret);
@@ -51,6 +53,9 @@ export async function handleRoomsApi(req: Request, db: Db, auth: Auth, secret = 
 
   // POST /api/rooms/join — SALLE-03 : par code (public, sur code) ou par lien d'invitation (toutes visibilités)
   if (parts.length === 1 && parts[0] === "join" && req.method === "POST") {
+    // SALLE-10 : chaque tentative compte, avant tout contrôle, pour que la réponse ne dise rien d'un code une fois la limite atteinte
+    const limited = await joinLimit?.(req);
+    if (limited) return limited;
     if (!who) return json({ error: "unauthorized" }, 401);
     const input = JoinRoomSchema.safeParse(await bodyOf(req));
     if (!input.success) return json({ error: "invalid_body" }, 400);
