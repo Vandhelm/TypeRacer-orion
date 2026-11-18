@@ -4,6 +4,7 @@
 import { z } from "zod";
 import type { Auth } from "./auth";
 import { guestSecret, readGuest } from "./guest";
+import type { Identity } from "./rooms";
 
 type Player = { name: string; guest: boolean };
 
@@ -15,6 +16,18 @@ async function verifiedPlayer(headers: Headers, auth: Auth, secret: string): Pro
   }
   const guest = readGuest(headers, secret);
   return guest ? { name: guest, guest: true } : null;
+}
+
+/** SALLE-01 : qui agit sur un salon, d'après sa session (compte et son joueur, ou invité signé) ; null sans session. */
+export async function roomIdentity(headers: Headers, auth: Auth, secret = guestSecret()): Promise<Identity | null> {
+  const session = await auth.api.getSession({ headers }).catch(() => null);
+  if (session) {
+    const user = session.user as { displayUsername?: string | null; username?: string | null; name: string; playerId?: number | null };
+    if (!user.playerId) return null;
+    return { kind: "account", playerId: user.playerId, name: user.displayUsername || user.username || user.name };
+  }
+  const guest = readGuest(headers, secret);
+  return guest ? { kind: "guest", name: guest } : null;
 }
 
 /** Le nom sous lequel ces en-têtes entrent dans un salon, ou null s'il faut d'abord choisir un pseudonyme. */
