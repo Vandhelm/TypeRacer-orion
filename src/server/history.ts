@@ -1,9 +1,10 @@
 // HIST-01 : l'historique des courses du compte connecté, paginé (GET /api/history?page=N).
 // Le joueur vient de la session, jamais de la requête ; un invité n'a pas d'historique (AUTH-03).
-import { count, desc, eq, inArray } from "drizzle-orm";
+// HIST-02 : le détail d'une de ses courses (GET /api/history/<id>), de quoi réafficher sa page de résultats.
+import { asc, count, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Db } from "../../db/client";
-import { raceConfigs, raceResults, races } from "../../db/schema";
+import { players, raceConfigs, raceResults, races, raceSamples } from "../../db/schema";
 import type { Auth } from "./auth";
 import { guestSecret, readGuest } from "./guest";
 
@@ -31,6 +32,7 @@ export async function listHistory(db: Db, playerId: number, page: number, pageSi
       textType: raceConfigs.textType,
       language: raceConfigs.language,
       wordCount: raceConfigs.wordCount,
+      others: sql<number>`jsonb_array_length(${races.others})`,
     })
     .from(raceResults)
     .innerJoin(races, eq(races.id, raceResults.raceId))
@@ -39,7 +41,7 @@ export async function listHistory(db: Db, playerId: number, page: number, pageSi
     .orderBy(desc(races.startedAt), desc(races.id))
     .limit(pageSize)
     .offset((page - 1) * pageSize);
-  // le nombre de participants enregistrés de chaque course de la page
+  // le nombre de participants de chaque course de la page : ceux qui ont un historique, plus les autres (invités, humains)
   const ids = rows.map((row) => row.id);
   const counted = ids.length
     ? await db.select({ raceId: raceResults.raceId, size: count() }).from(raceResults).where(inArray(raceResults.raceId, ids)).groupBy(raceResults.raceId)
@@ -50,11 +52,105 @@ export async function listHistory(db: Db, playerId: number, page: number, pageSi
     pageSize,
     total,
     pages: Math.ceil(total / pageSize),
-    races: rows.map((row) => ({ ...row, at: row.at.toISOString(), players: sizes.get(row.id) ?? 1 })),
+    races: rows.map(({ others, ...row }) => ({ ...row, at: row.at.toISOString(), players: (sizes.get(row.id) ?? 1) + Number(others) })),
   };
 }
 
 export type HistoryPage = Awaited<ReturnType<typeof listHistory>>;
+
+/** Identifiant de course : un entier positif de la colonne integer de Postgres, écrit sans zéro devant. */
+const RaceIdSchema = z.string().regex(/^[1-9]\d{0,9}$/).transform(Number).pipe(z.number().max(2_147_483_647));
+
+/** Course inexistante ou course d'un autre : même refus, pour qu'on ne puisse pas deviner quels ids existent. */
+export class HistoryRefused extends Error {
+  readonly reason = "not_found";
+  constructor() {
+    super("not_found");
+  }
+}
+
+/**
+ * Une course de l'historique, au format des résultats que le jeu confie au podium (RaceResults) :
+ * tous les participants dans l'ordre d'arrivée, chacun à son rang (ceux qui ont un historique et les autres), toutes les colonnes de RES-02 et les séries par seconde (RES-03).
+ * Refusée de la même façon si la course n'existe pas ou si le joueur n'y a pas participé.
+ */
+export async function raceDetail(db: Db, playerId: number, raceId: number) {
+  const [race] = await db
+    .select({
+      at: races.startedAt,
+      others: races.others,
+      language: raceConfigs.language,
+      botSpeed: raceConfigs.botSpeed,
+      botAccuracy: raceConfigs.botAccuracy,
+      textType: raceConfigs.textType,
+      length: raceConfigs.length,
+      wordCount: raceConfigs.wordCount,
+      duration: raceConfigs.duration,
+      level: raceConfigs.level,
+      punctuation: raceConfigs.punctuation,
+      numbers: raceConfigs.numbers,
+      specials: raceConfigs.specials,
+      accents: raceConfigs.accents,
+      mistakes: raceConfigs.mistakes,
+      excluded: raceConfigs.excluded,
+    })
+    .from(races)
+    .innerJoin(raceConfigs, eq(raceConfigs.id, races.configId))
+    .where(eq(races.id, raceId));
+  if (!race) throw new HistoryRefused();
+  const rows = await db
+    .select({ result: raceResults, name: players.name, bot: players.isBot })
+    .from(raceResults)
+    .innerJoin(players, eq(players.id, raceResults.playerId))
+    .where(eq(raceResults.raceId, raceId))
+    .orderBy(asc(raceResults.rank));
+  const mine = rows.find((row) => row.result.playerId === playerId);
+  if (!mine) throw new HistoryRefused();
+  const samples = await db
+    .select({ playerId: raceSamples.playerId, wpm: raceSamples.wpm, raw: raceSamples.raw, errors: raceSamples.errors })
+    .from(raceSamples)
+    .where(eq(raceSamples.raceId, raceId))
+    .orderBy(asc(raceSamples.playerId), asc(raceSamples.second));
+
+  const { at, others, ...config } = race;
+  const recorded = rows.map(({ result, name, bot }) => {
+    const series = samples.filter((sample) => sample.playerId === result.playerId);
+    return {
+      name,
+      me: result.playerId === playerId,
+      bot,
+      rank: result.rank,
+      wpm: result.wpm,
+      raw: result.raw,
+      accuracy: result.accuracy,
+      seconds: result.seconds,
+      chars: [result.correctChars, result.wrongChars, result.extraChars, result.missedChars],
+      consistency: result.consistency,
+      idle: result.idle,
+      finished: result.finished,
+      eliminated: result.eliminated,
+      wpmSeries: series.map((sample) => sample.wpm),
+      rawSeries: series.map((sample) => sample.raw),
+      errorSeries: series.map((sample) => sample.errors),
+      keys: result.keys,
+    };
+  });
+  // sans historique : jamais « moi », jamais un bot (le flag venait du navigateur)
+  const unrecorded = others.map(({ correctChars, wrongChars, extraChars, missedChars, ...other }) => ({
+    ...other,
+    me: false,
+    bot: false,
+    chars: [correctChars, wrongChars, extraChars, missedChars],
+  }));
+  return {
+    id: raceId,
+    at: at.toISOString(),
+    summary: { ...config, sessionSeconds: mine.result.sessionSeconds },
+    players: [...recorded, ...unrecorded].sort((a, b) => a.rank - b.rank),
+  };
+}
+
+export type RaceDetail = Awaited<ReturnType<typeof raceDetail>>;
 
 /** Le joueur du compte de la session ; "guest" pour un invité signé ; null sans session. */
 async function accountOf(req: Request, auth: Auth, secret: string): Promise<number | "guest" | "none" | null> {
@@ -63,13 +159,26 @@ async function accountOf(req: Request, auth: Auth, secret: string): Promise<numb
   return readGuest(req.headers, secret) ? "guest" : null;
 }
 
-/** GET /api/history?page=N. */
+/** GET /api/history?page=N (HIST-01) et GET /api/history/<id> (HIST-02). */
 export async function handleHistory(req: Request, db: Db, auth: Auth, secret = guestSecret()): Promise<Response> {
   if (req.method !== "GET") return json({ error: "method_not_allowed" }, 405);
   const who = await accountOf(req, auth, secret);
   if (who === null) return json({ error: "unauthorized" }, 401);
   if (who === "guest") return json({ error: "account_required" }, 403);
-  const raw = new URL(req.url).searchParams.get("page");
+  const url = new URL(req.url);
+  const detail = url.pathname.match(/^\/api\/history\/([^/]+)\/?$/);
+  if (detail) {
+    const raceId = RaceIdSchema.safeParse(detail[1]);
+    if (!raceId.success) return json({ error: "invalid_race" }, 400);
+    if (who === "none") return json({ error: "not_found" }, 404);
+    try {
+      return json(await raceDetail(db, who, raceId.data));
+    } catch (error) {
+      if (error instanceof HistoryRefused) return json({ error: error.reason }, 404);
+      throw error;
+    }
+  }
+  const raw = url.searchParams.get("page");
   const page = PageSchema.safeParse(raw ?? "1");
   if (!page.success) return json({ error: "invalid_page" }, 400);
   if (who === "none") return json({ page: page.data, pageSize: HISTORY_PAGE_SIZE, total: 0, pages: 0, races: [] });

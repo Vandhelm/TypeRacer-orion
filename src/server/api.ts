@@ -41,7 +41,7 @@ export async function handleApi(req: Request): Promise<Response> {
   if (pathname === "/api/account/avatar") return handleAvatar(req, auth(), saveAvatar(db()));
   if (pathname === "/api/guest") return handleGuest(req);
   if (pathname === "/api/realtime/ticket") return handleRealtimeTicket(req, auth());
-  if (pathname === "/api/history") return handleHistory(req, db(), auth());
+  if (pathname === "/api/history" || pathname.startsWith("/api/history/")) return handleHistory(req, db(), auth());
   const stats = pathname.match(/^\/api\/players\/([^/]+)\/stats$/);
   if (stats) return handleStats(stats[1]!, db());
   if (pathname.startsWith("/api/auth/")) return auth().handler(req);

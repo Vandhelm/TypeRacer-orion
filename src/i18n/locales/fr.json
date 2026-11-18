@@ -235,17 +235,21 @@
     "avatar": "{{name}}, {{rank}} place, {{speed}} mots par seconde",
     "yourPlace": "Ta place",
     "allPlayers": "Tous les joueurs ({{count}})",
-    "ranks": [
-      "1re",
-      "2e",
-      "3e",
-      "4e",
-      "5e",
-      "6e",
-      "7e",
-      "8e"
-    ],
-    "viewStats": "Voir les stats de {{name}}"
+    "rank_ordinal_one": "{{count}}re",
+    "rank_ordinal_two": "{{count}}e",
+    "rank_ordinal_few": "{{count}}e",
+    "rank_ordinal_other": "{{count}}e",
+    "viewStats": "Voir les stats de {{name}}",
+    "loading": "Chargement des résultats…",
+    "backToHistory": "Historique",
+    "errors": {
+      "not_found": "Cette course n’existe pas.",
+      "not_your_race": "Cette course n’est pas dans ton historique.",
+      "unauthorized": "Connecte-toi pour revoir tes courses.",
+      "account_required": "Les invités n’ont pas d’historique : crée un compte pour garder tes courses.",
+      "invalid_race": "Adresse de course invalide.",
+      "network": "Impossible de charger cette course."
+    }
   },
   "profile": {
     "pageTitle": "O.R.I.O.N — {{name}}",
@@ -336,7 +340,9 @@
       "previous": "← Plus récentes",
       "next": "Plus anciennes →",
       "page": "Page {{page}} / {{pages}}",
-      "rank": "{{rank}} sur {{players}}"
+      "rank": "{{rank}} sur {{players}}",
+      "open": "Revoir les résultats de la course du {{date}}",
+      "raceTitle": "Course de l’historique"
     }
   },
   "account": {

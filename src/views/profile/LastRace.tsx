@@ -13,8 +13,8 @@ const clock = (seconds: number) =>
 /** Un réglage ne se coupe jamais en deux, et le « · » reste collé au réglage d'avant. */
 const keep = (text: string) => text.replaceAll(" ", NBSP);
 
-/** La dernière course : ses réglages en une ligne, puis ses chiffres et son graphique dans une seule carte. */
-export function LastRace({ player, summary }: { player: PlayerResult; summary: RaceSummary }) {
+/** La dernière course (ou une course de l'historique, HIST-02, avec son titre) : ses réglages en une ligne, puis ses chiffres et son graphique dans une seule carte. */
+export function LastRace({ player, summary, title }: { player: PlayerResult; summary: RaceSummary; title?: string }) {
   const { t, i18n } = useTranslation();
 
   const settings = [
@@ -42,7 +42,7 @@ export function LastRace({ player, summary }: { player: PlayerResult; summary: R
 
   return (
     <section className="profile-section" aria-labelledby="last-race-title">
-      <h2 id="last-race-title" className="profile-section-title">{t("profile.lastRace")}</h2>
+      <h2 id="last-race-title" className="profile-section-title">{title ?? t("profile.lastRace")}</h2>
       <p className="race-context">
         <span className="race-settings">
           {settings.map((setting, i) => (

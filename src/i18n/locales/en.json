@@ -235,17 +235,21 @@
     "avatar": "{{name}}, {{rank}} place, {{speed}} words per second",
     "yourPlace": "Your place",
     "allPlayers": "All players ({{count}})",
-    "ranks": [
-      "1st",
-      "2nd",
-      "3rd",
-      "4th",
-      "5th",
-      "6th",
-      "7th",
-      "8th"
-    ],
-    "viewStats": "See stats for {{name}}"
+    "rank_ordinal_one": "{{count}}st",
+    "rank_ordinal_two": "{{count}}nd",
+    "rank_ordinal_few": "{{count}}rd",
+    "rank_ordinal_other": "{{count}}th",
+    "viewStats": "See stats for {{name}}",
+    "loading": "Loading results…",
+    "backToHistory": "History",
+    "errors": {
+      "not_found": "This race does not exist.",
+      "not_your_race": "This race is not in your history.",
+      "unauthorized": "Sign in to see your races again.",
+      "account_required": "Guests have no history: create an account to keep your races.",
+      "invalid_race": "Invalid race address.",
+      "network": "Could not load this race."
+    }
   },
   "profile": {
     "pageTitle": "O.R.I.O.N — {{name}}",
@@ -336,7 +340,9 @@
       "previous": "← Newer",
       "next": "Older →",
       "page": "Page {{page}} / {{pages}}",
-      "rank": "{{rank}} of {{players}}"
+      "rank": "{{rank}} of {{players}}",
+      "open": "See the results of the race of {{date}}",
+      "raceTitle": "Race from history"
     }
   },
   "account": {

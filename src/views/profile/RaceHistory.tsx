@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { oneDecimal } from "../podium/results";
-import { fetchHistory, outcomeKey, type HistoryPage, type HistoryRace } from "./history";
+import { historyHref, oneDecimal } from "../podium/results";
+import { fetchHistory, historyRankText, outcomeKey, type HistoryPage, type HistoryRace } from "./history";
 
 type State = { status: "loading" } | { status: "ready"; data: HistoryPage } | { status: "error" };
 
@@ -48,13 +48,14 @@ function HistoryRow({ race }: { race: HistoryRace }) {
   const date = new Intl.DateTimeFormat(i18n.language === "en" ? "en-CA" : "fr-CA", { dateStyle: "medium", timeStyle: "short" }).format(new Date(race.at));
   return (
     <li>
-      <div className="history-item">
+      {/* HIST-02 : la ligne rouvre la page de résultats de la course */}
+      <a className="history-item" href={historyHref(race.id)} title={t("profile.history.open", { date })}>
         <time className="history-date" dateTime={race.at}>{date}</time>
-        <span className="history-rank">{t("profile.history.rank", { rank: t(`podium.ranks.${race.rank - 1}`), players: race.players })}</span>
+        <span className="history-rank">{historyRankText(t, race)}</span>
         <span className="history-value">{race.wpm} {t("game.wpm")}</span>
         <span className="history-value">{oneDecimal(i18n.language, race.accuracy)} %</span>
         <span className="history-meta">{t(outcomeKey(race))} · {t(`profile.textTypes.${race.textType}`)} · {t("profile.words", { words: race.wordCount })}</span>
-      </div>
+      </a>
     </li>
   );
 }

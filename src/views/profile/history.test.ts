@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { historyUrl, outcomeKey, parseHistoryPage } from "./history";
+import { translate } from "../../i18n/test-instance";
+import { historyRankText, historyUrl, outcomeKey, parseHistoryPage } from "./history";
 
 const RACE = { id: 7, at: "2026-11-18T20:00:00.000Z", rank: 2, wpm: 61, accuracy: 95.5, seconds: 42, finished: true, eliminated: false, textType: "words", language: "fr", wordCount: 20, players: 4 };
 
@@ -28,5 +29,12 @@ describe("HIST-01 — reading a history page on the profile", () => {
     expect(outcomeKey(RACE)).toBe("profile.finished");
     expect(outcomeKey({ ...RACE, finished: false })).toBe("profile.notFinished");
     expect(outcomeKey({ ...RACE, finished: false, eliminated: true })).toBe("profile.out");
+  });
+});
+
+describe("HIST-01 — a history row names the rank among every participant", () => {
+  test("a 9th place reads as a translated ordinal, never a raw key", () => {
+    expect(historyRankText(translate("fr"), { rank: 9, players: 12 })).toBe("9e sur 12");
+    expect(historyRankText(translate("en"), { rank: 9, players: 12 })).not.toContain("podium.");
   });
 });

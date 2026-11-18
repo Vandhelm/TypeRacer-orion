@@ -1,32 +1,42 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useRaceResults } from "./hooks/useRaceResults";
 import { PodiumBoard } from "./PodiumBoard";
 import { PodiumScene } from "./PodiumScene";
-import { readResults } from "./results";
+import { raceErrorKey } from "./results";
 
-/** After the race: the top three on the podium, then every player. */
+/** After the race, or for a race of the history (?race=N, HIST-02): the top three on the podium, then every player. */
 export function PodiumPage() {
   const { t } = useTranslation();
-  const [stored] = useState(readResults);
+  const loaded = useRaceResults();
   const [arrived] = useState(() => location.hash === "#arrived"); // de retour d'un profil : pas de nouveau travelling
 
   useEffect(() => {
-    // pas de course jouée dans cet onglet : rien à classer
-    if (!stored) location.replace("/home");
-    else history.replaceState(null, "", "#arrived");
-  }, [stored]);
+    // pas de course jouée dans cet onglet, ni de course de l'historique : rien à classer
+    if (loaded.status === "missing") location.replace("/home");
+    else if (loaded.status === "ready") history.replaceState(null, "", `${location.pathname}${location.search}#arrived`);
+  }, [loaded.status]);
 
   useEffect(() => {
     document.title = t("podium.pageTitle");
   }, [t]);
 
-  if (!stored) return null;
-  const { players } = stored;
+  if (loaded.status === "loading") return <p className="podium-message" role="status">{t("podium.loading")}</p>;
+  if (loaded.status === "error") {
+    return (
+      <div className="podium-message" role="alert">
+        <p>{t(raceErrorKey(loaded.code))}</p>
+        <a className="podium-message-link" href="/profile#stats">{t("podium.backToHistory")}</a>
+      </div>
+    );
+  }
+  if (loaded.status !== "ready") return null;
+  const { results, raceId } = loaded;
 
   return (
     <>
-      <PodiumScene players={players} arrived={arrived} />
-      <PodiumBoard players={players} showPlace arrived={arrived} />
+      <PodiumScene players={results.players} arrived={arrived} raceId={raceId} />
+      <PodiumBoard players={results.players} showPlace arrived={arrived} raceId={raceId} />
     </>
   );
 }
