@@ -10,8 +10,16 @@
 /** Une adresse IPv4 ou IPv6 plausible : chiffres hexadécimaux, points et deux-points, 45 caractères au plus. */
 const IP_PATTERN = /^[0-9A-Fa-f:.]{2,45}$/;
 
+/**
+ * Une seule écriture par client, pour que deux requêtes de la même personne donnent la même valeur :
+ * port retiré (« 1.2.3.4:5555 », « [::1]:443 »), IPv4 vue en IPv6 (« ::ffff:1.2.3.4 ») ramenée à l'IPv4, minuscules.
+ */
 function clean(value: string | null | undefined): string | null {
-  const ip = value?.trim() ?? "";
+  let ip = (value?.trim() ?? "").toLowerCase();
+  const bracketed = ip.match(/^\[([^\]]+)\](?::\d+)?$/);
+  if (bracketed) ip = bracketed[1]!;
+  else if (/^[\d.]+:\d+$/.test(ip)) ip = ip.slice(0, ip.lastIndexOf(":"));
+  if (ip.startsWith("::ffff:") && /^[\d.]+$/.test(ip.slice(7))) ip = ip.slice(7);
   return IP_PATTERN.test(ip) ? ip : null;
 }
 
