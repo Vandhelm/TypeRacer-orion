@@ -38,9 +38,16 @@ export async function startGuestSession(nickname: string) {
 }
 
 let playerName: string | null = null;
-/** Le nom vérifié par le serveur pour cette page (compte connecté ou cookie d'invité). */
-export function setPlayerName(name: string | null) {
+let playerIsGuest = false;
+/** Le nom vérifié par le serveur pour cette page (compte connecté ou cookie d'invité), et s'il s'agit d'un invité. */
+export function setPlayerName(name: string | null, guest = false) {
   playerName = name;
+  playerIsGuest = guest;
+}
+
+/** AUTH-03 : le joueur de cette page est-il un invité (sans compte) ? Dit par le serveur, jamais deviné. */
+export function isGuestPlayer() {
+  return playerIsGuest;
 }
 
 /** Mon nom en jeu : celui que le serveur a vérifié. Jamais de nom inventé à la place d'un pseudonyme. */

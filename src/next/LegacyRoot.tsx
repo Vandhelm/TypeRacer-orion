@@ -17,8 +17,8 @@ const pages: Record<LegacyPageName, ComponentType> = {
   profile: lazy(() => import("../views/profile/ProfilePage").then((m) => ({ default: m.ProfilePage }))),
 };
 
-export default function LegacyRoot({ name, player }: { name: LegacyPageName; player?: string }) {
-  setPlayerName(player ?? null);
+export default function LegacyRoot({ name, player, guest }: { name: LegacyPageName; player?: string; guest?: boolean }) {
+  setPlayerName(player ?? null, guest ?? false);
   const Page = pages[name];
   return (
     <StrictMode>

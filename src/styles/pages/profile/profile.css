@@ -38,14 +38,9 @@
     font: 300 clamp(20px, 3.2vh, 28px)/1 var(--font-sans);
 }
 .profile-avatar img{ width: 100%; height: 100%; object-fit: cover; }
-/* Sans photo : la tête du poisson d'O.R.I.O.N, cadrée sur les mâchoires et l'œil ; l'initiale n'est pas dessinée */
-.avatar-default{
-    width: 100%;
-    height: 100%;
-    font-size: 0;
-    color: transparent;
-    background: url("../../../assets/podium/avatar.webp") no-repeat 57% 18% / 185%;
-}
+/* Sans photo (AUTH-03) : l'avatar généré remplit le cercle ; l'initiale garde la police du site */
+.avatar-generated{ display: block; width: 100%; height: 100%; }
+.avatar-generated text{ font: 300 30px var(--font-sans); }
 
 /* Sections : pas de cadre, un titre à barre rouge et un grand écart entre elles */
 .profile-section + .profile-section{ margin-top: clamp(36px, 6vh, 64px); }

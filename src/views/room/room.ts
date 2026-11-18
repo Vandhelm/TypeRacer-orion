@@ -1,6 +1,6 @@
 // Room model. À BRANCHER : sans serveur de jeu, le salon est gardé dans ce navigateur et les autres joueurs sont simulés.
 import type { TFunction } from "i18next";
-import { myName } from "../../players/nickname";
+import { isGuestPlayer, myName } from "../../players/nickname";
 import { cleanRoomCode, newInviteToken, newRoomCode, VISIBILITIES, type Visibility } from "../../rooms/access";
 
 const BOT_NAMES = ["Thon_Rouge", "Wasabi99", "Saba_Sensei", "Nori_Ninja", "Ebi_Fry", "Uni_Kun", "Tako_San"];
@@ -104,7 +104,7 @@ function oneOf<T extends string>(list: readonly T[], value: unknown, fallback: T
   return list.includes(value as T) ? (value as T) : fallback;
 }
 
-function newRoom(t: TFunction): Room {
+export function newRoom(t: TFunction): Room {
   return { ...RACE_DEFAULTS, name: t("room.defaultName"), autoName: true, visibility: "private", language: "fr", guests: 4, bots: true, code: newRoomCode(), invite: newInviteToken() };
 }
 
@@ -145,8 +145,9 @@ export function saveRoom(room: Room) {
   write(ROOM_KEY, JSON.stringify(room));
 }
 
-/** Qui arrive ? ?new : l'hôte crée ; ?code ou ?table : un joueur entre ; sinon : l'hôte revient dans son salon. */
-export function readSession(search: string, t: TFunction): Session {
+/** Qui arrive ? ?new : l'hôte crée ; ?code ou ?table : un joueur entre ; sinon : l'hôte revient dans son salon.
+ * AUTH-03 : un invité n'est jamais hôte — null s'il n'a pas de salon à rejoindre (le serveur l'a déjà refusé). */
+export function readSession(search: string, t: TFunction, guest = isGuestPlayer()): Session | null {
   const query = new URLSearchParams(search);
   const stored = storedRoom(t);
   const code = cleanRoomCode(query.get("code") || "");
@@ -178,6 +179,7 @@ export function readSession(search: string, t: TFunction): Session {
     };
     return { room, host: false, present: Math.min(guests, Math.max(2, (parseInt(query.get("present") ?? "", 10) || 1) + 1)) };
   }
+  if (guest) return null;
   if (query.has("new") || !stored) return { room: newRoom(t), host: true, present: 1 };
   return { room: stored, host: true, present: 1 };
 }

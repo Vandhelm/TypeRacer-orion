@@ -134,3 +134,28 @@ describe("SMOKE — API", () => {
     expect(res.headers.get("set-cookie") ?? "").toContain("session_token");
   });
 });
+
+describe("SMOKE — salon", () => {
+  async function guestCookie() {
+    const res = await fetch(`${base}/api/guest`, {
+      method: "POST",
+      headers: { "content-type": "application/json", origin: base },
+      body: JSON.stringify({ nickname: "Corail_418" }),
+    });
+    expect(res.status).toBe(200);
+    return (res.headers.get("set-cookie") ?? "").split(";")[0]!;
+  }
+
+  // AUTH-03 : le serveur refuse la création de salon à un invité, pas seulement le bouton de l'accueil.
+  test("AUTH-03 — un invité ne peut pas ouvrir /room?new", async () => {
+    const res = await fetch(`${base}/room?new`, { headers: { cookie: await guestCookie() }, redirect: "manual" });
+    expect(res.status).toBeGreaterThanOrEqual(300);
+    expect(res.status).toBeLessThan(400);
+    expect(res.headers.get("location") ?? "").toContain("/home#rooms");
+  });
+
+  test("AUTH-03 — un invité entre dans un salon par son code", async () => {
+    const res = await fetch(`${base}/room?code=ABC234`, { headers: { cookie: await guestCookie() }, redirect: "manual" });
+    expect(res.status).toBe(200);
+  });
+});
