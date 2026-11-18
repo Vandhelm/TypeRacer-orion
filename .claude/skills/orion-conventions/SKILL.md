@@ -121,10 +121,11 @@ describe("WIDG-01 — only an account creates a widget", () => {
   });
 
   test("a guest calling the API directly is refused (403) and nothing is written", async () => {
+    const before = await t.db.$count(widgets); // la base de démo a déjà des lignes : compare, ne suppose pas 0
     const res = await t.call("POST", "/api/widgets", t.guest("Corail_418"), { name: "Bol" });
     expect(res.status).toBe(403);
     expect(await res.json()).toEqual({ error: "account_required" });
-    expect(await t.db.$count(widgets)).toBe(0);
+    expect(await t.db.$count(widgets)).toBe(before);
   });
 
   test("an unknown field in the body is refused (400)", async () => {
@@ -138,8 +139,8 @@ describe("WIDG-01 — only an account creates a widget", () => {
 
 ### Traductions (I18N-01)
 
-- Fichiers : `src/i18n/locales/fr.json` et `src/i18n/locales/en.json`, mêmes clés dans les deux, rangées par page : `home.*`, `room.*`, `game.*`, `podium.*`, `profile.*`, `account.*`. Clés en camelCase, imbriquées par zone (`room.errors.full`, `account.photo.errors.tooBig`).
-- Dans un composant React : `const { t } = useTranslation();` (`react-i18next`), puis `t("room.launch")`, avec variables `t("home.linkFailed", { provider })`. Hors React : `import i18n from "../../i18n"` (chemin relatif depuis `src/views/<page>/`) puis `i18n.t(...)`.
+- Fichiers : `src/i18n/locales/fr.json` et `src/i18n/locales/en.json`, mêmes clés dans les deux, rangées par page : `home.*`, `rooms.*` (explorateur de salons), `room.*`, `game.*`, `podium.*`, `profile.*`, `account.*`, plus `nav.*` (navigation commune). Clés en camelCase, imbriquées par zone (`room.errors.full`, `account.photo.errors.size`).
+- Dans un composant React : `const { t } = useTranslation();` (`react-i18next`), puis `t("room.copyLink")`, avec variables `t("home.linkFailed", { provider })`. Hors React : `import i18n from "../../i18n"` (chemin relatif depuis `src/views/<page>/`) puis `i18n.t(...)`.
 - Erreurs du serveur : le code `{ error: "full" }` devient `t(\`room.errors.${error}\`)`. Ajoute donc une clé `<page>.errors.<code>` pour chaque nouveau code renvoyé, dans les deux langues.
 - Attributs aussi : `aria-label`, `title`, `placeholder`, `alt` passent par `t()`.
 - Vérifier que les deux fichiers ont les mêmes clés :
