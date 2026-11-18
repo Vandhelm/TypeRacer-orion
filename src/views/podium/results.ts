@@ -162,14 +162,25 @@ export function raceBody(results: RaceResults, content: string) {
   return { id: crypto.randomUUID(), ...results, content };
 }
 
-/** Envoie la course au serveur, qui garde l'historique des bots et du compte connecté (sa session, pas le corps). keepalive : l'envoi survit au passage au podium. */
-export function submitRace(results: RaceResults, content: string) {
-  fetch("/api/races", {
-    method: "POST",
-    keepalive: true,
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(raceBody(results, content)),
-  }).catch(() => { /* hors ligne : la course n'entre pas dans l'historique */ });
+/** Les navigateurs refusent un corps keepalive de plus de 64 Kio : une longue course à 8 joueurs le dépasse. */
+export const KEEPALIVE_LIMIT = 65_536;
+/** Au-delà, le jeu attend la réponse avant de passer au podium, mais pas plus longtemps que ceci. */
+const SUBMIT_WAIT_MS = 10_000;
+
+/**
+ * Envoie la course au serveur, qui garde l'historique des bots et du compte connecté (sa session, pas le corps).
+ * Un petit corps part en keepalive (l'envoi survit au passage au podium) ; un gros part sans, et la promesse
+ * ne se résout qu'à la réponse : quitter la page avant couperait l'envoi.
+ */
+export function submitRace(results: RaceResults, content: string): Promise<void> {
+  const body = JSON.stringify(raceBody(results, content));
+  const keepalive = new TextEncoder().encode(body).length <= KEEPALIVE_LIMIT;
+  const sent = fetch("/api/races", { method: "POST", keepalive, headers: { "content-type": "application/json" }, body }).then(
+    () => undefined,
+    () => undefined, // hors ligne : la course n'entre pas dans l'historique
+  );
+  if (keepalive) return Promise.resolve();
+  return Promise.race([sent, new Promise<void>((resolve) => setTimeout(resolve, SUBMIT_WAIT_MS))]);
 }
 
 export function readResults() {
@@ -201,14 +212,14 @@ export function historyRaceOf(search: string): number | null {
   return value && /^[1-9]\d{0,9}$/.test(value) ? Number(value) : null;
 }
 
-/** Erreur de chargement d'une course de l'historique : le code du serveur (not_found, not_your_race…) ou "network". */
+/** Erreur de chargement d'une course de l'historique : le code du serveur (not_found, unauthorized…) ou "network". */
 export class RaceLoadError extends Error {
   constructor(readonly code: string) {
     super(code);
   }
 }
 
-const RACE_ERRORS = ["not_found", "not_your_race", "unauthorized", "account_required", "invalid_race", "network"] as const;
+export const RACE_ERRORS = ["not_found", "unauthorized", "account_required", "invalid_race", "network"] as const;
 /** Le message traduit d'un refus ; un code inconnu devient une erreur réseau. */
 export const raceErrorKey = (code: string) => `podium.errors.${(RACE_ERRORS as readonly string[]).includes(code) ? code : "network"}`;
 

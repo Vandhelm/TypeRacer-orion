@@ -41,8 +41,15 @@ export function PodiumScene({ players, arrived, raceId = null }: { players: Play
                 {side && <SideFace points={side} />}
                 {rank === 1 && (
                   <div className="podium-actions">
-                    <a className="podium-play" href="/game">{t("game.playAgain")}</a>
-                    {raceId ? <a className="podium-back" href="/profile#stats">{t("podium.backToHistory")}</a> : <a className="podium-back" href="/room">{t("game.backToRoom")}</a>}
+                    {/* une course relue ne se rejoue pas : /game lancerait une course du salon courant */}
+                    {raceId ? (
+                      <a className="podium-back" href="/profile#stats">{t("podium.backToHistory")}</a>
+                    ) : (
+                      <>
+                        <a className="podium-play" href="/game">{t("game.playAgain")}</a>
+                        <a className="podium-back" href="/room">{t("game.backToRoom")}</a>
+                      </>
+                    )}
                   </div>
                 )}
               </div>

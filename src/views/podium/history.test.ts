@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { translate } from "../../i18n/test-instance";
-import { historyHref, historyRaceOf, playerAt, podiumHref, profileHref, raceErrorKey, raceResultsUrl, rankLabel, toResults } from "./results";
+import en from "../../i18n/locales/en.json";
+import fr from "../../i18n/locales/fr.json";
+import { historyHref, historyRaceOf, playerAt, podiumHref, profileHref, RACE_ERRORS, raceErrorKey, raceResultsUrl, rankLabel, toResults } from "./results";
 
 const SUMMARY = {
   textType: "words", language: "fr", duration: 60, level: "common", punctuation: false, numbers: false, specials: false, accents: true,
@@ -61,10 +63,16 @@ describe("HIST-02 — a race of the history opens its results page", () => {
   });
 
   test("explains a refused race with a translated message, never the raw server code", () => {
-    expect(raceErrorKey("not_your_race")).toBe("podium.errors.not_your_race");
     expect(raceErrorKey("not_found")).toBe("podium.errors.not_found");
     expect(raceErrorKey("unauthorized")).toBe("podium.errors.unauthorized");
     expect(raceErrorKey("<script>")).toBe("podium.errors.network");
+  });
+
+  test("knows only the codes the history route can send, plus network", () => {
+    // un autre joueur reçoit not_found, comme une course inexistante : pas de not_your_race
+    expect([...RACE_ERRORS].sort()).toEqual(["account_required", "invalid_race", "network", "not_found", "unauthorized"]);
+    expect(raceErrorKey("not_your_race")).toBe("podium.errors.network");
+    for (const locale of [fr, en]) expect(Object.keys(locale.podium.errors).sort()).toEqual([...RACE_ERRORS].sort());
   });
 
   test("refuses a body that is not a race", () => {
