@@ -212,4 +212,14 @@ describe("SMOKE — salon", () => {
     const res = await fetch(`${base}/room?code=ABC234`, { headers: { cookie: await guestCookie() }, redirect: "manual" });
     expect(res.status).toBe(200);
   });
+
+  // SALLE-10 : la limite est branchée sur la vraie route. Pas contre un déploiement (lecture seule, et Vercel réécrit l'IP).
+  test.skipIf(Boolean(remote))("SALLE-10 — le 11e essai de code en une minute reçoit 429", async () => {
+    const headers = { cookie: await guestCookie(), "content-type": "application/json", origin: base, "x-forwarded-for": "198.18.0.10" };
+    const join = () => fetch(`${base}/api/rooms/join`, { method: "POST", headers, body: JSON.stringify({ code: "ZZZZZZ" }) });
+    for (let i = 0; i < 10; i++) expect((await join()).status).toBe(404);
+    const res = await join();
+    expect(res.status).toBe(429);
+    expect(Number(res.headers.get("retry-after"))).toBeGreaterThan(0);
+  });
 });
