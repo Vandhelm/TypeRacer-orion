@@ -201,14 +201,14 @@ export function historyRaceOf(search: string): number | null {
   return value && /^[1-9]\d{0,9}$/.test(value) ? Number(value) : null;
 }
 
-/** Erreur de chargement d'une course de l'historique : le code du serveur (not_found, not_your_race…) ou "network". */
+/** Erreur de chargement d'une course de l'historique : le code du serveur (not_found, unauthorized…) ou "network". */
 export class RaceLoadError extends Error {
   constructor(readonly code: string) {
     super(code);
   }
 }
 
-const RACE_ERRORS = ["not_found", "not_your_race", "unauthorized", "account_required", "invalid_race", "network"] as const;
+export const RACE_ERRORS = ["not_found", "unauthorized", "account_required", "invalid_race", "network"] as const;
 /** Le message traduit d'un refus ; un code inconnu devient une erreur réseau. */
 export const raceErrorKey = (code: string) => `podium.errors.${(RACE_ERRORS as readonly string[]).includes(code) ? code : "network"}`;
 

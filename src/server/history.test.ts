@@ -7,6 +7,7 @@ import { createAuth } from "./auth";
 import { GUEST_COOKIE, signGuest } from "./guest";
 import { handleHistory, HISTORY_PAGE_SIZE } from "./history";
 import { parseRace, recordRace } from "./races";
+import { RACE_ERRORS } from "../views/podium/results";
 
 process.env.BETTER_AUTH_SECRET ??= "test-secret-test-secret-test-secret";
 process.env.BETTER_AUTH_URL ??= "http://localhost:3000";
@@ -209,6 +210,14 @@ describe("HIST-02 — a race of the history shows its full results again", () =>
 
   test("only GET is allowed (405)", async () => {
     expect((await t.call(`/api/history/${raceId}`, me.cookie, "DELETE")).status).toBe(405);
+  });
+
+  test("every refusal of a GET is a code the podium can translate", async () => {
+    const { cookie } = await t.signUp("Detail_Codes");
+    const refusals = [t.call(`/api/history/${raceId}`), t.call(`/api/history/${raceId}`, t.guest("Detail_Codes")), t.call("/api/history/abc", cookie), t.call(`/api/history/${raceId}`, cookie)];
+    const codes = await Promise.all(refusals.map(async (res) => ((await (await res).json()) as { error: string }).error));
+    expect(codes).toEqual(["unauthorized", "account_required", "invalid_race", "not_found"]);
+    for (const code of codes) expect(RACE_ERRORS as readonly string[]).toContain(code);
   });
 });
 

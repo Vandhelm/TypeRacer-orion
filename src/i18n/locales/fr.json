@@ -230,7 +230,6 @@
     "backToHistory": "Historique",
     "errors": {
       "not_found": "Cette course n’existe pas.",
-      "not_your_race": "Cette course n’est pas dans ton historique.",
       "unauthorized": "Connecte-toi pour revoir tes courses.",
       "account_required": "Les invités n’ont pas d’historique : crée un compte pour garder tes courses.",
       "invalid_race": "Adresse de course invalide.",
