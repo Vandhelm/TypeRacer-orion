@@ -143,6 +143,17 @@ Pour coder un critère entier, ou corriger les problèmes d'un rapport QA, la co
 
 Deux agents `dev` peuvent travailler en parallèle sur deux critères indépendants seulement s'ils ne touchent pas les mêmes fichiers ; sinon, l'un après l'autre.
 
+## Section entière
+
+Quand l'utilisateur demande une section d'exigences d'un coup (« fais la section 5.3 », « tous les TECH »), c'est le skill `overseer` qui orchestre (portée section). Dans ce projet :
+
+- **Une branche par exigence**, comme d'habitude (`feature/<page>/<id>` depuis `dev`), plus une **branche de section** depuis `dev` : `feature/section/<numéro>-<préfixe>` en minuscules, par exemple `feature/section/5-3-salle` ou `feature/section/3-tech`. Chaque branche d'exigence validée par la QA y est mergée en `--no-ff`.
+- Sur la branche de section : conflits résolus, `bun test`, `bun run test:smoke`, `bun run typecheck`, `bun run lint`, puis une QA de la section entière (skill `criteria-check`, portée section), puis les lignes de `docs/EXIGENCES.md` dans un commit `docs: update requirement matrix` avec `Refs:` listant les ID.
+- **Un seul point de validation** : rien n'est poussé avant que l'utilisateur ait lu le rapport de section et donné son accord. Après accord : push des branches d'exigence et de la branche de section, merge `--no-ff` de la branche de section dans `dev`, push de `dev` seulement s'il le demande.
+- **Mode** : medium par défaut. Pour 5.6 COURSE, 5.7 BOT, 5.8 BONUS et 6.4 SEC (serveur autoritaire, triche, droits), propose complex avant de lancer.
+- **Décisions réservées à l'utilisateur**, à demander avant de coder la section concernée : architecture du temps réel (TECH-06, qui conditionne COURSE et CONF-12), dessin de la piste (DES-04), hébergement (TECH-05), comptes, secrets et variables de production (AUTH-01, TECH-10). **Jamais d'IA** pour le nom, le logo et la démarche créative (DES-01 à DES-03) ni pour la réflexion de `docs/IA.md` : ces parties restent à l'utilisateur ; les agents peuvent seulement les vérifier.
+- **Ordre conseillé** : 3 TECH → 5.3 SALLE + 5.4 JOIN → 5.5 CONF → 5.6 COURSE + 5.7 BOT + 5.8 BONUS → 5.9 RES + 5.10 HIST → 5.11 I18N et 6 Qualité → 4 DES (DES-04 à DES-06).
+
 ## Fin de feature : push et merge dans dev
 
 Une feature est terminée quand le critère est implémenté et que l'utilisateur le dit (« c'est bon », « fini », « on merge ») ou valide le résultat. Ne pousse pas au fil des commits.
@@ -174,4 +185,5 @@ Une feature est terminée quand le critère est implémenté et que l'utilisateu
 | Commit | Conventional Commits, anglais, sujet ≤ 50 caractères, footer `Refs: <CRITÈRE>`, sans co-auteur, sur la branche du critère |
 | Travail non commité de la branche courante | stash, puis pop au retour (pas de commit à la place de l'utilisateur) |
 | Coder un critère | agent `dev` en light (il lance `qa` et corrige, 1 tour) ; `overseer` pour plusieurs critères ou en medium / complex |
+| Section entière | skill `overseer` (portée section) → branche `feature/section/<n>-<préfixe>` → un seul accord pour pousser et merger |
 | Feature terminée | QA du critère (agent `qa`) → matrice → confirmer → push → merge `--no-ff` dans dev |
