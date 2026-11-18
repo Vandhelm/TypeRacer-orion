@@ -207,6 +207,7 @@ export async function createRoom(db: Db, host: { playerId: number }, input: Crea
   const settings = { ...DEFAULT_SETTINGS, ...input.settings };
   const key = memberKey(host);
   // SALLE-06 : déjà membre d'un salon, on ne crée pas le deuxième ; la page propose de quitter le premier
+  await settleCurrentRoom(db, key);
   const current = await currentRoomOf(db, key);
   if (current) throw new RoomRefused("already_in_room", current);
   const roomId = await withFreshCode(
@@ -229,12 +230,16 @@ export async function createRoom(db: Db, host: { playerId: number }, input: Crea
 export async function readRoom(db: Db, code: string, who: Identity): Promise<RoomResult> {
   const room = await roomByCode(db, code);
   const key = memberKey(who);
-  if (!(await membership(db, room.id, key))) {
+  // SALLE-08 : lire son salon (la page le relit, /game et /podium aussi) est le signe de vie du membre
+  const member = await db.transaction(async (tx) => {
+    await sweep(tx, room.id, key);
+    return membership(tx, room.id, key);
+  });
+  if (!member) {
     // SALLE-07 : la page d'un expulsé le lui dit ; il connaissait déjà le salon, rien n'est révélé (SALLE-10)
     if (room.status !== "closed" && (await isKicked(db, room.id, key))) throw new RoomRefused("kicked");
     throw new RoomRefused("not_found"); // SALLE-10 : un non-membre ne sait pas si le salon existe
   }
-  await expireRaces(db, room.id);
   return { room: await roomView(db, room.id, key), you: key };
 }
 
@@ -246,7 +251,7 @@ export async function updateRoom(db: Db, code: string, who: Identity, input: Upd
   const { id } = await roomByCode(db, code);
   const key = memberKey(who);
   await db.transaction(async (tx) => {
-    await expireRaces(tx, id);
+    await sweep(tx, id, key);
     // sous le verrou du salon, comme joinRoom : les places prises et les réglages ne bougent pas pendant le changement
     const [room] = await tx.select().from(rooms).where(eq(rooms.id, id)).for("update");
     if (!room) throw new RoomRefused("not_found");
@@ -282,7 +287,7 @@ export type ListedRoom = { code: string; name: string; autoName: boolean; langua
 
 /** Les salons publics ouverts, les plus récents d'abord. Un salon « sur code » ou privé n'y est jamais. */
 export async function listPublicRooms(db: Db, limit = 50): Promise<ListedRoom[]> {
-  await expireRaces(db);
+  await sweepAll(db);
   const playerCount = sql<number>`(select count(*) from ${roomMembers} where ${roomMembers.roomId} = ${rooms.id} and ${roomMembers.role} = 'player')`.mapWith(Number);
   return db
     .select({ code: rooms.code, name: rooms.name, autoName: rooms.autoName, language: raceConfigs.language, guests: rooms.guests, bots: rooms.bots, players: playerCount, status: rooms.status })
@@ -317,8 +322,9 @@ async function roomFor(db: Db, via: JoinVia) {
 export async function joinRoom(db: Db, who: Identity, via: JoinVia): Promise<RoomResult> {
   const { id } = await roomFor(db, via);
   const key = memberKey(who);
+  await settleCurrentRoom(db, key, id);
   const entered = db.transaction(async (tx) => {
-    await expireRaces(tx, id);
+    await sweep(tx, id, key);
     // Verrou sur la ligne du salon : les entrées simultanées et le lancement passent l'un après l'autre.
     // L'état (SALLE-09) et les places prises (SALLE-03) sont lus sous ce verrou, jamais avant.
     const [room] = await tx.select({ status: rooms.status, visibility: rooms.visibility, guests: rooms.guests }).from(rooms).where(eq(rooms.id, id)).for("update");
@@ -353,7 +359,7 @@ export async function launchRoom(db: Db, code: string, who: Identity): Promise<R
   const { id } = await roomByCode(db, code);
   const key = memberKey(who);
   await db.transaction(async (tx) => {
-    await expireRaces(tx, id);
+    await sweep(tx, id, key);
     const [room] = await tx.select({ status: rooms.status, hostId: rooms.hostId }).from(rooms).where(eq(rooms.id, id)).for("update");
     if (!room) throw new RoomRefused("not_found");
     if (!(await membership(tx, id, key))) throw new RoomRefused("not_found"); // SALLE-10 : un non-membre ne sait pas si le salon existe
@@ -366,19 +372,91 @@ export async function launchRoom(db: Db, code: string, who: Identity): Promise<R
   return { room: await roomView(db, id, key), you: key };
 }
 
+/** SALLE-09 : marge après la durée de la course (décompte de 3 s, réseau, envoi de la fin) avant de la clore d'office. */
+export const RACE_GRACE_MS = 30_000;
+/** SALLE-09 : l'échéance d'une course, depuis son lancement : sa durée (race_configs.duration, en secondes) plus la marge. */
+export const raceDeadlineMs = (durationSeconds: number) => durationSeconds * 1000 + RACE_GRACE_MS;
 /**
- * SALLE-09 : durée maximale d'une course. Au-delà, la salle passe aux résultats même si un participant n'a jamais
- * déclaré sa fin (onglet fermé) : couvre le mode temps le plus long (600 s) avec une large marge.
+ * SALLE-08 : sans signe de vie (lecture du salon, action) depuis ce délai, un membre est parti, socket ou pas.
+ * Les pages relisent le salon toutes les 3 à 15 s ; la marge couvre un onglet en arrière-plan, que le navigateur
+ * ralentit (une minuterie par minute au pire).
  */
-export const RACE_MAX_MS = 15 * 60_000;
+export const MEMBER_AWAY_MS = 90_000;
 
 /**
- * SALLE-09 : l'échéance d'une course se calcule à la lecture, sans minuterie de processus (Next.js, Vercel) :
- * une salle en course depuis plus de RACE_MAX_MS passe aux résultats. Un seul salon (roomId), ou tous (explorateur).
+ * Le salon à jour, sous son verrou (pris ici) : l'heure de la base décide, sans minuterie de processus (Next.js, Vercel).
+ * - `actor` (qui agit) donne signe de vie ;
+ * - SALLE-09 : une course passée son échéance (sa propre durée) passe aux résultats ;
+ * - SALLE-08 : un membre silencieux depuis MEMBER_AWAY_MS est retiré, puis afterDeparture (hôte, fermeture, course).
+ * Renvoie true si quelque chose a changé.
  */
-async function expireRaces(db: Db, roomId?: number) {
-  const overdue = and(eq(rooms.status, "racing"), sql`${rooms.launchedAt} <= now() - ${RACE_MAX_MS} * interval '1 millisecond'`);
-  await db.update(rooms).set({ status: "results" }).where(roomId === undefined ? overdue : and(eq(rooms.id, roomId), overdue));
+async function sweep(tx: Db, roomId: number, actor?: string): Promise<boolean> {
+  await tx.select({ id: rooms.id }).from(rooms).where(eq(rooms.id, roomId)).for("update");
+  if (actor) await tx.update(roomMembers).set({ lastSeenAt: sql`now()` }).where(and(eq(roomMembers.roomId, roomId), eq(roomMembers.memberKey, actor)));
+  const deadline = sql`${rooms.launchedAt} + (select ${raceConfigs.duration} from ${raceConfigs} where ${raceConfigs.id} = ${rooms.configId}) * interval '1 second' + ${RACE_GRACE_MS} * interval '1 millisecond'`;
+  const ended = await tx.update(rooms).set({ status: "results" }).where(and(eq(rooms.id, roomId), eq(rooms.status, "racing"), sql`${deadline} <= now()`)).returning({ id: rooms.id });
+  const gone = await tx
+    .delete(roomMembers)
+    .where(and(eq(roomMembers.roomId, roomId), sql`${roomMembers.lastSeenAt} < now() - ${MEMBER_AWAY_MS} * interval '1 millisecond'`))
+    .returning({ key: roomMembers.memberKey });
+  if (gone.length) await afterDeparture(tx, roomId);
+  return ended.length > 0 || gone.length > 0;
+}
+
+/** Tous les salons qui ont une course échue ou un membre silencieux (explorateur, temps réel), chacun sous son verrou. */
+async function sweepAll(db: Db): Promise<void> {
+  const due = await db
+    .selectDistinct({ id: rooms.id })
+    .from(rooms)
+    .leftJoin(roomMembers, eq(roomMembers.roomId, rooms.id))
+    .where(and(ne(rooms.status, "closed"), sql`(${roomMembers.lastSeenAt} < now() - ${MEMBER_AWAY_MS} * interval '1 millisecond' or ${rooms.status} = 'racing')`));
+  for (const { id } of due) await db.transaction((tx) => sweep(tx, id));
+}
+
+/** SALLE-08 / SALLE-06 : avant de refuser un deuxième salon, on met à jour l'actuel : un membre parti n'y est plus. */
+async function settleCurrentRoom(db: Db, key: string, exceptRoomId?: number): Promise<void> {
+  const [row] = await db.select({ roomId: roomMembers.roomId }).from(roomMembers).where(eq(roomMembers.memberKey, key));
+  if (row && row.roomId !== exceptRoomId) await db.transaction((tx) => sweep(tx, row.roomId));
+}
+
+/**
+ * SALLE-08 : après un départ (quitter, déconnexion, silence, expulsion), sous le verrou du salon.
+ * - L'hôte parti : le rôle passe à la personne humaine connectée présente depuis le plus longtemps (participant ou
+ *   spectateur, par ordre d'arrivée). Humaine : un compte (host_id pointe vers players), jamais un bot ni un invité.
+ *   Connectée : les membres silencieux ont déjà été retirés (sweep).
+ * - Plus personne pour être hôte : le salon est fermé et ses derniers membres (invités, bots) libérés (SALLE-06).
+ * - Pendant une course, un coureur parti ne la retient pas (SALLE-09).
+ * Renvoie l'état du salon après coup.
+ */
+async function afterDeparture(tx: Db, roomId: number): Promise<RoomStatus> {
+  const [room] = await tx.select({ hostId: rooms.hostId, status: rooms.status }).from(rooms).where(eq(rooms.id, roomId));
+  if (!room || room.status === "closed") return "closed";
+  const left = await tx
+    .select({ key: roomMembers.memberKey, playerId: roomMembers.playerId, isBot: players.isBot })
+    .from(roomMembers)
+    .leftJoin(players, eq(players.id, roomMembers.playerId))
+    .where(eq(roomMembers.roomId, roomId))
+    .orderBy(asc(roomMembers.joinedAt), asc(roomMembers.memberKey));
+  if (!left.some((m) => m.key === memberKey({ playerId: room.hostId }))) {
+    const next = left.find((m) => m.playerId !== null && !m.isBot);
+    if (!next) {
+      await tx.delete(roomMembers).where(eq(roomMembers.roomId, roomId));
+      await tx.update(rooms).set({ status: "closed" }).where(eq(rooms.id, roomId));
+      return "closed";
+    }
+    await tx.update(rooms).set({ hostId: next.playerId! }).where(eq(rooms.id, roomId));
+  }
+  if (room.status === "racing") await endIfAllFinished(tx, roomId);
+  return room.status;
+}
+
+/**
+ * SALLE-08 / SALLE-09 : met un salon à jour (échéance de course, membres silencieux, hôte) sans qu'aucun membre n'agisse.
+ * Le temps réel l'appelle à intervalle régulier pour annoncer ces changements à ses sockets. True si quelque chose a changé.
+ */
+export async function refreshRoom(db: Db, code: string): Promise<boolean> {
+  const id = await roomIdByCode(db, code);
+  return id === null ? false : db.transaction((tx) => sweep(tx, id));
 }
 
 /** SALLE-09 : plus aucun participant humain en course (fini ou parti) : le salon passe aux résultats. Sous le verrou. */
@@ -397,7 +475,7 @@ export async function finishRoom(db: Db, code: string, who: Identity): Promise<R
   const { id } = await roomByCode(db, code);
   const key = memberKey(who);
   await db.transaction(async (tx) => {
-    await expireRaces(tx, id);
+    await sweep(tx, id, key);
     const [room] = await tx.select({ status: rooms.status }).from(rooms).where(eq(rooms.id, id)).for("update");
     if (!room) throw new RoomRefused("not_found");
     if (!(await membership(tx, id, key))) throw new RoomRefused("not_found"); // SALLE-10 : un non-membre ne sait pas si le salon existe
@@ -417,7 +495,7 @@ export async function kickMember(db: Db, code: string, who: Identity, target: st
   const { id } = await roomByCode(db, code);
   const key = memberKey(who);
   await db.transaction(async (tx) => {
-    await expireRaces(tx, id);
+    await sweep(tx, id, key);
     const [room] = await tx.select({ status: rooms.status, hostId: rooms.hostId }).from(rooms).where(eq(rooms.id, id)).for("update");
     if (!room || room.status === "closed") throw new RoomRefused("not_found");
     if (!(await membership(tx, id, key))) throw new RoomRefused("not_found"); // SALLE-10 : un non-membre ne sait pas si le salon existe
@@ -428,20 +506,21 @@ export async function kickMember(db: Db, code: string, who: Identity, target: st
     await tx.insert(roomBans).values({ roomId: id, memberKey: target }).onConflictDoNothing();
     // À BRANCHER (SALLE-04) : révoquer ici, dans la même transaction, le lien d'invitation personnel de `target`.
     // room_bans suffit déjà à le refuser à l'entrée, quel que soit le lien ; la révocation nettoie le jeton.
-    if (room.status === "racing") await endIfAllFinished(tx, id);
+    await afterDeparture(tx, id);
   });
   return { room: await roomView(db, id, key), you: key };
 }
 
 /**
- * Quitter un salon. Le dernier qui part le ferme.
- * À BRANCHER (SALLE-08) : si l'hôte part, passer le rôle au membre humain présent depuis le plus longtemps.
+ * Quitter un salon. SALLE-08 : si l'hôte part, le rôle passe à la personne humaine connectée la plus ancienne ;
+ * sans personne pour le reprendre, le salon est fermé (afterDeparture).
  */
 export async function leaveRoom(db: Db, code: string, who: Identity, options: { unlessRacing?: boolean; unlessLaunchedWithinMs?: number } = {}): Promise<{ left: boolean }> {
   const { id } = await roomByCode(db, code);
   // sous le verrou du salon, comme joinRoom et launchRoom : l'état lu et la fermeture ne croisent ni entrée ni lancement
   return db.transaction(async (tx) => {
-    await expireRaces(tx, id);
+    // sans signe de vie pour celui qui part : une déconnexion ne doit pas le garder présent
+    await sweep(tx, id);
     const within = options.unlessLaunchedWithinMs ?? 0;
     const [room] = await tx
       .select({ status: rooms.status, launchedRecently: sql<boolean>`coalesce(${rooms.launchedAt} > now() - ${within} * interval '1 millisecond', false)` })
@@ -454,13 +533,8 @@ export async function leaveRoom(db: Db, code: string, who: Identity, options: { 
     if (within > 0 && room.launchedRecently) return { left: false };
     const removed = await tx.delete(roomMembers).where(and(eq(roomMembers.roomId, id), eq(roomMembers.memberKey, memberKey(who)))).returning({ key: roomMembers.memberKey });
     if (!removed.length) throw new RoomRefused("not_found");
-    if (removed.length && !(await tx.$count(roomMembers, eq(roomMembers.roomId, id)))) {
-      await tx.update(rooms).set({ status: "closed" }).where(eq(rooms.id, id));
-    } else if (removed.length && room.status === "racing") {
-      // un participant qui quitte la course ne la retient pas
-      await endIfAllFinished(tx, id);
-    }
-    return { left: removed.length > 0 };
+    await afterDeparture(tx, id);
+    return { left: true };
   });
 }
 

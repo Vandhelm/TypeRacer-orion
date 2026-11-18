@@ -48,7 +48,7 @@ export const rooms = pgTable(
     hostId: integer("host_id").notNull().references(() => players.id),
     configId: integer("config_id").notNull().references(() => raceConfigs.id),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    /** SALLE-09 : départ de la course en cours ; elle prend fin d'elle-même après RACE_MAX_MS (src/server/rooms.ts). */
+    /** SALLE-09 : départ de la course en cours ; elle prend fin d'elle-même à raceDeadlineMs(durée) (src/server/rooms.ts). */
     launchedAt: timestamp("launched_at", { withTimezone: true }),
   },
   (table) => [index("rooms_lobby").on(table.status, table.visibility), check("rooms_guests_range", sql`${table.guests} between 2 and 30`),
@@ -74,6 +74,8 @@ export const roomMembers = pgTable(
     joinedAt: timestamp("joined_at", { withTimezone: true }).notNull().defaultNow(),
     /** SALLE-09 : ce membre a fini la course en cours ; remis à null à chaque lancement. */
     finishedAt: timestamp("finished_at", { withTimezone: true }),
+    /** SALLE-08 : dernier signe de vie (lecture du salon, action) ; silencieux trop longtemps, le membre est parti. */
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     primaryKey({ columns: [table.roomId, table.memberKey] }),

@@ -7,8 +7,12 @@ import { placeholderEmail } from "../accounts/username";
 import { isRoomCode, newInviteToken } from "../rooms/access";
 import { createAuth } from "./auth";
 import { GUEST_COOKIE, signGuest } from "./guest";
-import { CodeExhausted, createRoom, leaveAfterDisconnect, RACE_MAX_MS, withFreshCode } from "./rooms";
+import { DEFAULT_SETTINGS } from "../rooms/settings";
+import { CodeExhausted, createRoom, leaveAfterDisconnect, raceDeadlineMs, withFreshCode } from "./rooms";
 import { handleRoomsApi } from "./rooms-api";
+
+// SALLE-09 : l'échéance suit la durée de la course (race_configs.duration) ; les salons de ces tests gardent la durée par défaut
+const RACE_MAX_MS = raceDeadlineMs(DEFAULT_SETTINGS.duration);
 
 process.env.BETTER_AUTH_SECRET ??= "test-secret-test-secret-test-secret";
 process.env.BETTER_AUTH_URL ??= "http://localhost:3000";
