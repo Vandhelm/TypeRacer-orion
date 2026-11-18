@@ -16,8 +16,10 @@ export function useInvites(code: string, host: boolean, members: unknown) {
     let live = true;
     inviteApi.list(code).then((reply) => {
       if (!live) return;
-      if (reply.ok) setInvites(reply.data.invites);
-      else setError(reply.error);
+      if (reply.ok) {
+        setInvites(reply.data.invites);
+        setError((current) => (current === "invite_limit" ? current : null));
+      } else setError(reply.error);
     });
     return () => {
       live = false;
