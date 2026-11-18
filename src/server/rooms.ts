@@ -209,24 +209,27 @@ export async function readRoom(db: Db, code: string, who: Identity): Promise<Roo
  * Changer un réglage de course crée une nouvelle ligne race_configs : les courses passées gardent les leurs.
  */
 export async function updateRoom(db: Db, code: string, who: Identity, input: UpdateRoomInput): Promise<RoomResult> {
-  const room = await roomByCode(db, code);
+  const { id } = await roomByCode(db, code);
   const key = memberKey(who);
-  const member = await membership(db, room.id, key);
-  if (!member) throw new RoomRefused("not_member");
-  if (key !== memberKey({ playerId: room.hostId })) throw new RoomRefused("not_host");
   await db.transaction(async (tx) => {
+    // sous le verrou du salon, comme joinRoom : les places prises et les réglages ne bougent pas pendant le changement
+    const [room] = await tx.select().from(rooms).where(eq(rooms.id, id)).for("update");
+    if (!room) throw new RoomRefused("not_found");
+    const member = await membership(tx, id, key);
+    if (!member) throw new RoomRefused("not_member");
+    if (key !== memberKey({ playerId: room.hostId })) throw new RoomRefused("not_host");
     if (input.settings) {
       const [config] = await tx.select().from(raceConfigs).where(eq(raceConfigs.id, room.configId));
       const settings = { ...settingsOf(room, config!), ...input.settings };
       const [next] = await tx.insert(raceConfigs).values(configOf(settings)).returning({ id: raceConfigs.id });
-      await tx.update(rooms).set({ ...roomColumnsOf(settings), configId: next!.id }).where(eq(rooms.id, room.id));
+      await tx.update(rooms).set({ ...roomColumnsOf(settings), configId: next!.id }).where(eq(rooms.id, id));
     }
     if (input.role && input.role !== member.role) {
-      const taken = (await tx.select({ seat: roomMembers.seat }).from(roomMembers).where(eq(roomMembers.roomId, room.id))).map((m) => m.seat);
-      await tx.update(roomMembers).set({ role: input.role, ...placeFor(input.role, taken) }).where(and(eq(roomMembers.roomId, room.id), eq(roomMembers.memberKey, key)));
+      const taken = (await tx.select({ seat: roomMembers.seat }).from(roomMembers).where(eq(roomMembers.roomId, id))).map((m) => m.seat);
+      await tx.update(roomMembers).set({ role: input.role, ...placeFor(input.role, taken) }).where(and(eq(roomMembers.roomId, id), eq(roomMembers.memberKey, key)));
     }
   });
-  return { room: await roomView(db, room.id, key), you: key };
+  return { room: await roomView(db, id, key), you: key };
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -271,8 +274,10 @@ export async function joinRoom(db: Db, who: Identity, via: JoinVia): Promise<Roo
   await db.transaction(async (tx) => {
     // Verrou sur la ligne du salon : les entrées simultanées et le lancement passent l'un après l'autre.
     // L'état (SALLE-09) et les places prises (SALLE-03) sont lus sous ce verrou, jamais avant.
-    const [room] = await tx.select({ status: rooms.status }).from(rooms).where(eq(rooms.id, id)).for("update");
+    const [room] = await tx.select({ status: rooms.status, visibility: rooms.visibility }).from(rooms).where(eq(rooms.id, id)).for("update");
     if (!room) throw new RoomRefused("not_found");
+    // la visibilité aussi : l'hôte a pu rendre le salon privé entre-temps
+    if ("code" in via && !allows(room.visibility, "code")) throw new RoomRefused("not_found");
     if (room.status === "closed") throw new RoomRefused("closed");
     // un membre qui revient (rechargement, autre onglet) n'est pas un nouvel arrivant, même pendant la course
     if (await membership(tx, id, key)) return;

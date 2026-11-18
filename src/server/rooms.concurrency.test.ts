@@ -108,4 +108,36 @@ describe.skipIf(!process.env.DATABASE_URL)("SALLE-03 / SALLE-09 — simultaneous
       }
     }
   });
+
+  /** Tient le verrou du salon (comme une requête en cours) pendant que `during` part ; la requête attend sa libération. */
+  async function whileLocked(code: string, change: (tx: Parameters<Parameters<Server["db"]["transaction"]>[0]>[0], id: number) => Promise<unknown>, during: () => Promise<Response>) {
+    let pending: Promise<Response> | null = null;
+    await server.db.transaction(async (tx) => {
+      const [room] = await tx.select({ id: rooms.id }).from(rooms).where(eq(rooms.code, code)).for("update");
+      await change(tx, room!.id);
+      pending = during();
+      await Bun.sleep(150);
+    });
+    return pending!;
+  }
+
+  test("SALLE-03 — a join by code validated against a visibility changed meanwhile to private is refused", async () => {
+    const code = await open();
+    const joined = await whileLocked(code, (tx, id) => tx.update(rooms).set({ visibility: "private" }).where(eq(rooms.id, id)), () => call("POST", "/api/rooms/join", guest("Trop_Tot"), { code }));
+    expect(joined.status).toBe(404);
+    expect(await membersOf(code)).toHaveLength(1);
+  });
+
+  test("SALLE-03 — the host taking a seat while a guest is being seated gets another seat, never a 500", async () => {
+    const code = ((await (await call("POST", "/api/rooms", hostCookie, { role: "spectator", settings: { visibility: "public" } })).json()) as Joined).room.code;
+    const patched = await whileLocked(
+      code,
+      (tx, id) => tx.insert(roomMembers).values({ roomId: id, memberKey: "guest:00000000-0000-4000-8000-000000000000", guestName: "En_Cours", role: "player", seat: 0, color: "#000" }),
+      () => call("PATCH", `/api/rooms/${code}`, hostCookie, { role: "player" }),
+    );
+    expect(patched.status).toBe(200);
+    const seats = (await membersOf(code)).map((m) => m.seat);
+    expect(seats).toHaveLength(2);
+    expect(new Set(seats).size).toBe(2);
+  });
 });

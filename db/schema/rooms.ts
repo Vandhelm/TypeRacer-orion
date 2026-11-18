@@ -56,7 +56,7 @@ export const rooms = pgTable(
 
 /**
  * Qui est dans quel salon. Un membre est un compte (player_id) ou un invité (guest_name, son pseudonyme signé) :
- * member_key ("player:<id>" ou "guest:<pseudo en minuscules>") les identifie tous les deux, pour la clé primaire
+ * member_key ("player:<id>" ou "guest:<id de session signé>", jamais le pseudonyme) les identifie tous les deux, pour la clé primaire
  * et pour la règle « une seule salle à la fois » (SALLE-06). Un participant a une place (et sa couleur), un spectateur non.
  */
 export const roomMembers = pgTable(
