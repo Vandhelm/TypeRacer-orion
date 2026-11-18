@@ -312,7 +312,7 @@ describe("SALLE-04 — one invitation link per guest, single use, bound to an IP
     await join(t.guest("Garde"), kept.token, IP_B);
     const { you } = (await (await join(t.guest("Expulse"), token, IP_A)).json()) as Joined;
     const [room] = await t.db.select({ id: rooms.id }).from(rooms).where(eq(rooms.code, code));
-    // ce que fera l'expulsion : retirer le membre et révoquer ses liens
+    // ce que fait l'expulsion (kickMember) : retirer le membre et révoquer ses liens
     await t.db.delete(roomMembers).where(and(eq(roomMembers.roomId, room!.id), eq(roomMembers.memberKey, you)));
     expect(await revokeInvitesOf(t.db, room!.id, you)).toBe(1);
     const back = await join(t.guest("Expulse"), token, IP_A);

@@ -227,6 +227,12 @@ describe("SALLE-10 — POST /api/rooms/join is rate limited per IP", () => {
     expect((await call("POST", "/api/rooms/join", "198.51.100.12", ami, { code: room.code })).status).toBe(429);
   });
 
+  test("SALLE-04 — guessing invite tokens on /join is limited the same way", async () => {
+    const token = (i: number) => `${"A".repeat(42)}${i}`;
+    for (let i = 0; i < 10; i++) expect((await call("POST", "/api/rooms/join", "198.51.100.14", guest("Devin_Lien"), { invite: token(i) })).status).toBe(404);
+    expect((await call("POST", "/api/rooms/join", "198.51.100.14", guest("Devin_Lien"), { invite: token(10) })).status).toBe(429);
+  });
+
   test("malformed bodies count as attempts too", async () => {
     for (let i = 0; i < 10; i++) expect((await call("POST", "/api/rooms/join", "198.51.100.13", guest("Brouillon"), "{oops")).status).toBe(400);
     expect((await call("POST", "/api/rooms/join", "198.51.100.13", guest("Brouillon"), "{oops")).status).toBe(429);
