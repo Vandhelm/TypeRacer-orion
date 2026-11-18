@@ -155,6 +155,21 @@ describe("SMOKE — API", () => {
     expect((await fetch(`${base}/api/players/Smoke_Faux_Bot/stats`)).status).toBe(404);
   });
 
+  // TECH-07 : avec une session d'invité valide, un corps mal formé répond 400, jamais 500. N'écrit rien en base.
+  test("TECH-07 — /api/races refuse un corps invalide (400) avec une session d'invité", async () => {
+    const guest = await fetch(`${base}/api/guest`, { method: "POST", headers: { "content-type": "application/json", origin: base }, body: JSON.stringify({ nickname: "Smoke_Schema" }) });
+    const cookie = (guest.headers.get("set-cookie") ?? "").split(";")[0]!;
+    expect(cookie).toContain("=");
+    const summary = {
+      textType: "words", language: "fr", duration: 60, level: "common", punctuation: false, numbers: false, specials: false, accents: true,
+      excluded: "", mistakes: "fix", botSpeed: "medium", botAccuracy: "high", length: "short", wordCount: 20, sessionSeconds: 90,
+    };
+    for (const body of ["{", JSON.stringify({ id: crypto.randomUUID(), summary, players: [null] })]) {
+      const res = await fetch(`${base}/api/races`, { method: "POST", headers: { "content-type": "application/json", cookie }, body });
+      expect(res.status).toBe(400);
+    }
+  });
+
   // Crée une session : seulement en local, pas contre un déploiement.
   test.skipIf(Boolean(remote))("AUTH-01 — connexion avec le compte de démo", async () => {
     const res = await fetch(`${base}/api/auth/sign-in/username`, {
