@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { createCourse, createRace, type Race } from "../game/race";
 import type { Player } from "../room/room";
-import { buildResults, parseResults } from "./results";
+import { buildResults, parseResults, raceBody } from "./results";
 
 const PLAYERS: Player[] = [
   { name: "me", color: "red", me: true },
@@ -60,5 +60,16 @@ describe("parseResults", () => {
   test("coerces stored values", () => {
     const parsed = parseResults('{"summary":{},"players":[{"name":7,"wpm":"68","wpmSeries":["1",2]}]}');
     expect(parsed?.players[0]).toMatchObject({ name: "7", me: false, wpm: 68, chars: [0, 0, 0, 0], wpmSeries: [1, 2], errorSeries: [] });
+  });
+});
+
+describe("AUTH-06 — each race sent to the server has its own id", () => {
+  const results = { players: [], summary: {} } as unknown as Parameters<typeof raceBody>[0];
+  test("carries a UUID, different for each race", () => {
+    const first = raceBody(results, "le riz");
+    const second = raceBody(results, "le riz");
+    expect(first.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    expect(first.id).not.toBe(second.id);
+    expect(first.content).toBe("le riz");
   });
 });

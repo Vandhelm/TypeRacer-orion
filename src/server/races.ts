@@ -2,6 +2,7 @@
 // À BRANCHER : le navigateur envoie lui-même les résultats ; le serveur de jeu devra les produire pour qu'on ne puisse pas les inventer.
 // D'ici là, qui envoie la course vient de sa session (compte ou cookie d'invité signé), jamais du corps de la requête.
 import { avg, count, desc, eq, max, sql } from "drizzle-orm";
+import { z } from "zod";
 import type { Db } from "../../db/client";
 import type { Auth } from "./auth";
 import { guestSecret, readGuest } from "./guest";
@@ -21,6 +22,10 @@ const MAX_SECONDS = 600;
 export const PROGRESS_LIMIT = 50;
 
 export class InvalidRace extends Error {}
+/** La même course, déjà reçue (même identifiant) : un rejeu. */
+export class DuplicateRace extends Error {}
+
+const RaceId = z.uuid();
 
 const fail = (what: string): never => {
   throw new InvalidRace(`Invalid race: ${what}`);
@@ -85,7 +90,9 @@ export function parseRace(body: unknown) {
       keys: parseKeys(p.keys),
     };
   });
-  return { config, content: String(b.content ?? "").slice(0, 10_000), sessionSeconds: int(s.sessionSeconds ?? 0, "sessionSeconds", 0, 10_000_000), results };
+  // l'identifiant de la course (AUTH-06) : facultatif ici, exigé par la route
+  const id = b.id === undefined ? null : RaceId.safeParse(b.id).data ?? fail("id");
+  return { id, config, content: String(b.content ?? "").slice(0, 10_000), sessionSeconds: int(s.sessionSeconds ?? 0, "sessionSeconds", 0, 10_000_000), results };
 }
 
 type ParsedRace = ReturnType<typeof parseRace>;
@@ -130,9 +137,11 @@ export async function recordRace(db: Db, race: ParsedRace, requester: Requester 
     const longest = Math.max(...kept.map((result) => result.seconds));
     const [row] = await tx
       .insert(races)
-      .values({ configId: config!.id, content: race.content, startedAt: new Date(Date.now() - longest * 1000), finishedAt: new Date() })
+      .values({ clientId: race.id, configId: config!.id, content: race.content, startedAt: new Date(Date.now() - longest * 1000), finishedAt: new Date() })
+      .onConflictDoNothing({ target: races.clientId })
       .returning({ id: races.id });
-    const raceId = row!.id;
+    if (!row) throw new DuplicateRace("Race already recorded");
+    const raceId = row.id;
     for (const { playerId, wpmSeries, rawSeries, errorSeries, name: _name, bot: _bot, ...result } of kept) {
       await tx.insert(raceResults).values({ ...result, raceId, playerId, sessionSeconds: race.sessionSeconds });
       if (wpmSeries.length) {
@@ -143,7 +152,12 @@ export async function recordRace(db: Db, race: ParsedRace, requester: Requester 
   });
 }
 
-/** POST /api/races : refusé sans session (compte ou invité signé) ; le compte est celui de la session. */
+/**
+ * POST /api/races : refusé sans session (compte ou invité signé) ; le compte est celui de la session.
+ * Chaque course porte un identifiant unique tiré par le navigateur : le même envoi rejoué est refusé (409).
+ * Limite : un client qui tire un nouvel identifiant peut encore inventer une course ; MPM et rang viennent du navigateur
+ * tant que le serveur de jeu (COURSE-06) ne les calcule pas.
+ */
 export async function handleRace(req: Request, db: Db, auth: Auth, secret = guestSecret()): Promise<Response> {
   if (req.method !== "POST") return Response.json({ error: "method_not_allowed" }, { status: 405 });
   const session = await auth.api.getSession({ headers: req.headers }).catch(() => null);
@@ -151,9 +165,12 @@ export async function handleRace(req: Request, db: Db, auth: Auth, secret = gues
   const guest = session ? null : readGuest(req.headers, secret);
   if (!session && !guest) return Response.json({ error: "unauthorized" }, { status: 401 });
   try {
-    const raceId = await recordRace(db, parseRace(await req.json()), { playerId, guest });
+    const race = parseRace(await req.json());
+    if (!race.id) fail("id");
+    const raceId = await recordRace(db, race, { playerId, guest });
     return Response.json({ raceId }, { status: raceId ? 201 : 200 });
   } catch (error) {
+    if (error instanceof DuplicateRace) return Response.json({ error: "duplicate_race" }, { status: 409 });
     if (error instanceof InvalidRace || error instanceof SyntaxError) return Response.json({ error: error.message }, { status: 400 });
     throw error;
   }

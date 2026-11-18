@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { boolean, check, foreignKey, index, integer, jsonb, pgTable, primaryKey, real, text, timestamp, unique } from "drizzle-orm/pg-core";
+import { boolean, check, foreignKey, index, integer, jsonb, pgTable, primaryKey, real, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 import { players } from "./players";
 import { raceConfigs, rooms } from "./rooms";
 import { corpusTexts } from "./texts";
@@ -15,6 +15,8 @@ export const races = pgTable(
     content: text("content").notNull(),
     startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
     finishedAt: timestamp("finished_at", { withTimezone: true }),
+    // Identifiant tiré par le navigateur pour chaque course envoyée : la même course renvoyée est refusée (AUTH-06).
+    clientId: uuid("client_id").unique("races_client_id_unique"),
   },
   (table) => [index("races_room").on(table.roomId)],
 );

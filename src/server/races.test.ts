@@ -20,6 +20,9 @@ const result = (name: string, bot: boolean, wpm: number) => ({
   wpmSeries: [wpm - 2, wpm, wpm + 1], rawSeries: [wpm, wpm + 5, wpm + 6], errorSeries: [0, 1, 0],
 });
 
+/** Chaque envoi de course porte l'identifiant unique de sa course (AUTH-06.6), sauf si le test en donne un. */
+const withId = (body: unknown) => (body && typeof body === "object" && !("id" in body) ? { id: crypto.randomUUID(), ...body } : body);
+
 describe("races", () => {
   let db: Awaited<ReturnType<typeof createMockDatabase>>;
   beforeAll(async () => {
@@ -94,7 +97,7 @@ describe("AUTH-06 — a signed-in account keeps its races", () => {
   };
   const accountPlayer = async (name: string) => (await db.select({ playerId: user.playerId }).from(user).where(eq(user.username, name.toLowerCase())))[0]!.playerId!;
   const post = (body: unknown, cookie?: string) =>
-    handleRace(new Request("http://localhost/api/races", { method: "POST", headers: { "content-type": "application/json", ...(cookie && { cookie }) }, body: JSON.stringify(body) }), db, auth, GUEST_SECRET);
+    handleRace(new Request("http://localhost/api/races", { method: "POST", headers: { "content-type": "application/json", ...(cookie && { cookie }) }, body: JSON.stringify(withId(body)) }), db, auth, GUEST_SECRET);
   const resultsOf = async (playerId: number) => db.$count(raceResults, eq(raceResults.playerId, playerId));
 
   test("records the race of the player linked to the account", async () => {
@@ -155,6 +158,21 @@ describe("AUTH-06 — a signed-in account keeps its races", () => {
     expect(await db.$count(players, eq(players.name, "Ebi_Fry"))).toBe(1);
   });
 
+  test("the same race posted twice counts once", async () => {
+    const cookie = await signUp("Compte_Huit");
+    const body = { id: crypto.randomUUID(), summary: SUMMARY, players: [result("Compte_Huit", false, 70)] };
+    expect((await post(body, cookie)).status).toBe(201);
+    expect((await post(body, cookie)).status).toBe(409);
+    expect((await playerStats(db, "Compte_Huit"))!.races).toBe(1);
+  });
+
+  test("a race posted without its id is refused", async () => {
+    const cookie = await signUp("Compte_Neuf");
+    const res = await post({ id: undefined, summary: SUMMARY, players: [result("Compte_Neuf", false, 70)] }, cookie);
+    expect(res.status).toBe(400);
+    expect((await playerStats(db, "Compte_Neuf"))!.races).toBe(0);
+  });
+
   test("a forged guest cookie counts as no session", async () => {
     const forged = `${GUEST_COOKIE}=${signGuest("Corail_419", "another-secret-another-secret-12")}`;
     expect((await post({ summary: SUMMARY, players: [result("Bot_Forge", true, 50)] }, forged)).status).toBe(401);
@@ -169,7 +187,7 @@ describe("AUTH-03 — the server decides who is a bot, never the body", () => {
     auth = createAuth(db);
   });
   const post = (body: unknown, cookie: string) =>
-    handleRace(new Request("http://localhost/api/races", { method: "POST", headers: { "content-type": "application/json", cookie }, body: JSON.stringify(body) }), db, auth, GUEST_SECRET);
+    handleRace(new Request("http://localhost/api/races", { method: "POST", headers: { "content-type": "application/json", cookie }, body: JSON.stringify(withId(body)) }), db, auth, GUEST_SECRET);
 
   test("a human account posted as a bot gets no row and no new race", async () => {
     const before = await playerStats(db, "Corail_418");

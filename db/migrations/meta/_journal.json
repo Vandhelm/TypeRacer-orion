@@ -43,6 +43,13 @@
       "when": 1794488940584,
       "tag": "0005_race_keys",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1795025077657,
+      "tag": "0006_race_client_id",
+      "breakpoints": true
     }
   ]
 }
