@@ -22,6 +22,33 @@ const MAX_SECONDS = 600;
 /** Points du graphique de progression : les dernières courses. */
 export const PROGRESS_LIMIT = 50;
 
+/**
+ * Taille maximale du corps de POST /api/races, en octets. Un corps réel : 8 joueurs, 3 séries de 600 points (~3 Ko chacune)
+ * et 200 touches (~6 Ko) soit ~120 Ko, plus le texte (10 Ko). 512 Ko laisse une marge large ; au-delà : 413, avant tout parse.
+ */
+export const MAX_BODY_BYTES = 512 * 1024;
+
+class BodyTooLarge extends Error {}
+
+/** Lit le corps en s'arrêtant dès que la limite est dépassée : l'en-tête content-length n'est pas cru seul. */
+async function readBody(req: Request) {
+  if (Number(req.headers.get("content-length")) > MAX_BODY_BYTES) throw new BodyTooLarge();
+  const reader = req.body?.getReader();
+  if (!reader) return "";
+  const decoder = new TextDecoder();
+  let text = "";
+  let size = 0;
+  for (let chunk = await reader.read(); !chunk.done; chunk = await reader.read()) {
+    size += chunk.value.byteLength;
+    if (size > MAX_BODY_BYTES) {
+      await reader.cancel();
+      throw new BodyTooLarge();
+    }
+    text += decoder.decode(chunk.value, { stream: true });
+  }
+  return text + decoder.decode();
+}
+
 export class InvalidRace extends Error {}
 /** La même course, déjà reçue (même identifiant) : un rejeu. */
 export class DuplicateRace extends Error {}
@@ -172,11 +199,12 @@ export async function handleRace(req: Request, db: Db, auth: Auth, secret = gues
   const guest = session ? null : readGuest(req.headers, secret);
   if (!session && !guest) return Response.json({ error: "unauthorized" }, { status: 401 });
   try {
-    const race = parseRace(await req.json());
+    const race = parseRace(JSON.parse(await readBody(req)));
     if (!race.id) fail("id");
     const raceId = await recordRace(db, race, { playerId, guest });
     return Response.json({ raceId }, { status: raceId ? 201 : 200 });
   } catch (error) {
+    if (error instanceof BodyTooLarge) return Response.json({ error: "payload_too_large" }, { status: 413 });
     if (error instanceof DuplicateRace) return Response.json({ error: "duplicate_race" }, { status: 409 });
     if (error instanceof InvalidRace || error instanceof SyntaxError) return Response.json({ error: error.message }, { status: 400 });
     throw error;

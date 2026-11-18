@@ -5,6 +5,9 @@ import { createMockDatabase } from "../../db/mocks/test-database";
 import { placeholderEmail } from "../accounts/username";
 import { createAuth } from "./auth";
 import { GUEST_COOKIE, signGuest } from "./guest";
+import { createCourse, createRace } from "../views/game/race";
+import { buildResults, buildSummary, raceBody } from "../views/podium/results";
+import type { Room } from "../views/room/room";
 import { handleRace, InvalidRace, parseRace, playerStats, recordRace } from "./races";
 
 process.env.BETTER_AUTH_SECRET ??= "test-secret-test-secret-test-secret";
@@ -277,5 +280,87 @@ describe("TECH-07 — the body of /api/races is checked by a schema", () => {
   test("valid keys are kept and per-key junk is dropped", () => {
     const parsed = parseRace(race([keyed({ e: [10, 2], ab: [9, 9], z: [-1, 0] })]));
     expect(parsed.results[0]!.keys).toEqual({ e: [10, 2] });
+  });
+
+  test("keys with more entries than the limit are refused with 400", async () => {
+    const many = Object.fromEntries(Array.from({ length: 401 }, (_, i) => [String.fromCodePoint(0x4e00 + i), [1, 0]]));
+    expect((await post(race([keyed(many)]))).status).toBe(400);
+  });
+
+  test("a body above the size limit is refused with 413 before it is parsed", async () => {
+    const res = await send(JSON.stringify({ id: crypto.randomUUID(), content: "x".repeat(600_000) }));
+    expect(res.status).toBe(413);
+  });
+
+  test("a body above the size limit is refused even when content-length lies", async () => {
+    const big = JSON.stringify({ content: "x".repeat(600_000) });
+    const res = await handleRace(new Request("http://localhost/api/races", { method: "POST", headers: { "content-type": "application/json", cookie, "content-length": "10" }, body: big }), db, auth, GUEST_SECRET);
+    expect(res.status).toBe(413);
+  });
+
+  test("a realistic body of 8 players stays under the size limit", async () => {
+    const series = Array.from({ length: 600 }, () => 9999);
+    const keys = Object.fromEntries(Array.from({ length: 200 }, (_, i) => [String.fromCodePoint(0x4e00 + i), [99999.9, 99999.9]]));
+    const names = ["Thon_Rouge", "Nori_Ninja", "Ebi_Fry", "Wasabi_Bot", "Maki_Roll", "Kombu_Zen", "Umami_Kid", "Tofu_Flash"];
+    const players = names.map((name) => ({ ...result(name, false, 50), wpmSeries: series, rawSeries: series, errorSeries: series, keys }));
+    const res = await post({ ...race(players), content: "x".repeat(10_000) });
+    expect(res.status).not.toBe(413);
+    expect(res.status).not.toBe(400);
+  });
+
+  test("a race without session and with an invalid body is refused with 401 before any parse", async () => {
+    for (const raw of ["{", "null", "x".repeat(600_000)]) {
+      const res = await handleRace(new Request("http://localhost/api/races", { method: "POST", headers: { "content-type": "application/json" }, body: raw }), db, auth, GUEST_SECRET);
+      expect(res.status).toBe(401);
+    }
+  });
+});
+
+describe("TECH-07 — the real body of the client is accepted", () => {
+  let db: Awaited<ReturnType<typeof createMockDatabase>>;
+  let auth: ReturnType<typeof createAuth>;
+  beforeAll(async () => {
+    db = await createMockDatabase();
+    auth = createAuth(db);
+  });
+
+  const ME = { name: "Compte_Client", color: "red", me: true };
+  const BOT = { name: "Thon_Rouge", color: "blue", bot: true };
+  /** Le corps que submitRace envoie, passé par JSON comme sur le réseau. */
+  const clientBody = () => {
+    const base = createRace(createCourse(["le", "riz", "attend"], 60, "fix"), [ME, BOT], "medium", "high", () => 0.5);
+    const raceState = {
+      ...base, phase: "done" as const, startedAt: 1000, now: 31000, arrivals: [0, 1], wordIndex: 3, keystrokes: 15, wrongChars: 1, finishedAt: 30000,
+      keys: { e: [6, 1], " ": [2, 0] } as Record<string, [number, number]>,
+      samples: [[{ chars: 5, typed: 5, errors: 0 }, { chars: 14, typed: 15, errors: 1 }], [{ chars: 5, typed: 5, errors: 0 }], []],
+      bots: [{ lane: 1, wpm: 60, accuracy: 93, words: 3, typed: 15, errors: 1, keys: {}, finishedAt: 31000 }],
+    };
+    const room = { textType: "words", language: "fr", duration: 60, level: "common", punctuation: false, numbers: false, specials: false, accents: true, excluded: "", mistakes: "fix", botSpeed: "medium", botAccuracy: "high", length: "short" } as Room;
+    const results = { players: buildResults(raceState, [ME, BOT]), summary: buildSummary(raceState, room, 90) };
+    return JSON.parse(JSON.stringify(raceBody(results, "le riz attend")));
+  };
+
+  test("the body built by the client is recorded: `me` dropped, keys kept", async () => {
+    await auth.api.signUpEmail({ body: { name: "Compte_Client", email: placeholderEmail("Compte_Client"), password: "sushi-roll-42", username: "Compte_Client", displayUsername: "Compte_Client" } });
+    const { headers } = await auth.api.signInUsername({ body: { username: "Compte_Client", password: "sushi-roll-42" }, returnHeaders: true });
+    const cookie = headers.get("set-cookie")!.split(";")[0]!;
+    const body = clientBody();
+    expect(body.players[0].me).toBe(true);
+    expect(body.players[0].keys).not.toEqual({});
+    expect(body.players[1].keys).toEqual({});
+    const res = await handleRace(new Request("http://localhost/api/races", { method: "POST", headers: { "content-type": "application/json", cookie }, body: JSON.stringify(body) }), db, auth, GUEST_SECRET);
+    expect(res.status).toBe(201);
+    const { raceId } = await res.json();
+    const rows = await db.select().from(raceResults).where(eq(raceResults.raceId, raceId));
+    expect(rows).toHaveLength(2);
+    expect(rows.every((row) => !("me" in row))).toBe(true);
+    const mine = rows.find((row) => Object.keys(row.keys).length > 0)!;
+    expect(mine.keys).toEqual({ e: [6, 1], " ": [2, 0] });
+  });
+
+  test("the same body with a guest cookie is accepted (201, the bot is kept)", async () => {
+    const cookie = `${GUEST_COOKIE}=${signGuest("Invite_Client", GUEST_SECRET)}`;
+    const res = await handleRace(new Request("http://localhost/api/races", { method: "POST", headers: { "content-type": "application/json", cookie }, body: JSON.stringify(clientBody()) }), db, auth, GUEST_SECRET);
+    expect(res.status).toBe(201);
   });
 });
