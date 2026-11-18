@@ -1,7 +1,7 @@
 // Réglages d'un salon (TECH-07) : un seul schéma, lu par le serveur pour valider ce que l'hôte envoie,
 // et par la page du salon pour ses types et ses valeurs par défaut.
 import { z } from "zod";
-import { VISIBILITIES } from "./access";
+import { isRoomCode, VISIBILITIES } from "./access";
 
 export const MIN_GUESTS = 2;
 // À BRANCHER (SALLE-05) : la capacité passera à 30 ; la contrainte rooms_guests_range et les places (0 à 7) suivront.
@@ -74,3 +74,8 @@ export const DEFAULT_SETTINGS: RoomSettings = {
 export const CreateRoomSchema = z.object({ role: z.enum(ROLES), settings: RoomSettingsSchema.partial().optional() }).strict();
 /** PATCH /api/rooms/:code : l'hôte change ses réglages ou son propre rôle. */
 export const UpdateRoomSchema = z.object({ role: z.enum(ROLES).optional(), settings: RoomSettingsSchema.partial().optional() }).strict();
+/** POST /api/rooms/join : un code de salon, ou un jeton d'invitation, jamais les deux. */
+export const JoinRoomSchema = z.union([
+  z.object({ code: z.string().refine(isRoomCode) }).strict(),
+  z.object({ invite: z.string().regex(/^[A-Za-z0-9_-]{8,128}$/) }).strict(),
+]);

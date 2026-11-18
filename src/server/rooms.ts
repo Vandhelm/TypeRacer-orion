@@ -1,10 +1,10 @@
 // Salons, côté serveur (SALLE-01, 02, 03, 09). Indépendant du transport : les routes HTTP (api.ts) et le temps réel
 // (realtime.ts) appellent ces fonctions ; rien ici ne connaît Request, WebSocket ou Next.js.
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, ne, sql } from "drizzle-orm";
 import type { z } from "zod";
 import type { Db } from "../../db/client";
 import { players, raceConfigs, roomMembers, rooms } from "../../db/schema";
-import { newInviteToken, newRoomCode } from "../rooms/access";
+import { allows, newInviteToken, newRoomCode } from "../rooms/access";
 import { SEAT_COLORS } from "../rooms/seats";
 import { DEFAULT_SETTINGS, type CreateRoomSchema, type Role, type RoomSettings, type UpdateRoomSchema } from "../rooms/settings";
 
@@ -224,4 +224,65 @@ export async function updateRoom(db: Db, code: string, who: Identity, input: Upd
     }
   });
   return { room: await roomView(db, room.id, key), you: key };
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// SALLE-03 : liste et entrée
+
+/** Ce que montre l'explorateur d'un salon public. Ni lien d'invitation, ni membres nommés. */
+export type ListedRoom = { code: string; name: string; autoName: boolean; language: RoomSettings["language"]; guests: number; bots: boolean; players: number; status: RoomStatus };
+
+/** Les salons publics ouverts, les plus récents d'abord. Un salon « sur code » ou privé n'y est jamais. */
+export async function listPublicRooms(db: Db, limit = 50): Promise<ListedRoom[]> {
+  const playerCount = sql<number>`(select count(*) from ${roomMembers} where ${roomMembers.roomId} = ${rooms.id} and ${roomMembers.role} = 'player')`.mapWith(Number);
+  return db
+    .select({ code: rooms.code, name: rooms.name, autoName: rooms.autoName, language: raceConfigs.language, guests: rooms.guests, bots: rooms.bots, players: playerCount, status: rooms.status })
+    .from(rooms)
+    .innerJoin(raceConfigs, eq(raceConfigs.id, rooms.configId))
+    .where(and(eq(rooms.visibility, "public"), ne(rooms.status, "closed")))
+    .orderBy(desc(rooms.createdAt), desc(rooms.id))
+    .limit(limit);
+}
+
+/** Comment on entre : par le code du salon, ou par un lien d'invitation. */
+export type JoinVia = { code: string } | { invite: string };
+
+/** Le salon visé, seulement si ce moyen d'entrée l'ouvre (SALLE-03). Un refus ne dit pas si le salon existe. */
+async function roomFor(db: Db, via: JoinVia) {
+  // À BRANCHER (SALLE-04) : un jeton par invité, lié à son IP ; ici, le jeton unique du salon.
+  const [room] = await db.select().from(rooms).where("code" in via ? eq(rooms.code, via.code) : eq(rooms.inviteToken, via.invite));
+  if (!room) throw new RoomRefused("not_found");
+  // À BRANCHER (SALLE-10) : limiter les essais de code par IP, avant cette lecture, dans la route.
+  if ("code" in via && !allows(room.visibility, "code")) throw new RoomRefused("not_found");
+  return room;
+}
+
+/**
+ * Entrer dans un salon comme participant. Un membre qui revient (rechargement, autre onglet) le retrouve sans doublon.
+ * Points d'extension : SALLE-05 (capacité), SALLE-06 (une salle à la fois), SALLE-07 (expulsés) se vérifient ici,
+ * avant l'insertion ; SALLE-09 (état du salon) aussi.
+ */
+export async function joinRoom(db: Db, who: Identity, via: JoinVia): Promise<RoomResult> {
+  const room = await roomFor(db, via);
+  const key = memberKey(who);
+  if (await membership(db, room.id, key)) return { room: await roomView(db, room.id, key), you: key };
+  await db.transaction(async (tx) => {
+    const taken = (await tx.select({ seat: roomMembers.seat }).from(roomMembers).where(eq(roomMembers.roomId, room.id))).map((m) => m.seat);
+    const identity = who.kind === "account" ? { playerId: who.playerId } : { guestName: who.name };
+    await tx.insert(roomMembers).values({ roomId: room.id, memberKey: key, ...identity, role: "player", ...placeFor("player", taken) }).onConflictDoNothing();
+  });
+  return { room: await roomView(db, room.id, key), you: key };
+}
+
+/**
+ * Quitter un salon. Le dernier qui part le ferme.
+ * À BRANCHER (SALLE-08) : si l'hôte part, passer le rôle au membre humain présent depuis le plus longtemps.
+ */
+export async function leaveRoom(db: Db, code: string, who: Identity): Promise<{ left: boolean }> {
+  const room = await roomByCode(db, code);
+  const removed = await db.delete(roomMembers).where(and(eq(roomMembers.roomId, room.id), eq(roomMembers.memberKey, memberKey(who)))).returning({ key: roomMembers.memberKey });
+  if (removed.length && !(await db.$count(roomMembers, eq(roomMembers.roomId, room.id)))) {
+    await db.update(rooms).set({ status: "closed" }).where(eq(rooms.id, room.id));
+  }
+  return { left: removed.length > 0 };
 }

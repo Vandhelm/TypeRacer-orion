@@ -146,3 +146,115 @@ describe("SALLE-01 — a signed-in user creates a room and hosts it", () => {
     expect(room.code).toBe("FRAKS3");
   });
 });
+
+type Joined = { room: { code: string; members: { key: string; name: string; role: string; guest: boolean }[]; invite: string | null }; you: string };
+
+describe("SALLE-03 — visibility decides who sees and enters a room", () => {
+  let t: Awaited<ReturnType<typeof setup>>;
+  let host: { cookie: string; playerId: number };
+  const open = async (visibility: "public" | "semi" | "private") => {
+    const res = await t.call("POST", "/api/rooms", host.cookie, { role: "player", settings: { visibility } });
+    return ((await res.json()) as Joined).room;
+  };
+  const inviteOf = async (code: string) => ((await (await t.call("GET", `/api/rooms/${code}`, host.cookie)).json()) as Joined).room.invite!;
+  beforeAll(async () => {
+    t = await setup();
+    host = await t.signUp("Hote_Visible");
+  });
+
+  test("GET /api/rooms lists public rooms only, never semi or private", async () => {
+    const pub = await open("public");
+    const semi = await open("semi");
+    const priv = await open("private");
+    const res = await t.call("GET", "/api/rooms");
+    expect(res.status).toBe(200);
+    const { rooms: listed } = (await res.json()) as { rooms: { code: string }[] };
+    const codes = listed.map((r) => r.code);
+    expect(codes).toContain(pub.code);
+    expect(codes).not.toContain(semi.code);
+    expect(codes).not.toContain(priv.code);
+    const [demoPrivate] = await t.db.select({ code: rooms.code }).from(rooms).where(eq(rooms.visibility, "private"));
+    expect(codes).not.toContain(demoPrivate!.code);
+  });
+
+  test("the list gives no invitation token", async () => {
+    await open("public");
+    const body = await (await t.call("GET", "/api/rooms")).text();
+    expect(body).not.toContain("invite");
+  });
+
+  test("the code of a private room is refused", async () => {
+    const priv = await open("private");
+    const res = await t.call("POST", "/api/rooms/join", t.guest("Curieux_1"), { code: priv.code });
+    expect(res.status).toBe(404);
+    const members = await t.db.select().from(roomMembers).where(eq(roomMembers.guestName, "Curieux_1"));
+    expect(members).toHaveLength(0);
+  });
+
+  test("the code of a semi (on code) room is accepted", async () => {
+    const semi = await open("semi");
+    const res = await t.call("POST", "/api/rooms/join", t.guest("Codeur_1"), { code: semi.code });
+    expect(res.status).toBe(200);
+    const { room, you } = (await res.json()) as Joined;
+    expect(you).toBe("guest:codeur_1");
+    expect(room.members.map((m) => m.key)).toContain(you);
+    expect(room.invite).toBeNull();
+  });
+
+  test("a public room is entered directly with its code", async () => {
+    const pub = await open("public");
+    const res = await t.call("POST", "/api/rooms/join", (await t.signUp("Passant_1")).cookie, { code: pub.code });
+    expect(res.status).toBe(200);
+  });
+
+  test("the invitation link opens every visibility, including private", async () => {
+    for (const visibility of ["public", "semi", "private"] as const) {
+      const room = await open(visibility);
+      const res = await t.call("POST", "/api/rooms/join", t.guest(`Invite_${visibility}`), { invite: await inviteOf(room.code) });
+      expect(res.status).toBe(200);
+    }
+  });
+
+  test("a wrong invitation token is refused", async () => {
+    const res = await t.call("POST", "/api/rooms/join", t.guest("Faussaire"), { invite: "0".repeat(32) });
+    expect(res.status).toBe(404);
+  });
+
+  test("joining needs a session (401) and a valid body (400)", async () => {
+    const pub = await open("public");
+    expect((await t.call("POST", "/api/rooms/join", undefined, { code: pub.code })).status).toBe(401);
+    expect((await t.call("POST", "/api/rooms/join", t.guest("Bavard_1"), { code: pub.code, role: "host" })).status).toBe(400);
+    expect((await t.call("POST", "/api/rooms/join", t.guest("Bavard_1"), {})).status).toBe(400);
+  });
+
+  test("joining twice does not duplicate the member", async () => {
+    const pub = await open("public");
+    await t.call("POST", "/api/rooms/join", t.guest("Deux_Fois"), { code: pub.code });
+    const res = await t.call("POST", "/api/rooms/join", t.guest("Deux_Fois"), { code: pub.code });
+    const { room } = (await res.json()) as Joined;
+    expect(room.members.filter((m) => m.key === "guest:deux_fois")).toHaveLength(1);
+  });
+
+  test("a member who is not the host cannot change the settings (403)", async () => {
+    const pub = await open("public");
+    await t.call("POST", "/api/rooms/join", t.guest("Pas_Hote"), { code: pub.code });
+    const res = await t.call("PATCH", `/api/rooms/${pub.code}`, t.guest("Pas_Hote"), { settings: { visibility: "private" } });
+    expect(res.status).toBe(403);
+  });
+
+  test("the host can change the visibility; the list follows", async () => {
+    const pub = await open("public");
+    await t.call("PATCH", `/api/rooms/${pub.code}`, host.cookie, { settings: { visibility: "private" } });
+    const { rooms: listed } = (await (await t.call("GET", "/api/rooms")).json()) as { rooms: { code: string }[] };
+    expect(listed.map((r) => r.code)).not.toContain(pub.code);
+  });
+
+  test("leaving removes the member", async () => {
+    const pub = await open("public");
+    await t.call("POST", "/api/rooms/join", t.guest("Partant"), { code: pub.code });
+    const res = await t.call("POST", `/api/rooms/${pub.code}/leave`, t.guest("Partant"));
+    expect(res.status).toBe(200);
+    const room = ((await (await t.call("GET", `/api/rooms/${pub.code}`, host.cookie)).json()) as Joined).room;
+    expect(room.members.map((m) => m.key)).not.toContain("guest:partant");
+  });
+});

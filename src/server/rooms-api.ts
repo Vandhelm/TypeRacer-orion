@@ -2,11 +2,11 @@
 // refus → statut HTTP. Toute règle (hôte, accès, état) est dans rooms.ts, appliquée par le serveur (SEC-01).
 import type { Db } from "../../db/client";
 import { isRoomCode } from "../rooms/access";
-import { CreateRoomSchema, UpdateRoomSchema } from "../rooms/settings";
+import { CreateRoomSchema, JoinRoomSchema, UpdateRoomSchema } from "../rooms/settings";
 import type { Auth } from "./auth";
 import { guestSecret } from "./guest";
 import { roomIdentity } from "./room-gate";
-import { CodeExhausted, createRoom, readRoom, RoomRefused, updateRoom, type RefusalReason, type RoomResult } from "./rooms";
+import { CodeExhausted, createRoom, joinRoom, leaveRoom, listPublicRooms, readRoom, RoomRefused, updateRoom, type RefusalReason, type RoomResult } from "./rooms";
 
 const STATUS: Record<RefusalReason, number> = { not_found: 404, not_member: 403, not_host: 403, full: 409, in_race: 409, closed: 410 };
 
@@ -17,9 +17,11 @@ async function bodyOf(req: Request): Promise<unknown> {
 }
 
 /** Exécute une action ; un refus attendu devient son statut HTTP, une erreur inattendue remonte. */
-async function run(action: () => Promise<RoomResult>, status = 200): Promise<Response> {
+async function run(action: () => Promise<RoomResult>, status = 200, done?: (result: RoomResult) => void): Promise<Response> {
   try {
-    return json(await action(), status);
+    const result = await action();
+    done?.(result);
+    return json(result, status);
   } catch (error) {
     if (error instanceof RoomRefused) return json({ error: error.reason }, STATUS[error.reason]);
     if (error instanceof CodeExhausted) return json({ error: "no_free_code" }, 503);
@@ -44,7 +46,30 @@ export async function handleRoomsApi(req: Request, db: Db, auth: Auth, secret = 
     return run(() => createRoom(db, { playerId: who.playerId }, input.data), 201);
   }
 
+  // GET /api/rooms — SALLE-03 : les salons publics seulement, pour l'explorateur et « Faire une course »
+  if (parts.length === 0 && req.method === "GET") return json({ rooms: await listPublicRooms(db) });
+
+  // POST /api/rooms/join — SALLE-03 : par code (public, sur code) ou par lien d'invitation (toutes visibilités)
+  if (parts.length === 1 && parts[0] === "join" && req.method === "POST") {
+    if (!who) return json({ error: "unauthorized" }, 401);
+    const input = JoinRoomSchema.safeParse(await bodyOf(req));
+    if (!input.success) return json({ error: "invalid_body" }, 400);
+    return run(() => joinRoom(db, who, input.data), 200, (result) => changed(result.room.code));
+  }
+
   const [code, action] = parts;
+  // POST /api/rooms/:code/leave
+  if (code && isRoomCode(code) && action === "leave" && req.method === "POST") {
+    if (!who) return json({ error: "unauthorized" }, 401);
+    try {
+      const result = await leaveRoom(db, code, who);
+      if (result.left) changed(code);
+      return json(result);
+    } catch (error) {
+      if (error instanceof RoomRefused) return json({ error: error.reason }, STATUS[error.reason]);
+      throw error;
+    }
+  }
   if (code && isRoomCode(code) && !action) {
     if (!who) return json({ error: "unauthorized" }, 401);
     // GET /api/rooms/:code — l'état du salon, pour ses membres
@@ -53,9 +78,7 @@ export async function handleRoomsApi(req: Request, db: Db, auth: Auth, secret = 
     if (req.method === "PATCH") {
       const input = UpdateRoomSchema.safeParse(await bodyOf(req));
       if (!input.success) return json({ error: "invalid_body" }, 400);
-      const response = await run(() => updateRoom(db, code, who, input.data));
-      if (response.ok) changed(code);
-      return response;
+      return run(() => updateRoom(db, code, who, input.data), 200, () => changed(code));
     }
   }
   return json({ error: "not_found" }, 404);
