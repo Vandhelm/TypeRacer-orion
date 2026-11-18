@@ -211,13 +211,38 @@ describe("SALLE-04 — one invitation link per guest, single use, bound to an IP
     expect((await join(t.guest("Faux_IP"), token, "not-an-ip")).status).toBe(403);
   });
 
-  test("an existing member opening another link does not consume it", async () => {
+  test("a member whose IP changed (wifi to 4G) reloads their link: still accepted, the link stays theirs", async () => {
     const code = await open();
-    const first = await newInvite(code);
-    const second = await newInvite(code);
-    await join(t.guest("Deja_La"), first.token);
-    expect((await join(t.guest("Deja_La"), second.token)).status).toBe(200);
-    expect((await invitesOf(code)).find((i) => i.token === second.token)).toMatchObject({ status: "unused" });
+    const { token } = await newInvite(code);
+    const first = (await (await join(t.guest("Nomade"), token, IP_A)).json()) as Joined;
+    const reload = await join(t.guest("Nomade"), token, IP_B);
+    expect(reload.status).toBe(200);
+    expect(((await reload.json()) as Joined).you).toBe(first.you);
+    expect(await membersNamed("Nomade")).toBe(1);
+    const [row] = await t.db.select({ usedBy: roomInvites.usedBy, usedIp: roomInvites.usedIp }).from(roomInvites).where(eq(roomInvites.token, token));
+    expect(row).toEqual({ usedBy: first.you, usedIp: IP_A });
+  });
+
+  test("a member opening someone else's used link stays in, and the link is not handed over", async () => {
+    const code = await open();
+    const mine = await newInvite(code);
+    const theirs = await newInvite(code);
+    await join(t.guest("Proprio_L"), theirs.token, IP_B);
+    await join(t.guest("Membre_Curieux"), mine.token, IP_A);
+    expect((await join(t.guest("Membre_Curieux"), theirs.token, IP_A)).status).toBe(200);
+    expect((await invitesOf(code)).find((i) => i.token === theirs.token)).toMatchObject({ usedBy: "Proprio_L" });
+  });
+
+  test("a member who came by code and opens a free link takes it; expelling them revokes it (SALLE-07)", async () => {
+    const code = await open("public");
+    const { token } = await newInvite(code);
+    const { you } = (await (await t.call("POST", "/api/rooms/join", t.guest("Par_Code"), { code })).json()) as Joined;
+    expect((await join(t.guest("Par_Code"), token, IP_A)).status).toBe(200);
+    expect((await invitesOf(code))[0]).toMatchObject({ status: "used", usedBy: "Par_Code" });
+    const [room] = await t.db.select({ id: rooms.id }).from(rooms).where(eq(rooms.code, code));
+    await t.db.delete(roomMembers).where(and(eq(roomMembers.roomId, room!.id), eq(roomMembers.memberKey, you)));
+    expect(await revokeInvitesOf(t.db, room!.id, you)).toBe(1);
+    expect((await join(t.guest("Par_Code"), token, IP_A)).status).toBe(404);
   });
 
   test("a refused entry (race in progress) leaves the link unused", async () => {

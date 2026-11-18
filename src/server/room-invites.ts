@@ -64,7 +64,8 @@ export async function roomOfInvite(db: Db, token: string): Promise<number> {
  * Libre : il est lié à cette IP et à cette personne. Déjà lié : il ne sert plus qu'à cette personne depuis cette IP
  * (reconnexion) ; toute autre demande est refusée (invite_taken), même d'une autre session derrière la même IP.
  * Sans IP connue, un lien n'est jamais pris : on ne saurait pas à qui le lier.
- * `isMember` : la personne est déjà dans le salon ; un lien libre n'est alors pas consommé.
+ * `isMember` : la personne est déjà dans le salon. Elle reste acceptée quel que soit le lien ou son IP, et un lien
+ * libre lui est lié quand même (membre entré par code) : revokeInvitesOf le retrouvera à son expulsion.
  */
 export async function claimInvite(tx: Db, roomId: number, token: string, who: Identity, ip: string | null, isMember: boolean): Promise<void> {
   const [invite] = await tx
@@ -75,11 +76,16 @@ export async function claimInvite(tx: Db, roomId: number, token: string, who: Id
   if (!invite) throw new RoomRefused("not_found");
   const key = memberKey(who);
   if (invite.usedBy) {
+    // un membre déjà présent reste accepté (son IP a pu changer : wifi puis 4G), sans que le lien change de main
+    if (isMember) return;
     if (!ip || invite.usedIp !== ip || invite.usedBy !== key) throw new RoomRefused("invite_taken");
     return;
   }
-  if (isMember) return;
-  if (!ip) throw new RoomRefused("invite_taken");
+  if (!ip) {
+    if (isMember) return;
+    throw new RoomRefused("invite_taken");
+  }
+  // libre : il est pris, même par un membre déjà présent (entré par code), pour que son expulsion le révoque
   await tx.update(roomInvites).set({ usedBy: key, usedName: who.name, usedIp: ip, usedAt: new Date() }).where(eq(roomInvites.id, invite.id));
 }
 
