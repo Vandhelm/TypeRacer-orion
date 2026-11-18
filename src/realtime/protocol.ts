@@ -6,7 +6,7 @@ import { CODE_PATTERN } from "../rooms/access";
 
 /** Un message plus long est refusé par le serveur avant même d'être lu. */
 export const MAX_MESSAGE_BYTES = 1024;
-/** PERF-02 : au plus 10 progressions par seconde et par joueur, côté client comme côté serveur. */
+/** PERF-02 : au plus 10 progressions par seconde, par salle et par joueur, côté client comme côté serveur. */
 export const PROGRESS_PER_SECOND = 10;
 export const PROGRESS_INTERVAL_MS = 1000 / PROGRESS_PER_SECOND;
 export const WPM_MAX = 500;

@@ -27,7 +27,7 @@
 
 Un serveur Bun WebSocket séparé de Next.js, dans `src/realtime/`, qui garde l'état des salles en mémoire et fera foi pour la course (COURSE-06). Il est hébergé sur **Fly.io** (offre gratuite, une machine `shared-cpu-1x` 256 Mo, région `yul`), configuré par `fly.toml` et `Dockerfile.realtime`. Le site reste sur Vercel.
 
-L'identité vient d'un **ticket** : le serveur temps réel est sur un autre domaine que le site, les cookies de session n'y arrivent donc pas. `/api/realtime/ticket` (Next.js) lit la session Better Auth, sinon le cookie invité signé `orion_guest`, et remet un ticket signé HMAC-SHA256 avec un secret partagé (`REALTIME_SECRET`), valable 60 s et à usage unique. Aucun message ne porte d'identité : le serveur la tient du ticket.
+L'identité vient d'un **ticket** : le serveur temps réel est sur un autre domaine que le site, les cookies de session n'y arrivent donc pas. `/api/realtime/ticket` (Next.js) lit la session Better Auth, sinon le cookie invité signé `orion_guest`, et remet un ticket signé HMAC-SHA256 avec un secret partagé (`REALTIME_SECRET`), valable 60 s et à usage unique. Aucun message ne porte d'identité : le serveur la tient du ticket. Un compte est désigné par `u:<id du joueur>`, un invité par `g:<uuid>`, l'identifiant aléatoire gardé dans son cookie signé : deux invités au même pseudo (« Alice », « alice ») restent deux joueurs. Un cookie invité émis avant cet identifiant en reçoit un à sa première demande de ticket (cookie réécrit, même pseudo, même expiration).
 
 ### Conséquences
 
@@ -35,6 +35,9 @@ L'identité vient d'un **ticket** : le serveur temps réel est sur un autre doma
 - **Une seule instance** : l'état est en mémoire. Passer à plusieurs instances demanderait de router chaque salle vers la même machine (en-tête `fly-replay`) ou de partager l'état (Redis).
 - Un redémarrage du serveur vide les salles. Les clients se reconnectent seuls avec un ticket neuf et rejoignent leur salle ; la reprise d'une course en cours (COURSE-08) reste à faire avec COURSE.
 - Le serveur temps réel ne lit pas la base pour l'instant : il ne vérifie pas encore qu'une salle existe, sa visibilité ni sa capacité. Ces règles arriveront avec SALLE (SALLE-03, SALLE-05), par un appel à l'API du site ou une connexion à la base.
+- **`progress` et `wpm` sont déclarés par le client.** Le serveur les relaie après une validation de forme seulement (types, bornes 0 à 1 et 0 à 500, champs en trop refusés) et la limite de fréquence. Il ne vérifie ni la monotonie, ni une vitesse plausible, ni l'état de la course : un client modifié peut afficher une progression fausse chez les autres. Cette cohérence arrive avec le serveur autoritaire de COURSE-06 ; d'ici là, rien de ce qui est relayé ne sert au classement ni n'est écrit en base.
+- **PERF-02, règle retenue :** au plus 10 progressions diffusées par seconde **par salle et par joueur** (une toutes les 100 ms), tous ses onglets confondus ; le client applique la même limite avant d'envoyer, et le serveur fusionne l'excédent (la dernière valeur part). Au-delà de 60 messages par seconde sur une connexion, elle est fermée.
+- **Rejeu d'un ticket après redémarrage.** Les nonces des tickets utilisés ne sont gardés qu'en mémoire, et la machine Fly s'arrête quand elle est vide. Pour qu'un ticket capturé ne redevienne pas utilisable après un redémarrage, le serveur refuse tout ticket émis avant son propre démarrage (date d'émission = expiration − 60 s). Risque résiduel accepté : un écart d'horloge entre Vercel et Fly ; il ferait au pire refuser un ticket légitime émis à la seconde du démarrage, et le client en redemande un.
 - `REALTIME_ALLOWED_ORIGINS` liste les pages autorisées à se connecter. Les déploiements de prévisualisation Vercel (domaine variable) doivent y être ajoutés pour utiliser le temps réel.
 
 ## Flux temps réel
@@ -50,6 +53,7 @@ L'identité vient d'un **ticket** : le serveur temps réel est sur un autre doma
 | `src/realtime/main.ts` | Lancement (`bun run realtime`) et configuration par variables d'environnement |
 | `src/realtime/client.ts` | Client sans React : ticket, connexion, salle, reconnexion, envoi limité |
 | `src/realtime/useRealtimeRoom.ts` | Hook React pour les pages |
+| `src/views/room/live.ts`, `src/views/room/LiveList.tsx` | Présents et progression en direct, affichés dans la salle (`/room`) et dans l'en-tête de la course (`/game`), qui envoie aussi la progression locale |
 
 ### Connexion
 
@@ -87,7 +91,7 @@ Serveur vers client (validés par `ServerMessage` côté client) :
 
 ### Règles du serveur
 
-- Connexion refusée sans ticket valide, avec un ticket expiré, déjà utilisé ou signé par un autre secret, ou depuis une origine non autorisée.
+- Connexion refusée sans ticket valide, avec un ticket expiré, déjà utilisé, émis avant le démarrage du serveur ou signé par un autre secret, ou depuis une origine non autorisée.
 - Message invalide (JSON cassé, type inconnu, valeur hors bornes, champ en trop, trame binaire) : `error invalid_message` à l'expéditeur seulement ; la connexion reste ouverte.
 - Message de plus de 1 Ko : la connexion est fermée par Bun. Plus de 60 messages en une seconde : fermeture 1008.
 - Progression (PERF-02) : au plus une diffusion toutes les 100 ms par salle et par joueur, onglets compris. Les messages en trop sont fusionnés et la dernière valeur part dès que la limite le permet. Le client applique la même limite avant d'envoyer. Rien n'est écrit en base.
