@@ -4,7 +4,8 @@ import type { RoomSocketMessage } from "../../server/realtime";
 import type { RefusalReason, RoomResult, RoomView } from "../../server/rooms";
 
 export type RoomError = RefusalReason | "unauthorized" | "account_required" | "invalid_body" | "no_free_code" | "network";
-export type Answer = { ok: true; result: RoomResult } | { ok: false; error: RoomError };
+/** current : SALLE-06, le salon où l'on est déjà quand le serveur répond « already_in_room ». */
+export type Answer = { ok: true; result: RoomResult } | { ok: false; error: RoomError; current?: string };
 
 async function send(method: string, path: string, body?: unknown): Promise<Answer> {
   try {
@@ -14,8 +15,9 @@ async function send(method: string, path: string, body?: unknown): Promise<Answe
       headers: body === undefined ? undefined : { "content-type": "application/json" },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
-    const data = (await res.json().catch(() => ({}))) as RoomResult & { error?: RoomError };
-    return res.ok ? { ok: true, result: data } : { ok: false, error: data.error ?? "network" };
+    const data = (await res.json().catch(() => ({}))) as RoomResult & { error?: RoomError; room?: unknown };
+    if (res.ok) return { ok: true, result: data };
+    return { ok: false, error: data.error ?? "network", ...(typeof data.room === "string" ? { current: data.room } : {}) };
   } catch {
     return { ok: false, error: "network" };
   }

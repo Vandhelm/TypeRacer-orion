@@ -100,6 +100,8 @@
     "helpRole": "Player: you take a seat and race. Spectator: you watch the race without taking part.",
     "spectators": "Spectators",
     "watchInstead": "Watch as a spectator",
+    "leaveCurrent": "Leave {{code}} and enter here",
+    "backToCurrent": "Back to {{code}}",
     "loading": "Opening the room…",
     "errors": {
       "not_found": "This room doesn't exist, or it needs an invitation.",
@@ -108,6 +110,7 @@
       "full": "This room is full.",
       "in_race": "A race is in progress: try again once it's over.",
       "closed": "This room is closed.",
+      "already_in_room": "You are already in room {{code}}: you can only be in one room at a time.",
       "account_required": "You need an account to create a room.",
       "invalid_body": "Invalid request.",
       "no_free_code": "The room can't be created right now. Try again.",

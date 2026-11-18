@@ -24,6 +24,9 @@ export function useRoom(page: "room" | "game" = "room") {
   const [ready, setReady] = useState(false);
   /** SALLE-05 : un salon complet s'ouvre encore comme spectateur, à la demande. */
   const [joinRole, setJoinRole] = useState<Role | undefined>();
+  /** SALLE-06 : le salon où l'on est déjà, quand le serveur refuse d'en ouvrir un deuxième ; `attempt` relance l'arrivée. */
+  const [current, setCurrent] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
   const pending = useRef<Partial<RoomSettings>>({});
   const timer = useRef(0);
   const code = view.code;
@@ -39,7 +42,10 @@ export function useRoom(page: "room" | "game" = "room") {
     (reply: Answer) => {
       if (reply.ok) apply(reply.result);
       else if (reply.error === "unauthorized") location.replace("/");
-      else setError(reply.error);
+      else {
+        setCurrent(reply.current ?? null);
+        setError(reply.error);
+      }
     },
     [apply],
   );
@@ -64,7 +70,7 @@ export function useRoom(page: "room" | "game" = "room") {
     return () => {
       live = false;
     };
-  }, [arrival, page, answer, joinRole]);
+  }, [arrival, page, answer, joinRole, attempt]);
 
   useEffect(() => () => clearTimeout(timer.current), []);
 
@@ -88,6 +94,15 @@ export function useRoom(page: "room" | "game" = "room") {
   }, [code]);
 
   const host = ready && view.host === you;
+
+  /** SALLE-06 : on accepte de quitter le salon actuel, puis on refait l'arrivée (création ou entrée) ici. */
+  const leaveCurrent = useCallback(async () => {
+    if (!current) return;
+    await roomApi.leave(current);
+    setCurrent(null);
+    setError(null);
+    setAttempt((n) => n + 1);
+  }, [current]);
 
   /** SALLE-05 : le salon est complet ; on y entre comme spectateur, sans place. */
   const watchInstead = useCallback(() => {
@@ -139,6 +154,8 @@ export function useRoom(page: "room" | "game" = "room") {
     error,
     /** SALLE-05 : entrer comme spectateur quand le salon est complet ; null sinon. */
     watchInstead: error === "full" && arrival?.action === "join" && !joinRole ? watchInstead : null,
+    /** SALLE-06 : le salon où l'on est déjà, et de quoi le quitter pour entrer ici ; null sans ce refus. */
+    elsewhere: error === "already_in_room" && current ? { code: current, leave: leaveCurrent } : null,
     leave,
     finish,
     /** waiting, racing, results, closed : l'état du salon selon le serveur. */

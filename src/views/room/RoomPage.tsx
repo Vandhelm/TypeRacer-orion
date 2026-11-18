@@ -20,7 +20,7 @@ const VISIBILITY_KEY = { private: "private", semi: "semiPrivate", public: "publi
 export function RoomPage() {
   const { t, i18n } = useTranslation();
   const state = useRoom();
-  const { room, update, host, seats, players, spectators, displayName, ready, error, watchInstead, leave, status, finished, launch: launchOnServer } = state;
+  const { room, update, host, seats, players, spectators, displayName, ready, error, watchInstead, elsewhere, leave, status, finished, launch: launchOnServer } = state;
   const editor = useRef<TextEditorHandle>(null);
   const launched = useRef(false);
   const [stampOn, setStampOn] = useState(false);
@@ -57,9 +57,15 @@ export function RoomPage() {
     return (
       <main className="relative z-1 isolate">
         <div className="room-shade room-name" role={error ? "alert" : "status"}>
-          <p>{t(error ? `room.errors.${error}` : "room.loading")}</p>
+          <p>{t(error ? `room.errors.${error}` : "room.loading", elsewhere ? { code: elsewhere.code } : undefined)}</p>
           {error && <HangingButton className="room-leave" href="/home#rooms">{t("room.leave")}</HangingButton>}
           {watchInstead && <button type="button" className="room-refusal-action" onClick={watchInstead}>{t("room.watchInstead")}</button>}
+          {elsewhere && (
+            <>
+              <button type="button" className="room-refusal-action" onClick={elsewhere.leave}>{t("room.leaveCurrent", { code: elsewhere.code })}</button>
+              <a className="room-refusal-action" href={`/room?code=${elsewhere.code}`}>{t("room.backToCurrent", { code: elsewhere.code })}</a>
+            </>
+          )}
         </div>
       </main>
     );

@@ -100,6 +100,8 @@
     "helpRole": "Participant : tu as une place et tu cours. Spectateur : tu regardes la course sans y prendre part.",
     "spectators": "Spectateurs",
     "watchInstead": "Regarder en spectateur",
+    "leaveCurrent": "Quitter {{code}} et entrer ici",
+    "backToCurrent": "Retourner dans {{code}}",
     "loading": "Ouverture du salon…",
     "errors": {
       "not_found": "Ce salon n'existe pas, ou il faut une invitation pour y entrer.",
@@ -108,6 +110,7 @@
       "full": "Ce salon est complet.",
       "in_race": "Une course est en cours : réessaie quand elle sera finie.",
       "closed": "Ce salon est fermé.",
+      "already_in_room": "Tu es déjà dans le salon {{code}} : on ne peut être que dans un salon à la fois.",
       "account_required": "Il faut un compte pour créer un salon.",
       "invalid_body": "Demande invalide.",
       "no_free_code": "Impossible de créer le salon pour l'instant. Réessaie.",
