@@ -130,6 +130,16 @@ export function useRoom(page: "room" | "game" = "room") {
     [host, flush],
   );
 
+  /** SALLE-07 : l'hôte expulse un participant ou un spectateur ; la réponse est le salon sans lui. */
+  // un refus (personne déjà partie) ne remplace pas la page : la relecture suivante montre la liste à jour
+  const kick = useCallback(
+    async (member: string) => {
+      const reply = await roomApi.kick(code, member);
+      if (reply.ok) apply(reply.result);
+    },
+    [code, apply],
+  );
+
   /** SALLE-01 : l'hôte court (participant) ou regarde (spectateur). */
   const setRole = useCallback(async (role: Role) => answer(await roomApi.update(code, { role })), [code, answer]);
 
@@ -168,6 +178,9 @@ export function useRoom(page: "room" | "game" = "room") {
     finished: me?.finished ?? false,
     setRole,
     launch,
+    kick,
+    /** SALLE-07 : les autres personnes du salon (participants et spectateurs, sans les bots), que l'hôte peut expulser. */
+    others: view.members.filter((m) => m.key !== you),
     seats,
     players,
     spectators: view.members.filter((m) => m.role === "spectator"),

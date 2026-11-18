@@ -20,7 +20,7 @@ const VISIBILITY_KEY = { private: "private", semi: "semiPrivate", public: "publi
 export function RoomPage() {
   const { t, i18n } = useTranslation();
   const state = useRoom();
-  const { room, update, host, seats, players, spectators, displayName, ready, error, watchInstead, elsewhere, leave, status, finished, launch: launchOnServer } = state;
+  const { room, update, host, seats, players, spectators, displayName, ready, error, watchInstead, elsewhere, leave, others, kick, status, finished, launch: launchOnServer } = state;
   const editor = useRef<TextEditorHandle>(null);
   const launched = useRef(false);
   const [stampOn, setStampOn] = useState(false);
@@ -110,6 +110,23 @@ export function RoomPage() {
           />
         </form>
         <TextEditorDialog ref={editor} text={room.text} onUse={(text) => update({ text, textType: "custom" })} />
+        {host && others.length > 0 && (
+          <section className="room-members room-shade" aria-labelledby="members-title">
+            <h2 id="members-title" className="room-label">{t("room.members")}</h2>
+            <ul>
+              {others.map((m) => (
+                <li key={m.key}>
+                  <span className="room-members-name">{m.name}</span>
+                  <span className="room-members-role">{t(`room.role_${m.role}`)}</span>
+                  <button type="button" className="room-refusal-action" onClick={() => confirm(t("room.kickConfirm", { name: m.name })) && void kick(m.key)}>
+                    {t("room.kick")}
+                    <span className="sr-only">{` ${m.name}`}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
         <section className="sr-only" aria-labelledby="players-title">
           <h2 id="players-title">{t("room.players")}</h2>
           {/* la liste reste lue par les lecteurs d'écran ; à l'écran, les joueurs sont les poissons */}

@@ -34,6 +34,8 @@ export const roomApi = {
   /** SALLE-09 : la course est finie, le salon repasse aux résultats. keepalive : la page part au podium juste après. */
   finish: (code: string) => fetch(`/api/rooms/${code}/finish`, { method: "POST", credentials: "same-origin", keepalive: true }).catch(() => undefined),
   update: (code: string, body: { role?: Role; settings?: Partial<RoomSettings> }) => send("PATCH", `/api/rooms/${code}`, body),
+  /** SALLE-07 : l'hôte expulse un membre (sa clé) ; le serveur vérifie que c'est bien l'hôte. */
+  kick: (code: string, member: string) => send("POST", `/api/rooms/${code}/kick`, { member }),
 };
 
 /** Sans WebSocket (Next.js, Vercel), on relit l'état à ce rythme. */
