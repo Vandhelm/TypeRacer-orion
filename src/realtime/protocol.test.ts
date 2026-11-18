@@ -64,7 +64,7 @@ describe("TECH-07 — real-time client messages are validated by a schema", () =
 
 describe("TECH-06 — server messages read by the client", () => {
   test("parses a presence list", () => {
-    const message = { type: "presence", room: "ABC234", players: [{ id: "g:corail_418", name: "Corail_418", guest: true }] };
+    const message = { type: "presence" as const, room: "ABC234", players: [{ id: "g:corail_418", name: "Corail_418", guest: true }] };
     expect(parseServerMessage(raw(message))).toEqual(message);
   });
 
