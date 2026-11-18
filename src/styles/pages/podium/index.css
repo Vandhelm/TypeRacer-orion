@@ -7,6 +7,8 @@
 @import "../../base/tokens.css";
 @import "../../base/reset.css" layer(base);
 @import "../../base/utilities.css";
+@import "../../base/animations.css";
+@import "../../components/tabs/hanging-tabs.css";
 
 @import "./scene.css";
 @import "./board.css";

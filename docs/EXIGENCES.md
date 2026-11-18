@@ -139,9 +139,9 @@ Les statuts viennent des rapports de l'agent `qa` (skill `criteria-check`). Une 
 
 | ID | Statut | Fichiers principaux | Tests associés | Notes et choix |
 |---|---|---|---|---|
-| I18N-01 | non vérifié |  |  |  |
-| I18N-02 | non vérifié |  |  |  |
-| I18N-03 | non vérifié |  |  |  |
+| I18N-01 | complet | `src/i18n/locales/fr.json`, `src/i18n/locales/en.json`, `src/i18n/server.ts`, `src/i18n/request.ts`, `app/layout.tsx`, `app/not-found.tsx`, `app/*/page.tsx` | `tests/i18n/i18n-01.test.ts` | Titres et `<html lang>` rendus côté serveur selon le cookie puis `Accept-Language`. Pas de meta description (le titre seul est traduit). Réserves mineures : placeholder « Corail_418 » (`HomePanel.tsx:170`) et kanji « 始 » (`GamePage.tsx:79`) en dur. Vérifié le 2026-11-18 (QA section 5.11, rendu fr/en sur les 5 pages et la 404). |
+| I18N-02 | complet | `src/components/tabs/LanguageSwitcher.tsx`, `src/i18n/index.ts`, `src/i18n/server.ts`, `src/next/NotFoundSwitcher.tsx`, les 5 `*Page.tsx` | `tests/i18n/i18n-02.test.ts` | Cookie `orion-lang` (un an, `Path=/`), repli sur le navigateur côté client et serveur, puis anglais. La 404 recharge la page après le choix. Vérifié le 2026-11-18 (QA section 5.11). |
+| I18N-03 | complet | `src/i18n/format.ts` | `src/i18n/format.test.ts`, `src/views/profile/format.test.tsx`, `src/views/room/useRoomLabels.test.tsx` | `Intl` en fr-CA ou en-CA. Réserve mineure : graduations des axes des graphiques non formatées (`ProgressChart.tsx:51`, `SpeedChart.tsx`). Vérifié le 2026-11-18 (QA section 5.11, nombres et dates en fr et en à l'écran). |
 
 ## 6. Qualité
 

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
+import { formatNumber } from "../../i18n/format";
 import { myAccuracy, myWpm, secondsLeft, type Race } from "./race";
 import { TypingText } from "./TypingText";
 
@@ -7,7 +8,7 @@ const LOCKED_KEYS = ["Enter", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown",
 
 /** Timer, stats and the text itself. The real input is invisible and covers the panel: the player writes "in" the text. */
 export function TypingPanel({ race, onInput, lang }: { race: Race; onInput: (value: string) => void; lang: string }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const input = useRef<HTMLInputElement>(null);
   const racing = race.phase === "racing";
   const disabled = !racing || race.finishedAt > 0;
@@ -35,8 +36,8 @@ export function TypingPanel({ race, onInput, lang }: { race: Race; onInput: (val
   return (
     <section className="game-panel" aria-label={t("game.typingArea")}>
       <div className="game-stats">
-        <p className="game-stat"><span className="game-stat-label">{t("game.wpm")}</span><b>{myWpm(race)}</b></p>
-        <p className="game-stat"><span className="game-stat-label">{t("game.accuracy")}</span><b>{myAccuracy(race)} %</b></p>
+        <p className="game-stat"><span className="game-stat-label">{t("game.wpm")}</span><b>{formatNumber(i18n.language, myWpm(race))}</b></p>
+        <p className="game-stat"><span className="game-stat-label">{t("game.accuracy")}</span><b>{formatNumber(i18n.language, myAccuracy(race))} %</b></p>
       </div>
       <p className="game-timer" role="timer" aria-label={`${t("game.time")} ${seconds} s`}>{timerPrefix}{seconds}</p>
       <TypingText words={race.course.words} wordIndex={race.wordIndex} typed={race.typed} missed={race.missedWords} active={racing} lang={lang} />

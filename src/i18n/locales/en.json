@@ -1,6 +1,7 @@
 {
   "home": {
     "langChoice": "Language",
+    "pageTitle": "O.R.I.O.N — Home",
     "viewChoice": "Play or account",
     "overline": "SUSHI RESTAURANT",
     "viewPlay": "PLAY",
@@ -251,8 +252,14 @@
       "network": "Could not load this race."
     }
   },
+  "notFound": {
+    "title": "Page not found",
+    "text": "This page does not exist.",
+    "home": "Back to home"
+  },
   "profile": {
     "pageTitle": "O.R.I.O.N — {{name}}",
+    "defaultTitle": "O.R.I.O.N — Stats",
     "back": "← Podium",
     "place": "{{rank}} place",
     "accuracy": "Accuracy",

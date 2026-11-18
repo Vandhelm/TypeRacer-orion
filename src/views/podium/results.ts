@@ -3,6 +3,7 @@ import { CHARS_PER_WORD, laneElapsedMs, laneProgress, laneWpm, myAccuracy, type 
 import { parseKeys, roundKeys, type KeyCounts } from "../../players/keys";
 import type { TFunction } from "i18next";
 import type { Player, Room } from "../room/room";
+import { formatNumber } from "../../i18n/format";
 
 export type PlayerResult = {
   name: string;
@@ -254,8 +255,7 @@ export async function fetchRaceResults(raceId: number, signal?: AbortSignal): Pr
   return results;
 }
 
-export const oneDecimal = (language: string, value: number) =>
-  new Intl.NumberFormat(language === "en" ? "en-CA" : "fr-CA", { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(value);
+export const oneDecimal = (language: string, value: number) => formatNumber(language, value, 1);
 /** Le joueur classé à ce rang, s'il est connu : une marche du podium reste vide plutôt que d'y monter le suivant. */
 export const playerAt = (players: PlayerResult[], rank: number) => players.find((player) => player.rank === rank);
 

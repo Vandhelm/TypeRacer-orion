@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { authClient } from "../../accounts/client";
 import { HangingButton } from "../../components/buttons/HangingButton";
+import { LanguageSwitcher } from "../../components/tabs/LanguageSwitcher";
 import { useRaceResults } from "../podium/hooks/useRaceResults";
 import { podiumHref, raceErrorKey, rankLabel, type PlayerResult, type RaceResults } from "../podium/results";
 import { CareerStats } from "./CareerStats";
@@ -40,9 +41,15 @@ function subjectOf(results: RaceResults | null): Subject | null {
 export function ProfilePage() {
   const [own] = useState(() => { const query = new URLSearchParams(location.search); return !query.has("player") && !query.has("name"); });
   const { data: session, isPending } = authClient.useSession();
-  if (own && isPending) return <main className="profile" aria-busy="true" />;
-  if (own && session) return <OwnProfile me={session.user as Me} />;
-  return <PlayerProfile session={isPending ? "pending" : session ? "signed-in" : "signed-out"} />;
+  // I18N-02 : le sélecteur est ici, donc présent sur chaque variante de la page (attente, profil propre, profil d'un joueur)
+  return (
+    <>
+      <LanguageSwitcher className="hanging-tabs-floating" />
+      {own && isPending ? <main className="profile" aria-busy="true" />
+        : own && session ? <OwnProfile me={session.user as Me} />
+        : <PlayerProfile session={isPending ? "pending" : session ? "signed-in" : "signed-out"} />}
+    </>
+  );
 }
 
 /** Un joueur : le détail de la dernière course (ou d'une course de l'historique, ?race=N) s'il y était, puis ses statistiques. */
@@ -74,7 +81,7 @@ function PlayerView({ session, results, raceId, error }: ViewProps) {
   const [layout, setLayout] = useKeyboardLayout();
 
   useEffect(() => {
-    document.title = subject ? t("profile.pageTitle", { name: subject.name }) : t("nav.profile");
+    document.title = subject ? t("profile.pageTitle", { name: subject.name }) : t("profile.defaultTitle");
   }, [t, subject]);
 
   useEffect(() => {

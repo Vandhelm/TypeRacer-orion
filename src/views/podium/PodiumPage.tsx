@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { LanguageSwitcher } from "../../components/tabs/LanguageSwitcher";
 import { useRaceResults } from "./hooks/useRaceResults";
 import { PodiumBoard } from "./PodiumBoard";
 import { PodiumScene } from "./PodiumScene";
@@ -36,6 +37,7 @@ export function PodiumPage() {
 
   return (
     <>
+      <LanguageSwitcher className="hanging-tabs-floating" />
       {raceId === null && notSaved ? <p className="podium-notice" role="alert">{t("podium.notSaved")}</p> : null}
       <PodiumScene players={results.players} arrived={arrived} raceId={raceId} />
       <PodiumBoard players={results.players} showPlace arrived={arrived} raceId={raceId} />

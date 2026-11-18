@@ -13,6 +13,7 @@
     justify-content: space-between;
     flex-wrap: wrap;
     gap: 12px 24px;
+    padding-top: 88px; /* below the floating language tabs (up to 84px tall) */
     margin-bottom: clamp(20px, 4vh, 40px);
 }
 .hanging-button.profile-back{ position: relative; top: auto; left: auto; animation: none; }
