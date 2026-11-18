@@ -36,6 +36,14 @@ describe("I18N-02 — langue choisie, conservée, sinon celle du navigateur", ()
     }
   });
 
+  test("le sélecteur de /profile est rendu pour toutes ses variantes (attente, profil propre, joueur)", () => {
+    const source = readFileSync("src/views/profile/ProfilePage.tsx", "utf8");
+    const wrapper = source.slice(source.indexOf("export function ProfilePage"), source.indexOf("function PlayerProfile"));
+    expect(wrapper).toContain("<LanguageSwitcher");
+    expect(wrapper).toContain("<OwnProfile");
+    expect(wrapper.indexOf("<LanguageSwitcher")).toBeLessThan(wrapper.indexOf("<OwnProfile"));
+  });
+
   test("chaque page lit sa langue et son titre côté serveur depuis le cookie", () => {
     for (const page of ["page", "room/page", "game/page", "podium/page", "profile/page"]) {
       expect(readFileSync(`app/${page}.tsx`, "utf8")).toContain("titleFor(");

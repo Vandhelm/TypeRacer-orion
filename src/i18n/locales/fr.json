@@ -248,6 +248,11 @@
     ],
     "viewStats": "Voir les stats de {{name}}"
   },
+  "notFound": {
+    "title": "Page introuvable",
+    "text": "Cette page n'existe pas.",
+    "home": "Retour à l'accueil"
+  },
   "profile": {
     "pageTitle": "O.R.I.O.N — {{name}}",
     "defaultTitle": "O.R.I.O.N — Statistiques",

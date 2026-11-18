@@ -42,9 +42,15 @@ function subjectOf(results: RaceResults | null): Subject | null {
 export function ProfilePage() {
   const [own] = useState(() => { const query = new URLSearchParams(location.search); return !query.has("player") && !query.has("name"); });
   const { data: session, isPending } = authClient.useSession();
-  if (own && isPending) return <main className="profile" aria-busy="true" />;
-  if (own && session) return <OwnProfile me={session.user as Me} />;
-  return <PlayerProfile session={isPending ? "pending" : session ? "signed-in" : "signed-out"} />;
+  // I18N-02 : le sélecteur est ici, donc présent sur chaque variante de la page (attente, profil propre, profil d'un joueur)
+  return (
+    <>
+      <LanguageSwitcher className="hanging-tabs-floating" />
+      {own && isPending ? <main className="profile" aria-busy="true" />
+        : own && session ? <OwnProfile me={session.user as Me} />
+        : <PlayerProfile session={isPending ? "pending" : session ? "signed-in" : "signed-out"} />}
+    </>
+  );
 }
 
 /** Un joueur : le détail de la dernière course s'il y était, puis ses statistiques sur toutes ses courses. */
@@ -61,7 +67,7 @@ function PlayerProfile({ session }: { session: SessionState }) {
   const [layout, setLayout] = useKeyboardLayout();
 
   useEffect(() => {
-    document.title = subject ? t("profile.pageTitle", { name: subject.name }) : t("nav.profile");
+    document.title = subject ? t("profile.pageTitle", { name: subject.name }) : t("profile.defaultTitle");
   }, [t, subject]);
 
   useEffect(() => {
@@ -75,16 +81,13 @@ function PlayerProfile({ session }: { session: SessionState }) {
 
   if (!subject) {
     return (
-      <>
-        <LanguageSwitcher className="hanging-tabs-floating" />
-        <main className="profile" aria-labelledby="profile-name">
-          <header className="profile-head">
-            <HangingButton className="profile-back" href="/home">{t("profile.home")}</HangingButton>
-            <div className="profile-title"><h1 id="profile-name" className="profile-name">{t("nav.profile")}</h1></div>
-          </header>
-          <p className="profile-note">{t("profile.empty")}</p>
-        </main>
-      </>
+      <main className="profile" aria-labelledby="profile-name">
+        <header className="profile-head">
+          <HangingButton className="profile-back" href="/home">{t("profile.home")}</HangingButton>
+          <div className="profile-title"><h1 id="profile-name" className="profile-name">{t("nav.profile")}</h1></div>
+        </header>
+        <p className="profile-note">{t("profile.empty")}</p>
+      </main>
     );
   }
 
@@ -92,8 +95,6 @@ function PlayerProfile({ session }: { session: SessionState }) {
   const place = t("profile.place", { rank: t(`podium.ranks.${index}`) });
 
   return (
-    <>
-    <LanguageSwitcher className="hanging-tabs-floating" />
     <main className="profile" aria-labelledby="profile-name">
       <header className="profile-head">
         {subject.fromPodium && <HangingButton className="profile-back" href={PODIUM_HREF}>{t("profile.back")}</HangingButton>}
@@ -110,6 +111,5 @@ function PlayerProfile({ session }: { session: SessionState }) {
 
       <CareerStats state={stats} guest={guest} layout={layout} onLayout={setLayout} />
     </main>
-    </>
   );
 }

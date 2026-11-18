@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import en from "../../src/i18n/locales/en.json";
 import fr from "../../src/i18n/locales/fr.json";
-import { pageTitle } from "../../src/i18n/server";
+import { notFoundText, pageTitle } from "../../src/i18n/server";
 
 const keys = (node: unknown, prefix = ""): string[] =>
   node && typeof node === "object"
@@ -18,6 +18,12 @@ describe("I18N-01 — textes en français et en anglais", () => {
   test("aucune valeur de traduction n'est vide", () => {
     expect(keys(fr).filter((k) => !lookup(fr, k))).toEqual([]);
     expect(keys(en).filter((k) => !lookup(en, k))).toEqual([]);
+  });
+
+  test("la page 404 est traduite côté serveur", () => {
+    expect(notFoundText("fr").title).not.toBe(notFoundText("en").title);
+    expect(notFoundText("fr").home).toBe(fr.notFound.home);
+    expect(notFoundText("en").text).toBe(en.notFound.text);
   });
 
   test("le titre de chaque page est traduit côté serveur", () => {

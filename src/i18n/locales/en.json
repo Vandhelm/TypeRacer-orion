@@ -248,6 +248,11 @@
     ],
     "viewStats": "See stats for {{name}}"
   },
+  "notFound": {
+    "title": "Page not found",
+    "text": "This page does not exist.",
+    "home": "Back to home"
+  },
   "profile": {
     "pageTitle": "O.R.I.O.N — {{name}}",
     "defaultTitle": "O.R.I.O.N — Stats",

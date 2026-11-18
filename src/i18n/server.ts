@@ -42,4 +42,6 @@ const TITLES: Record<SupportedLanguage, Record<TitledPage, string>> = {
   en: { home: en.home.pageTitle, room: en.room.pageTitle, game: en.game.pageTitle, podium: en.podium.pageTitle, profile: en.profile.defaultTitle },
 };
 
+export const notFoundText = (language: SupportedLanguage) => (language === "fr" ? fr : en).notFound;
+
 export const pageTitle = (language: SupportedLanguage, page: TitledPage) => TITLES[language][page];
