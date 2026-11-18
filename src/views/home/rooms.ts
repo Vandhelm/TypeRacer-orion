@@ -1,13 +1,14 @@
 // Les salons publics de l'explorateur, lus sur le serveur (SALLE-03 : jamais les salons « sur code » ni privés).
+import { canJoin } from "../../rooms/access";
 import type { ListedRoom } from "../../server/rooms";
 
 export type Room = { n: number; serial: string; code: string; lang: "fr" | "en"; guests: string; bots: boolean };
 
 export const WAITING_PAGE = "/room";
 
-/** Un ticket par salon public, dans l'ordre du serveur. */
+/** Un ticket par salon public qu'on peut rejoindre (SALLE-09 : pas pendant sa course), dans l'ordre du serveur. */
 export function tablesOf(list: ListedRoom[]): Room[] {
-  return list.map((room, i) => ({ n: i + 1, serial: room.code, code: room.code, lang: room.language, guests: `${room.players} / ${room.guests}`, bots: room.bots }));
+  return list.filter((room) => canJoin(room.status)).map((room, i) => ({ n: i + 1, serial: room.code, code: room.code, lang: room.language, guests: `${room.players} / ${room.guests}`, bots: room.bots }));
 }
 
 export async function fetchPublicRooms(): Promise<Room[]> {

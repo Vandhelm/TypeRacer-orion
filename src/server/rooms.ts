@@ -4,7 +4,7 @@ import { and, asc, desc, eq, ne, sql } from "drizzle-orm";
 import type { z } from "zod";
 import type { Db } from "../../db/client";
 import { players, raceConfigs, roomMembers, rooms } from "../../db/schema";
-import { allows, newInviteToken, newRoomCode } from "../rooms/access";
+import { allows, canJoin, newInviteToken, newRoomCode } from "../rooms/access";
 import { SEAT_COLORS } from "../rooms/seats";
 import { DEFAULT_SETTINGS, type CreateRoomSchema, type Role, type RoomSettings, type UpdateRoomSchema } from "../rooms/settings";
 
@@ -265,7 +265,10 @@ async function roomFor(db: Db, via: JoinVia) {
 export async function joinRoom(db: Db, who: Identity, via: JoinVia): Promise<RoomResult> {
   const room = await roomFor(db, via);
   const key = memberKey(who);
+  if (room.status === "closed") throw new RoomRefused("closed");
+  // un membre qui revient (rechargement, autre onglet) n'est pas un nouvel arrivant, même pendant la course
   if (await membership(db, room.id, key)) return { room: await roomView(db, room.id, key), you: key };
+  if (!canJoin(room.status)) throw new RoomRefused("in_race");
   await db.transaction(async (tx) => {
     const taken = (await tx.select({ seat: roomMembers.seat }).from(roomMembers).where(eq(roomMembers.roomId, room.id))).map((m) => m.seat);
     const identity = who.kind === "account" ? { playerId: who.playerId } : { guestName: who.name };

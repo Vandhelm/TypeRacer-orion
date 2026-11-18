@@ -258,3 +258,53 @@ describe("SALLE-03 — visibility decides who sees and enters a room", () => {
     expect(room.members.map((m) => m.key)).not.toContain("guest:partant");
   });
 });
+
+describe("SALLE-09 — a room is joined only while waiting or on the results screen", () => {
+  let t: Awaited<ReturnType<typeof setup>>;
+  let host: { cookie: string; playerId: number };
+  const roomIn = async (status: "waiting" | "racing" | "results" | "closed") => {
+    const { room } = (await (await t.call("POST", "/api/rooms", host.cookie, { role: "player", settings: { visibility: "public" } })).json()) as Joined;
+    await t.db.update(rooms).set({ status }).where(eq(rooms.code, room.code));
+    return room;
+  };
+  const inviteOf = async (code: string) => ((await (await t.call("GET", `/api/rooms/${code}`, host.cookie)).json()) as Joined).room.invite!;
+  beforeAll(async () => {
+    t = await setup();
+    host = await t.signUp("Hote_Etat");
+  });
+
+  test("joining a racing room by a direct API call is refused (409 in_race)", async () => {
+    const room = await roomIn("racing");
+    const res = await t.call("POST", "/api/rooms/join", t.guest("Retardataire"), { code: room.code });
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ error: "in_race" });
+    expect(await t.db.$count(roomMembers, eq(roomMembers.guestName, "Retardataire"))).toBe(0);
+  });
+
+  test("an invitation link does not open a racing room either", async () => {
+    const room = await roomIn("waiting");
+    const invite = await inviteOf(room.code);
+    await t.db.update(rooms).set({ status: "racing" }).where(eq(rooms.code, room.code));
+    expect((await t.call("POST", "/api/rooms/join", t.guest("Invite_Tard"), { invite })).status).toBe(409);
+  });
+
+  test("the demo room already racing refuses newcomers", async () => {
+    const res = await t.call("POST", "/api/rooms/join", t.guest("Spectre_1"), { code: "RACE88" });
+    expect(res.status).toBe(409);
+  });
+
+  test("a waiting room accepts", async () => {
+    const room = await roomIn("waiting");
+    expect((await t.call("POST", "/api/rooms/join", t.guest("Ponctuel"), { code: room.code })).status).toBe(200);
+  });
+
+  test("a room on its results screen accepts", async () => {
+    const room = await roomIn("results");
+    expect((await t.call("POST", "/api/rooms/join", t.guest("Apres_Course"), { code: room.code })).status).toBe(200);
+  });
+
+  test("a closed room refuses (410)", async () => {
+    const room = await roomIn("closed");
+    expect((await t.call("POST", "/api/rooms/join", t.guest("Trop_Tard"), { code: room.code })).status).toBe(410);
+  });
+});

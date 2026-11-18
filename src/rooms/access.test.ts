@@ -1,5 +1,5 @@
 import { describe, expect, spyOn, test } from "bun:test";
-import { allows, cleanRoomCode, CODE_ALPHABET, isListed, isRoomCode, newInviteToken, newRoomCode } from "./access";
+import { allows, canJoin, cleanRoomCode, CODE_ALPHABET, isListed, isRoomCode, newInviteToken, newRoomCode } from "./access";
 
 describe("room code", () => {
   test("has no ambiguous characters", () => {
@@ -75,5 +75,14 @@ describe("SALLE-02 — room code drawn by crypto", () => {
     const seen = new Set<string>();
     for (let i = 0; i < 400; i++) for (const c of newRoomCode()) seen.add(c);
     expect(seen.size).toBe(CODE_ALPHABET.length);
+  });
+});
+
+describe("SALLE-09 — joinable states", () => {
+  test("waiting and results are open; racing and closed are not", () => {
+    expect(canJoin("waiting")).toBe(true);
+    expect(canJoin("results")).toBe(true);
+    expect(canJoin("racing")).toBe(false);
+    expect(canJoin("closed")).toBe(false);
   });
 });

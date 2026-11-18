@@ -56,3 +56,10 @@ export function allows(visibility: Visibility, access: Access) {
 export function isListed(visibility: Visibility) {
   return allows(visibility, "listed");
 }
+
+export type RoomStatus = "waiting" | "racing" | "results" | "closed";
+
+/** SALLE-09 : on rejoint un salon en attente ou sur l'écran des résultats, jamais pendant une course. */
+export function canJoin(status: RoomStatus) {
+  return status === "waiting" || status === "results";
+}
