@@ -1,6 +1,9 @@
 // Photo de profil (AUTH-04) : le serveur revérifie le format et le poids, puis réduit lui-même l'image,
 // sans se fier à la réduction faite par le navigateur.
+import { eq } from "drizzle-orm";
 import sharp from "sharp";
+import type { Db } from "../../db/client";
+import * as schema from "../../db/schema";
 import type { Auth } from "./auth";
 
 export const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
@@ -28,8 +31,17 @@ export async function resizeAvatar(bytes: Uint8Array): Promise<Buffer | null> {
   }
 }
 
+export type SaveAvatar = (userId: string, image: string | null) => Promise<void>;
+
+/** Écrit user.image directement : POST /api/auth/update-user refuse `image` (voir auth.ts). */
+export const saveAvatar =
+  (db: Db): SaveAvatar =>
+  async (userId, image) => {
+    await db.update(schema.user).set({ image, updatedAt: new Date() }).where(eq(schema.user.id, userId));
+  };
+
 /** POST : enregistre la photo (champ « avatar »). DELETE : la retire. La photo est gardée dans user.image. */
-export async function handleAvatar(req: Request, auth: Auth): Promise<Response> {
+export async function handleAvatar(req: Request, auth: Auth, save: SaveAvatar): Promise<Response> {
   if (req.method !== "POST" && req.method !== "DELETE") return Response.json({ error: "method_not_allowed" }, { status: 405 });
   const session = await auth.api.getSession({ headers: req.headers });
   if (!session) return Response.json({ error: "unauthorized" }, { status: 401 });
@@ -45,6 +57,6 @@ export async function handleAvatar(req: Request, auth: Auth): Promise<Response> 
     if (!resized) return Response.json({ error: "bad_type" }, { status: 415 });
     image = `data:image/webp;base64,${resized.toString("base64")}`;
   }
-  await auth.api.updateUser({ headers: req.headers, body: { image } });
+  await save(session.user.id, image);
   return Response.json({ image });
 }
