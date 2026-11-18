@@ -162,7 +162,7 @@ export function HomePanel({ ref }: { ref?: Ref<HTMLElement> }) {
         />
 
         <div className="grid animate-[rise_.7s_.65s_cubic-bezier(.2,.8,.2,1)_both] grid-cols-[minmax(0,1fr)] motion-reduce:animate-none">
-          <form className={pane === "play" ? FORM : `is-hidden ${FORM}`} id="pane-play" aria-hidden={pane !== "play"} onSubmit={(e) => void play(e)}>
+          <form className={pane === "play" ? FORM : `pointer-events-none invisible ${FORM}`} id="pane-play" aria-hidden={pane !== "play"} onSubmit={(e) => void play(e)}>
             <TextField
               id="nickname"
               num="01"
@@ -216,7 +216,7 @@ export function HomePanel({ ref }: { ref?: Ref<HTMLElement> }) {
           </form>
 
           <form
-            className={pane === "account" ? FORM : `is-hidden ${FORM}`}
+            className={pane === "account" ? FORM : `pointer-events-none invisible ${FORM}`}
             id="pane-account"
             aria-hidden={pane !== "account"}
             onSubmit={(e) => {

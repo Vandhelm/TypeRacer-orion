@@ -6,7 +6,6 @@
 
 @import "../../base/tokens.css";
 @import "../../base/reset.css" layer(base);
-@import "../../base/utilities.css";
 
 @import "./scene.css";
 @import "./board.css";

@@ -34,7 +34,7 @@ export function PodiumScene({ players, arrived }: { players: PlayerResult[]; arr
             const player = players[rank - 1];
             const side = SIDE_FACES[rank];
             return (
-              <div key={rank} className={`podium-block podium-block--${rank}${player ? "" : " is-hidden"}`}>
+              <div key={rank} className={`podium-block podium-block--${rank}${player ? "" : " pointer-events-none invisible"}`}>
                 <span>{rank}</span>
                 {player && <a className="podium-name" href={profileHref(rank - 1)} aria-label={t("podium.viewStats", { name: player.name })}>{player.name}</a>}
                 <span className="podium-speed">{player && `${wordsPerSecond(player)} ${t("podium.wordsPerSecond")}`}</span>

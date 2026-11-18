@@ -9,7 +9,6 @@
 @import "../../base/tokens.css";
 @import "../../base/reset.css" layer(base);
 @import "../../base/animations.css";
-@import "../../base/utilities.css";
 
 
 @import "./game.css";
