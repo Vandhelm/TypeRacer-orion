@@ -1,12 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { isPlayer, readSession, saveRoom, seatsOf, type Room } from "../room";
+import { isPlayer, newRoom, readSession, saveRoom, seatsOf, type Room } from "../room";
 
 /** The room shown on this page: who we are in it, its settings, its seats. Only the host's room is saved. */
 export function useRoom() {
   const { t } = useTranslation();
-  const [{ room: initialRoom, host, present }] = useState(() => readSession(location.search, t));
+  const [session] = useState(() => readSession(location.search, t));
+  // AUTH-03 : un invité sans salon à rejoindre n'a rien à faire ici (le serveur l'a déjà renvoyé) ; en attendant
+  // de repartir, il voit un salon en lecture seule, jamais comme hôte.
+  const { room: initialRoom, host, present } = session ?? { room: newRoom(t), host: false, present: 1 };
   const [room, setRoom] = useState(initialRoom);
+
+  useEffect(() => {
+    if (!session) location.replace("/home#rooms");
+  }, [session]);
 
   // recharger la page garde le même salon
   useEffect(() => {
