@@ -29,8 +29,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun --hot server.ts",
-    "next:dev": "bun --bun next dev",
+    "dev": "bun --bun next dev",
+    "dev:legacy": "bun --hot server.ts",
     "next:build": "bun --bun next build",
     "next:start": "bun --bun next start",
     "typecheck": "tsc --noEmit",
