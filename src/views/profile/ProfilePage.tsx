@@ -10,6 +10,7 @@ import { LastRace } from "./LastRace";
 import { OwnProfile, type Me } from "./OwnProfile";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { guestStats, statsSource, type SessionState } from "./stats";
+import { HEAD, NAME, NOTE, PAGE, TITLE } from "./styles";
 
 const PODIUM_HREF = "/podium#arrived";
 
@@ -41,7 +42,7 @@ function subjectOf(results: RaceResults | null): Subject | null {
 export function ProfilePage() {
   const [own] = useState(() => { const query = new URLSearchParams(location.search); return !query.has("player") && !query.has("name"); });
   const { data: session, isPending } = authClient.useSession();
-  if (own && isPending) return <main className="profile" aria-busy="true" />;
+  if (own && isPending) return <main className={PAGE} aria-busy="true" />;
   if (own && session) return <OwnProfile me={session.user as Me} />;
   return <PlayerProfile session={isPending ? "pending" : session ? "signed-in" : "signed-out"} />;
 }
@@ -74,12 +75,12 @@ function PlayerProfile({ session }: { session: SessionState }) {
 
   if (!subject) {
     return (
-      <main className="profile" aria-labelledby="profile-name">
-        <header className="profile-head">
+      <main className={PAGE} aria-labelledby="profile-name">
+        <header className={HEAD}>
           <HangingButton className="profile-back" href="/home">{t("profile.home")}</HangingButton>
-          <div className="profile-title"><h1 id="profile-name" className="profile-name">{t("nav.profile")}</h1></div>
+          <div className={TITLE}><h1 id="profile-name" className={NAME}>{t("nav.profile")}</h1></div>
         </header>
-        <p className="profile-note">{t("profile.empty")}</p>
+        <p className={NOTE}>{t("profile.empty")}</p>
       </main>
     );
   }
@@ -88,13 +89,13 @@ function PlayerProfile({ session }: { session: SessionState }) {
   const place = t("profile.place", { rank: t(`podium.ranks.${index}`) });
 
   return (
-    <main className="profile" aria-labelledby="profile-name">
-      <header className="profile-head">
+    <main className={PAGE} aria-labelledby="profile-name">
+      <header className={HEAD}>
         {subject.fromPodium && <HangingButton className="profile-back" href={PODIUM_HREF}>{t("profile.back")}</HangingButton>}
-        <div className="profile-id">
-          <div className="profile-title">
-            <h1 id="profile-name" className="profile-name">{subject.name}</h1>
-            {result && <p className="profile-rank">{result.me ? `${place} · ${t("room.you")}` : place}</p>}
+        <div className="ml-auto flex min-w-0 items-center gap-4">
+          <div className={TITLE}>
+            <h1 id="profile-name" className={NAME}>{subject.name}</h1>
+            {result && <p className="mt-2 font-mono text-[max(11px,1.3vh)] leading-none font-normal tracking-[.2em] text-muted uppercase">{result.me ? `${place} · ${t("room.you")}` : place}</p>}
           </div>
           <ProfileAvatar name={subject.name} src={stats.status === "ready" ? stats.stats?.image : null} />
         </div>

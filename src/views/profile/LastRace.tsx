@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { oneDecimal, type PlayerResult, type RaceSummary } from "../podium/results";
 import { SpeedChart } from "./SpeedChart";
 import { StatBlock, Swatch, Unit } from "./StatBlock";
+import { CROSS, SECTION, SECTION_TITLE } from "./styles";
 
 const IDLE_ALERT = 50;
 const NBSP = " ";
@@ -41,16 +42,16 @@ export function LastRace({ player, summary }: { player: PlayerResult; summary: R
   ] as const;
 
   return (
-    <section className="profile-section" aria-labelledby="last-race-title">
-      <h2 id="last-race-title" className="profile-section-title">{t("profile.lastRace")}</h2>
-      <p className="race-context">
-        <span className="race-settings">
+    <section className={SECTION} aria-labelledby="last-race-title">
+      <h2 id="last-race-title" className={SECTION_TITLE}>{t("profile.lastRace")}</h2>
+      <p className="mb-4 flex flex-wrap items-baseline justify-between gap-x-8 gap-y-1.5 font-mono text-[max(12px,1.4vh)] leading-[1.6] font-normal text-muted">
+        <span className="min-w-0 [&_i]:mr-[.5em] [&_i]:text-line-soft [&_i]:not-italic">
           {settings.map((setting, i) => (
             <Fragment key={i}>{i > 0 && <>{NBSP}<i>·</i> </>}{keep(setting)}</Fragment>
           ))}
         </span>
-        <span className="race-meta">
-          {outcome.map((line) => <span key={line} className="race-outcome">{line}</span>)}
+        <span className="flex flex-wrap gap-x-5 gap-y-1 whitespace-nowrap">
+          {outcome.map((line) => <span key={line} className="text-white">{line}</span>)}
           <span>{`${t("profile.session")} ${clock(summary.sessionSeconds)}`}</span>
         </span>
       </p>
@@ -70,9 +71,9 @@ export function LastRace({ player, summary }: { player: PlayerResult; summary: R
           value={player.chars[0]}
           notes={[
             <>
-              <i className="chart-cross">×</i>{NBSP}
+              <i className={CROSS}>×</i>{NBSP}
               {errors.map(([count, word], i) => (
-                <Fragment key={i}>{i > 0 && `${NBSP}· `}<b className="stat-error">{count}</b>{NBSP}{keep(word)}</Fragment>
+                <Fragment key={i}>{i > 0 && `${NBSP}· `}<b className="font-normal text-red-text">{count}</b>{NBSP}{keep(word)}</Fragment>
               ))}
             </>,
           ]}

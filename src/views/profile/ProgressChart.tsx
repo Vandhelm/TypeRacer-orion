@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { buildChart } from "./chart";
 import { useChartSize } from "./hooks/useChartSize";
 import type { ProgressPoint } from "./stats";
+import { CHART, CURSOR, DOT, GRID_LINE, LEGEND, LINE, PLOT, SWATCH, TIP, TIP_HEAD } from "./styles";
 
 const TIP_MARGIN = 12;
 
@@ -39,37 +40,37 @@ export function ProgressChart({ progress }: { progress: ProgressPoint[] }) {
   }, [hover, chart, size.width]);
 
   return (
-    <div ref={root} className="chart">
-      <div className="chart-legend">
-        <span><i className="chart-swatch chart-swatch--wpm" />{t("profile.progress")}</span>
+    <div ref={root} className={CHART}>
+      <div className={LEGEND}>
+        <span><i className={SWATCH.wpm} />{t("profile.progress")}</span>
       </div>
-      <div ref={plot} className="chart-plot" onPointerMove={onPointer} onPointerDown={onPointer} onPointerLeave={() => setHover(null)}>
+      <div ref={plot} className={PLOT} onPointerMove={onPointer} onPointerDown={onPointer} onPointerLeave={() => setHover(null)}>
         <svg viewBox={`0 0 ${size.width} ${chart.height}`} height={chart.height} role="img" aria-label={t("profile.progress")}>
           {chart.speedTicks.map((value) => (
             <g key={value}>
-              <line className={value ? "chart-grid" : "chart-grid is-zero"} x1={chart.left} x2={chart.right} y1={chart.y(value)} y2={chart.y(value)} />
+              <line className={GRID_LINE(value)} x1={chart.left} x2={chart.right} y1={chart.y(value)} y2={chart.y(value)} />
               <text x={chart.left - 8} y={chart.y(value) + 4} textAnchor="end">{value}</text>
             </g>
           ))}
           {chart.timeTicks.map((i) => <text key={i} x={chart.x(i)} y={chart.height - 8} textAnchor="middle">{i + 1}</text>)}
           <text x={chart.left} y={chart.axisLabel}>{labels.wpm}</text>
           {chart.count > 1 ? (
-            <path className="chart-line chart-line--wpm" d={chart.path(wpm)} />
+            <path className={LINE.wpm} d={chart.path(wpm)} />
           ) : (
-            chart.count === 1 && <circle className="chart-dot--wpm" cx={chart.x(0)} cy={chart.y(wpm[0]!)} r={4} />
+            chart.count === 1 && <circle className="fill-red-text" cx={chart.x(0)} cy={chart.y(wpm[0]!)} r={4} />
           )}
           {hover !== null && (
             <g>
-              <line className="chart-cursor" x1={chart.x(hover)} x2={chart.x(hover)} y1={chart.top} y2={chart.bandTop} />
-              <circle className="chart-dot chart-dot--wpm" cx={chart.x(hover)} cy={chart.y(wpm[hover]!)} r={4} />
+              <line className={CURSOR} x1={chart.x(hover)} x2={chart.x(hover)} y1={chart.top} y2={chart.bandTop} />
+              <circle className={DOT.wpm} cx={chart.x(hover)} cy={chart.y(wpm[hover]!)} r={4} />
             </g>
           )}
         </svg>
       </div>
 
       {point && (
-        <div ref={tip} className="chart-tip">
-          <p className="chart-tip-head">{`${labels.race} ${hover! + 1}`}</p>
+        <div ref={tip} className={TIP}>
+          <p className={TIP_HEAD}>{`${labels.race} ${hover! + 1}`}</p>
           <p><span>{labels.date}</span>{date(point.at)}</p>
           <p><span>{labels.wpm}</span>{point.wpm}</p>
           <p><span>{labels.accuracy}</span>{percent(point.accuracy)}</p>

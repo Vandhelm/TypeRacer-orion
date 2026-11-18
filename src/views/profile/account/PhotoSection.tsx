@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { avatarProblem, saveAvatar, shrinkAvatar } from "../../../accounts/avatar";
 import { ProfileAvatar } from "../ProfileAvatar";
 import { AccountMessage, type Message } from "./AccountMessage";
+import { ACCOUNT_BUTTON, ACCOUNT_SECTION, BOX, HELP, MAIN, SECTION_TITLE } from "../styles";
 
 type Props = { name: string; image: string | null; onChange: (image: string | null) => void };
 
@@ -34,22 +35,25 @@ export function PhotoSection({ name, image, onChange }: Props) {
   }
 
   return (
-    <section className="profile-section" aria-labelledby="photo-title">
-      <h2 id="photo-title" className="profile-section-title">{t("account.photo.title")}</h2>
-      <div className="acc-box">
-        <label className="account-avatar" htmlFor={inputId} title={t("account.photo.change")}>
+    <section className={ACCOUNT_SECTION} aria-labelledby="photo-title">
+      <h2 id="photo-title" className={SECTION_TITLE}>{t("account.photo.title")}</h2>
+      <div className={BOX}>
+        <label className="group relative flex-none cursor-pointer rounded-[50%] [&_.profile-avatar]:w-20" htmlFor={inputId} title={t("account.photo.change")}>
           <ProfileAvatar name={name} src={image} />
-          <span className="avatar-change" aria-hidden="true">{t("account.photo.changeShort")}</span>
+          <span
+            className="absolute inset-0 grid place-items-center rounded-[50%] bg-[rgba(0,0,0,.7)] font-mono text-[10px] leading-none font-medium tracking-[.16em] text-white uppercase opacity-0 transition-[opacity] duration-200 ease-[ease] group-hover:opacity-100 motion-reduce:transition-none"
+            aria-hidden="true"
+          >{t("account.photo.changeShort")}</span>
         </label>
-        <div className="acc-main">
-          <p className="acc-help">{t("account.photo.help")}</p>
-          <div className="acc-actions">
-            <label className="acc-btn" aria-disabled={busy || undefined}>
+        <div className={MAIN}>
+          <p className={HELP}>{t("account.photo.help")}</p>
+          <div className="flex flex-wrap gap-2.5">
+            <label className={ACCOUNT_BUTTON.normal} aria-disabled={busy || undefined}>
               {t("account.photo.choose")}
               <input id={inputId} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" disabled={busy} onChange={pick} />
             </label>
             {image && (
-              <button className="acc-btn acc-btn--quiet" type="button" disabled={busy} onClick={() => void save(null, t("account.photo.removed"))}>
+              <button className={ACCOUNT_BUTTON.quiet} type="button" disabled={busy} onClick={() => void save(null, t("account.photo.removed"))}>
                 {t("account.photo.remove")}
               </button>
             )}
