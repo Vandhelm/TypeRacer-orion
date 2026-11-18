@@ -8,7 +8,7 @@ Les statuts viennent des rapports de l'agent `qa` (skill `criteria-check`). Une 
 
 | ID | Statut | Fichiers principaux | Tests associés | Notes et choix |
 |---|---|---|---|---|
-| TECH-01 | non fait | `package.json`, `build.ts`, `server.ts` | aucun | Choix assumé : Bun (vu en classe) avec React et TypeScript, au lieu de Next.js App Router. Pages HTML par entrée (`home.html`, `room.html`…) bâties par `build.ts`. Inscrit le 2026-11-17. |
+| TECH-01 | partiel | `app/`, `src/next/LegacyPage.tsx`, `next.config.ts` | `tests/smoke/app.smoke.ts` | Migration progressive vers Next.js 16 (App Router) : les 5 pages et l'API passent par `app/`, mais chaque page est encore l'ancienne application React rendue dans le navigateur (`LegacyPage`). La production Vercel utilise encore `build.ts` + `api/index.js`. Bun reste le gestionnaire de paquets, l'exécuteur de tests et le runtime (`bun --bun next`). Non vérifié par la QA. Mis à jour le 2026-11-17. |
 | TECH-02 | non vérifié |  |  |  |
 | TECH-03 | non vérifié |  |  |  |
 | TECH-04 | non vérifié |  |  |  |
