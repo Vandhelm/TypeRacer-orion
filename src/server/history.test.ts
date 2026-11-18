@@ -135,3 +135,70 @@ describe("HIST-01 — every finished race appears in the signed-in user's histor
     expect((await t.call("/api/history", cookie, "POST")).status).toBe(405);
   });
 });
+
+type DetailBody = { id: number; at: string; summary: Record<string, unknown>; players: Record<string, unknown>[] };
+
+describe("HIST-02 — a race of the history shows its full results again", () => {
+  let t: Awaited<ReturnType<typeof setup>>;
+  let me: { cookie: string; playerId: number };
+  let raceId: number;
+  beforeAll(async () => {
+    t = await setup();
+    me = await t.signUp("Detail_Moi");
+    raceId = await t.race(me.playerId, "Detail_Moi", 50, [result("Nori_Ninja", true, 80), result("Ebi_Fry", true, 65)]);
+  });
+
+  test("the owner gets the podium order, every RES-02 column and the WPM series", async () => {
+    const res = await t.call(`/api/history/${raceId}`, me.cookie);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as DetailBody;
+    expect(body.id).toBe(raceId);
+    expect(Number.isNaN(Date.parse(body.at))).toBe(false);
+    expect(body.summary).toEqual(SUMMARY);
+    expect(body.players.map((player) => [player.name, player.rank, player.me, player.bot])).toEqual([
+      ["Nori_Ninja", 1, false, true],
+      ["Ebi_Fry", 2, false, true],
+      ["Detail_Moi", 3, true, false],
+    ]);
+    // ce qui a été envoyé après la course revient tel quel
+    const { name: _name, bot: _bot, ...sent } = result("Detail_Moi", false, 50);
+    expect(body.players[2]).toMatchObject(sent);
+    expect(body.players[0]).toMatchObject({ wpm: 80, raw: 85, wpmSeries: [78, 80, 81], rawSeries: [80, 85, 86], errorSeries: [0, 1, 0] });
+  });
+
+  test("a race of another account is refused (403) and leaks nothing", async () => {
+    const { cookie } = await t.signUp("Detail_Autre");
+    const res = await t.call(`/api/history/${raceId}`, cookie);
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: "not_your_race" });
+  });
+
+  test("a race the player never ran is refused (403)", async () => {
+    const other = await t.signUp("Detail_Tiers");
+    const theirs = await t.race(other.playerId, "Detail_Tiers", 40);
+    expect((await t.call(`/api/history/${theirs}`, me.cookie)).status).toBe(403);
+  });
+
+  test("an unknown race is not found (404)", async () => {
+    const res = await t.call("/api/history/2000000000", me.cookie);
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: "not_found" });
+  });
+
+  test("an invalid race id is refused (400), never a server error", async () => {
+    for (const id of ["abc", "-1", "0", "1.5", "01", "2147483648", "99999999999", "1%20OR%201=1"]) {
+      const res = await t.call(`/api/history/${id}`, me.cookie);
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({ error: "invalid_race" });
+    }
+  });
+
+  test("without a session (401) or as a guest (403), no race is shown", async () => {
+    expect((await t.call(`/api/history/${raceId}`)).status).toBe(401);
+    expect((await t.call(`/api/history/${raceId}`, t.guest("Detail_Moi"))).status).toBe(403);
+  });
+
+  test("only GET is allowed (405)", async () => {
+    expect((await t.call(`/api/history/${raceId}`, me.cookie, "DELETE")).status).toBe(405);
+  });
+});
