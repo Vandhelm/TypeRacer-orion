@@ -78,7 +78,8 @@ describe("TECH-06 — connecting needs a valid ticket", () => {
   });
 
   test("a forged, expired or foreign-secret ticket is refused", async () => {
-    const forged = ticketFor(player("Corail_418")).replace(/.$/, "A");
+    const valid = ticketFor(player("Corail_418"));
+    const forged = valid.slice(0, -1) + (valid.endsWith("A") ? "B" : "A");
     const expired = signTicket(player("Corail_418"), SECRET, Date.now() - 120_000);
     const foreign = signTicket(player("Corail_418"), "another-secret-another-secret-12");
     for (const ticket of [forged, expired, foreign, "garbage"]) {
