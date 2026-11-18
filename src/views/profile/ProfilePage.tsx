@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { authClient } from "../../accounts/client";
 import { HangingButton } from "../../components/buttons/HangingButton";
+import { LanguageSwitcher } from "../../components/tabs/LanguageSwitcher";
 import { readResults, type PlayerResult, type RaceResults } from "../podium/results";
 import { CareerStats } from "./CareerStats";
 import { useKeyboardLayout } from "./hooks/useKeyboardLayout";
@@ -74,13 +75,16 @@ function PlayerProfile({ session }: { session: SessionState }) {
 
   if (!subject) {
     return (
-      <main className="profile" aria-labelledby="profile-name">
-        <header className="profile-head">
-          <HangingButton className="profile-back" href="/home">{t("profile.home")}</HangingButton>
-          <div className="profile-title"><h1 id="profile-name" className="profile-name">{t("nav.profile")}</h1></div>
-        </header>
-        <p className="profile-note">{t("profile.empty")}</p>
-      </main>
+      <>
+        <LanguageSwitcher className="hanging-tabs-floating" />
+        <main className="profile" aria-labelledby="profile-name">
+          <header className="profile-head">
+            <HangingButton className="profile-back" href="/home">{t("profile.home")}</HangingButton>
+            <div className="profile-title"><h1 id="profile-name" className="profile-name">{t("nav.profile")}</h1></div>
+          </header>
+          <p className="profile-note">{t("profile.empty")}</p>
+        </main>
+      </>
     );
   }
 
@@ -88,6 +92,8 @@ function PlayerProfile({ session }: { session: SessionState }) {
   const place = t("profile.place", { rank: t(`podium.ranks.${index}`) });
 
   return (
+    <>
+    <LanguageSwitcher className="hanging-tabs-floating" />
     <main className="profile" aria-labelledby="profile-name">
       <header className="profile-head">
         {subject.fromPodium && <HangingButton className="profile-back" href={PODIUM_HREF}>{t("profile.back")}</HangingButton>}
@@ -104,5 +110,6 @@ function PlayerProfile({ session }: { session: SessionState }) {
 
       <CareerStats state={stats} guest={guest} layout={layout} onLayout={setLayout} />
     </main>
+    </>
   );
 }

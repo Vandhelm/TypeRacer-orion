@@ -32,6 +32,17 @@
 }
 .hanging-tab:focus-visible{ outline: 1px solid #fff; outline-offset: 4px; }
 
+/* Pinned to the top-right corner (pages without a navbar). */
+.hanging-tabs-floating{
+    position: fixed;
+    top: 0;
+    right: clamp(16px, 4vw, 56px);
+    z-index: 50;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+}
+
 @media (prefers-reduced-motion: reduce){
     .hanging-tab{ animation: none; }
 }
