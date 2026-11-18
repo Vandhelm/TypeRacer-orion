@@ -7,6 +7,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import type { Subprocess } from "bun";
 import postgres from "postgres";
+import sharp from "sharp";
 import { DEMO_PASSWORD } from "../../db/mocks/data";
 
 const remote = process.env.BASE_URL?.replace(/\/$/, "");
@@ -158,6 +159,25 @@ describe("SMOKE — API", () => {
     });
     expect(res.status).toBe(200);
     expect(res.headers.get("set-cookie") ?? "").toContain("session_token");
+  });
+
+  // sharp doit se charger dans l'application construite par Next.js, pas seulement sous `bun test`.
+  test.skipIf(Boolean(remote))("AUTH-04 — l'application construite réduit la photo envoyée", async () => {
+    const signIn = await fetch(`${base}/api/auth/sign-in/username`, {
+      method: "POST",
+      headers: { "content-type": "application/json", origin: base },
+      body: JSON.stringify({ username: "corail_418", password: DEMO_PASSWORD }),
+    });
+    const cookie = (signIn.headers.get("set-cookie") ?? "").split(";")[0]!;
+    const png = await sharp({ create: { width: 1000, height: 1000, channels: 3, background: "#f80" } }).png().toBuffer();
+    const form = new FormData();
+    form.append("avatar", new Blob([png], { type: "image/png" }), "photo.png");
+    const res = await fetch(`${base}/api/account/avatar`, { method: "POST", headers: { cookie, origin: base }, body: form });
+    expect(res.status).toBe(200);
+    const { image } = (await res.json()) as { image: string };
+    expect(image.startsWith("data:image/webp;base64,")).toBe(true);
+    const meta = await sharp(Buffer.from(image.split(",")[1]!, "base64")).metadata();
+    expect([meta.format, meta.width, meta.height]).toEqual(["webp", 256, 256]);
   });
 });
 
