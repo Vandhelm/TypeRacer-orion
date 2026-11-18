@@ -38,6 +38,16 @@ export const roomApi = {
   kick: (code: string, member: string) => send("POST", `/api/rooms/${code}/kick`, { member }),
 };
 
+/**
+ * SALLE-06 : la demande d'arrivée (créer, entrer, relire) part une seule fois par tentative (`key`), même si l'effet
+ * de la page tourne deux fois (React StrictMode en dev) : une deuxième création serait refusée, « déjà dans un salon »,
+ * avec le salon que la première vient de créer. `holder` : un useRef de la page.
+ */
+export function arrivalRequest<T>(holder: { current: { key: string; request: Promise<T> } | null }, key: string, make: () => Promise<T>): Promise<T> {
+  if (holder.current?.key !== key) holder.current = { key, request: make() };
+  return holder.current.request;
+}
+
 /** Sans WebSocket (Next.js, Vercel), on relit l'état à ce rythme. */
 const POLL_MS = 3000;
 

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { DEFAULT_SETTINGS, type Role, type RoomSettings } from "../../../rooms/settings";
 import type { RoomResult } from "../../../server/rooms";
-import { roomApi, watchRoom, type Answer, type RoomError } from "../api";
+import { arrivalRequest, roomApi, watchRoom, type Answer, type RoomError } from "../api";
 import { keepPresence } from "../presence";
 import { arrivalOf, isPlayer, roomOf, seatsOf, type Room, type RoomView } from "../room";
 
@@ -28,6 +28,8 @@ export function useRoom(page: "room" | "game" = "room") {
   /** SALLE-06 : le salon où l'on est déjà, quand le serveur refuse d'en ouvrir un deuxième ; `attempt` relance l'arrivée. */
   const [current, setCurrent] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
+  /** SALLE-06 : la demande d'arrivée en cours, pour ne pas l'envoyer deux fois (StrictMode). */
+  const sent = useRef<{ key: string; request: Promise<Answer> } | null>(null);
   const pending = useRef<Partial<RoomSettings>>({});
   const timer = useRef(0);
   const code = view.code;
@@ -60,8 +62,9 @@ export function useRoom(page: "room" | "game" = "room") {
     }
     let live = true;
     // SALLE-03 : le serveur décide si ce code ou ce lien ouvre le salon ; un membre qui revient le retrouve
-    const request =
-      arrival.action === "create" ? roomApi.create("player") : arrival.action === "join" ? roomApi.join({ ...arrival.via, ...(joinRole ? { role: joinRole } : {}) }) : roomApi.read(arrival.code);
+    const request = arrivalRequest(sent, `${attempt}|${joinRole ?? ""}`, () =>
+      arrival.action === "create" ? roomApi.create("player") : arrival.action === "join" ? roomApi.join({ ...arrival.via, ...(joinRole ? { role: joinRole } : {}) }) : roomApi.read(arrival.code),
+    );
     request.then((reply) => {
       if (!live) return;
       answer(reply);
