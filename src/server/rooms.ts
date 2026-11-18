@@ -266,18 +266,22 @@ async function roomFor(db: Db, via: JoinVia) {
  * avant l'insertion ; SALLE-09 (état du salon) aussi.
  */
 export async function joinRoom(db: Db, who: Identity, via: JoinVia): Promise<RoomResult> {
-  const room = await roomFor(db, via);
+  const { id } = await roomFor(db, via);
   const key = memberKey(who);
-  if (room.status === "closed") throw new RoomRefused("closed");
-  // un membre qui revient (rechargement, autre onglet) n'est pas un nouvel arrivant, même pendant la course
-  if (await membership(db, room.id, key)) return { room: await roomView(db, room.id, key), you: key };
-  if (!canJoin(room.status)) throw new RoomRefused("in_race");
   await db.transaction(async (tx) => {
-    const taken = (await tx.select({ seat: roomMembers.seat }).from(roomMembers).where(eq(roomMembers.roomId, room.id))).map((m) => m.seat);
+    // Verrou sur la ligne du salon : les entrées simultanées et le lancement passent l'un après l'autre.
+    // L'état (SALLE-09) et les places prises (SALLE-03) sont lus sous ce verrou, jamais avant.
+    const [room] = await tx.select({ status: rooms.status }).from(rooms).where(eq(rooms.id, id)).for("update");
+    if (!room) throw new RoomRefused("not_found");
+    if (room.status === "closed") throw new RoomRefused("closed");
+    // un membre qui revient (rechargement, autre onglet) n'est pas un nouvel arrivant, même pendant la course
+    if (await membership(tx, id, key)) return;
+    if (!canJoin(room.status)) throw new RoomRefused("in_race");
+    const taken = (await tx.select({ seat: roomMembers.seat }).from(roomMembers).where(eq(roomMembers.roomId, id))).map((m) => m.seat);
     const identity = who.kind === "account" ? { playerId: who.playerId } : { guestName: who.name };
-    await tx.insert(roomMembers).values({ roomId: room.id, memberKey: key, ...identity, role: "player", ...placeFor("player", taken) }).onConflictDoNothing();
+    await tx.insert(roomMembers).values({ roomId: id, memberKey: key, ...identity, role: "player", ...placeFor("player", taken) });
   });
-  return { room: await roomView(db, room.id, key), you: key };
+  return { room: await roomView(db, id, key), you: key };
 }
 
 /**
