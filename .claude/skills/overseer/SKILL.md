@@ -32,10 +32,11 @@ Passe toujours `model` dans l'appel `Agent` : il l'emporte sur le frontmatter. C
 |---|---|---|---|
 | `Explore` | localiser des fichiers ou du code | comprendre un flux | — |
 | `qa` | — | light et medium | complex, ou sécurité, droits, temps réel en jeu |
-| `dev` | — | correction ciblée d'un rapport QA, i18n, style, textes | nouvelle exigence, schéma de base, logique serveur ou sécurité |
+| `dev` | — | **par défaut** : nouvelle exigence, correction d'un rapport QA, i18n, style, textes | escalade après un tour échoué, schéma de base, sécurité, droits, temps réel |
 
 - **Escalade :** un tour de correction qui échoue fait monter le `dev` suivant d'un cran (sonnet → opus). Ne redescends pas sur la même unité.
 - Un agent ne change pas de modèle en cours de route : le choix se fait au lancement.
+- **Effort :** passe toujours `effort` dans l'appel `Agent` : `low` pour `Explore`, `medium` pour `dev` et `qa`, `high` quand le modèle est `opus` (sécurité, droits, temps réel, escalade).
 - Note le modèle de chaque agent dans le rapport final.
 
 **Light avec une seule unité :** pas de phase de découpe ni d'`Explore`. Lance directement un `dev`, puis un `qa`, puis au plus un `dev` de correction.
@@ -78,7 +79,7 @@ Quand l'utilisateur demande une section entière (« fais la section 5.3 », « 
 2. **Liste de travail** : prends la source des exigences et le fichier de suivi du projet (voir ses skills). Garde les exigences de la section qui ne sont pas « complet ». Lance d'abord un `qa` sur la section entière (mode light, critique seulement) pour partir de l'état réel, pas du fichier de suivi.
 3. **Décisions humaines d'abord** : si une exigence de la section dépend d'un choix que le projet réserve à l'utilisateur (architecture, contenu créatif, compte ou secret), arrête-toi **avant** de lancer les `dev` et pose toutes ces questions en une fois. Les autres ambiguïtés, tranche-les et note-les.
 4. **Groupes** : regroupe les exigences qui touchent les mêmes fichiers (un `dev` les enchaîne) ; les groupes indépendants partent en parallèle, chacun en worktree. Ordonne selon les dépendances à l'intérieur de la section.
-5. **Branche de section** : suis le skill du projet. À défaut, une branche par exigence, puis une branche d'intégration de la section où tu merges les branches validées, tu résous les conflits, tu lances toute la suite de tests, puis un `qa` final sur la section complète.
+5. **Branche de section** : suis le skill du projet. À défaut, une branche par exigence, puis une branche d'intégration de la section où tu merges les branches validées, tu résous les conflits, tu lances `bun test`, `typecheck` et `lint` (sortie coupée). Pas de `qa` final de section : chaque exigence a déjà le sien. En complex, la seconde QA indépendante joue ce rôle.
 6. **Un seul point d'arrêt** : à la fin, rends le rapport de section (tableau par exigence : statut QA, branche, commits, choix faits, reste à faire) et les lignes de suivi, puis applique les règles du projet pour le merge. Ne pousse jamais : donne les commandes `git push` prêtes à copier. Les choix faits sans l'utilisateur vont dans la colonne « choix faits », pas dans une question.
 7. **Budget** : medium = 8 agents par **groupe** d'exigences, pas pour la section entière ; annonce le total prévu avant de lancer si la section a plus de 3 groupes.
 
