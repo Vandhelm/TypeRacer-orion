@@ -170,6 +170,23 @@ describe("SMOKE — API", () => {
     }
   });
 
+  // TECH-07 : la validation de /api/auth/* est celle de Better Auth ; un corps [] ou null ne doit jamais faire un 500.
+  test("TECH-07 — la connexion refuse un corps [] ou null (4xx, jamais 500)", async () => {
+    for (const body of ["[]", "null"]) {
+      const res = await fetch(`${base}/api/auth/sign-in/username`, { method: "POST", headers: { "content-type": "application/json", origin: base }, body });
+      expect(res.status).toBeGreaterThanOrEqual(400);
+      expect(res.status).toBeLessThan(500);
+    }
+  });
+
+  // TECH-07 : sans session, la route refuse (401) avant de lire le corps, même invalide.
+  test("TECH-07 — /api/races sans session et avec un corps invalide répond 401", async () => {
+    for (const body of ["{", "null"]) {
+      const res = await fetch(`${base}/api/races`, { method: "POST", headers: { "content-type": "application/json" }, body });
+      expect(res.status).toBe(401);
+    }
+  });
+
   // Crée une session : seulement en local, pas contre un déploiement.
   test.skipIf(Boolean(remote))("AUTH-01 — connexion avec le compte de démo", async () => {
     const res = await fetch(`${base}/api/auth/sign-in/username`, {
