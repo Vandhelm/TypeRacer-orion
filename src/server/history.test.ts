@@ -84,6 +84,16 @@ describe("HIST-01 — every finished race appears in the signed-in user's histor
     expect(Number.isNaN(Date.parse(body.races[0]!.at))).toBe(false);
   });
 
+  test("another player's id in the query is ignored: the session decides", async () => {
+    const victim = await t.signUp("Hist_Cible");
+    await t.race(victim.playerId, "Hist_Cible", 70);
+    const { cookie } = await t.signUp("Hist_Curieux");
+    for (const query of [`playerId=${victim.playerId}`, `player=${victim.playerId}`, "name=Hist_Cible"]) {
+      const body = (await (await t.call(`/api/history?page=1&${query}`, cookie)).json()) as ListBody;
+      expect(body.races).toEqual([]);
+    }
+  });
+
   test("an account with no race gets an empty first page", async () => {
     const { cookie } = await t.signUp("Hist_Vide");
     const body = (await (await t.call("/api/history", cookie)).json()) as ListBody;
