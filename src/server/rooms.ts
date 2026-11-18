@@ -1,6 +1,6 @@
 // Salons, côté serveur (SALLE-01, 02, 03, 09). Indépendant du transport : les routes HTTP (api.ts) et le temps réel
 // (realtime.ts) appellent ces fonctions ; rien ici ne connaît Request, WebSocket ou Next.js.
-import { and, asc, desc, eq, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, ne, sql } from "drizzle-orm";
 import type { z } from "zod";
 import type { Db } from "../../db/client";
 import { players, raceConfigs, roomMembers, rooms } from "../../db/schema";
@@ -200,7 +200,7 @@ export async function createRoom(db: Db, host: { playerId: number }, input: Crea
 export async function readRoom(db: Db, code: string, who: Identity): Promise<RoomResult> {
   const room = await roomByCode(db, code);
   const key = memberKey(who);
-  if (!(await membership(db, room.id, key))) throw new RoomRefused("not_member");
+  if (!(await membership(db, room.id, key))) throw new RoomRefused("not_found"); // SALLE-10 : un non-membre ne sait pas si le salon existe
   return { room: await roomView(db, room.id, key), you: key };
 }
 
@@ -216,10 +216,10 @@ export async function updateRoom(db: Db, code: string, who: Identity, input: Upd
     const [room] = await tx.select().from(rooms).where(eq(rooms.id, id)).for("update");
     if (!room) throw new RoomRefused("not_found");
     const member = await membership(tx, id, key);
-    if (!member) throw new RoomRefused("not_member");
+    if (!member) throw new RoomRefused("not_found"); // SALLE-10 : un non-membre ne sait pas si le salon existe
     if (key !== memberKey({ playerId: room.hostId })) throw new RoomRefused("not_host");
     // SALLE-09 : pendant la course, ni place prise par l'hôte spectateur, ni réglage changé
-    if (room.status === "closed") throw new RoomRefused("closed");
+    if (room.status === "closed") throw new RoomRefused("not_found");
     if (!canJoin(room.status)) throw new RoomRefused("in_race");
     if (input.settings) {
       const [config] = await tx.select().from(raceConfigs).where(eq(raceConfigs.id, room.configId));
@@ -306,19 +306,27 @@ export async function launchRoom(db: Db, code: string, who: Identity): Promise<R
   await db.transaction(async (tx) => {
     const [room] = await tx.select({ status: rooms.status, hostId: rooms.hostId }).from(rooms).where(eq(rooms.id, id)).for("update");
     if (!room) throw new RoomRefused("not_found");
-    if (!(await membership(tx, id, key))) throw new RoomRefused("not_member");
+    if (!(await membership(tx, id, key))) throw new RoomRefused("not_found"); // SALLE-10 : un non-membre ne sait pas si le salon existe
     if (key !== memberKey({ playerId: room.hostId })) throw new RoomRefused("not_host");
-    if (room.status === "closed") throw new RoomRefused("closed");
+    if (room.status === "closed") throw new RoomRefused("not_found");
     if (!canJoin(room.status)) throw new RoomRefused("in_race");
     await tx.update(rooms).set({ status: "racing" }).where(eq(rooms.id, id));
+    await tx.update(roomMembers).set({ finishedAt: null }).where(eq(roomMembers.roomId, id));
   });
   return { room: await roomView(db, id, key), you: key };
 }
 
+/** SALLE-09 : plus aucun participant humain en course (fini ou parti) : le salon passe aux résultats. Sous le verrou. */
+async function endIfAllFinished(tx: Db, roomId: number) {
+  const racing = await tx.$count(roomMembers, and(eq(roomMembers.roomId, roomId), eq(roomMembers.role, "player"), isNull(roomMembers.finishedAt)));
+  if (!racing) await tx.update(rooms).set({ status: "results" }).where(and(eq(rooms.id, roomId), eq(rooms.status, "racing")));
+}
+
 /**
- * SALLE-09 : la course est finie, le salon passe en « results » et accepte de nouveau des arrivants.
- * La course se joue dans chaque navigateur (COURSE-* pas encore côté serveur) : le premier membre dont l'écran
- * passe aux résultats le signale. Seul un membre le peut ; hors course, rien ne change (appel répété sans effet).
+ * SALLE-09 : ce membre a fini la course. Le salon passe aux résultats (et accepte de nouveau des arrivants) quand
+ * chaque participant humain a fini ou est parti ; les spectateurs ne comptent pas. La course se joue dans chaque
+ * navigateur (COURSE-* pas encore côté serveur) : un membre ne peut déclarer fini que lui-même, jamais les autres.
+ * Hors course, rien ne change (appel répété sans effet).
  */
 export async function finishRoom(db: Db, code: string, who: Identity): Promise<RoomResult> {
   const { id } = await roomByCode(db, code);
@@ -326,8 +334,10 @@ export async function finishRoom(db: Db, code: string, who: Identity): Promise<R
   await db.transaction(async (tx) => {
     const [room] = await tx.select({ status: rooms.status }).from(rooms).where(eq(rooms.id, id)).for("update");
     if (!room) throw new RoomRefused("not_found");
-    if (!(await membership(tx, id, key))) throw new RoomRefused("not_member");
-    if (room.status === "racing") await tx.update(rooms).set({ status: "results" }).where(eq(rooms.id, id));
+    if (!(await membership(tx, id, key))) throw new RoomRefused("not_found"); // SALLE-10 : un non-membre ne sait pas si le salon existe
+    if (room.status !== "racing") return;
+    await tx.update(roomMembers).set({ finishedAt: sql`now()` }).where(and(eq(roomMembers.roomId, id), eq(roomMembers.memberKey, key), isNull(roomMembers.finishedAt)));
+    await endIfAllFinished(tx, id);
   });
   return { room: await roomView(db, id, key), you: key };
 }
@@ -341,10 +351,16 @@ export async function leaveRoom(db: Db, code: string, who: Identity, options: { 
   // sous le verrou du salon, comme joinRoom et launchRoom : l'état lu et la fermeture ne croisent ni entrée ni lancement
   return db.transaction(async (tx) => {
     const [room] = await tx.select({ status: rooms.status }).from(rooms).where(eq(rooms.id, id)).for("update");
-    if (!room || (options.unlessRacing && room.status === "racing")) return { left: false };
+    // SALLE-10 : un salon fermé, ou dont on n'est pas membre, répond comme un code inconnu
+    if (!room || room.status === "closed") throw new RoomRefused("not_found");
+    if (options.unlessRacing && room.status === "racing") return { left: false };
     const removed = await tx.delete(roomMembers).where(and(eq(roomMembers.roomId, id), eq(roomMembers.memberKey, memberKey(who)))).returning({ key: roomMembers.memberKey });
+    if (!removed.length) throw new RoomRefused("not_found");
     if (removed.length && !(await tx.$count(roomMembers, eq(roomMembers.roomId, id)))) {
       await tx.update(rooms).set({ status: "closed" }).where(eq(rooms.id, id));
+    } else if (removed.length && room.status === "racing") {
+      // un participant qui quitte la course ne la retient pas
+      await endIfAllFinished(tx, id);
     }
     return { left: removed.length > 0 };
   });

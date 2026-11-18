@@ -70,6 +70,8 @@ export const roomMembers = pgTable(
     seat: integer("seat"),
     color: text("color"),
     joinedAt: timestamp("joined_at", { withTimezone: true }).notNull().defaultNow(),
+    /** SALLE-09 : ce membre a fini la course en cours ; remis à null à chaque lancement. */
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
   },
   (table) => [
     primaryKey({ columns: [table.roomId, table.memberKey] }),

@@ -71,6 +71,13 @@
       "when": 1795033798135,
       "tag": "0009_room_results",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1795036199082,
+      "tag": "0010_room_member_finished",
+      "breakpoints": true
     }
   ]
 }
