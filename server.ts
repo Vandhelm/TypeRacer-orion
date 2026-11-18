@@ -4,9 +4,14 @@ import home from "./home.html";
 import podium from "./podium.html";
 import profile from "./profile.html";
 import room from "./room.html";
-import { handleApi } from "./src/server/api";
+import { auth, db, handleApi } from "./src/server/api";
+import { createRealtime, type SocketData } from "./src/server/realtime";
+import { roomEvents } from "./src/server/room-events";
 
-const server = Bun.serve({
+// Temps réel des salons (WebSocket) : les routes /api/rooms émettent roomEvents, les sockets /ws/rooms/:code les reçoivent.
+const realtime = createRealtime({ db: db(), auth: auth(), events: roomEvents });
+
+const server = Bun.serve<SocketData>({
   port: Number(process.env.PORT) || 3000,
   development: process.env.NODE_ENV !== "production",
   routes: {
@@ -18,6 +23,10 @@ const server = Bun.serve({
     "/profile": profile,
     "/api/*": handleApi,
   },
+  fetch(req, srv) {
+    return realtime.matches(req) ? realtime.upgrade(req, srv) : new Response("Not found", { status: 404 });
+  },
+  websocket: realtime.websocket,
 });
 
 console.log(`O.R.I.O.N → ${server.url}`);

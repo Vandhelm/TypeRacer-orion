@@ -286,3 +286,9 @@ export async function leaveRoom(db: Db, code: string, who: Identity): Promise<{ 
   }
   return { left: removed.length > 0 };
 }
+
+/** L'id d'un salon ouvert, ou null s'il n'existe pas ou est fermé. */
+export async function roomIdByCode(db: Db, code: string): Promise<number | null> {
+  const [row] = await db.select({ id: rooms.id }).from(rooms).where(and(eq(rooms.code, code), ne(rooms.status, "closed")));
+  return row?.id ?? null;
+}
