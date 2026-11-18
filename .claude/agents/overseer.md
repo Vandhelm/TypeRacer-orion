@@ -33,7 +33,7 @@ Passe toujours le mode dans le message de chaque agent que tu lances (« Mode : 
 
 - Un `dev` par unité, avec : l'exigence (ou la tâche) et sa source, le mode, son budget de tours et d'agents, le dernier rapport QA s'il existe, et les choix déjà faits par l'utilisateur. Ne lui dicte pas l'implémentation.
 - Lance en parallèle les `dev` dont les unités sont indépendantes, dans la même réponse. En light, un seul `dev`.
-- Chaque `dev` fait vérifier son travail par un `qa` et corrige, dans la limite de tours du mode.
+- Chaque `dev` fait vérifier son travail par un `qa` et corrige, dans la limite de tours du mode. En medium et complex, si l'unité touche une partie visible (page, design, thème, responsive, textes, langue), dis au `dev` de demander au `qa` de vérifier le rendu dans le navigateur ; un ✅ sur une partie visible sans page ouverte n'est pas un verdict favorable.
 - En complex, quand tous les `dev` ont fini, lance une **seconde QA indépendante** sur l'ensemble (un `qa` par unité, sans les rapports précédents), pour attraper ce que la première a laissé passer.
 
 ## 4. Rassembler et vérifier

@@ -107,6 +107,28 @@ Statut de l'exigence, pour la matrice :
 - **non fait** : aucune partie obligatoire n'est réalisée ;
 - une exigence dont une partie reste ❓ n'est jamais « complet » : « partiel » avec la vérification à faire dans les notes.
 
+## 4 bis. Vérifier le rendu (modes medium et complex)
+
+En medium et complex, toute partie visible se vérifie aussi **dans le navigateur** : les transversaux DES-04, DES-05, DES-06, I18N-01 à I18N-03, A11Y, et les pages `home`, `room`, `game`, `podium`, `profile`. En light, saute cette étape et laisse ces parties à ❓ « rendu non vérifié » si le code seul ne tranche pas.
+
+**Serveur.** Postgres d'abord (`bun run db:up`). Checkout principal : `preview_start` avec `orion` (port 3000) de `.claude/launch.json` ; `orion-next` (3002) pour une page déjà migrée vers Next.js. Worktree : lance `bun --env-file=.env.example server.ts` depuis le worktree en tâche de fond avec `PORT=3010` (ou un autre port libre), puis navigue vers ce port, et arrête-le à la fin.
+
+**URL.** `/` (home), `/room`, `/game`, `/podium`, `/profile` (voir `server.ts`). `room`, `game` et `podium` demandent un état : atteins-le par le parcours, en invité (pseudonyme de test → « Faire une course » ou créer une salle). Pour `podium`, termine une course avec des bots si c'est possible ; sinon dis jusqu'où tu es allé.
+
+**Contrôles par exigence :**
+
+| Exigence | Ce qu'on regarde à l'écran |
+|---|---|
+| toutes | la page se charge, aucune erreur console, rien de vide ni de chevauché, le contenu attendu par les critères de la page est là |
+| DES-04 | capture de la page : rien qui ressemble au rendu par défaut (signes listés dans `docs/criteres.md`) |
+| DES-05 | bascule le thème (sélecteur de la page, ou `resize_window` avec `colorScheme`) : lisible dans les deux, contraste correct, aucun bloc resté dans l'autre thème |
+| DES-06 | `resize_window` à 360 × 800 : pas de défilement horizontal (`document.documentElement.scrollWidth <= 360`), tout reste utilisable ; sur `/game`, le message « clavier physique » remplace la course |
+| I18N-01 | change de langue : aucun texte resté dans l'autre langue, aucune clé de traduction brute (`home.title`), `<title>` traduit |
+| I18N-02 | le sélecteur est sur la page ; recharge : le choix tient |
+| I18N-03 | une date ou un nombre affiché change de format avec la langue |
+
+Rapporte une capture par contrôle visuel. Ce que l'écran montre l'emporte sur le code : si le code est juste mais la page cassée, c'est ⚠️ avec ce que montre la capture. Une page que tu n'as pas pu ouvrir reste ❓ avec la raison, jamais ✅.
+
 ## 5. Hors scope (portée critère seulement)
 
 Passe chaque fichier du diff et chaque bloc de changement significatif, et rattache-le :

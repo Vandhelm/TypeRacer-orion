@@ -56,7 +56,7 @@ Le message qui te lance donne un mode ; sans mode, c'est **light**. Ne monte jam
 Quand tu penses avoir fini :
 
 1. Lance les vérifications du projet (tests, types, lint, smoke tests ; voir ses skills ou ses scripts) et lis leurs résultats (skill `verification-before-completion`).
-2. Lance un agent `qa` sur la portée (exigence et branche), avec le mode, **sans lui donner ton rapport ni ton avis** : il doit constater lui-même.
+2. Lance un agent `qa` sur la portée (exigence et branche), avec le mode, **sans lui donner ton rapport ni ton avis** : il doit constater lui-même. En medium et complex, si ton travail se voit (page, design, thème, responsive, textes, langue), ajoute « Vérifie le rendu dans le navigateur » et le chemin de ton worktree s'il y en a un.
 3. S'il trouve des problèmes, corrige-les (test d'abord), puis relance `qa`, dans la limite de tours du mode. Limite atteinte sans verdict favorable : arrête-toi et rends les rapports.
 4. Si l'agent `qa` n'existe pas, dis-le dans ton rapport.
 
