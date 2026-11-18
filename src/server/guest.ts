@@ -1,6 +1,6 @@
 // Session d'invité (AUTH-02) : le pseudonyme choisi à l'accueil est validé ici puis gardé dans un cookie
 // signé (HMAC-SHA256). Le serveur ne croit que ce cookie : un cookie altéré ou signé avec un autre secret est ignoré.
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { isValidNickname, NICKNAME_MAX, NICKNAME_MIN } from "../players/nickname";
 
@@ -20,15 +20,22 @@ export function guestSecret(env: Env = process.env) {
 
 const sign = (payload: string, secret: string) => createHmac("sha256", secret).update(payload).digest("base64url");
 
-export function signGuest(nickname: string, secret: string, now = Date.now()) {
-  const payload = Buffer.from(JSON.stringify({ n: nickname, e: now + GUEST_TTL_MS })).toString("base64url");
+/**
+ * TECH-06 : `i` est l'identifiant aléatoire de la session invitée. Deux invités au même pseudo (« Alice », « alice »)
+ * restent deux joueurs distincts dans une salle temps réel.
+ */
+export function signGuest(nickname: string, secret: string, now = Date.now(), id: string = randomUUID()) {
+  const payload = Buffer.from(JSON.stringify({ n: nickname, e: now + GUEST_TTL_MS, i: id })).toString("base64url");
   return `${payload}.${sign(payload, secret)}`;
 }
 
-const Payload = z.object({ n: z.string(), e: z.number() });
+// `i` manque dans les cookies émis avant TECH-06 : la session reste valable, sans identifiant.
+const Payload = z.object({ n: z.string(), e: z.number(), i: z.uuid().optional() });
 
-/** Le pseudonyme d'un cookie, seulement si la signature, la date et la règle du pseudo sont bonnes. */
-export function verifyGuest(value: string, secret: string, now = Date.now()): string | null {
+export type GuestSession = { nickname: string; id: string | null; expires: number };
+
+/** La session d'un cookie, seulement si la signature, la date et la règle du pseudo sont bonnes. */
+export function verifyGuestSession(value: string, secret: string, now = Date.now()): GuestSession | null {
   const parts = value.split(".");
   if (parts.length !== 2 || !parts[0] || !parts[1]) return null;
   const [payload, signature] = parts as [string, string];
@@ -38,10 +45,15 @@ export function verifyGuest(value: string, secret: string, now = Date.now()): st
   try {
     const data = Payload.safeParse(JSON.parse(Buffer.from(payload, "base64url").toString("utf8")));
     if (!data.success || data.data.e <= now || !isValidNickname(data.data.n)) return null;
-    return data.data.n;
+    return { nickname: data.data.n, id: data.data.i ?? null, expires: data.data.e };
   } catch {
     return null;
   }
+}
+
+/** Le pseudonyme d'un cookie, seulement si la signature, la date et la règle du pseudo sont bonnes. */
+export function verifyGuest(value: string, secret: string, now = Date.now()): string | null {
+  return verifyGuestSession(value, secret, now)?.nickname ?? null;
 }
 
 export function guestCookie(value: string, secure: boolean, maxAge?: number) {
@@ -51,13 +63,18 @@ export function guestCookie(value: string, secure: boolean, maxAge?: number) {
   return parts.join("; ");
 }
 
-/** Le pseudonyme vérifié de l'invité qui envoie ces en-têtes, ou null. */
-export function readGuest(headers: Headers, secret = guestSecret(), now = Date.now()) {
+/** La session vérifiée de l'invité qui envoie ces en-têtes, ou null. */
+export function readGuestSession(headers: Headers, secret = guestSecret(), now = Date.now()): GuestSession | null {
   for (const pair of (headers.get("cookie") ?? "").split(";")) {
     const [name, ...rest] = pair.trim().split("=");
-    if (name === GUEST_COOKIE) return verifyGuest(rest.join("="), secret, now);
+    if (name === GUEST_COOKIE) return verifyGuestSession(rest.join("="), secret, now);
   }
   return null;
+}
+
+/** Le pseudonyme vérifié de l'invité qui envoie ces en-têtes, ou null. */
+export function readGuest(headers: Headers, secret = guestSecret(), now = Date.now()) {
+  return readGuestSession(headers, secret, now)?.nickname ?? null;
 }
 
 const GuestBody = z
