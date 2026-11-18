@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 import { allows, cleanRoomCode, CODE_ALPHABET, isListed, isRoomCode, newInviteToken, newRoomCode } from "./access";
 
 describe("room code", () => {
@@ -46,5 +46,34 @@ describe("visibility", () => {
     expect(allows("public", "invite")).toBe(true);
     expect(allows("semi", "invite")).toBe(true);
     expect(allows("private", "invite")).toBe(true);
+  });
+});
+
+describe("SALLE-02 — room code drawn by crypto", () => {
+  test("the default draw uses crypto.getRandomValues, not Math.random", () => {
+    const cryptoSpy = spyOn(crypto, "getRandomValues");
+    const mathSpy = spyOn(Math, "random");
+    try {
+      expect(isRoomCode(newRoomCode())).toBe(true);
+      expect(cryptoSpy).toHaveBeenCalled();
+      expect(mathSpy).not.toHaveBeenCalled();
+    } finally {
+      cryptoSpy.mockRestore();
+      mathSpy.mockRestore();
+    }
+  });
+
+  test("bytes that would bias the alphabet are skipped", () => {
+    // 248 = 8 × 31 : un octet ≥ 248 favoriserait les premières lettres, il est rejeté
+    const bytes = [255, 248, 0, 1, 2, 3, 4, 30];
+    let i = 0;
+    const source = (n: number) => Uint8Array.from({ length: n }, () => bytes[i++ % bytes.length]!);
+    expect(newRoomCode(source)).toBe("ABCDE9");
+  });
+
+  test("every character of the alphabet can be drawn", () => {
+    const seen = new Set<string>();
+    for (let i = 0; i < 400; i++) for (const c of newRoomCode()) seen.add(c);
+    expect(seen.size).toBe(CODE_ALPHABET.length);
   });
 });

@@ -6,8 +6,21 @@ export const CODE_LENGTH = 6;
 /** La même règle, pour la contrainte de la base. */
 export const CODE_PATTERN = `^[${CODE_ALPHABET}]{${CODE_LENGTH}}$`;
 
-export function newRoomCode(random: () => number = Math.random) {
-  return Array.from({ length: CODE_LENGTH }, () => CODE_ALPHABET[Math.floor(random() * CODE_ALPHABET.length)]).join("");
+/** Des octets aléatoires : crypto.getRandomValues par défaut, imprévisible contrairement à Math.random. */
+export type RandomBytes = (count: number) => Uint8Array;
+const cryptoBytes: RandomBytes = (count) => crypto.getRandomValues(new Uint8Array(count));
+/** Le plus grand multiple de la taille de l'alphabet sous 256 : au-delà, un octet favoriserait les premières lettres. */
+const UNBIASED_LIMIT = 256 - (256 % CODE_ALPHABET.length);
+
+/** Un code de salon tiré au hasard (SALLE-02). L'unicité est garantie par la base : en cas de collision, on retire. */
+export function newRoomCode(random: RandomBytes = cryptoBytes) {
+  let code = "";
+  while (code.length < CODE_LENGTH) {
+    for (const byte of random(CODE_LENGTH)) {
+      if (byte < UNBIASED_LIMIT && code.length < CODE_LENGTH) code += CODE_ALPHABET[byte % CODE_ALPHABET.length];
+    }
+  }
+  return code;
 }
 
 /** Nettoie une saisie : majuscules, caractères hors alphabet retirés, 6 au plus. */
