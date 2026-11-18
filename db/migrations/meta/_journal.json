@@ -120,6 +120,13 @@
       "when": 1795045397634,
       "tag": "0016_room_invites",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1795045773052,
+      "tag": "0017_rate_limits",
+      "breakpoints": true
     }
   ]
 }

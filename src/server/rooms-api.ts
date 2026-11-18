@@ -4,7 +4,8 @@ import type { Db } from "../../db/client";
 import { isRoomCode } from "../rooms/access";
 import { CreateRoomSchema, JoinRoomSchema, KickSchema, UpdateRoomSchema } from "../rooms/settings";
 import type { Auth } from "./auth";
-import { clientIp } from "./client-ip";
+import { clientIp, type IpContext } from "./client-ip";
+import type { Guard } from "./rate-limit";
 import { guestSecret } from "./guest";
 import { createInvite, listInvites } from "./room-invites";
 import { roomIdentity } from "./room-gate";
@@ -37,7 +38,8 @@ async function run<T = RoomResult>(action: () => Promise<T>, status = 200, done?
 /** Notifié après chaque changement d'un salon : le temps réel s'y abonne pour pousser le nouvel état aux membres. */
 export type RoomChanged = (code: string) => void;
 
-export async function handleRoomsApi(req: Request, db: Db, auth: Auth, secret = guestSecret(), changed: RoomChanged = () => {}): Promise<Response> {
+/** `joinLimit` (SALLE-10) : la limite de tentatives par IP sur /join ; api.ts la branche toujours, les tests la passent. */
+export async function handleRoomsApi(req: Request, db: Db, auth: Auth, secret = guestSecret(), changed: RoomChanged = () => {}, joinLimit?: Guard, ip: IpContext = {}): Promise<Response> {
   const { pathname } = new URL(req.url);
   const parts = pathname.replace(/\/$/, "").split("/").slice(3); // après /api/rooms
   const who = await roomIdentity(req.headers, auth, secret);
@@ -56,11 +58,14 @@ export async function handleRoomsApi(req: Request, db: Db, auth: Auth, secret = 
 
   // POST /api/rooms/join — SALLE-03 : par code (public, sur code) ou par lien d'invitation (toutes visibilités)
   if (parts.length === 1 && parts[0] === "join" && req.method === "POST") {
+    // SALLE-10 : chaque tentative compte, avant tout contrôle, pour que la réponse ne dise rien d'un code une fois la limite atteinte
+    const limited = await joinLimit?.(req);
+    if (limited) return limited;
     if (!who) return json({ error: "unauthorized" }, 401);
     const input = JoinRoomSchema.safeParse(await bodyOf(req));
     if (!input.success) return json({ error: "invalid_body" }, 400);
-    // SALLE-04 : un lien d'invitation est lié à l'IP du client, lue derrière le proxy
-    return run(() => joinRoom(db, who, input.data, clientIp(req.headers)), 200, (result) => changed(result.room.code));
+    // SALLE-04 : un lien d'invitation est lié à l'IP du client (client-ip.ts : proxy connu ou socket)
+    return run(() => joinRoom(db, who, input.data, clientIp(req.headers, ip)), 200, (result) => changed(result.room.code));
   }
 
   const [code, action] = parts;

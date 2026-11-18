@@ -4,7 +4,7 @@ import type { RoomSocketMessage } from "../../server/realtime";
 import type { InviteView } from "../../server/room-invites";
 import type { RefusalReason, RoomResult, RoomView } from "../../server/rooms";
 
-export type RoomError = RefusalReason | "unauthorized" | "account_required" | "invalid_body" | "no_free_code" | "network";
+export type RoomError = RefusalReason | "unauthorized" | "account_required" | "invalid_body" | "no_free_code" | "rate_limited" | "network";
 /** current : SALLE-06, le salon où l'on est déjà quand le serveur répond « already_in_room ». */
 export type Answer = { ok: true; result: RoomResult } | { ok: false; error: RoomError; current?: string };
 

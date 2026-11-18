@@ -7,7 +7,7 @@ import { newInviteToken } from "../rooms/access";
 import { createAuth } from "./auth";
 import { GUEST_COOKIE, signGuest } from "./guest";
 import { MAX_INVITES, revokeInvitesOf, type InviteView } from "./room-invites";
-import { withSocketIp } from "./client-ip";
+import { socketIp } from "./client-ip";
 import { handleRoomsApi } from "./rooms-api";
 
 process.env.BETTER_AUTH_SECRET ??= "test-secret-test-secret-test-secret";
@@ -31,7 +31,7 @@ async function setup() {
   const sessions = new Map<string, string>();
   const freshGuest = (name: string) => `${GUEST_COOKIE}=${signGuest(name, SECRET)}`;
   const guest = (name: string) => sessions.get(name) ?? sessions.set(name, freshGuest(name)).get(name)!;
-  /** ip : la première valeur de x-forwarded-for, comme derrière le proxy de Vercel ; null : sans en-tête. */
+  /** ip : la première valeur de x-forwarded-for, derrière un proxy déclaré (TRUST_PROXY) ; null : sans en-tête. */
   const call = (method: string, path: string, cookie?: string, body?: unknown, ip: string | null = IP_A) =>
     handleRoomsApi(
       new Request(`http://localhost${path}`, {
@@ -42,6 +42,9 @@ async function setup() {
       db,
       auth,
       SECRET,
+      undefined,
+      undefined,
+      { env: { TRUST_PROXY: "1" } },
     );
   return { db, signUp, guest, freshGuest, call };
 }
@@ -363,7 +366,7 @@ describe("SALLE-04 — the local Bun server (server.ts) binds a link to the sock
     const { room } = (await (await t.call("POST", "/api/rooms", host.cookie, { role: "player" })).json()) as Joined;
     const { invite } = (await (await t.call("POST", `/api/rooms/${room.code}/invites`, host.cookie)).json()) as { invite: InviteView };
     // le handler de server.ts, autour de la route des salons de cette base de test
-    const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: withSocketIp((req) => handleRoomsApi(req, t.db, createAuth(t.db), SECRET)) });
+    const server = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: (req, srv) => handleRoomsApi(req, t.db, createAuth(t.db), SECRET, undefined, undefined, { env: {}, peer: socketIp(srv, req) }) });
     try {
       const res = await fetch(`http://127.0.0.1:${server.port}/api/rooms/join`, {
         method: "POST",

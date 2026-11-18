@@ -122,6 +122,7 @@
       "account_required": "Il faut un compte pour créer un salon.",
       "invalid_body": "Demande invalide.",
       "no_free_code": "Impossible de créer le salon pour l'instant. Réessaie.",
+      "rate_limited": "Trop d'essais de code. Réessaie dans une minute.",
       "network": "Le serveur ne répond pas. Vérifie ta connexion.",
       "unauthorized": "Choisis d'abord un pseudo."
     },

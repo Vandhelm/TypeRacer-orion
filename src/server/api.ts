@@ -5,6 +5,8 @@ import { handleRace, playerStats } from "./races";
 import { handleAvatar, saveAvatar } from "./account";
 import { handleGuest } from "./guest";
 import { createAuth, type Auth } from "./auth";
+import { socketIp } from "./client-ip";
+import { joinGuard } from "./rate-limit";
 import { handleRoomsApi } from "./rooms-api";
 import { roomEvents } from "./room-events";
 
@@ -40,12 +42,17 @@ async function getStats(name: string) {
   return stats ? Response.json(stats) : Response.json({ error: "not_found" }, { status: 404 });
 }
 
-export async function handleApi(req: Request): Promise<Response> {
+/** `context` : le serveur Bun (server.ts), qui donne l'IP de la socket (SALLE-10), ou le contexte de route de Next.js. */
+export async function handleApi(req: Request, context?: unknown): Promise<Response> {
   const { pathname } = new URL(req.url);
   if (pathname === "/api/races") return handleRace(req, db(), auth());
   if (pathname === "/api/account/avatar") return handleAvatar(req, auth(), saveAvatar(db()));
   if (pathname === "/api/guest") return handleGuest(req);
-  if (pathname === "/api/rooms" || pathname.startsWith("/api/rooms/")) return handleRoomsApi(req, db(), auth(), undefined, roomEvents.emit);
+  if (pathname === "/api/rooms" || pathname.startsWith("/api/rooms/")) {
+    // une seule IP pour la limite de débit (SALLE-10) et la liaison des liens d'invitation (SALLE-04)
+    const peer = socketIp(context, req);
+    return handleRoomsApi(req, db(), auth(), undefined, roomEvents.emit, joinGuard(db(), { peer }), { peer });
+  }
   const stats = pathname.match(/^\/api\/players\/([^/]+)\/stats$/);
   if (stats) return getStats(decodeURIComponent(stats[1]!));
   if (pathname.startsWith("/api/auth/")) return auth().handler(req);

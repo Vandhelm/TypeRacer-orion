@@ -315,7 +315,7 @@ export type JoinVia = ({ code: string } | { invite: string }) & { role?: Role };
 async function roomFor(db: Db, via: JoinVia): Promise<number> {
   // SALLE-04 : un lien par invité (room_invites) ; il est vérifié et pris sous le verrou, dans joinRoom
   if ("invite" in via) return roomOfInvite(db, via.invite);
-  // À BRANCHER (SALLE-10) : limiter les essais de code par IP, avant cette lecture, dans la route.
+  // SALLE-10 : les essais sont limités par IP avant cette lecture, dans la route (rate-limit.ts).
   const [room] = await db.select({ id: rooms.id }).from(rooms).where(eq(rooms.code, via.code));
   if (!room) throw new RoomRefused("not_found");
   return room.id;

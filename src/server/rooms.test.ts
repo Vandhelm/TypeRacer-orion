@@ -71,13 +71,16 @@ async function setup() {
     handleRoomsApi(
       new Request(`http://localhost${path}`, {
         method,
-        // SALLE-04 : derrière le proxy, l'IP du client est la première valeur de x-forwarded-for
+        // SALLE-04 : derrière un proxy déclaré (TRUST_PROXY), l'IP du client est la première valeur de x-forwarded-for
         headers: { ...(cookie ? { cookie } : {}), "x-forwarded-for": "203.0.113.1", ...(body === undefined ? {} : { "content-type": "application/json" }) },
         body: body === undefined ? undefined : typeof body === "string" ? body : JSON.stringify(body),
       }),
       db,
       auth,
       SECRET,
+      undefined,
+      undefined,
+      { env: { TRUST_PROXY: "1" } },
     );
   /** SALLE-06 : un compte n'est que dans un salon à la fois ; chaque salon d'un test a donc son propre hôte, neuf. */
   let hosts = 0;

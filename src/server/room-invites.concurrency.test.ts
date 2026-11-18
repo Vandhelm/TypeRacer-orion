@@ -25,6 +25,9 @@ describe.skipIf(!process.env.DATABASE_URL)("SALLE-04 — simultaneous use of one
       server.db,
       createAuth(server.db),
       SECRET,
+      undefined,
+      undefined,
+      { env: { TRUST_PROXY: "1" } },
     );
   const guest = (name: string) => `${GUEST_COOKIE}=${signGuest(name, SECRET)}`;
 

@@ -122,6 +122,7 @@
       "account_required": "You need an account to create a room.",
       "invalid_body": "Invalid request.",
       "no_free_code": "The room can't be created right now. Try again.",
+      "rate_limited": "Too many code attempts. Try again in a minute.",
       "network": "The server isn't answering. Check your connection.",
       "unauthorized": "Choose a nickname first."
     },

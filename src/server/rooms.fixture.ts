@@ -36,7 +36,8 @@ export async function roomsFixture(changed?: RoomChanged) {
     handleRoomsApi(
       new Request(`http://localhost${path}`, {
         method,
-        // SALLE-04 : un lien d'invitation se lie à l'IP du client ; toutes les requêtes viennent de la même
+        // SALLE-04 : un lien d'invitation se lie à l'IP du client ; toutes les requêtes viennent de la même, derrière un
+        // proxy déclaré (TRUST_PROXY, client-ip.ts)
         headers: { ...(cookie ? { cookie } : {}), ...(body === undefined ? {} : { "content-type": "application/json" }), "x-forwarded-for": "203.0.113.1" },
         body: body === undefined ? undefined : JSON.stringify(body),
       }),
@@ -44,6 +45,8 @@ export async function roomsFixture(changed?: RoomChanged) {
       auth,
       SECRET,
       changed,
+      undefined,
+      { env: { TRUST_PROXY: "1" } },
     );
   /** Un compte neuf crée un salon public ; renvoie le salon et l'hôte (cookie, id, clé). */
   const open = async (name: string, settings: Record<string, unknown> = {}, role: "player" | "spectator" = "player") => {

@@ -17,7 +17,7 @@ describe("schema", () => {
 
   test("creates every table", async () => {
     const { rows } = await db.execute<{ table_name: string }>(sql`SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name`);
-    expect(rows.map((row) => row.table_name)).toEqual(["account", "corpus_texts", "players", "race_configs", "race_results", "race_samples", "races", "room_bans", "room_invites", "room_members", "rooms", "saved_texts", "session", "user", "verification"]);
+    expect(rows.map((row) => row.table_name)).toEqual(["account", "corpus_texts", "players", "race_configs", "race_results", "race_samples", "races", "rate_limits", "room_bans", "room_invites", "room_members", "rooms", "saved_texts", "session", "user", "verification"]);
   });
 
   test("enforces foreign keys", async () => {
