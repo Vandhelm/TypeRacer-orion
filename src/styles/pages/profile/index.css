@@ -1,8 +1,7 @@
-/* Player profile page entry (profile.html). */
+/* Player profile page entry. */
 @layer theme, base, components, utilities;
 @import "tailwindcss/theme.css" layer(theme);
 @import "tailwindcss/utilities.css" layer(utilities);
-@source "../../../../profile.html";
 @source "../../../views/profile";
 
 @import "../../base/tokens.css";

@@ -1,4 +1,4 @@
-// Toutes les routes /api/*. Le même code tourne en local (server.ts) et sous Next.js (app/api/[...path]/route.ts), en local comme sur Vercel.
+// Toutes les routes /api/*. Servies par Next.js (app/api/[...path]/route.ts), en local comme sur Vercel.
 import { sql } from "drizzle-orm";
 import { connect } from "../../db/client";
 import { handleRace, playerStats } from "./races";

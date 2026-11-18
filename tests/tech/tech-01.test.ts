@@ -1,0 +1,28 @@
+import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+
+const tracked = (await Bun.$`git ls-files`.text()).split("\n").filter(Boolean);
+
+describe("TECH-01 Next.js App Router, ancienne pile Bun retiree", () => {
+  test("plus de serveur Bun, de build Bun ni de pages HTML a la racine", () => {
+    const legacy = tracked.filter((f) => /^(server( 2)?\.ts|build\.ts|bunfig\.toml|[^/]+\.html)$/.test(f));
+    expect(legacy).toEqual([]);
+  });
+
+  test("plus de point d'entree src/views/*/main.tsx", () => {
+    expect(tracked.filter((f) => /^src\/views\/[^/]+\/main\.tsx$/.test(f))).toEqual([]);
+  });
+
+  test("package.json ne garde ni dev:legacy ni build", () => {
+    const scripts = JSON.parse(readFileSync("package.json", "utf8")).scripts as Record<string, string>;
+    expect(scripts["dev:legacy"]).toBeUndefined();
+    expect(scripts["build"]).toBeUndefined();
+    expect(scripts["dev"]).toContain("next dev");
+    expect(scripts["next:build"]).toContain("next build");
+  });
+
+  test("aucune feuille de style ne pointe vers un fichier .html", () => {
+    const css = tracked.filter((f) => f.endsWith(".css"));
+    expect(css.filter((f) => /\.html/.test(readFileSync(f, "utf8")))).toEqual([]);
+  });
+});
