@@ -66,7 +66,7 @@ Tu ne pousses pas, tu ne merges pas, tu ne réécris pas l'historique et tu ne c
 
 ## 6. Rapport final
 
-Ta réponse finale est ce rapport, et rien d'autre. **20 lignes au plus** : une ligne par partie et par problème, des références `fichier:ligne`, jamais de code cité, une section vide s'écrit « — ».
+Ta réponse finale est ce rapport, et rien d'autre. Sans remplissage : une ligne par partie et par problème, des références `fichier:ligne`, jamais de code cité, une section vide s'écrit « — ».
 
 ```markdown
 ## <exigence ou tâche> — <branche>

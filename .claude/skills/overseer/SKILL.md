@@ -36,7 +36,7 @@ Passe toujours `model` dans l'appel `Agent` : il l'emporte sur le frontmatter. C
 
 - **Escalade :** un tour de correction qui échoue fait monter le `dev` suivant d'un cran (sonnet → opus). Ne redescends pas sur la même unité.
 - Un agent ne change pas de modèle en cours de route : le choix se fait au lancement.
-- **Effort :** passe toujours `effort` dans l'appel `Agent` : `low` pour `Explore`, `medium` pour `dev` et `qa`, `high` quand le modèle est `opus` (sécurité, droits, temps réel, escalade).
+- **Effort :** passe toujours `effort` dans l'appel `Agent` : `low` pour `Explore`, `medium` pour `dev`, `high` pour `qa` (c'est le filet de sécurité : en medium, il rate des cas limites) et pour tout agent sur `opus` (sécurité, droits, temps réel, escalade).
 - Note le modèle de chaque agent dans le rapport final.
 
 **Light avec une seule unité :** pas de phase de découpe ni d'`Explore`. Lance directement un `dev`, puis un `qa`, puis au plus un `dev` de correction.
