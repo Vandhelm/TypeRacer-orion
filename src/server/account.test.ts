@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import sharp from "sharp";
 import type { Auth } from "./auth";
-import { avatarType, handleAvatar, resizeAvatar } from "./account";
+import { AVATAR_MAX_BYTES, avatarType, handleAvatar, resizeAvatar } from "./account";
 
 const bytes = (...values: number[]) => new Uint8Array(values);
 
@@ -22,11 +22,11 @@ describe("avatarType", () => {
 const picture = (width: number, height: number, format: "png" | "jpeg" | "webp" = "png") =>
   sharp({ create: { width, height, channels: 3, background: "#3a7" } })[format]().toBuffer();
 
-const fakeAuth = () => {
+const fakeAuth = ({ signedIn = true } = {}) => {
   const saved: { image: string | null }[] = [];
   const auth = {
     api: {
-      getSession: async () => ({ user: { id: "u1" } }),
+      getSession: async () => (signedIn ? { user: { id: "u1" } } : null),
       updateUser: async ({ body }: { body: { image: string | null } }) => {
         saved.push(body);
         return { status: true };
@@ -73,6 +73,41 @@ describe("AUTH-04 — redimensionnement côté serveur", () => {
   test("une image indécodable reçoit 415 et rien n'est enregistré", async () => {
     const { auth, saved } = fakeAuth();
     const response = await handleAvatar(upload(bytes(0xff, 0xd8, 0xff, 0xe0, 0, 0, 0)), auth);
+    expect(response.status).toBe(415);
+    expect(saved).toEqual([]);
+  });
+});
+
+const padded = async (size: number) => {
+  const data = new Uint8Array(size);
+  data.set(await picture(64, 64, "png"));
+  return data;
+};
+
+describe("AUTH-04 — garde-fous du téléversement", () => {
+  test("sans session, 401 et rien n'est enregistré", async () => {
+    const { auth, saved } = fakeAuth({ signedIn: false });
+    const response = await handleAvatar(upload(await picture(64, 64)), auth);
+    expect(response.status).toBe(401);
+    expect(saved).toEqual([]);
+  });
+
+  test("2 Mo + 1 octet reçoit 413 et rien n'est enregistré", async () => {
+    const { auth, saved } = fakeAuth();
+    const response = await handleAvatar(upload(await padded(AVATAR_MAX_BYTES + 1)), auth);
+    expect(response.status).toBe(413);
+    expect(saved).toEqual([]);
+  });
+
+  test("exactement 2 Mo n'est pas refusé pour sa taille", async () => {
+    const { auth } = fakeAuth();
+    const response = await handleAvatar(upload(await padded(AVATAR_MAX_BYTES)), auth);
+    expect(response.status).not.toBe(413);
+  });
+
+  test("un GIF reçoit 415 et rien n'est enregistré", async () => {
+    const { auth, saved } = fakeAuth();
+    const response = await handleAvatar(upload(bytes(0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 1, 0, 1, 0)), auth);
     expect(response.status).toBe(415);
     expect(saved).toEqual([]);
   });
