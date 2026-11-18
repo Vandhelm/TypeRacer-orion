@@ -1,5 +1,5 @@
 # Intégration continue (TECH-09) : à chaque push et pull request, lint, types, tests unitaires
-# et de régression, puis smoke tests sur un vrai Postgres.
+# et de régression, build Next.js, puis smoke tests sur un vrai Postgres.
 name: CI
 
 on:
@@ -50,8 +50,15 @@ jobs:
       - name: Tests unitaires et de régression
         run: bun test
 
+      # TECH-01 : l'application est construite et servie par Next.js. Un build en échec arrête la CI.
+      - name: Build Next.js
+        run: bun run next:build
+
+      # Smoke tests contre `next start` (base jetable orion_smoke), sur le build de l'étape précédente.
       - name: Smoke tests
         run: bun run test:smoke
+        env:
+          SMOKE_SKIP_BUILD: "1"
 
       # TECH-02 interdit tout fichier .js/.jsx. Non bloquant tant que les 2 fichiers existants
       # (createRacePool.js, createScene.js) ne sont pas convertis : retirer
