@@ -7,7 +7,7 @@ import type { LegacyPageName } from "./LegacyRoot";
 
 const LegacyRoot = dynamic(() => import("./LegacyRoot"), { ssr: false });
 
-/** player : le nom vérifié par le serveur, pour les pages qui en ont besoin (salon). */
+/** player : le nom vérifié par le serveur, pour les pages qui en ont besoin (salon, course). */
 export function LegacyPage({ name, player }: { name: LegacyPageName; player?: string }) {
   return <LegacyRoot name={name} player={player} />;
 }
