@@ -5,6 +5,7 @@ import { avg, count, desc, eq, max, sql } from "drizzle-orm";
 import type { Db } from "../../db/client";
 import type { Auth } from "./auth";
 import { guestSecret, readGuest } from "./guest";
+import { isBotName } from "../players/bots";
 import { parseKeys, type KeyCounts } from "../players/keys";
 import { players, raceConfigs, raceResults, races, raceSamples, user } from "../../db/schema";
 
@@ -89,8 +90,9 @@ export function parseRace(body: unknown) {
 
 type ParsedRace = ReturnType<typeof parseRace>;
 
-/** Le joueur d'un bot : créé à sa première course. Un nom pris par un humain n'est jamais repris. */
+/** Le joueur d'un bot : créé à sa première course, seulement pour un nom de la liste des bots. Un nom pris par un humain n'est jamais repris. */
 async function botPlayer(db: Db, name: string) {
+  if (!isBotName(name)) return null;
   await db.insert(players).values({ name, isBot: true }).onConflictDoNothing();
   const [row] = await db.select({ id: players.id, isBot: players.isBot }).from(players).where(sql`lower(${players.name}) = lower(${name})`);
   return row?.isBot ? row.id : null;

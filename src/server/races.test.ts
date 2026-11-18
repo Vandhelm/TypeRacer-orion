@@ -27,10 +27,10 @@ describe("races", () => {
   });
 
   test("records the bots of a race, with their per-second samples", async () => {
-    const body = { summary: SUMMARY, content: "le riz attend", players: [result("Nouveau_Bot", true, 70), result("Invite_42", false, 60)] };
+    const body = { summary: SUMMARY, content: "le riz attend", players: [result("Nori_Ninja", true, 70), result("Invite_42", false, 60)] };
     const raceId = await recordRace(db, parseRace(body));
     expect(raceId).toBeNumber();
-    const [bot] = await db.select().from(players).where(eq(players.name, "Nouveau_Bot"));
+    const [bot] = await db.select().from(players).where(eq(players.name, "Nori_Ninja"));
     expect(bot!.isBot).toBe(true);
     const rows = await db.select().from(raceResults).where(eq(raceResults.raceId, raceId!));
     expect(rows).toHaveLength(1);
@@ -54,8 +54,8 @@ describe("races", () => {
   });
 
   test("computes a player's stats from every race", async () => {
-    const stats = await playerStats(db, "nouveau_bot");
-    expect(stats).toMatchObject({ name: "Nouveau_Bot", bot: true, races: 1, wins: 1, bestWpm: 70, averageWpm: 70, averageAccuracy: 95.5 });
+    const stats = await playerStats(db, "nori_ninja");
+    expect(stats).toMatchObject({ name: "Nori_Ninja", bot: true, races: 1, wins: 1, bestWpm: 70, averageWpm: 70, averageAccuracy: 95.5 });
     expect(stats!.progress).toHaveLength(1);
   });
 
@@ -67,10 +67,10 @@ describe("races", () => {
   });
 
   test("adds up a player's keys over every race", async () => {
-    const keyed = (keys: unknown) => ({ ...result("Clavier_Bot", true, 50), keys });
+    const keyed = (keys: unknown) => ({ ...result("Uni_Kun", true, 50), keys });
     await recordRace(db, parseRace({ summary: SUMMARY, players: [keyed({ e: [10, 2], " ": [4, 0] })] }));
     await recordRace(db, parseRace({ summary: SUMMARY, players: [keyed({ e: [5, 1], ab: [9, 9], z: [-1, 0] })] }));
-    expect((await playerStats(db, "Clavier_Bot"))!.keys).toEqual({ e: [15, 3], " ": [4, 0] });
+    expect((await playerStats(db, "Uni_Kun"))!.keys).toEqual({ e: [15, 3], " ": [4, 0] });
   });
 
   test("returns null for an unknown player", async () => {
@@ -149,14 +149,46 @@ describe("AUTH-06 — a signed-in account keeps its races", () => {
 
   test("a guest still keeps no history, even posing as a bot", async () => {
     const cookie = `${GUEST_COOKIE}=${signGuest("Invite_Perle", GUEST_SECRET)}`;
-    const res = await post({ summary: SUMMARY, players: [result("Invite_Perle", true, 60), result("Bot_Du_Guest", true, 50)] }, cookie);
+    const res = await post({ summary: SUMMARY, players: [result("Invite_Perle", true, 60), result("Ebi_Fry", true, 50)] }, cookie);
     expect(res.status).toBe(201);
     expect(await db.$count(players, eq(players.name, "Invite_Perle"))).toBe(0);
-    expect(await db.$count(players, eq(players.name, "Bot_Du_Guest"))).toBe(1);
+    expect(await db.$count(players, eq(players.name, "Ebi_Fry"))).toBe(1);
   });
 
   test("a forged guest cookie counts as no session", async () => {
     const forged = `${GUEST_COOKIE}=${signGuest("Corail_419", "another-secret-another-secret-12")}`;
     expect((await post({ summary: SUMMARY, players: [result("Bot_Forge", true, 50)] }, forged)).status).toBe(401);
+  });
+});
+
+describe("AUTH-03 — the server decides who is a bot, never the body", () => {
+  let db: Awaited<ReturnType<typeof createMockDatabase>>;
+  let auth: ReturnType<typeof createAuth>;
+  beforeAll(async () => {
+    db = await createMockDatabase();
+    auth = createAuth(db);
+  });
+  const post = (body: unknown, cookie: string) =>
+    handleRace(new Request("http://localhost/api/races", { method: "POST", headers: { "content-type": "application/json", cookie }, body: JSON.stringify(body) }), db, auth, GUEST_SECRET);
+
+  test("a human account posted as a bot gets no row and no new race", async () => {
+    const before = await playerStats(db, "Corail_418");
+    expect(await recordRace(db, parseRace({ summary: SUMMARY, players: [result("Corail_418", true, 200)] }))).toBeNull();
+    expect(await db.$count(players, eq(players.name, "Corail_418"))).toBe(1);
+    expect(await playerStats(db, "Corail_418")).toEqual(before);
+  });
+
+  test("a free name posted as a bot is never created", async () => {
+    expect(await recordRace(db, parseRace({ summary: SUMMARY, players: [result("Nom_Libre_9", true, 200)] }))).toBeNull();
+    expect(await db.$count(players, eq(players.name, "Nom_Libre_9"))).toBe(0);
+    expect(await playerStats(db, "Nom_Libre_9")).toBeNull();
+  });
+
+  test("a name a guest posted as a bot stays free for a new account", async () => {
+    const cookie = `${GUEST_COOKIE}=${signGuest("Invite_Malin", GUEST_SECRET)}`;
+    await post({ summary: SUMMARY, players: [result("Invite_Malin", false, 60), result("Libre_Nom", true, 200)] }, cookie);
+    expect(await db.$count(players, eq(players.name, "Libre_Nom"))).toBe(0);
+    const res = await auth.api.signUpEmail({ body: { name: "Libre_Nom", email: placeholderEmail("Libre_Nom"), password: "sushi-roll-42", username: "Libre_Nom", displayUsername: "Libre_Nom" } });
+    expect(res.user).toBeDefined();
   });
 });
