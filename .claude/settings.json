@@ -18,10 +18,18 @@
       "Bash(git stash:*)",
       "Bash(git merge --no-ff:*)",
       "Bash(git worktree:*)",
-      "Bash(git cherry-pick:*)"
+      "Bash(git cherry-pick:*)",
+      "Bash(bash .claude/hooks/worktree-setup.sh:*)"
     ],
     "deny": [
       "Bash(git push:*)"
     ]
+  },
+  "enabledPlugins": {
+    "figma@knowledge-work-plugins": false,
+    "design@knowledge-work-plugins": false,
+    "engineering@knowledge-work-plugins": false,
+    "informatica-for-claude-platform@knowledge-work-plugins": false,
+    "pdf-viewer@knowledge-work-plugins": false
   }
 }
