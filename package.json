@@ -31,7 +31,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun --bun next dev",
+    "dev": "bun run --parallel next:dev realtime",
+    "next:dev": "bun --bun next dev",
+    "realtime": "bun src/realtime/main.ts",
     "dev:legacy": "bun --hot server.ts",
     "next:build": "bun --bun next build",
     "next:start": "bun --bun next start",
