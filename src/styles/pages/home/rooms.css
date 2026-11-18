@@ -31,3 +31,13 @@
 @media (prefers-reduced-motion: reduce){
     .rooms-stall{ animation: none !important; }
 }
+
+/* SALLE-03 : aucun salon public ouvert */
+.rooms-empty{
+    margin: 0 4cqw;
+    padding: 14px 18px;
+    text-align: center;
+    color: var(--color-muted);
+    border: 1px dashed var(--color-line);
+    border-radius: 12px;
+}

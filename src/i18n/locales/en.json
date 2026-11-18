@@ -60,7 +60,8 @@
     "stub": "STUB",
     "take": "TAKE",
     "reserved": "RESERVED",
-    "takeLabel": "Take the coupon for table {{n}} — {{guests}} guests"
+    "takeLabel": "Take the coupon for table {{n}} — {{guests}} guests",
+    "empty": "No public room right now. Create yours, or enter a code."
   },
   "nav": {
     "main": "Main navigation",

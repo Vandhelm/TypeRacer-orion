@@ -60,7 +60,8 @@
     "stub": "TALON",
     "take": "PRENDRE",
     "reserved": "RÉSERVÉ",
-    "takeLabel": "Prendre le coupon de la table {{n}} — {{guests}} convives"
+    "takeLabel": "Prendre le coupon de la table {{n}} — {{guests}} convives",
+    "empty": "Aucun salon public pour l'instant. Crée le tien, ou entre un code."
   },
   "nav": {
     "main": "Navigation principale",

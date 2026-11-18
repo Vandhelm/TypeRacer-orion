@@ -1,9 +1,9 @@
-import { useImperativeHandle, useRef, useState, type CSSProperties, type Ref } from "react";
+import { useEffect, useImperativeHandle, useRef, useState, type CSSProperties, type Ref } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { Ticket, TicketStub } from "../../components/cards/Ticket";
 import { useTicketSway } from "./hooks/useTicketSway";
-import { ROOMS, WAITING_PAGE } from "./rooms";
+import { fetchPublicRooms, WAITING_PAGE, type Room } from "./rooms";
 
 export type RoomsViewHandle = { tickets(): HTMLDivElement[] };
 
@@ -17,12 +17,26 @@ export function RoomsView({ descending, ref }: { descending: boolean; ref?: Ref<
   const [taken, setTaken] = useState(-1);
   const [cut, setCut] = useState<string>();
   const [flying, setFlying] = useState<Flying | null>(null);
+  const [tables, setRooms] = useState<Room[]>([]);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    let live = true;
+    fetchPublicRooms().then((list) => {
+      if (!live) return;
+      setRooms(list);
+      setLoaded(true);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
 
   const roots = useRef<(HTMLDivElement | null)[]>([]);
   const papers = useRef<(HTMLDivElement | null)[]>([]);
   const stubs = useRef<(HTMLDivElement | null)[]>([]);
   const holes = useRef<(HTMLSpanElement | null)[]>([]);
-  const sway = useTicketSway(papers, ROOMS.length);
+  const sway = useTicketSway(papers, tables.length);
 
   useImperativeHandle(ref, () => ({ tickets: () => roots.current.filter((el): el is HTMLDivElement => !!el) }), []);
 
@@ -35,16 +49,16 @@ export function RoomsView({ descending, ref }: { descending: boolean; ref?: Ref<
     // le ticket est coupé net à la perforation
     setCut(`inset(-20px -20px ${paper.offsetHeight - stub.offsetTop}px -20px)`);
     setTaken(i);
-    const room = ROOMS[i]!;
+    const room = tables[i]!;
     const reduce = reducedMotion();
+    // SALLE-03 : un salon public s'ouvre directement ; le serveur vérifie l'entrée par son code
     setTimeout(() => {
-      const [present, max] = room.guests.split(" / ");
-      location.href = `${WAITING_PAGE}?table=${room.n}&serial=${room.serial}&lang=${room.lang}&guests=${max}&present=${present}&bots=${room.bots ? 1 : 0}`;
+      location.href = `${WAITING_PAGE}?code=${room.code}`;
     }, reduce ? 500 : 1700);
   }
 
   const stubOf = (i: number) => {
-    const room = ROOMS[i]!;
+    const room = tables[i]!;
     return {
       label: t("rooms.stub"),
       actionLabel: t("rooms.take"),
@@ -56,10 +70,11 @@ export function RoomsView({ descending, ref }: { descending: boolean; ref?: Ref<
     <main className="rooms pointer-events-none fixed inset-0 z-10 flex items-start justify-center px-4 narrow:min-h-screen narrow:items-start narrow:px-2 narrow:pt-[110px] narrow:pb-6">
       <h1 className="sr-only">{t("rooms.pageTitle")}</h1>
       <div className="rooms-stall">
+        {loaded && !tables.length && <p className="rooms-empty pointer-events-auto" role="status">{t("rooms.empty")}</p>}
         <div className={taken >= 0 ? "tickets locked" : "tickets"} id="tickets" {...sway.container}>
-          {ROOMS.map((room, i) => (
+          {tables.map((room, i) => (
             <Ticket
-              key={room.n}
+              key={room.code}
               data-i={i}
               header={t("rooms.reservation")}
               number={String(room.n).padStart(2, "0")}

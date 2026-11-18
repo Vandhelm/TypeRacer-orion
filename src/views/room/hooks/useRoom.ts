@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { DEFAULT_SETTINGS, type Role, type RoomSettings } from "../../../rooms/settings";
 import type { RoomResult } from "../../../server/rooms";
-import { roomApi, type Answer, type RoomError } from "../api";
+import { roomApi, watchRoom, type Answer, type RoomError } from "../api";
 import { isPlayer, readSession, roomOf, seatsOf, type Room, type RoomView } from "../room";
 
 /** Le temps d'attendre la fin d'une saisie avant d'envoyer les réglages au serveur. */
@@ -48,11 +48,8 @@ export function useRoom() {
       return;
     }
     let live = true;
-    const request = session.host ? roomApi.create("player") : session.code ? roomApi.read(session.code) : null;
-    if (!request) {
-      setError("not_found");
-      return;
-    }
+    // SALLE-03 : le serveur décide si ce code ou ce lien ouvre le salon ; un membre qui revient le retrouve
+    const request = session.host ? roomApi.create("player") : roomApi.join(session.invite ? { invite: session.invite } : { code: session.code ?? "" });
     request.then((reply) => {
       if (!live) return;
       answer(reply);
@@ -65,6 +62,24 @@ export function useRoom() {
   }, [session, answer]);
 
   useEffect(() => () => clearTimeout(timer.current), []);
+
+  // En direct : les arrivées, les départs et les réglages de l'hôte. Le lien d'invitation reste celui reçu par HTTP.
+  useEffect(() => {
+    if (!code) return;
+    return watchRoom(
+      code,
+      (next) => {
+        setView((current) => ({ ...next, invite: current.invite }));
+        if (!Object.keys(pending.current).length) setRoom((current) => ({ ...roomOf(next), invite: current.invite }));
+      },
+      setError,
+    );
+  }, [code]);
+
+  /** Quitter le salon (bouton « Quitter ») : le serveur retire le membre et prévient les autres. */
+  const leave = useCallback(() => {
+    if (code) void roomApi.leave(code);
+  }, [code]);
 
   const host = ready && view.host === you;
 
@@ -96,8 +111,9 @@ export function useRoom() {
   const me = view.members.find((m) => m.key === you);
 
   return {
-    ready,
+    ready: ready && !error,
     error,
+    leave,
     room,
     update,
     host,

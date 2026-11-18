@@ -21,7 +21,7 @@ const VISIBILITY_KEY = { private: "private", semi: "semiPrivate", public: "publi
 export function RoomPage() {
   const { t, i18n } = useTranslation();
   const state = useRoom();
-  const { room, update, host, seats, players, spectators, displayName, ready, error } = state;
+  const { room, update, host, seats, players, spectators, displayName, ready, error, leave } = state;
   const editor = useRef<TextEditorHandle>(null);
   const launched = useRef(false);
   const [stampOn, setStampOn] = useState(false);
@@ -67,7 +67,7 @@ export function RoomPage() {
       <Stamp className="room-stamp" label={t("home.stampPlay")} visible={stampOn} playKey={0} />
 
       <header className="relative z-1 isolate mb-[clamp(20px,4vh,40px)] flex flex-wrap items-center justify-between gap-x-6 gap-y-3 pr-[124px] phone:mb-[14px] phone:pr-0">
-        <HangingButton className="room-leave" href={host ? "/home" : "/home#rooms"}>
+        <HangingButton className="room-leave" href={host ? "/home" : "/home#rooms"} onClick={leave}>
           {t("room.leave")}
         </HangingButton>
         <div className="room-shade text-right phone:w-full">
