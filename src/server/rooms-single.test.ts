@@ -47,7 +47,7 @@ describe("SALLE-06 — a person is in one room at a time", () => {
     const b = await t.open("Seul_LienB");
     const cookie = t.guest("Invite_Deux");
     await t.join(cookie, { code: a.room.code });
-    const res = await t.join(cookie, { invite: b.room.invite! });
+    const res = await t.join(cookie, { invite: await t.invite(b.room.code, b.host.cookie) });
     expect(res.body as unknown).toEqual({ error: "already_in_room", room: a.room.code });
   });
 
@@ -68,7 +68,8 @@ describe("SALLE-06 — a person is in one room at a time", () => {
   test("the same join twice, or from a second tab at once, makes a single member", async () => {
     const a = await t.open("Seul_Onglets");
     const cookie = t.guest("Deux_Onglets");
-    const answers = await Promise.all([t.join(cookie, { code: a.room.code }), t.join(cookie, { code: a.room.code }), t.join(cookie, { invite: a.room.invite! })]);
+    const invite = await t.invite(a.room.code, a.host.cookie);
+    const answers = await Promise.all([t.join(cookie, { code: a.room.code }), t.join(cookie, { code: a.room.code }), t.join(cookie, { invite })]);
     expect(answers.map((r) => r.status)).toEqual([200, 200, 200]);
     expect(await membershipsOf(answers[0].body.you)).toEqual([{ code: a.room.code }]);
     const again = await t.join(cookie, { code: a.room.code });

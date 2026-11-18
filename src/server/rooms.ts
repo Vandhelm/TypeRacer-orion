@@ -4,8 +4,9 @@ import { and, asc, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import type { z } from "zod";
 import type { Db } from "../../db/client";
 import { players, raceConfigs, roomBans, roomMembers, rooms } from "../../db/schema";
-import { allows, canJoin, newInviteToken, newRoomCode } from "../rooms/access";
+import { allows, canJoin, newRoomCode } from "../rooms/access";
 import { seatColor } from "../rooms/seats";
+import { claimInvite, roomOfInvite } from "./room-invites";
 import { DEFAULT_SETTINGS, type CreateRoomSchema, type Role, type RoomSettings, type UpdateRoomSchema } from "../rooms/settings";
 
 export type CreateRoomInput = z.infer<typeof CreateRoomSchema>;
@@ -64,8 +65,6 @@ export type RoomView = {
   /** Clé du membre hôte. */
   host: string;
   settings: RoomSettings;
-  /** Le lien d'invitation, montré à l'hôte seulement. À BRANCHER (SALLE-04) : un lien par invité. */
-  invite: string | null;
   /** Par ordre d'arrivée. */
   members: MemberView[];
 };
@@ -97,7 +96,8 @@ export class RoomRefused extends Error {
     super(`Room refused: ${reason}`);
   }
 }
-export type RefusalReason = "not_found" | "not_member" | "not_host" | "full" | "in_race" | "closed" | "already_in_room" | "kicked" | "invalid_target" | "unknown_member";
+/** invite_taken : lien déjà lié à une autre IP ou une autre personne (SALLE-04) ; invite_limit : trop de liens dans ce salon. */
+export type RefusalReason = "not_found" | "not_member" | "not_host" | "full" | "in_race" | "closed" | "already_in_room" | "kicked" | "invalid_target" | "unknown_member" | "invite_taken" | "invite_limit";
 
 /** SALLE-07 : cette personne a été expulsée de ce salon. */
 async function isKicked(db: Db, roomId: number, key: string, name?: string): Promise<boolean> {
@@ -171,8 +171,8 @@ const configOf = (s: RoomSettings) => ({
 
 const roomColumnsOf = (s: RoomSettings) => ({ name: s.autoName ? "" : s.name, autoName: s.autoName || !s.name, visibility: s.visibility, guests: s.guests, bots: s.bots });
 
-/** L'état d'un salon tel que le voit `viewer` (seul l'hôte reçoit le lien d'invitation). */
-export async function roomView(db: Db, roomId: number, viewer?: string): Promise<RoomView> {
+/** L'état d'un salon tel que le voit `viewer`. Sans lien d'invitation : l'hôte les lit à part (room-invites.ts, SALLE-04). */
+export async function roomView(db: Db, roomId: number, _viewer?: string): Promise<RoomView> {
   const [row] = await db.select().from(rooms).innerJoin(raceConfigs, eq(raceConfigs.id, rooms.configId)).where(eq(rooms.id, roomId));
   if (!row) throw new RoomRefused("not_found");
   const members = await db
@@ -187,7 +187,6 @@ export async function roomView(db: Db, roomId: number, viewer?: string): Promise
     status: row.rooms.status,
     host,
     settings: settingsOf(row.rooms, row.race_configs),
-    invite: viewer === host ? row.rooms.inviteToken : null,
     members: members.map((m) => ({ key: m.key, name: m.playerName ?? m.guestName ?? "", guest: m.playerId === null, host: m.key === host, role: m.role, seat: m.seat, color: m.color, finished: m.finishedAt !== null })),
   };
 }
@@ -224,7 +223,7 @@ export async function createRoom(db: Db, host: { playerId: number }, input: Crea
         const [config] = await tx.insert(raceConfigs).values(configOf(settings)).returning({ id: raceConfigs.id });
         const [room] = await tx
           .insert(rooms)
-          .values({ code, inviteToken: newInviteToken(), ...roomColumnsOf(settings), hostId: host.playerId, configId: config!.id })
+          .values({ code, ...roomColumnsOf(settings), hostId: host.playerId, configId: config!.id })
           .returning({ id: rooms.id });
         await tx.insert(roomMembers).values({ roomId: room!.id, memberKey: key, playerId: host.playerId, role: input.role, ...placeFor(input.role, [], settings.guests) });
         return room!.id;
@@ -313,22 +312,24 @@ export type JoinVia = ({ code: string } | { invite: string }) & { role?: Role };
  * Le salon visé par ce code ou ce lien. La visibilité se vérifie ensuite, sous le verrou, après l'appartenance :
  * un membre retrouve son salon par son code même s'il est privé (SALLE-03).
  */
-async function roomFor(db: Db, via: JoinVia) {
-  // À BRANCHER (SALLE-04) : un jeton par invité, lié à son IP ; ici, le jeton unique du salon.
-  const [room] = await db.select().from(rooms).where("code" in via ? eq(rooms.code, via.code) : eq(rooms.inviteToken, via.invite));
+async function roomFor(db: Db, via: JoinVia): Promise<number> {
+  // SALLE-04 : un lien par invité (room_invites) ; il est vérifié et pris sous le verrou, dans joinRoom
+  if ("invite" in via) return roomOfInvite(db, via.invite);
   // À BRANCHER (SALLE-10) : limiter les essais de code par IP, avant cette lecture, dans la route.
+  const [room] = await db.select({ id: rooms.id }).from(rooms).where(eq(rooms.code, via.code));
   if (!room) throw new RoomRefused("not_found");
-  return room;
+  return room.id;
 }
 
 /**
  * Entrer dans un salon comme participant, ou comme spectateur (SALLE-05 : il ne prend pas de place). Un membre qui revient (rechargement, autre onglet) le retrouve sans doublon.
  * SALLE-05 : la capacité (rooms.guests) est lue sous le verrou. SALLE-06 : une salle à la fois (contrainte en base,
  * refus « already_in_room » avec le salon actuel). SALLE-07 : un expulsé est refusé (« kicked »). SALLE-09 (état du
- * salon) se vérifie aussi ici, avant l'insertion.
+ * salon) se vérifie aussi ici, avant l'insertion. ip : l'IP du client (client-ip.ts), à laquelle un lien
+ * d'invitation est lié (SALLE-04).
  */
-export async function joinRoom(db: Db, who: Identity, via: JoinVia): Promise<RoomResult> {
-  const { id } = await roomFor(db, via);
+export async function joinRoom(db: Db, who: Identity, via: JoinVia, ip: string | null = null): Promise<RoomResult> {
+  const id = await roomFor(db, via);
   const key = memberKey(who);
   await settleCurrentRoom(db, key, id);
   const entered = db.transaction(async (tx) => {
@@ -340,9 +341,13 @@ export async function joinRoom(db: Db, who: Identity, via: JoinVia): Promise<Roo
     if (!room || room.status === "closed") throw new RoomRefused("not_found");
     // un membre qui revient (rechargement, autre onglet) n'est pas un nouvel arrivant, même pendant la course,
     // et il retrouve son salon par son code même si l'hôte l'a rendu privé (SALLE-03)
-    if (await membership(tx, id, key)) return;
+    const isMember = !!(await membership(tx, id, key));
     // SALLE-07 : un expulsé ne revient pas, ni par code ni par lien, quel que soit le rôle demandé
-    if (await isKicked(tx, id, key, who.name)) throw new RoomRefused("kicked");
+    if (!isMember && (await isKicked(tx, id, key, who.name))) throw new RoomRefused("kicked");
+    // SALLE-04 : le lien doit être libre, ou déjà lié à cette personne et à cette IP ; une entrée refusée plus bas
+    // annule la transaction, et le lien reste libre
+    if ("invite" in via) await claimInvite(tx, id, via.invite, who, ip, isMember);
+    if (isMember) return;
     // la visibilité est lue sous le verrou : l'hôte a pu rendre le salon privé entre-temps
     if ("code" in via && !allows(room.visibility, "code")) throw new RoomRefused("not_found");
     if (!canJoin(room.status)) throw new RoomRefused("in_race");

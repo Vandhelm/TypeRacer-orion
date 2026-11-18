@@ -4,7 +4,7 @@ import { players, raceConfigs, roomMembers, rooms, user } from "../../db/schema"
 import { DEFAULT_CONFIG } from "../../db/mocks/data";
 import { createMockDatabase } from "../../db/mocks/test-database";
 import { placeholderEmail } from "../accounts/username";
-import { isRoomCode, newInviteToken } from "../rooms/access";
+import { isRoomCode } from "../rooms/access";
 import { createAuth } from "./auth";
 import { GUEST_COOKIE, signGuest } from "./guest";
 import { DEFAULT_SETTINGS } from "../rooms/settings";
@@ -26,7 +26,7 @@ async function insertRoom(db: TestDb, code: string) {
   const [config] = await db.insert(raceConfigs).values(DEFAULT_CONFIG).returning({ id: raceConfigs.id });
   const [row] = await db
     .insert(rooms)
-    .values({ code, inviteToken: newInviteToken(), name: "Test", visibility: "public", guests: 4, bots: true, hostId: host!.id, configId: config!.id })
+    .values({ code, name: "Test", visibility: "public", guests: 4, bots: true, hostId: host!.id, configId: config!.id })
     .returning({ id: rooms.id, code: rooms.code });
   return row!;
 }
@@ -71,7 +71,8 @@ async function setup() {
     handleRoomsApi(
       new Request(`http://localhost${path}`, {
         method,
-        headers: { ...(cookie ? { cookie } : {}), ...(body === undefined ? {} : { "content-type": "application/json" }) },
+        // SALLE-04 : derrière le proxy, l'IP du client est la première valeur de x-forwarded-for
+        headers: { ...(cookie ? { cookie } : {}), "x-forwarded-for": "203.0.113.1", ...(body === undefined ? {} : { "content-type": "application/json" }) },
         body: body === undefined ? undefined : typeof body === "string" ? body : JSON.stringify(body),
       }),
       db,
@@ -157,7 +158,12 @@ describe("SALLE-01 — a signed-in user creates a room and hosts it", () => {
   });
 });
 
-type Joined = { room: { code: string; members: { key: string; name: string; role: string; guest: boolean }[]; invite: string | null }; you: string };
+type Joined = { room: { code: string; members: { key: string; name: string; role: string; guest: boolean }[] }; you: string };
+
+/** SALLE-04 : un nouveau lien d'invitation, généré par l'hôte (un par invité). */
+async function newInvite(t: Awaited<ReturnType<typeof setup>>, hostCookie: string, code: string) {
+  return ((await (await t.call("POST", `/api/rooms/${code}/invites`, hostCookie)).json()) as { invite: { token: string } }).invite.token;
+}
 
 describe("SALLE-03 — visibility decides who sees and enters a room", () => {
   let t: Awaited<ReturnType<typeof setup>>;
@@ -167,7 +173,7 @@ describe("SALLE-03 — visibility decides who sees and enters a room", () => {
     const res = await t.call("POST", "/api/rooms", host.cookie, { role: "player", settings: { visibility } });
     return ((await res.json()) as Joined).room;
   };
-  const inviteOf = async (code: string) => ((await (await t.call("GET", `/api/rooms/${code}`, host.cookie)).json()) as Joined).room.invite!;
+  const inviteOf = (code: string) => newInvite(t, host.cookie, code);
   beforeAll(async () => {
     t = await setup();
     host = await t.signUp("Hote_Visible");
@@ -209,7 +215,7 @@ describe("SALLE-03 — visibility decides who sees and enters a room", () => {
     const { room, you } = (await res.json()) as Joined;
     expect(you).toStartWith("guest:");
     expect(room.members.map((m) => m.key)).toContain(you);
-    expect(room.invite).toBeNull();
+    expect(room).not.toHaveProperty("invite");
   });
 
   test("a public room is entered directly with its code", async () => {
@@ -298,7 +304,7 @@ describe("SALLE-09 — a room is joined only while waiting or on the results scr
     await t.db.update(rooms).set({ status }).where(eq(rooms.code, room.code));
     return room;
   };
-  const inviteOf = async (code: string) => ((await (await t.call("GET", `/api/rooms/${code}`, host.cookie)).json()) as Joined).room.invite!;
+  const inviteOf = (code: string) => newInvite(t, host.cookie, code);
   beforeAll(async () => {
     t = await setup();
     host = await t.signUp("Hote_Etat");
@@ -406,7 +412,7 @@ describe("SALLE-03 — a member finds their room again by its code, whatever its
 
   test("a guest who came by invitation reloads with ?code: 200, no duplicate; a fresh guest gets 404", async () => {
     const created = (await (await t.call("POST", "/api/rooms", host.cookie, { role: "player" })).json()) as Joined;
-    const invite = created.room.invite!;
+    const invite = await newInvite(t, host.cookie, created.room.code);
     const first = (await (await t.call("POST", "/api/rooms/join", t.guest("Invite_Recharge"), { invite })).json()) as Joined;
     const res = await t.call("POST", "/api/rooms/join", t.guest("Invite_Recharge"), { code: created.room.code });
     expect(res.status).toBe(200);
@@ -430,7 +436,7 @@ describe("SALLE-03 — a member finds their room again by its code, whatever its
   });
   test("a member who left a private room and comes back by its code gets 404", async () => {
     const created = (await (await t.call("POST", "/api/rooms", host.cookie, { role: "player" })).json()) as Joined;
-    await t.call("POST", "/api/rooms/join", t.guest("Parti_Prive"), { invite: created.room.invite! });
+    await t.call("POST", "/api/rooms/join", t.guest("Parti_Prive"), { invite: await newInvite(t, host.cookie, created.room.code) });
     expect((await t.call("POST", `/api/rooms/${created.room.code}/leave`, t.guest("Parti_Prive"))).status).toBe(200);
     const back = await t.call("POST", "/api/rooms/join", t.guest("Parti_Prive"), { code: created.room.code });
     expect(back.status).toBe(404);

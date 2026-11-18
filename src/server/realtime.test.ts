@@ -56,7 +56,7 @@ describe("SALLE-03 — members are pushed in real time over a WebSocket", () => 
       websocket: realtime.websocket,
     });
     call = (method, path, cookie, body) =>
-      handleRoomsApi(new Request(`http://localhost${path}`, { method, headers: { ...(cookie ? { cookie } : {}), "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) }), db, auth, SECRET, roomEvents.emit);
+      handleRoomsApi(new Request(`http://localhost${path}`, { method, headers: { ...(cookie ? { cookie } : {}), "content-type": "application/json", "x-forwarded-for": "203.0.113.1" }, body: body === undefined ? undefined : JSON.stringify(body) }), db, auth, SECRET, roomEvents.emit);
     signUp = async (name) => {
       await auth.api.signUpEmail({ body: { name, email: placeholderEmail(name), password: "sushi-roll-42", username: name, displayUsername: name } });
       const { headers } = await auth.api.signInUsername({ body: { username: name, password: "sushi-roll-42" }, returnHeaders: true });
@@ -107,7 +107,7 @@ describe("SALLE-03 — members are pushed in real time over a WebSocket", () => 
   });
 
   test("another cookie with the same guest nickname cannot open a member's socket", async () => {
-    const invite = ((await (await call("GET", `/api/rooms/${code}`, hostCookie)).json()) as { room: { invite: string } }).room.invite;
+    const invite = ((await (await call("POST", `/api/rooms/${code}/invites`, hostCookie)).json()) as { invite: { token: string } }).invite.token; // SALLE-04
     expect((await call("POST", "/api/rooms/join", guest("Bob"), { invite })).status).toBe(200);
     expect(await connect(url(`/ws/rooms/${code}`), freshGuest("bob")).closed).not.toBe(1000);
     const bob = connect(url(`/ws/rooms/${code}`), guest("Bob"));
@@ -160,7 +160,7 @@ describe("SALLE-09 — going from the room to the race never costs a member thei
     const realtime = createRealtime({ db, auth, secret: SECRET, events: roomEvents, leaveAfterMs: AWAY_MS });
     server = Bun.serve({ port: 0, fetch: (req, srv) => (realtime.matches(req) ? realtime.upgrade(req, srv) : new Response("not found", { status: 404 })), websocket: realtime.websocket });
     call = (method, path, cookie, body) =>
-      handleRoomsApi(new Request(`http://localhost${path}`, { method, headers: { ...(cookie ? { cookie } : {}), "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) }), db, auth, SECRET, roomEvents.emit);
+      handleRoomsApi(new Request(`http://localhost${path}`, { method, headers: { ...(cookie ? { cookie } : {}), "content-type": "application/json", "x-forwarded-for": "203.0.113.1" }, body: body === undefined ? undefined : JSON.stringify(body) }), db, auth, SECRET, roomEvents.emit);
     await auth.api.signUpEmail({ body: { name: "Hote_Sprint", email: placeholderEmail("Hote_Sprint"), password: "sushi-roll-42", username: "Hote_Sprint", displayUsername: "Hote_Sprint" } });
     const { headers } = await auth.api.signInUsername({ body: { username: "Hote_Sprint", password: "sushi-roll-42" }, returnHeaders: true });
     hostCookie = headers.get("set-cookie")!.split(";")[0]!;
@@ -168,9 +168,10 @@ describe("SALLE-09 — going from the room to the race never costs a member thei
   afterAll(() => server.stop(true));
 
   test("the socket closes while waiting, the race is launched and finished before the delay: the member stays", async () => {
-    const created = (await (await call("POST", "/api/rooms", hostCookie, { role: "player" })).json()) as { room: { code: string; invite: string } };
+    const created = (await (await call("POST", "/api/rooms", hostCookie, { role: "player" })).json()) as { room: { code: string } };
     const code = created.room.code;
-    const { you } = (await (await call("POST", "/api/rooms/join", runner, { invite: created.room.invite })).json()) as { you: string };
+    const invite = ((await (await call("POST", `/api/rooms/${code}/invites`, hostCookie)).json()) as { invite: { token: string } }).invite.token; // SALLE-04
+    const { you } = (await (await call("POST", "/api/rooms/join", runner, { invite })).json()) as { you: string };
     const socket = connect(`ws://localhost:${server.port}/ws/rooms/${code}`, runner);
     await socket.next();
     socket.ws.close();

@@ -17,7 +17,6 @@ export type RoomJson = {
   host: string;
   settings: { guests: number };
   members: { key: string; name: string; role: string; seat: number | null; color: string | null; host: boolean; guest: boolean }[];
-  invite: string | null;
 };
 export type Joined = { room: RoomJson; you: string };
 export type Refused = { error: string; room?: string };
@@ -37,7 +36,8 @@ export async function roomsFixture(changed?: RoomChanged) {
     handleRoomsApi(
       new Request(`http://localhost${path}`, {
         method,
-        headers: { ...(cookie ? { cookie } : {}), ...(body === undefined ? {} : { "content-type": "application/json" }) },
+        // SALLE-04 : un lien d'invitation se lie à l'IP du client ; toutes les requêtes viennent de la même
+        headers: { ...(cookie ? { cookie } : {}), ...(body === undefined ? {} : { "content-type": "application/json" }), "x-forwarded-for": "203.0.113.1" },
         body: body === undefined ? undefined : JSON.stringify(body),
       }),
       db,
@@ -58,10 +58,16 @@ export async function roomsFixture(changed?: RoomChanged) {
     const res = await call("POST", "/api/rooms/join", cookie, body);
     return { status: res.status, body: (await res.json()) as Joined & Refused };
   };
+  /** SALLE-04 : un lien d'invitation neuf, généré par l'hôte de ce salon. */
+  const invite = async (code: string, hostCookie: string) => {
+    const res = await call("POST", `/api/rooms/${code}/invites`, hostCookie);
+    if (res.status !== 201) throw new Error(`invite failed: ${res.status} ${await res.text()}`);
+    return ((await res.json()) as { invite: { token: string } }).invite.token;
+  };
   /** GET /api/rooms/:code : le statut et le corps de la réponse. */
   const read = async (cookie: string, code: string) => {
     const res = await call("GET", `/api/rooms/${code}`, cookie);
     return { status: res.status, body: (await res.json()) as Joined & Refused };
   };
-  return { db, auth, signUp, guest, call, open, join, read };
+  return { db, auth, signUp, guest, call, open, join, invite, read };
 }

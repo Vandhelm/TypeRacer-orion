@@ -32,9 +32,13 @@ export function isRoomCode(value: string) {
   return new RegExp(CODE_PATTERN).test(value);
 }
 
-/** Jeton du lien d'invitation : long, pour qu'on ne puisse pas le deviner. */
-export function newInviteToken() {
-  return crypto.randomUUID().replaceAll("-", "");
+/** SALLE-04 : octets d'aléa d'un jeton d'invitation, 256 bits (le minimum exigé est 128). */
+export const INVITE_TOKEN_BYTES = 32;
+
+/** SALLE-04 : jeton du lien d'invitation, tiré par crypto, en base64url (43 caractères) : impossible à deviner. */
+export function newInviteToken(random: RandomBytes = cryptoBytes) {
+  // btoa plutôt que Buffer : ce fichier est aussi chargé par le navigateur
+  return btoa(String.fromCharCode(...random(INVITE_TOKEN_BYTES))).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
 }
 
 export const VISIBILITIES = ["private", "semi", "public"] as const;

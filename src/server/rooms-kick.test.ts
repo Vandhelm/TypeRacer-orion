@@ -43,7 +43,7 @@ describe("SALLE-07 — the host kicks a participant or a spectator, who can no l
     const again = await t.join(cookie, { code: room.code });
     expect(again.status).toBe(403);
     expect(again.body.error).toBe("kicked");
-    expect((await t.join(cookie, { invite: room.invite!, role: "spectator" })).body.error).toBe("kicked");
+    expect((await t.join(cookie, { invite: await t.invite(room.code, host.cookie), role: "spectator" })).body.error).toBe("kicked");
     expect(await keysOf(room.code)).not.toContain(body.you);
   });
 
@@ -52,7 +52,7 @@ describe("SALLE-07 — the host kicks a participant or a spectator, who can no l
     const { body } = await t.join(t.guest("Recidiviste"), { code: room.code });
     await kick(room.code, host.cookie, { member: body.you });
     expect((await t.join(t.guest("Recidiviste"), { code: room.code })).body.error).toBe("kicked");
-    expect((await t.join(t.guest("recidiviste"), { invite: room.invite! })).body.error).toBe("kicked");
+    expect((await t.join(t.guest("recidiviste"), { invite: await t.invite(room.code, host.cookie) })).body.error).toBe("kicked");
     expect((await t.join(t.guest("Innocent"), { code: room.code })).status).toBe(200);
   });
 

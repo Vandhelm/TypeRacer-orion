@@ -49,6 +49,25 @@ body{ height: auto; min-height: 100vh; overflow: visible; font-size: 16px; paddi
 .room-guest .room-name-box input{ cursor: default; }
 .room-guest .text-choice span{ border-bottom-color: transparent; }
 
+/* SALLE-04 : les liens d'invitation de l'hôte, un par invité */
+.room-invites{ margin-top: clamp(20px, 4vh, 36px); max-width: 640px; }
+.room-invites-head{ display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.room-invites-empty, .room-invites-error{ margin-top: 10px; font: 400 max(12px, 1.4vh)/1.4 var(--font-mono); color: var(--color-muted); }
+.room-invites-error{ color: var(--color-red-text); }
+/* sans défilement propre : une liste qui défile couperait l'infobulle du bouton copier (barre horizontale à 360 px) */
+.room-invites-list{ margin-top: 8px; list-style: none; padding: 0; }
+.room-invite{ display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; min-height: 44px; border-bottom: 1px dashed var(--color-line-soft); font: 400 max(12px, 1.4vh)/1.3 var(--font-mono); }
+.room-invite-name{ letter-spacing: .1em; text-transform: uppercase; }
+.room-invite-status{ overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-muted); }
+.room-invite-used .room-invite-status{ color: inherit; }
+.room-invite-revoked{ opacity: .6; }
+/* le bouton copier est au bord droit : son infobulle s'aligne à droite au lieu de dépasser de l'écran */
+.room-invite [data-tip]::after{ left: auto; right: 0; transform: translate(0, 4px); }
+.room-invite [data-tip]:hover::after, .room-invite [data-tip]:focus-visible::after{ transform: none; }
+.room-invite-url{ grid-column: 1 / -1; display: grid; gap: 4px; padding-bottom: 8px; color: var(--color-muted); }
+.room-invite-url input{ min-width: 0; padding: 6px 8px; border: 1px solid var(--color-line-soft); border-radius: 6px; background: transparent; color: #fff; font: inherit; }
+.room-invite-url input:focus-visible{ outline: 2px solid #fff; outline-offset: 2px; }
+
 .room-settings{ grid-area: settings; position: relative; margin-top: clamp(20px, 3.4vh, 36px); padding-top: clamp(16px, 2.6vh, 24px); border-top: 1px dashed var(--color-line-soft); }
 .room-toolbar{ display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px 24px; margin-bottom: clamp(12px, 2vh, 20px); }
 .room-panel{ position: relative; display: grid; row-gap: 4px; }

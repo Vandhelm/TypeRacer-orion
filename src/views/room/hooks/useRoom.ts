@@ -8,7 +8,7 @@ import { arrivalOf, isPlayer, roomOf, seatsOf, type Room, type RoomView } from "
 
 /** Le temps d'attendre la fin d'une saisie avant d'envoyer les réglages au serveur. */
 const SAVE_DELAY_MS = 400;
-const EMPTY_VIEW: RoomView = { code: "", status: "waiting", host: "", settings: DEFAULT_SETTINGS, invite: null, members: [] };
+const EMPTY_VIEW: RoomView = { code: "", status: "waiting", host: "", settings: DEFAULT_SETTINGS, members: [] };
 
 /**
  * The room shown on this page, as the server knows it: its settings, its members, who we are in it.
@@ -81,15 +81,15 @@ export function useRoom(page: "room" | "game" = "room") {
   // SALLE-08 : sur /room comme sur /game, la page donne signe de vie, socket ou pas
   useEffect(() => (code ? keepPresence(code) : undefined), [code]);
 
-  // En direct : les arrivées, les départs et les réglages de l'hôte. Le lien d'invitation reste celui reçu par HTTP.
+  // En direct : les arrivées, les départs et les réglages de l'hôte.
   // /game ne suit pas le salon : sa socket fermée hors course ferait sortir le joueur (leaveAfterDisconnect)
   useEffect(() => {
     if (!code || page === "game") return;
     return watchRoom(
       code,
       (next) => {
-        setView((current) => ({ ...next, invite: current.invite }));
-        if (!Object.keys(pending.current).length) setRoom((current) => ({ ...roomOf(next), invite: current.invite }));
+        setView(next);
+        if (!Object.keys(pending.current).length) setRoom(roomOf(next));
       },
       setError,
     );
@@ -129,7 +129,7 @@ export function useRoom(page: "room" | "game" = "room") {
     (patch: Partial<Room>) => {
       setRoom((current) => ({ ...current, ...patch }));
       if (!host) return;
-      const { code: _code, invite: _invite, ...settings } = patch;
+      const { code: _code, ...settings } = patch;
       Object.assign(pending.current, settings);
       clearTimeout(timer.current);
       timer.current = window.setTimeout(flush, SAVE_DELAY_MS);
@@ -190,6 +190,8 @@ export function useRoom(page: "room" | "game" = "room") {
     others: view.members.filter((m) => m.key !== you),
     seats,
     players,
+    /** Les membres par ordre d'arrivée ; une arrivée met à jour le statut des liens d'invitation (SALLE-04). */
+    members: view.members,
     spectators: view.members.filter((m) => m.role === "spectator"),
     humans: view.members.filter((m) => m.role === "player").length,
     displayName: room.autoName ? t("room.defaultName") : room.name,

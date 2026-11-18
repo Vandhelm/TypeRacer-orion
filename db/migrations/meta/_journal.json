@@ -113,6 +113,13 @@
       "when": 1795041794442,
       "tag": "0015_glossy_ultimatum",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1795045397634,
+      "tag": "0016_room_invites",
+      "breakpoints": true
     }
   ]
 }

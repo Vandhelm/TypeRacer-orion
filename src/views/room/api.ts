@@ -1,6 +1,7 @@
 // Appels du salon vers le serveur (/api/rooms…). Le serveur décide de tout : cette page n'envoie que des demandes.
 import type { Role, RoomSettings } from "../../rooms/settings";
 import type { RoomSocketMessage } from "../../server/realtime";
+import type { InviteView } from "../../server/room-invites";
 import type { RefusalReason, RoomResult, RoomView } from "../../server/rooms";
 
 export type RoomError = RefusalReason | "unauthorized" | "account_required" | "invalid_body" | "no_free_code" | "network";
@@ -22,6 +23,23 @@ async function send(method: string, path: string, body?: unknown): Promise<Answe
     return { ok: false, error: "network" };
   }
 }
+
+/** Une demande dont la réponse n'est pas un salon (liens d'invitation). */
+async function request<T>(method: string, path: string): Promise<{ ok: true; data: T } | { ok: false; error: RoomError }> {
+  try {
+    const res = await fetch(path, { method, credentials: "same-origin" });
+    const data = (await res.json().catch(() => ({}))) as T & { error?: RoomError };
+    return res.ok ? { ok: true, data } : { ok: false, error: data.error ?? "network" };
+  } catch {
+    return { ok: false, error: "network" };
+  }
+}
+
+/** SALLE-04 : les liens d'invitation, pour l'hôte seulement (le serveur refuse les autres). */
+export const inviteApi = {
+  list: (code: string) => request<{ invites: InviteView[] }>("GET", `/api/rooms/${code}/invites`),
+  create: (code: string) => request<{ invite: InviteView }>("POST", `/api/rooms/${code}/invites`),
+};
 
 export const roomApi = {
   create: (role: Role) => send("POST", "/api/rooms", { role }),
