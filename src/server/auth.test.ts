@@ -181,3 +181,70 @@ describe("changing display username", () => {
     expect(player!.name).toBe("Seul_Neuf");
   });
 });
+
+describe("AUTH-04 — seule /api/account/avatar écrit la photo", () => {
+  async function signedIn(name: string) {
+    const db = await createMockDatabase();
+    const auth = createAuth(db);
+    await signUp(auth, name);
+    const { headers } = await auth.api.signInUsername({ body: { username: name, password: "sushi-roll-42" }, returnHeaders: true });
+    const cookie = headers.get("set-cookie")!.split(";")[0]!;
+    const image = async () => (await db.select({ image: user.image }).from(user).where(eq(user.username, name.toLowerCase())))[0]!.image;
+    const updateUser = (body: Record<string, unknown>) =>
+      auth.handler(
+        new Request("http://localhost:3000/api/auth/update-user", {
+          method: "POST",
+          headers: { cookie, origin: "http://localhost:3000", "content-type": "application/json" },
+          body: JSON.stringify(body),
+        }),
+      );
+    return { auth, db, image, updateUser };
+  }
+
+  test("POST /api/auth/update-user refuse un GIF de 3 Mo et ne change pas user.image", async () => {
+    const { image, updateUser } = await signedIn("Photo_Gif");
+    const gif = `data:image/gif;base64,${Buffer.alloc(3 * 1024 * 1024, 0x47).toString("base64")}`;
+    const response = await updateUser({ image: gif });
+    expect(response.status).toBe(400);
+    expect(await image()).toBeNull();
+  });
+
+  test("POST /api/auth/update-user refuse une URL externe et ne change pas user.image", async () => {
+    const { image, updateUser } = await signedIn("Photo_Url");
+    const response = await updateUser({ image: "https://evil.example/x.svg" });
+    expect(response.status).toBe(400);
+    expect(await image()).toBeNull();
+  });
+
+  test("POST /api/auth/update-user refuse aussi image: null et un nom accompagné d'une image", async () => {
+    const { image, updateUser } = await signedIn("Photo_Nul");
+    expect((await updateUser({ image: null })).status).toBe(400);
+    expect((await updateUser({ name: "x", image: "https://evil.example/x.svg" })).status).toBe(400);
+    expect(await image()).toBeNull();
+  });
+
+  test("l'inscription ignore une image fournie par le client", async () => {
+    const db = await createMockDatabase();
+    const auth = createAuth(db);
+    const body = { name: "Photo_Inscr", email: placeholderEmail("Photo_Inscr"), password: "sushi-roll-42", username: "Photo_Inscr", displayUsername: "Photo_Inscr", image: "https://evil.example/x.svg" };
+    const { user: created } = await auth.api.signUpEmail({ body });
+    const [row] = await db.select({ image: user.image }).from(user).where(eq(user.id, created.id));
+    expect(row!.image).toBeNull();
+  });
+
+  test("un compte GitHub ou Discord ne garde pas l'avatar externe du fournisseur", async () => {
+    const db = await createMockDatabase();
+    const ctx = await createAuth(db).$context;
+    const created = await ctx.internalAdapter.createUser({ name: "Gh", email: "gh@example.com", emailVerified: true, displayUsername: "Photo_Gh", image: "https://avatars.githubusercontent.com/u/1" }, { method: "oauth", oauth: { providerId: "github", profile: {} } });
+    const [row] = await db.select({ image: user.image }).from(user).where(eq(user.id, created.id));
+    expect(row!.image).toBeNull();
+  });
+
+  test("une mise à jour interne (liaison GitHub ou Discord) ne réécrit pas la photo", async () => {
+    const { auth, db, image } = await signedIn("Photo_Lien");
+    const ctx = await auth.$context;
+    const [row] = await db.select({ id: user.id }).from(user).where(eq(user.username, "photo_lien"));
+    await ctx.internalAdapter.updateUser(row!.id, { image: "https://avatars.githubusercontent.com/u/1" });
+    expect(await image()).toBeNull();
+  });
+});
