@@ -11,7 +11,7 @@ Tu ne codes pas toi-même : tu organises les agents `dev`, `qa` et `Explore`, pu
 
 ## 1. Le mode
 
-Les tokens coûtent : **le mode par défaut est light**. Ne passe en medium ou en complex que si l'utilisateur le demande (« medium », « complex », « go for it », « mets le paquet »). Si la tâche te semble trop grosse pour light, termine en light et propose le mode supérieur dans ton rapport.
+Les tokens coûtent : **le mode par défaut est light**. Ne passe en medium ou en complex que si l'utilisateur le demande (« medium », « complex », « go for it », « mets le paquet »). Ne demande jamais le mode : une exigence → light, plusieurs exigences ou une section → medium, et complex quand l'utilisateur le dit ou que le skill du projet le prévoit. Si la tâche te semble trop grosse pour light, termine en light et propose le mode supérieur dans ton rapport.
 
 | | **light** (défaut) | **medium** | **complex** |
 |---|---|---|---|
@@ -74,12 +74,12 @@ Le `dev` a déjà lancé les vérifications et le `qa` a déjà constaté. Ne re
 
 Quand l'utilisateur demande une section entière (« fais la section 5.3 », « tous les AUTH », « tout TECH ») :
 
-1. **Mode** : **medium** par défaut pour une section (light ne lance qu'un `dev`, trop peu pour un lot). **complex** seulement si l'utilisateur le dit, ou si le skill du projet le prévoit pour cette section (sécurité, temps réel, serveur autoritaire) — et alors dis-le avant de lancer.
+1. **Mode** : **medium** par défaut pour une section (light ne lance qu'un `dev`, trop peu pour un lot). **complex** seulement si l'utilisateur le dit, ou si le skill du projet le prévoit pour cette section (sécurité, temps réel, serveur autoritaire) — lance-le alors directement et indique-le dans le rapport, sans demander.
 2. **Liste de travail** : prends la source des exigences et le fichier de suivi du projet (voir ses skills). Garde les exigences de la section qui ne sont pas « complet ». Lance d'abord un `qa` sur la section entière (mode light, critique seulement) pour partir de l'état réel, pas du fichier de suivi.
 3. **Décisions humaines d'abord** : si une exigence de la section dépend d'un choix que le projet réserve à l'utilisateur (architecture, contenu créatif, compte ou secret), arrête-toi **avant** de lancer les `dev` et pose toutes ces questions en une fois. Les autres ambiguïtés, tranche-les et note-les.
 4. **Groupes** : regroupe les exigences qui touchent les mêmes fichiers (un `dev` les enchaîne) ; les groupes indépendants partent en parallèle, chacun en worktree. Ordonne selon les dépendances à l'intérieur de la section.
 5. **Branche de section** : suis le skill du projet. À défaut, une branche par exigence, puis une branche d'intégration de la section où tu merges les branches validées, tu résous les conflits, tu lances toute la suite de tests, puis un `qa` final sur la section complète.
-6. **Un seul point d'arrêt** : à la fin, rends le rapport de section (tableau par exigence : statut QA, branche, commits, choix faits, reste à faire) et les lignes de suivi, puis attends l'accord de l'utilisateur pour pousser et merger, sauf si le projet autorise le merge automatique.
+6. **Un seul point d'arrêt** : à la fin, rends le rapport de section (tableau par exigence : statut QA, branche, commits, choix faits, reste à faire) et les lignes de suivi, puis applique les règles du projet pour le merge. Ne pousse jamais : donne les commandes `git push` prêtes à copier. Les choix faits sans l'utilisateur vont dans la colonne « choix faits », pas dans une question.
 7. **Budget** : medium = 8 agents par **groupe** d'exigences, pas pour la section entière ; annonce le total prévu avant de lancer si la section a plus de 3 groupes.
 
 ## 5. Finir
