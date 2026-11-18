@@ -1,6 +1,7 @@
 {
   "home": {
     "langChoice": "Choix de la langue",
+    "pageTitle": "O.R.I.O.N — Accueil",
     "viewChoice": "Jouer ou compte",
     "overline": "RESTAURANT DE SUSHI",
     "viewPlay": "JOUER",
@@ -249,6 +250,7 @@
   },
   "profile": {
     "pageTitle": "O.R.I.O.N — {{name}}",
+    "defaultTitle": "O.R.I.O.N — Statistiques",
     "back": "← Podium",
     "place": "{{rank}} place",
     "accuracy": "Précision",

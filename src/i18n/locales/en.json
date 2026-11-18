@@ -1,6 +1,7 @@
 {
   "home": {
     "langChoice": "Language",
+    "pageTitle": "O.R.I.O.N — Home",
     "viewChoice": "Play or account",
     "overline": "SUSHI RESTAURANT",
     "viewPlay": "PLAY",
@@ -249,6 +250,7 @@
   },
   "profile": {
     "pageTitle": "O.R.I.O.N — {{name}}",
+    "defaultTitle": "O.R.I.O.N — Stats",
     "back": "← Podium",
     "place": "{{rank}} place",
     "accuracy": "Accuracy",
