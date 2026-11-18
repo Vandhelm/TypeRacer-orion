@@ -1,9 +1,8 @@
-/* Room page entry (room.html). Components come before the page sections here:
+/* Room page entry. Components come before the page sections here:
    the page overrides some of them with selectors of equal specificity. */
 @layer theme, base, components, utilities;
 @import "tailwindcss/theme.css" layer(theme);
 @import "tailwindcss/utilities.css" layer(utilities);
-@source "../../../../room.html";
 @source "../../../views/room";
 @source "../../../components";
 

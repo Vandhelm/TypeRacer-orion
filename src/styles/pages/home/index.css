@@ -1,11 +1,10 @@
-/* Home page entry (home.html). Order matters: base → page sections → components → view states.
+/* Home page entry. Order matters: base → page sections → components → view states.
    Tailwind: theme + utilities only, no preflight (reset.css is our base).
    Utilities live in a cascade layer, so the plain CSS below always wins over them:
    never style the same property of an element in both places. */
 @layer theme, base, components, utilities;
 @import "tailwindcss/theme.css" layer(theme);
 @import "tailwindcss/utilities.css" layer(utilities);
-@source "../../../../home.html";
 @source "../../../views/home";
 @source "../../../components";
 

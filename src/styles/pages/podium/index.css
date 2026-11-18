@@ -1,8 +1,7 @@
-/* Podium page entry (podium.html). */
+/* Podium page entry. */
 @layer theme, base, components, utilities;
 @import "tailwindcss/theme.css" layer(theme);
 @import "tailwindcss/utilities.css" layer(utilities);
-@source "../../../../podium.html";
 @source "../../../views/podium";
 
 @import "../../base/tokens.css";

@@ -1,5 +1,5 @@
 /* Home view: the panel with Play / Account forms.
-   Page wrappers (.home, .panel-body, forms, button stacks) are laid out with Tailwind in home.html. */
+   Page wrappers (.home, .panel-body, forms, button stacks) are laid out with Tailwind in the home page components. */
 .panel{
     pointer-events: auto;
     position: relative;
