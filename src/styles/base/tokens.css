@@ -34,3 +34,4 @@
 @custom-variant phone (@media (max-width: 700px));
 @custom-variant narrow (@media (max-width: 760px));
 @custom-variant tiny (@media (max-width: 420px));
+@custom-variant compact (@media (max-width: 760px), (max-height: 600px));

@@ -1,17 +1,20 @@
 import { memo, useLayoutEffect, useRef } from "react";
 
+// The cursor (.game-cursor) blinks with a keyframe: it stays in styles/pages/game/typing.css.
+const WORD = "game-word mr-[1ch] inline-block whitespace-pre";
+
 const PastOrNextWord = memo(function PastOrNextWord({ text, status }: { text: string; status: "next" | "done" | "missed" }) {
-  const classes = { next: "game-word", done: "game-word is-done", missed: "game-word is-done is-missed" }[status];
+  const classes = { next: WORD, done: `${WORD} text-white`, missed: `${WORD} text-red-text underline decoration-1 underline-offset-[.25em]` }[status];
   return <span className={classes}>{text}</span>;
 });
 
 /** The word being typed, letter by letter: right in white, wrong in red, extra letters added in red. */
 function CurrentWord({ text, typed }: { text: string; typed: string }) {
   return (
-    <span className="game-word is-current">
+    <span className={`${WORD} is-current`}>
       {[...typed].map((char, k) => {
-        if (k >= text.length) return <span key={k} className="is-wrong is-extra">{char === " " ? "·" : char}</span>;
-        return <span key={k} className={char === text[k] ? "is-right" : "is-wrong"}>{text[k]}</span>;
+        if (k >= text.length) return <span key={k} className="text-red-text underline decoration-1 underline-offset-[.2em]">{char === " " ? "·" : char}</span>;
+        return <span key={k} className={char === text[k] ? "text-white" : "text-red-text"}>{text[k]}</span>;
       })}
       <i className="game-cursor" aria-hidden="true" />
       {typed.length < text.length && <span>{text.slice(typed.length)}</span>}
@@ -31,7 +34,11 @@ export function TypingText({ words, wordIndex, typed, missed, active, lang }: Ty
   }, [wordIndex, typed, active]);
 
   return (
-    <p ref={box} className="game-text" lang={lang}>
+    <p
+      ref={box}
+      className="relative col-[1/-1] row-start-2 max-h-[calc(3*1.7em)] overflow-hidden font-mono text-[max(17px,2.5vh)] leading-[1.7] font-normal wrap-anywhere text-muted transition-[opacity] duration-200 ease-[ease] group-not-focus-within:opacity-60 motion-reduce:transition-none"
+      lang={lang}
+    >
       {words.map((word, i) => {
         if (i === wordIndex && active) return <CurrentWord key={i} text={word} typed={typed} />;
         return <PastOrNextWord key={i} text={word} status={i >= wordIndex ? "next" : missed.has(i) ? "missed" : "done"} />;
