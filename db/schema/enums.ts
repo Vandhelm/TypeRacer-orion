@@ -5,7 +5,8 @@ export const language = pgEnum("language", ["fr", "en"]);
 export const visibility = pgEnum("visibility", ["private", "semi", "public"]);
 /** SALLE-01 : un participant court ; un spectateur regarde, sans place ni poisson. */
 export const memberRole = pgEnum("member_role", ["player", "spectator"]);
-export const roomStatus = pgEnum("room_status", ["waiting", "racing", "closed"]);
+/** SALLE-09 : on entre pendant « waiting » et « results », jamais pendant « racing ». */
+export const roomStatus = pgEnum("room_status", ["waiting", "racing", "results", "closed"]);
 export const botSpeed = pgEnum("bot_speed", ["slow", "medium", "fast", "mixed"]);
 export const botAccuracy = pgEnum("bot_accuracy", ["shaky", "decent", "high"]);
 export const textType = pgEnum("text_type", ["coherent", "quote", "words", "custom"]);
