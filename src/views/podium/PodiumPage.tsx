@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { PodiumBoard } from "./PodiumBoard";
 import { PodiumScene } from "./PodiumScene";
-import { readResults } from "./results";
+import { backToRoomHref, readResults } from "./results";
 
 /** After the race: the top three on the podium, then every player. */
 export function PodiumPage() {
@@ -21,11 +21,11 @@ export function PodiumPage() {
   }, [t]);
 
   if (!stored) return null;
-  const { players } = stored;
+  const { players, room } = stored;
 
   return (
     <>
-      <PodiumScene players={players} arrived={arrived} />
+      <PodiumScene players={players} arrived={arrived} roomHref={backToRoomHref(room)} />
       <PodiumBoard players={players} showPlace arrived={arrived} />
     </>
   );

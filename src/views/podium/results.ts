@@ -1,6 +1,7 @@
 // Résultats d'une course, confiés par le jeu au podium et aux profils : tout vient de ce que chaque couloir a vraiment tapé pendant la course.
 import { CHARS_PER_WORD, laneElapsedMs, laneProgress, laneWpm, myAccuracy, type Race, type Sample } from "../game/race";
 import { parseKeys, roundKeys, type KeyCounts } from "../../players/keys";
+import { isRoomCode } from "../../rooms/access";
 import type { Player, Room } from "../room/room";
 
 export type PlayerResult = {
@@ -29,7 +30,8 @@ export type RaceSummary = Pick<Room, "textType" | "language" | "duration" | "lev
   wordCount: number;
   sessionSeconds: number;
 };
-export type RaceResults = { players: PlayerResult[]; summary: RaceSummary };
+/** `room` : le code du salon de la course, pour y revenir depuis le podium (SALLE-09). Jamais envoyé au serveur. */
+export type RaceResults = { players: PlayerResult[]; summary: RaceSummary; room?: string };
 
 const RESULTS_KEY = "orion-results";
 const SESSION_KEY = "orion-session-start";
@@ -129,7 +131,8 @@ export function parseResults(raw: string | null): RaceResults | null {
         keys: parseKeys(p.keys),
       };
     });
-    return { players, summary: stored.summary as RaceSummary };
+    const room = typeof stored.room === "string" && isRoomCode(stored.room) ? stored.room : undefined;
+    return { players, summary: stored.summary as RaceSummary, ...(room ? { room } : {}) };
   } catch {
     return null;
   }
@@ -140,8 +143,13 @@ export function saveResults(results: RaceResults) {
 }
 
 /** Le corps envoyé au serveur : la course et son identifiant unique, pour que le serveur refuse un rejeu (AUTH-06). */
-export function raceBody(results: RaceResults, content: string) {
+export function raceBody({ room: _room, ...results }: RaceResults, content: string) {
   return { id: crypto.randomUUID(), ...results, content };
+}
+
+/** Retour au salon de la course ; sans code, l'accueil (un /room nu créerait un nouveau salon). */
+export function backToRoomHref(room: string | undefined) {
+  return room ? `/room?code=${room}` : "/home";
 }
 
 /** Envoie la course au serveur, qui garde l'historique des bots et du compte connecté (sa session, pas le corps). keepalive : l'envoi survit au passage au podium. */

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { createCourse, createRace, type Race } from "../game/race";
 import type { Player } from "../room/room";
-import { buildResults, parseResults, raceBody } from "./results";
+import { backToRoomHref, buildResults, parseResults, raceBody } from "./results";
 
 const PLAYERS: Player[] = [
   { name: "me", color: "red", me: true },
@@ -71,5 +71,29 @@ describe("AUTH-06 — each race sent to the server has its own id", () => {
     expect(first.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
     expect(first.id).not.toBe(second.id);
     expect(first.content).toBe("le riz");
+  });
+});
+
+describe("SALLE-09 — the podium leads back to the same room, never to a new one", () => {
+  const stored = (room: unknown) => JSON.stringify({ summary: {}, players: [{ name: "me" }], room });
+
+  test("the room code of the race is kept with the results", () => {
+    expect(parseResults(stored("ABC234"))?.room).toBe("ABC234");
+  });
+
+  test("a missing or forged room code is dropped", () => {
+    expect(parseResults(stored(undefined))?.room).toBeUndefined();
+    expect(parseResults(stored("../x?new"))?.room).toBeUndefined();
+    expect(parseResults(stored(42))?.room).toBeUndefined();
+  });
+
+  test("back to the room opens /room?code, never a bare /room that would create a room", () => {
+    expect(backToRoomHref("ABC234")).toBe("/room?code=ABC234");
+    expect(backToRoomHref(undefined)).toBe("/home");
+  });
+
+  test("the room code is not sent with the race to /api/races", () => {
+    const body = raceBody({ players: [], summary: {}, room: "ABC234" } as unknown as Parameters<typeof raceBody>[0], "le riz");
+    expect(body).not.toHaveProperty("room");
   });
 });

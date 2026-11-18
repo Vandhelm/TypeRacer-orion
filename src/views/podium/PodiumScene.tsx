@@ -13,7 +13,7 @@ const SIDE_FACES: Partial<Record<(typeof RANKS)[number], string>> = {
 };
 
 /** The 3D set: pyramid, floor, columns, and the top three players on the podium. */
-export function PodiumScene({ players, arrived }: { players: PlayerResult[]; arrived: boolean }) {
+export function PodiumScene({ players, arrived, roomHref }: { players: PlayerResult[]; arrived: boolean; roomHref: string }) {
   const { t, i18n } = useTranslation();
   const scene = useRef<HTMLDivElement>(null);
   useCameraTravel(scene, arrived);
@@ -41,8 +41,9 @@ export function PodiumScene({ players, arrived }: { players: PlayerResult[]; arr
                 {side && <SideFace points={side} />}
                 {rank === 1 && (
                   <div className="podium-actions">
-                    <a className="podium-play" href="/game">{t("game.playAgain")}</a>
-                    <a className="podium-back" href="/room">{t("game.backToRoom")}</a>
+                    {/* SALLE-09 : rejouer passe par le salon, où l'hôte relance ; /game ou /room nus ne retrouvent pas le salon */}
+                    <a className="podium-play" href={roomHref}>{t("game.playAgain")}</a>
+                    <a className="podium-back" href={roomHref}>{t("game.backToRoom")}</a>
                   </div>
                 )}
               </div>
