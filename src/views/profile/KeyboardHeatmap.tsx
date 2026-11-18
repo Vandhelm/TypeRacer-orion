@@ -43,7 +43,7 @@ export function KeyboardHeatmap({ keys, layout, onLayout }: Props) {
                   key={c}
                   className={`keymap-key${cap.wide ? " is-wide" : ""}${value ? "" : " is-empty"}`}
                   style={{ "--heat": `${Math.round(level * 100)}%`, "--i": r + c } as CSSProperties}
-                  title={value ? t("profile.keys.detail", { key: nameOf(cap.label), rate: percent(value.rate), errors: Math.round(value.errors), typed: Math.round(value.typed) }) : undefined}
+                  title={value ? t("profile.keys.detail", { key: nameOf(cap.label), rate: percent(value.rate), errors: formatNumber(i18n.language, Math.round(value.errors)), typed: formatNumber(i18n.language, Math.round(value.typed)) }) : undefined}
                 >
                   <span key={cap.label} className="keymap-cap">{cap.label}</span>
                 </span>

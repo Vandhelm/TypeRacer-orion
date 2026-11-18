@@ -4,12 +4,15 @@ import { createElement, type ReactElement } from "react";
 import { I18nextProvider } from "react-i18next";
 import type { i18n as I18n } from "i18next";
 import { oneDecimal } from "../podium/results";
-import type { PlayerResult } from "../podium/results";
+import type { PlayerResult, RaceSummary } from "../podium/results";
 
 let i18n: I18n;
 let CareerStats: typeof import("./CareerStats").CareerStats;
 let ProgressChart: typeof import("./ProgressChart").ProgressChart;
 let KeyboardHeatmap: typeof import("./KeyboardHeatmap").KeyboardHeatmap;
+let LastRace: typeof import("./LastRace").LastRace;
+let SpeedChart: typeof import("./SpeedChart").SpeedChart;
+let TextEditorDialog: typeof import("../room/TextEditorDialog").TextEditorDialog;
 let PodiumBoard: typeof import("../podium/PodiumBoard").PodiumBoard;
 
 beforeAll(async () => {
@@ -19,6 +22,9 @@ beforeAll(async () => {
   ({ CareerStats } = await import("./CareerStats"));
   ({ ProgressChart } = await import("./ProgressChart"));
   ({ KeyboardHeatmap } = await import("./KeyboardHeatmap"));
+  ({ LastRace } = await import("./LastRace"));
+  ({ SpeedChart } = await import("./SpeedChart"));
+  ({ TextEditorDialog } = await import("../room/TextEditorDialog"));
   ({ PodiumBoard } = await import("../podium/PodiumBoard"));
 });
 
@@ -67,6 +73,35 @@ describe("I18N-03 — les vues formatent selon la langue", () => {
     const node = () => createElement(PodiumBoard, { players: [player()], showPlace: true, arrived: true });
     expect(await render("fr", node)).toContain("1 234");
     expect(await render("en", node)).toContain("1,234");
+  });
+
+  test("KeyboardHeatmap : l'infobulle d'une touche formate les frappes", async () => {
+    const node = () => createElement(KeyboardHeatmap, { keys: { a: [12345, 100] }, layout: "qwerty", onLayout: () => {} });
+    expect(await render("fr", node)).toContain("12 345");
+    expect(await render("en", node)).toContain("12,345");
+  });
+
+  test("LastRace : nombre de mots et durée du réglage suivent la langue", async () => {
+    const summary = { textType: "words", language: "fr", duration: 1500, level: "easy", punctuation: false, numbers: false, specials: false, accents: true, excluded: "", mistakes: "stop", botSpeed: 50, botAccuracy: 90, length: "short", wordCount: 1234, sessionSeconds: 5 } as unknown as RaceSummary;
+    const node = () => createElement(LastRace, { player: player(), summary });
+    const fr = await render("fr", node);
+    const en = await render("en", node);
+    expect(fr).toContain("1 234");
+    expect(fr).toContain("1 500");
+    expect(en).toContain("1,234");
+    expect(en).toContain("1,500");
+  });
+
+  test("SpeedChart : le tableau suit la langue", async () => {
+    const node = () => createElement(SpeedChart, { player: player({ wpmSeries: [1234], rawSeries: [1234], errorSeries: [0] }) });
+    expect(await render("fr", node)).toContain("1 234");
+    expect(await render("en", node)).toContain("1,234");
+  });
+
+  test("TextEditorDialog : la limite de caractères suit la langue", async () => {
+    const node = () => createElement(TextEditorDialog, { text: "", onUse: () => {} });
+    expect(await render("fr", node)).toContain("5 000");
+    expect(await render("en", node)).toContain("5,000");
   });
 
   test("oneDecimal suit la langue choisie", () => {
