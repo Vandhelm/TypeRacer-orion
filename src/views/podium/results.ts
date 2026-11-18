@@ -2,6 +2,7 @@
 import { CHARS_PER_WORD, laneElapsedMs, laneProgress, laneWpm, myAccuracy, type Race, type Sample } from "../game/race";
 import { parseKeys, roundKeys, type KeyCounts } from "../../players/keys";
 import type { Player, Room } from "../room/room";
+import { formatNumber } from "../../i18n/format";
 
 export type PlayerResult = {
   name: string;
@@ -169,5 +170,4 @@ export function sessionSeconds() {
 
 export const profileHref = (index: number) => `/profile?player=${index}`;
 
-export const oneDecimal = (language: string, value: number) =>
-  new Intl.NumberFormat(language === "en" ? "en-CA" : "fr-CA", { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(value);
+export const oneDecimal = (language: string, value: number) => formatNumber(language, value, 1);
