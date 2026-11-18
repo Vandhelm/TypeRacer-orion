@@ -4,6 +4,7 @@ import { connect } from "../../db/client";
 import { handleRace, playerStats } from "./races";
 import { handleAvatar, saveAvatar } from "./account";
 import { handleGuest } from "./guest";
+import { handleRealtimeTicket } from "./realtime-ticket";
 import { createAuth, type Auth } from "./auth";
 
 let database: ReturnType<typeof connect> | null = null;
@@ -43,6 +44,7 @@ export async function handleApi(req: Request): Promise<Response> {
   if (pathname === "/api/races") return handleRace(req, db(), auth());
   if (pathname === "/api/account/avatar") return handleAvatar(req, auth(), saveAvatar(db()));
   if (pathname === "/api/guest") return handleGuest(req);
+  if (pathname === "/api/realtime/ticket") return handleRealtimeTicket(req, auth());
   const stats = pathname.match(/^\/api\/players\/([^/]+)\/stats$/);
   if (stats) return getStats(decodeURIComponent(stats[1]!));
   if (pathname.startsWith("/api/auth/")) return auth().handler(req);
