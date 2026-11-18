@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import { HangingButton } from "../../components/buttons/HangingButton";
-import { buildResults, buildSummary, markSessionStart, saveResults, sessionSeconds, submitRace } from "../podium/results";
+import { buildResults, buildSummary, markSessionStart, rememberSubmit, saveResults, sessionSeconds, submitRace } from "../podium/results";
 import { useRoom } from "../room/hooks/useRoom";
 import { rememberGuestRace } from "../profile/stats";
 import { useRace } from "./hooks/useRace";
@@ -39,8 +39,11 @@ export function GamePage() {
     const rank = results.players.findIndex((player) => player.me);
     const me = results.players[rank];
     if (me) rememberGuestRace({ at: new Date().toISOString(), wpm: me.wpm, accuracy: me.accuracy, rank: rank + 1, keys: me.keys });
-    // le retour arrière ne relance pas une course ; une grosse course part sans keepalive, la page attend son envoi
-    void submitRace(results, race.course.words.join(" ")).then(() => location.replace("/podium"));
+    // le retour arrière ne relance pas une course ; la page attend la réponse (un instant en keepalive), un refus est dit au podium
+    void submitRace(results, race.course.words.join(" ")).then((outcome) => {
+      rememberSubmit(outcome);
+      location.replace("/podium");
+    });
   }, [showResults, race, players, room]);
 
   return (

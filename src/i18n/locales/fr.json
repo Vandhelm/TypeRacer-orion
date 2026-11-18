@@ -227,6 +227,7 @@
     "rank_ordinal_other": "{{count}}e",
     "viewStats": "Voir les stats de {{name}}",
     "loading": "Chargement des résultats…",
+    "notSaved": "Cette course n’a pas pu être enregistrée dans l’historique.",
     "backToHistory": "Historique",
     "errors": {
       "not_found": "Cette course n’existe pas.",
