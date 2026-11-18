@@ -132,16 +132,16 @@ Les statuts viennent des rapports de l'agent `qa` (skill `criteria-check`). Une 
 
 | ID | Statut | Fichiers principaux | Tests associés | Notes et choix |
 |---|---|---|---|---|
-| HIST-01 | non fait | — | aucun | Ni route, ni liste, ni pagination. Vérifié le 2026-11-18 (QA site, light). |
-| HIST-02 | non fait | — | aucun | `race_samples` jamais relu. Vérifié le 2026-11-18 (QA site, light). |
+| HIST-01 | complet | `src/server/history.ts`, `src/server/races.ts`, `src/views/profile/RaceHistory.tsx`, `src/views/profile/history.ts`, `src/views/podium/results.ts`, `src/views/game/race.ts`, `src/views/game/GamePage.tsx` | `src/server/history.test.ts`, `src/views/profile/history.test.ts`, `src/views/podium/results.test.ts`, `src/views/game/race.test.ts` | 10 courses par page côté serveur, joueur pris dans la session (invité 403, sans session 401). Vu dans le navigateur : course réelle listée, course de 600 s et course à 8 joueurs (84 Ko) enregistrées, pagination fr/en à 1280 et 360 px. Refus signalé sur le podium ; limites : petite course refusée après 1,5 s non signalée, grosse course sans réponse en 10 s. Migration 0008 obligatoire avant déploiement (sans elle, POST /api/races → 500). QA 2026-11-18, feature/section/5-10-hist. |
+| HIST-02 | complet | `src/server/history.ts`, `db/schema/races.ts`, `db/migrations/0008_race_others.sql`, `src/views/podium/hooks/useRaceResults.ts`, `src/views/podium/PodiumPage.tsx`, `src/views/podium/PodiumScene.tsx`, `src/views/podium/PodiumBoard.tsx`, `src/views/profile/ProfilePage.tsx` | `src/server/history.test.ts`, `src/views/podium/history.test.ts`, `src/views/podium/PodiumScene.test.tsx` | `/podium?race=N` relu via `/api/history/N` : tous les participants à leur rang (`races.others`), détail RES-02 et séries via `/profile?race=N&player=i`. Course d'un autre = 404 comme une course inexistante, pas de « Rejouer ». Vu en fr/en à 1280 et 360 px. Courses antérieures à 0008 sans invités. QA 2026-11-18, feature/section/5-10-hist. |
 
 ### 5.11 Internationalisation (I18N)
 
 | ID | Statut | Fichiers principaux | Tests associés | Notes et choix |
 |---|---|---|---|---|
-| I18N-01 | partiel | `src/i18n/index.ts`, `src/i18n/locales/*.json`, `app/*/page.tsx` | aucun | `<title>` en dur en français ; `lang="fr"` fixé côté serveur. Vérifié le 2026-11-18 (QA site, light). |
-| I18N-02 | partiel | `src/i18n/index.ts`, `src/views/home/HomePage.tsx`, `src/views/room/RoomPage.tsx` | aucun | Sélecteur absent de game, podium et profile. Vérifié le 2026-11-18 (QA site, light). |
-| I18N-03 | complet | `src/views/podium/results.ts`, `src/views/profile/ProgressChart.tsx`, `src/views/profile/KeyboardHeatmap.tsx` | aucun | Intl selon la langue (fr-CA/en-CA). Vérifié le 2026-11-18 (QA site, light). |
+| I18N-01 | complet | `src/i18n/locales/fr.json`, `src/i18n/locales/en.json`, `src/i18n/server.ts`, `src/i18n/request.ts`, `app/layout.tsx`, `app/not-found.tsx`, `app/*/page.tsx` | `tests/i18n/i18n-01.test.ts` | Titres et `<html lang>` rendus côté serveur selon le cookie puis `Accept-Language`. Pas de meta description (le titre seul est traduit). Réserves mineures : placeholder « Corail_418 » (`HomePanel.tsx:170`) et kanji « 始 » (`GamePage.tsx:79`) en dur. Vérifié le 2026-11-18 (QA section 5.11, rendu fr/en sur les 5 pages et la 404). |
+| I18N-02 | complet | `src/components/tabs/LanguageSwitcher.tsx`, `src/i18n/index.ts`, `src/i18n/server.ts`, `src/next/NotFoundSwitcher.tsx`, les 5 `*Page.tsx` | `tests/i18n/i18n-02.test.ts` | Cookie `orion-lang` (un an, `Path=/`), repli sur le navigateur côté client et serveur, puis anglais. La 404 recharge la page après le choix. Vérifié le 2026-11-18 (QA section 5.11). |
+| I18N-03 | complet | `src/i18n/format.ts` | `src/i18n/format.test.ts`, `src/views/profile/format.test.tsx`, `src/views/room/useRoomLabels.test.tsx` | `Intl` en fr-CA ou en-CA. Réserve mineure : graduations des axes des graphiques non formatées (`ProgressChart.tsx:51`, `SpeedChart.tsx`). Vérifié le 2026-11-18 (QA section 5.11, nombres et dates en fr et en à l'écran). |
 
 ## 6. Qualité
 
