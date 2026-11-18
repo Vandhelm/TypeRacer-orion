@@ -92,6 +92,13 @@ describe("samples", () => {
     expect(race.samples[1]).toHaveLength(2);
   });
 
+  test("HIST-01 — a single late tick never records more seconds than the race lasts", () => {
+    const start = { ...racing("fix"), course: createCourse(["le", "riz", "attend"], 600, "fix") };
+    const race = advanceBots(start, 1000 + 660_000, [0.5]);
+    expect(race.samples[0]).toHaveLength(600);
+    expect(race.samples[1]).toHaveLength(600);
+  });
+
   test("stops measuring a lane once it is done", () => {
     const race = { ...racing("fix"), finishedAt: 1500 };
     expect(advanceBots(race, 3200, [0.5]).samples[0]).toEqual([]);

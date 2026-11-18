@@ -193,7 +193,8 @@ function sampleOf(race: Race, lane: number): Sample | null {
 }
 
 function recordSamples(race: Race) {
-  const second = Math.floor((race.now - race.startedAt) / 1000);
+  // un tick tardif ne mesure pas au-delà de la durée de la course : le serveur refuse plus de secondes qu'elle n'en a
+  const second = Math.floor(capped(race, race.now - race.startedAt) / 1000);
   return race.samples.map((samples, lane) => {
     const sample = samples.length < second ? sampleOf(race, lane) : null;
     if (!sample) return samples;
@@ -204,8 +205,11 @@ function recordSamples(race: Race) {
 
 export const everyoneDone = (race: Race) => race.finishedAt > 0 && race.bots.every((bot) => bot.finishedAt > 0);
 
+/** Un temps de course borné à sa durée : la fin n'est vue qu'au tick, parfois en retard (onglet en arrière-plan). */
+const capped = (race: Race, ms: number) => Math.min(race.course.durationMs, Math.max(0, ms));
+
 export function elapsedMs(race: Race) {
-  return race.startedAt ? Math.max(0, (race.finishedAt || race.now) - race.startedAt) : 0;
+  return race.startedAt ? capped(race, (race.finishedAt || race.now) - race.startedAt) : 0;
 }
 
 export function secondsLeft(race: Race) {
@@ -227,7 +231,7 @@ export function myAccuracy(race: Race) {
 export function laneElapsedMs(race: Race, lane: number) {
   if (lane === race.myLane) return elapsedMs(race);
   const bot = race.bots.find((candidate) => candidate.lane === lane);
-  return bot && race.startedAt ? Math.max(0, (bot.finishedAt || race.now) - race.startedAt) : 0;
+  return bot && race.startedAt ? capped(race, (bot.finishedAt || race.now) - race.startedAt) : 0;
 }
 
 /** Vitesse finale de ce couloir, en mots par minute. */

@@ -90,3 +90,18 @@
 @media (prefers-reduced-motion: reduce){
     .podium-board{ animation: none; }
 }
+
+/* HIST-02 : une course de l'historique en chargement, ou refusée */
+.podium-message{
+    display: grid; place-content: center; justify-items: center; gap: 20px; min-height: 100vh; padding: 24px;
+    color: var(--color-muted); font: 400 13px/1.6 var(--font-mono); text-align: center;
+}
+/* La course jouée n'a pas été enregistrée (HIST-01). */
+.podium-notice{
+    position: fixed; z-index: 20; top: 16px; left: 50%; width: max-content; max-width: calc(100vw - 32px); margin: 0; padding: 8px 14px;
+    background: #000; border: 1px solid var(--color-red-text); color: #fff; font: 400 12px/1.5 var(--font-mono); text-align: center;
+    transform: translateX(-50%);
+}
+.podium-message-link{ color: #fff; letter-spacing: .2em; text-transform: uppercase; text-decoration: none; border-bottom: 1px solid var(--color-red-text); }
+.podium-message-link:hover{ color: var(--color-red-text); }
+.podium-message-link:focus-visible{ outline: 1px solid #fff; outline-offset: 4px; }

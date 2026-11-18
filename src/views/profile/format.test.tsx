@@ -34,7 +34,7 @@ const render = async (language: "fr" | "en", node: () => ReactElement) => {
 };
 
 const player = (patch: Partial<PlayerResult> = {}): PlayerResult => ({
-  name: "Corail", me: true, bot: false, wpm: 1234, raw: 90, accuracy: 96, seconds: 30, chars: [10, 1, 0, 0],
+  name: "Corail", rank: 1, me: true, bot: false, wpm: 1234, raw: 90, accuracy: 96, seconds: 30, chars: [10, 1, 0, 0],
   consistency: 80, idle: 0, finished: true, eliminated: false, wpmSeries: [], rawSeries: [], errorSeries: [], keys: {}, ...patch,
 });
 
