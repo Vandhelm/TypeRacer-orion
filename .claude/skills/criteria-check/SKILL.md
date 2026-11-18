@@ -39,17 +39,17 @@ Le texte des exigences est dans `docs/criteres.md`, rangé par section de l'éno
 
 | Page | Dossier | Critères |
 |---|---|---|
-| `home` | `src/pages/home` | AUTH-01, AUTH-02, AUTH-03, JOIN-01, JOIN-02, JOIN-03, PERF-01 |
-| `room` | `src/pages/room` | SALLE-01 à SALLE-10, CONF-01 à CONF-12, COURSE-02, SEC-01 |
-| `game` | `src/pages/game` | COURSE-01, COURSE-03 à COURSE-10, BOT-01 à BOT-05, BONUS-01 à BONUS-04, PERF-02, PERF-03 |
-| `podium` | `src/pages/podium` | RES-01 à RES-05, COURSE-10, COURSE-11 |
-| `profile` | `src/pages/profile` | AUTH-03, AUTH-04, AUTH-05, AUTH-06, HIST-01, HIST-02, SEC-02 |
+| `home` | `src/views/home` | AUTH-01, AUTH-02, AUTH-03, JOIN-01, JOIN-02, JOIN-03, PERF-01 |
+| `room` | `src/views/room` | SALLE-01 à SALLE-10, CONF-01 à CONF-12, COURSE-02, SEC-01 |
+| `game` | `src/views/game` | COURSE-01, COURSE-03 à COURSE-10, BOT-01 à BOT-05, BONUS-01 à BONUS-04, PERF-02, PERF-03 |
+| `podium` | `src/views/podium` | RES-01 à RES-05, COURSE-10, COURSE-11 |
+| `profile` | `src/views/profile` | AUTH-03, AUTH-04, AUTH-05, AUTH-06, HIST-01, HIST-02, SEC-02 |
 
 Transversaux, à vérifier **sur chaque page** de la portée : I18N-01, I18N-02, I18N-03, A11Y-01 à A11Y-04, DES-04, DES-05, DES-06. Pour une page, ne note que ce qui concerne cette page (« I18N-01 partiel : 3 chaînes en dur dans `RoomPage.tsx` »).
 
 Projet entier seulement (portée site ou section 3, 4, 6) : TECH-01 à TECH-10, DES-01 à DES-03, TEST-01 à TEST-03, SEC-03.
 
-Si un dossier de page a changé de nom ou qu'une page manque dans ce tableau, liste `src/pages` et dis-le dans le rapport plutôt que de deviner.
+Si un dossier de page a changé de nom ou qu'une page manque dans ce tableau, liste `src/views` et dis-le dans le rapport plutôt que de deviner.
 
 ## 2. Délimiter ce qu'on lit
 

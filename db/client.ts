@@ -4,7 +4,8 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import * as schema from "./schema";
 
-export const MIGRATIONS_DIR = join(import.meta.dir, "migrations");
+// import.meta.dir n'existe que sous Bun hors bundle ; une fois regroupé par Next.js, on repart de la racine du projet.
+export const MIGRATIONS_DIR = join((import.meta.dir as string | undefined) ?? join(process.cwd(), "db"), "migrations");
 
 /** Any Drizzle Postgres connection: the real server or the in-memory one used by tests. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
