@@ -1,15 +1,13 @@
-import type { Metadata, Viewport } from "next";
+import type { Viewport } from "next";
 import type { ReactNode } from "react";
-
-export const metadata: Metadata = {
-  title: "O.R.I.O.N",
-};
+import { requestLanguage } from "../src/i18n/request";
 
 export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover" };
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+// I18N-02 : l'attribut lang suit le choix mémorisé, sinon la langue du navigateur.
+export default async function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="fr">
+    <html lang={await requestLanguage()}>
       <body>{children}</body>
     </html>
   );

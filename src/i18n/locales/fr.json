@@ -1,6 +1,7 @@
 {
   "home": {
     "langChoice": "Choix de la langue",
+    "pageTitle": "O.R.I.O.N — Accueil",
     "viewChoice": "Jouer ou compte",
     "overline": "RESTAURANT DE SUSHI",
     "viewPlay": "JOUER",
@@ -247,8 +248,14 @@
     ],
     "viewStats": "Voir les stats de {{name}}"
   },
+  "notFound": {
+    "title": "Page introuvable",
+    "text": "Cette page n'existe pas.",
+    "home": "Retour à l'accueil"
+  },
   "profile": {
     "pageTitle": "O.R.I.O.N — {{name}}",
+    "defaultTitle": "O.R.I.O.N — Statistiques",
     "back": "← Podium",
     "place": "{{rank}} place",
     "accuracy": "Précision",

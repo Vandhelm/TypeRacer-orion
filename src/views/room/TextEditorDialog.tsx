@@ -1,6 +1,7 @@
 import { useImperativeHandle, useRef, useState, type ChangeEvent, type Ref } from "react";
 import { useTranslation } from "react-i18next";
 import { SmallButton } from "../../components/buttons/SmallButton";
+import { formatNumber } from "../../i18n/format";
 import { countWords, MAX_TEXT_LENGTH, readSavedTexts, writeSavedTexts, type SavedText } from "./room";
 
 const TEXT_TOOLS = {
@@ -32,7 +33,7 @@ type TextEditorDialogProps = { text: string; onUse: (text: string) => void; ref?
 
 /** Modal editor for the custom text: cleanup tools, import, saved texts. */
 export function TextEditorDialog({ text, onUse, ref }: TextEditorDialogProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const dialog = useRef<HTMLDialogElement>(null);
   const area = useRef<HTMLTextAreaElement>(null);
   const [draft, setDraft] = useState("");
@@ -95,7 +96,7 @@ export function TextEditorDialog({ text, onUse, ref }: TextEditorDialogProps) {
         </div>
         <label className="sr-only" htmlFor="editor-text">{t("room.editorTitle")}</label>
         <textarea ref={area} className="room-editor-text" id="editor-text" maxLength={MAX_TEXT_LENGTH} spellCheck={false} value={draft} onChange={(e) => setDraft(e.target.value)} />
-        <p className="room-editor-count"><span>{`${words} ${t("room.wordsUnit")}`}</span><span>{t("room.maxChars", { n: MAX_TEXT_LENGTH })}</span></p>
+        <p className="room-editor-count"><span>{`${formatNumber(i18n.language, words)} ${t("room.wordsUnit")}`}</span><span>{t("room.maxChars", { n: formatNumber(i18n.language, MAX_TEXT_LENGTH) })}</span></p>
         <div className="room-editor-save">
           <input type="text" maxLength={40} autoComplete="off" placeholder={t("room.textName")} value={saveName} onChange={(e) => setSaveName(e.target.value)} />
           <SmallButton onClick={save}>{t("room.save")}</SmallButton>
