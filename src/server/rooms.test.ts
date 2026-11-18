@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, test } from "bun:test";
+import { beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { players, raceConfigs, roomMembers, rooms, user } from "../../db/schema";
 import { DEFAULT_CONFIG } from "../../db/mocks/data";
@@ -74,7 +74,10 @@ async function setup() {
       auth,
       SECRET,
     );
-  return { db, auth, signUp, guest, freshGuest, call };
+  /** SALLE-06 : un compte n'est que dans un salon à la fois ; chaque salon d'un test a donc son propre hôte, neuf. */
+  let hosts = 0;
+  const newHost = (base: string) => signUp(`${base}_${++hosts}`);
+  return { db, auth, signUp, newHost, guest, freshGuest, call };
 }
 
 describe("SALLE-01 — a signed-in user creates a room and hosts it", () => {
@@ -156,6 +159,7 @@ describe("SALLE-03 — visibility decides who sees and enters a room", () => {
   let t: Awaited<ReturnType<typeof setup>>;
   let host: { cookie: string; playerId: number };
   const open = async (visibility: "public" | "semi" | "private") => {
+    host = await t.newHost("Hote_Visible");
     const res = await t.call("POST", "/api/rooms", host.cookie, { role: "player", settings: { visibility } });
     return ((await res.json()) as Joined).room;
   };
@@ -285,6 +289,7 @@ describe("SALLE-09 — a room is joined only while waiting or on the results scr
   let t: Awaited<ReturnType<typeof setup>>;
   let host: { cookie: string; playerId: number };
   const roomIn = async (status: "waiting" | "racing" | "results" | "closed") => {
+    host = await t.newHost("Hote_Etat");
     const { room } = (await (await t.call("POST", "/api/rooms", host.cookie, { role: "player", settings: { visibility: "public" } })).json()) as Joined;
     await t.db.update(rooms).set({ status }).where(eq(rooms.code, room.code));
     return room;
@@ -380,7 +385,9 @@ describe("SALLE-03 — a member finds their room again by its code, whatever its
   let host: { cookie: string; playerId: number };
   beforeAll(async () => {
     t = await setup();
-    host = await t.signUp("Hote_Retour");
+  });
+  beforeEach(async () => {
+    host = await t.newHost("Hote_Retour");
   });
 
   test("the host of a default (private) room reloads with ?code: 200, same key, one member", async () => {
@@ -432,6 +439,7 @@ describe("SALLE-09 — the race ends on the server: racing → results once ever
   let host: { cookie: string; playerId: number };
   /** Une salle lancée : l'hôte (participant ou spectateur) et un invité participant. */
   const launched = async (role: "player" | "spectator" = "player") => {
+    host = await t.newHost("Hote_Fin");
     const { room } = (await (await t.call("POST", "/api/rooms", host.cookie, { role, settings: { visibility: "public" } })).json()) as Joined;
     const runner = t.freshGuest(`Coureur_${room.code}`);
     await t.call("POST", "/api/rooms/join", runner, { code: room.code });
@@ -492,6 +500,7 @@ describe("SALLE-09 — the race ends on the server: racing → results once ever
   });
 
   test("finishing on a waiting room changes nothing", async () => {
+    host = await t.newHost("Hote_Fin");
     const { room } = (await (await t.call("POST", "/api/rooms", host.cookie, { role: "player" })).json()) as Joined;
     await t.call("POST", `/api/rooms/${room.code}/finish`, host.cookie);
     expect(await statusOf(room.code)).toBe("waiting");
@@ -514,6 +523,7 @@ describe("SALLE-09 — a race nobody finishes ends on its own after the maximum 
   const launchedAgo = (code: string, ms: number) => t.db.update(rooms).set({ launchedAt: sql`now() - ${ms} * interval '1 millisecond'` }).where(eq(rooms.code, code));
   /** A (l'hôte) finit ; B ferme son onglet sans rien déclarer : sa déconnexion ne le retire pas. */
   const abandoned = async () => {
+    host = await t.newHost("Hote_Abandon");
     const { room } = (await (await t.call("POST", "/api/rooms", host.cookie, { role: "player", settings: { visibility: "public" } })).json()) as Joined;
     const runner = t.freshGuest(`Fantome_${room.code}`);
     const { you } = (await (await t.call("POST", "/api/rooms/join", runner, { code: room.code })).json()) as Joined;
@@ -525,7 +535,9 @@ describe("SALLE-09 — a race nobody finishes ends on its own after the maximum 
   };
   beforeAll(async () => {
     t = await setup();
-    host = await t.signUp("Hote_Abandon");
+  });
+  beforeEach(async () => {
+    host = await t.newHost("Hote_Abandon");
   });
 
   test("just before the maximum duration the room still races: a newcomer gets 409", async () => {
@@ -585,7 +597,9 @@ describe("SALLE-09 — role and settings are frozen during a race", () => {
   let host: { cookie: string; playerId: number };
   beforeAll(async () => {
     t = await setup();
-    host = await t.signUp("Hote_Gel");
+  });
+  beforeEach(async () => {
+    host = await t.newHost("Hote_Gel");
   });
 
   test("the spectating host cannot take a seat (409 in_race) and stays seatless", async () => {
