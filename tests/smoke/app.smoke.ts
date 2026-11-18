@@ -111,6 +111,11 @@ describe("SMOKE — API", () => {
     expect(res.status).toBe(401);
   });
 
+  test("AUTH-06 — /api/races refuse une course envoyée sans session", async () => {
+    const res = await fetch(`${base}/api/races`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+    expect(res.status).toBe(401);
+  });
+
   // TECH-01 : le catch-all app/api/[...path]/route.ts transmet les routes de better-auth à handleApi.
   test("TECH-01 — /api/auth/get-session répond sous Next.js", async () => {
     const res = await fetch(`${base}/api/auth/get-session`);
