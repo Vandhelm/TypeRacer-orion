@@ -13,6 +13,7 @@
 @import "../../base/utilities.css";
 
 @import "../../components/buttons/hanging-button.css";
+@import "../../components/live-list.css";
 
 @import "./game.css";
 @import "./pool.css";
