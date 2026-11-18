@@ -325,7 +325,19 @@
     "wrong": "wrong",
     "extra": "extra",
     "missed_one": "missed",
-    "missed_other": "missed"
+    "missed_other": "missed",
+    "history": {
+      "title": "History",
+      "loading": "Loading history…",
+      "empty": "No finished race yet.",
+      "pastEnd": "This page is empty.",
+      "error": "Could not load the history.",
+      "pagination": "History pages",
+      "previous": "← Newer",
+      "next": "Older →",
+      "page": "Page {{page}} / {{pages}}",
+      "rank": "{{rank}} of {{players}}"
+    }
   },
   "account": {
     "tabs": {

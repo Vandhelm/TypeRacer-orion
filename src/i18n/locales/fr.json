@@ -325,7 +325,19 @@
     "wrong": "faux",
     "extra": "en trop",
     "missed_one": "manqué",
-    "missed_other": "manqués"
+    "missed_other": "manqués",
+    "history": {
+      "title": "Historique",
+      "loading": "Chargement de l’historique…",
+      "empty": "Aucune course terminée pour l’instant.",
+      "pastEnd": "Cette page est vide.",
+      "error": "Impossible de charger l’historique.",
+      "pagination": "Pages de l’historique",
+      "previous": "← Plus récentes",
+      "next": "Plus anciennes →",
+      "page": "Page {{page}} / {{pages}}",
+      "rank": "{{rank}} sur {{players}}"
+    }
   },
   "account": {
     "tabs": {
