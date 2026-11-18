@@ -48,6 +48,8 @@ export const rooms = pgTable(
     hostId: integer("host_id").notNull().references(() => players.id),
     configId: integer("config_id").notNull().references(() => raceConfigs.id),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    /** SALLE-09 : départ de la course en cours ; elle prend fin d'elle-même après RACE_MAX_MS (src/server/rooms.ts). */
+    launchedAt: timestamp("launched_at", { withTimezone: true }),
   },
   (table) => [index("rooms_lobby").on(table.status, table.visibility), check("rooms_guests_range", sql`${table.guests} between 2 and 8`),
     check("rooms_code_format", sql`${table.code} ~ ${sql.raw(`'${CODE_PATTERN}'`)}`),

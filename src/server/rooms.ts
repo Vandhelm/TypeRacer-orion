@@ -55,7 +55,8 @@ export function memberKey(who: Identity | { playerId: number }): string {
   return `guest:${who.sessionId}`;
 }
 
-export type MemberView = { key: string; name: string; guest: boolean; host: boolean; role: Role; seat: number | null; color: string | null };
+/** finished (SALLE-09) : ce membre a fini la course en cours ; son retour au salon ne le renvoie pas courir. */
+export type MemberView = { key: string; name: string; guest: boolean; host: boolean; role: Role; seat: number | null; color: string | null; finished: boolean };
 export type RoomView = {
   code: string;
   status: RoomStatus;
@@ -142,7 +143,7 @@ export async function roomView(db: Db, roomId: number, viewer?: string): Promise
   const [row] = await db.select().from(rooms).innerJoin(raceConfigs, eq(raceConfigs.id, rooms.configId)).where(eq(rooms.id, roomId));
   if (!row) throw new RoomRefused("not_found");
   const members = await db
-    .select({ key: roomMembers.memberKey, playerId: roomMembers.playerId, guestName: roomMembers.guestName, playerName: players.name, role: roomMembers.role, seat: roomMembers.seat, color: roomMembers.color })
+    .select({ key: roomMembers.memberKey, playerId: roomMembers.playerId, guestName: roomMembers.guestName, playerName: players.name, role: roomMembers.role, seat: roomMembers.seat, color: roomMembers.color, finishedAt: roomMembers.finishedAt })
     .from(roomMembers)
     .leftJoin(players, eq(players.id, roomMembers.playerId))
     .where(eq(roomMembers.roomId, roomId))
@@ -154,7 +155,7 @@ export async function roomView(db: Db, roomId: number, viewer?: string): Promise
     host,
     settings: settingsOf(row.rooms, row.race_configs),
     invite: viewer === host ? row.rooms.inviteToken : null,
-    members: members.map((m) => ({ key: m.key, name: m.playerName ?? m.guestName ?? "", guest: m.playerId === null, host: m.key === host, role: m.role, seat: m.seat, color: m.color })),
+    members: members.map((m) => ({ key: m.key, name: m.playerName ?? m.guestName ?? "", guest: m.playerId === null, host: m.key === host, role: m.role, seat: m.seat, color: m.color, finished: m.finishedAt !== null })),
   };
 }
 
@@ -201,6 +202,7 @@ export async function readRoom(db: Db, code: string, who: Identity): Promise<Roo
   const room = await roomByCode(db, code);
   const key = memberKey(who);
   if (!(await membership(db, room.id, key))) throw new RoomRefused("not_found"); // SALLE-10 : un non-membre ne sait pas si le salon existe
+  await expireRaces(db, room.id);
   return { room: await roomView(db, room.id, key), you: key };
 }
 
@@ -212,6 +214,7 @@ export async function updateRoom(db: Db, code: string, who: Identity, input: Upd
   const { id } = await roomByCode(db, code);
   const key = memberKey(who);
   await db.transaction(async (tx) => {
+    await expireRaces(tx, id);
     // sous le verrou du salon, comme joinRoom : les places prises et les réglages ne bougent pas pendant le changement
     const [room] = await tx.select().from(rooms).where(eq(rooms.id, id)).for("update");
     if (!room) throw new RoomRefused("not_found");
@@ -243,6 +246,7 @@ export type ListedRoom = { code: string; name: string; autoName: boolean; langua
 
 /** Les salons publics ouverts, les plus récents d'abord. Un salon « sur code » ou privé n'y est jamais. */
 export async function listPublicRooms(db: Db, limit = 50): Promise<ListedRoom[]> {
+  await expireRaces(db);
   const playerCount = sql<number>`(select count(*) from ${roomMembers} where ${roomMembers.roomId} = ${rooms.id} and ${roomMembers.role} = 'player')`.mapWith(Number);
   return db
     .select({ code: rooms.code, name: rooms.name, autoName: rooms.autoName, language: raceConfigs.language, guests: rooms.guests, bots: rooms.bots, players: playerCount, status: rooms.status })
@@ -277,6 +281,7 @@ export async function joinRoom(db: Db, who: Identity, via: JoinVia): Promise<Roo
   const { id } = await roomFor(db, via);
   const key = memberKey(who);
   await db.transaction(async (tx) => {
+    await expireRaces(tx, id);
     // Verrou sur la ligne du salon : les entrées simultanées et le lancement passent l'un après l'autre.
     // L'état (SALLE-09) et les places prises (SALLE-03) sont lus sous ce verrou, jamais avant.
     const [room] = await tx.select({ status: rooms.status, visibility: rooms.visibility }).from(rooms).where(eq(rooms.id, id)).for("update");
@@ -304,16 +309,32 @@ export async function launchRoom(db: Db, code: string, who: Identity): Promise<R
   const { id } = await roomByCode(db, code);
   const key = memberKey(who);
   await db.transaction(async (tx) => {
+    await expireRaces(tx, id);
     const [room] = await tx.select({ status: rooms.status, hostId: rooms.hostId }).from(rooms).where(eq(rooms.id, id)).for("update");
     if (!room) throw new RoomRefused("not_found");
     if (!(await membership(tx, id, key))) throw new RoomRefused("not_found"); // SALLE-10 : un non-membre ne sait pas si le salon existe
     if (key !== memberKey({ playerId: room.hostId })) throw new RoomRefused("not_host");
     if (room.status === "closed") throw new RoomRefused("not_found");
     if (!canJoin(room.status)) throw new RoomRefused("in_race");
-    await tx.update(rooms).set({ status: "racing" }).where(eq(rooms.id, id));
+    await tx.update(rooms).set({ status: "racing", launchedAt: sql`now()` }).where(eq(rooms.id, id));
     await tx.update(roomMembers).set({ finishedAt: null }).where(eq(roomMembers.roomId, id));
   });
   return { room: await roomView(db, id, key), you: key };
+}
+
+/**
+ * SALLE-09 : durée maximale d'une course. Au-delà, la salle passe aux résultats même si un participant n'a jamais
+ * déclaré sa fin (onglet fermé) : couvre le mode temps le plus long (600 s) avec une large marge.
+ */
+export const RACE_MAX_MS = 15 * 60_000;
+
+/**
+ * SALLE-09 : l'échéance d'une course se calcule à la lecture, sans minuterie de processus (Next.js, Vercel) :
+ * une salle en course depuis plus de RACE_MAX_MS passe aux résultats. Un seul salon (roomId), ou tous (explorateur).
+ */
+async function expireRaces(db: Db, roomId?: number) {
+  const overdue = and(eq(rooms.status, "racing"), sql`${rooms.launchedAt} <= now() - ${RACE_MAX_MS} * interval '1 millisecond'`);
+  await db.update(rooms).set({ status: "results" }).where(roomId === undefined ? overdue : and(eq(rooms.id, roomId), overdue));
 }
 
 /** SALLE-09 : plus aucun participant humain en course (fini ou parti) : le salon passe aux résultats. Sous le verrou. */
@@ -332,6 +353,7 @@ export async function finishRoom(db: Db, code: string, who: Identity): Promise<R
   const { id } = await roomByCode(db, code);
   const key = memberKey(who);
   await db.transaction(async (tx) => {
+    await expireRaces(tx, id);
     const [room] = await tx.select({ status: rooms.status }).from(rooms).where(eq(rooms.id, id)).for("update");
     if (!room) throw new RoomRefused("not_found");
     if (!(await membership(tx, id, key))) throw new RoomRefused("not_found"); // SALLE-10 : un non-membre ne sait pas si le salon existe
@@ -350,6 +372,7 @@ export async function leaveRoom(db: Db, code: string, who: Identity, options: { 
   const { id } = await roomByCode(db, code);
   // sous le verrou du salon, comme joinRoom et launchRoom : l'état lu et la fermeture ne croisent ni entrée ni lancement
   return db.transaction(async (tx) => {
+    await expireRaces(tx, id);
     const [room] = await tx.select({ status: rooms.status }).from(rooms).where(eq(rooms.id, id)).for("update");
     // SALLE-10 : un salon fermé, ou dont on n'est pas membre, répond comme un code inconnu
     if (!room || room.status === "closed") throw new RoomRefused("not_found");

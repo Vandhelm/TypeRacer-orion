@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { players, raceConfigs, roomMembers, rooms, user } from "../../db/schema";
 import { DEFAULT_CONFIG } from "../../db/mocks/data";
 import { createMockDatabase } from "../../db/mocks/test-database";
@@ -7,7 +7,7 @@ import { placeholderEmail } from "../accounts/username";
 import { isRoomCode, newInviteToken } from "../rooms/access";
 import { createAuth } from "./auth";
 import { GUEST_COOKIE, signGuest } from "./guest";
-import { CodeExhausted, createRoom, withFreshCode } from "./rooms";
+import { CodeExhausted, createRoom, leaveAfterDisconnect, RACE_MAX_MS, withFreshCode } from "./rooms";
 import { handleRoomsApi } from "./rooms-api";
 
 process.env.BETTER_AUTH_SECRET ??= "test-secret-test-secret-test-secret";
@@ -417,6 +417,14 @@ describe("SALLE-03 — a member finds their room again by its code, whatever its
     expect((await t.call("POST", "/api/rooms/join", t.guest("Nouveau_Venu"), { code: pub.code })).status).toBe(404);
     expect(await t.db.$count(roomMembers, eq(roomMembers.guestName, "Nouveau_Venu"))).toBe(0);
   });
+  test("a member who left a private room and comes back by its code gets 404", async () => {
+    const created = (await (await t.call("POST", "/api/rooms", host.cookie, { role: "player" })).json()) as Joined;
+    await t.call("POST", "/api/rooms/join", t.guest("Parti_Prive"), { invite: created.room.invite! });
+    expect((await t.call("POST", `/api/rooms/${created.room.code}/leave`, t.guest("Parti_Prive"))).status).toBe(200);
+    const back = await t.call("POST", "/api/rooms/join", t.guest("Parti_Prive"), { code: created.room.code });
+    expect(back.status).toBe(404);
+    expect(await t.db.$count(roomMembers, eq(roomMembers.guestName, "Parti_Prive"))).toBe(0);
+  });
 });
 
 describe("SALLE-09 — the race ends on the server: racing → results once every human player has finished", () => {
@@ -495,6 +503,66 @@ describe("SALLE-09 — the race ends on the server: racing → results once ever
     expect((await t.call("POST", `/api/rooms/${code}/finish`, (await t.signUp("Saboteur_2")).cookie)).status).toBe(404);
     expect((await t.call("POST", `/api/rooms/${code}/finish`)).status).toBe(401);
     expect(await statusOf(code)).toBe("racing");
+  });
+});
+
+describe("SALLE-09 — a race nobody finishes ends on its own after the maximum duration", () => {
+  let t: Awaited<ReturnType<typeof setup>>;
+  let host: { cookie: string; playerId: number };
+  const statusOf = async (code: string) => (await t.db.select({ status: rooms.status }).from(rooms).where(eq(rooms.code, code)))[0]!.status;
+  /** Recule le départ de la course de `ms` : le temps passe sans minuterie. */
+  const launchedAgo = (code: string, ms: number) => t.db.update(rooms).set({ launchedAt: sql`now() - ${ms} * interval '1 millisecond'` }).where(eq(rooms.code, code));
+  /** A (l'hôte) finit ; B ferme son onglet sans rien déclarer : sa déconnexion ne le retire pas. */
+  const abandoned = async () => {
+    const { room } = (await (await t.call("POST", "/api/rooms", host.cookie, { role: "player", settings: { visibility: "public" } })).json()) as Joined;
+    const runner = t.freshGuest(`Fantome_${room.code}`);
+    const { you } = (await (await t.call("POST", "/api/rooms/join", runner, { code: room.code })).json()) as Joined;
+    expect((await t.call("POST", `/api/rooms/${room.code}/launch`, host.cookie)).status).toBe(200);
+    await t.call("POST", `/api/rooms/${room.code}/finish`, host.cookie);
+    const sessionId = you.slice("guest:".length);
+    expect((await leaveAfterDisconnect(t.db, room.code, { kind: "guest", name: "Fantome", sessionId })).left).toBe(false);
+    return room.code;
+  };
+  beforeAll(async () => {
+    t = await setup();
+    host = await t.signUp("Hote_Abandon");
+  });
+
+  test("just before the maximum duration the room still races: a newcomer gets 409", async () => {
+    const code = await abandoned();
+    await launchedAgo(code, RACE_MAX_MS - 60_000);
+    expect((await t.call("POST", "/api/rooms/join", t.freshGuest("Trop_Tot"), { code })).status).toBe(409);
+    expect(await statusOf(code)).toBe("racing");
+  });
+
+  test("past the maximum duration a newcomer gets 200 and the room is on results", async () => {
+    const code = await abandoned();
+    await launchedAgo(code, RACE_MAX_MS + 1_000);
+    expect((await t.call("POST", "/api/rooms/join", t.freshGuest("Apres_Course"), { code })).status).toBe(200);
+    expect(await statusOf(code)).toBe("results");
+  });
+
+  test("past the maximum duration the host can launch again", async () => {
+    const code = await abandoned();
+    await launchedAgo(code, RACE_MAX_MS + 1_000);
+    expect((await t.call("POST", `/api/rooms/${code}/launch`, host.cookie)).status).toBe(200);
+    expect(await statusOf(code)).toBe("racing");
+  });
+
+  test("past the maximum duration a member reading the room sees results, and the explorer lists it as results", async () => {
+    const code = await abandoned();
+    await launchedAgo(code, RACE_MAX_MS + 1_000);
+    const listed = (await (await t.call("GET", "/api/rooms")).json()) as { rooms: { code: string; status: string }[] };
+    expect(listed.rooms.find((r) => r.code === code)?.status).toBe("results");
+    const read = (await (await t.call("GET", `/api/rooms/${code}`, host.cookie)).json()) as { room: { status: string } };
+    expect(read.room.status).toBe("results");
+  });
+
+  test("a member who has finished is marked finished in the room view; the others are not", async () => {
+    const code = await abandoned();
+    const { room, you } = (await (await t.call("GET", `/api/rooms/${code}`, host.cookie)).json()) as Joined & { room: { members: { key: string; finished: boolean }[] } };
+    expect(room.members.find((m) => m.key === you)?.finished).toBe(true);
+    expect(room.members.filter((m) => m.key !== you).map((m) => m.finished)).toEqual([false]);
   });
 });
 
