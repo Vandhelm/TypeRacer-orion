@@ -5,6 +5,12 @@ import { Ticket, TicketStub } from "../../components/cards/Ticket";
 import { useTicketSway } from "./hooks/useTicketSway";
 import { ROOMS, WAITING_PAGE } from "./rooms";
 
+// Ticket sizes scale with --u and --hang (components/cards/ticket.css): 3 columns, 4 on a wide stall, 2 on a narrow one.
+const TICKETS =
+  "mx-[4cqw] grid grid-cols-[repeat(3,minmax(0,1fr))] [align-items:start] gap-[2.6cqw] pt-0 [--hang:34px] [--u:.32cqw] narrow:m-0 " +
+  "[@container(min-width:460px)]:grid-cols-[repeat(4,minmax(0,1fr))] [@container(min-width:460px)]:[--u:.235cqw] " +
+  "[@container(max-width:420px)]:grid-cols-[repeat(2,minmax(0,1fr))] [@container(max-width:420px)]:gap-3 [@container(max-width:420px)]:[--u:calc((100cqw-12px)/200)]";
+
 export type RoomsViewHandle = { tickets(): HTMLDivElement[] };
 
 type Flying = { left: number; top: number; width: number; u: number };
@@ -55,8 +61,8 @@ export function RoomsView({ descending, ref }: { descending: boolean; ref?: Ref<
   return (
     <main className="rooms pointer-events-none fixed inset-0 z-10 flex items-start justify-center px-4 narrow:min-h-screen narrow:items-start narrow:px-2 narrow:pt-[110px] narrow:pb-6">
       <h1 className="sr-only">{t("rooms.pageTitle")}</h1>
-      <div className="rooms-stall">
-        <div className={taken >= 0 ? "tickets locked" : "tickets"} id="tickets" {...sway.container}>
+      <div className="pointer-events-auto relative @container mt-[36vh] w-[min(100%,940px,calc((100vh-36vh-40px)/.42))] animate-[rise_1s_.15s_cubic-bezier(.2,.8,.2,1)_both] motion-reduce:animate-none! narrow:mt-[30vh]">
+        <div className={taken >= 0 ? `${TICKETS} [&_.ticket-button]:pointer-events-none` : TICKETS} id="tickets" {...sway.container}>
           {ROOMS.map((room, i) => (
             <Ticket
               key={room.n}
@@ -66,9 +72,9 @@ export function RoomsView({ descending, ref }: { descending: boolean; ref?: Ref<
               title={`${t("rooms.table")} ${room.n}`}
               serial={`${t("rooms.serial")} ${room.serial}`}
               rows={[
-                { label: t("rooms.lang"), value: t(room.lang === "fr" ? "rooms.codeFr" : "rooms.codeEn"), valueClassName: "v-lang" },
+                { label: t("rooms.lang"), value: t(room.lang === "fr" ? "rooms.codeFr" : "rooms.codeEn") },
                 { label: t("rooms.guests"), value: room.guests },
-                { label: t("rooms.bots"), value: t(room.bots ? "rooms.yes" : "rooms.no"), valueClassName: room.bots ? "v-bots yes" : "v-bots" },
+                { label: t("rooms.bots"), value: t(room.bots ? "rooms.yes" : "rooms.no"), highlight: room.bots },
               ]}
               stampLabel={t("rooms.reserved")}
               stub={{ ...stubOf(i), onAction: () => take(i) }}

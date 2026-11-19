@@ -4,6 +4,7 @@ import { formatNumber } from "../../i18n/format";
 import type { PlayerResult } from "../podium/results";
 import { buildChart } from "./chart";
 import { useChartSize } from "./hooks/useChartSize";
+import { CHART, CROSS, CURSOR, DOT, ERROR_MARK, GRID_LINE, LEGEND, LINE, PLOT, SWATCH, TIP } from "./styles";
 
 const TIP_MARGIN = 12;
 
@@ -35,44 +36,44 @@ export function SpeedChart({ player }: { player: PlayerResult }) {
   }, [hover, chart, size.width]);
 
   return (
-    <div ref={root} className="chart">
-      <div className="chart-legend">
-        <span><i className="chart-swatch chart-swatch--wpm" />{labels.wpm}</span>
-        <span><i className="chart-swatch chart-swatch--raw" />{labels.raw}</span>
-        <span><i className="chart-cross">×</i>{labels.errors}</span>
+    <div ref={root} className={CHART}>
+      <div className={LEGEND}>
+        <span><i className={SWATCH.wpm} />{labels.wpm}</span>
+        <span><i className={SWATCH.raw} />{labels.raw}</span>
+        <span><i className={CROSS}>×</i>{labels.errors}</span>
       </div>
 
-      <div ref={plot} className="chart-plot" onPointerMove={onPointer} onPointerDown={onPointer} onPointerLeave={() => setHover(null)}>
+      <div ref={plot} className={PLOT} onPointerMove={onPointer} onPointerDown={onPointer} onPointerLeave={() => setHover(null)}>
         <svg viewBox={`0 0 ${size.width} ${chart.height}`} height={chart.height} role="img" aria-label={`${labels.wpm} / ${labels.second}`}>
           {chart.speedTicks.map((value) => (
             <g key={value}>
-              <line className={value ? "chart-grid" : "chart-grid is-zero"} x1={chart.left} x2={chart.right} y1={chart.y(value)} y2={chart.y(value)} />
+              <line className={GRID_LINE(value)} x1={chart.left} x2={chart.right} y1={chart.y(value)} y2={chart.y(value)} />
               <text x={chart.left - 8} y={chart.y(value) + 4} textAnchor="end">{value}</text>
             </g>
           ))}
           {chart.timeTicks.map((i) => <text key={i} x={chart.x(i)} y={chart.height - 8} textAnchor="middle">{i + 1}</text>)}
           <text x={chart.left} y={chart.axisLabel}>{labels.wpm}</text>
-          {errors.map((count, i) => count > 0 && <text key={i} className="chart-error" x={chart.x(i)} y={chart.bandCenter + 5} textAnchor="middle">×</text>)}
+          {errors.map((count, i) => count > 0 && <text key={i} className={ERROR_MARK} x={chart.x(i)} y={chart.bandCenter + 5} textAnchor="middle">×</text>)}
           {chart.count > 1 ? (
             <>
-              <path className="chart-line chart-line--raw" d={chart.path(raw)} />
-              <path className="chart-line chart-line--wpm" d={chart.path(wpm)} />
+              <path className={LINE.raw} d={chart.path(raw)} />
+              <path className={LINE.wpm} d={chart.path(wpm)} />
             </>
           ) : (
-            chart.count === 1 && <circle className="chart-dot--wpm" cx={chart.x(0)} cy={chart.y(wpm[0]!)} r={4} />
+            chart.count === 1 && <circle className="fill-red-text" cx={chart.x(0)} cy={chart.y(wpm[0]!)} r={4} />
           )}
           {hover !== null && (
             <g>
-              <line className="chart-cursor" x1={chart.x(hover)} x2={chart.x(hover)} y1={chart.top} y2={chart.cursorBottom} />
-              <circle className="chart-dot chart-dot--raw" cx={chart.x(hover)} cy={chart.y(raw[hover]!)} r={4} />
-              <circle className="chart-dot chart-dot--wpm" cx={chart.x(hover)} cy={chart.y(wpm[hover]!)} r={4} />
+              <line className={CURSOR} x1={chart.x(hover)} x2={chart.x(hover)} y1={chart.top} y2={chart.cursorBottom} />
+              <circle className={DOT.raw} cx={chart.x(hover)} cy={chart.y(raw[hover]!)} r={4} />
+              <circle className={DOT.wpm} cx={chart.x(hover)} cy={chart.y(wpm[hover]!)} r={4} />
             </g>
           )}
         </svg>
       </div>
 
       {hover !== null && (
-        <div ref={tip} className="chart-tip">
+        <div ref={tip} className={TIP}>
           <p><span>{labels.second}</span>{hover + 1}</p>
           <p><span>{labels.wpm}</span>{formatNumber(i18n.language, wpm[hover]!)}</p>
           <p><span>{labels.raw}</span>{formatNumber(i18n.language, raw[hover]!)}</p>

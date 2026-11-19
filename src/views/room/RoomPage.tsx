@@ -13,6 +13,7 @@ import { RoomIntro } from "./RoomIntro";
 import { RoomSettings } from "./RoomSettings";
 import { RoomTicket } from "./RoomTicket";
 import { TextEditorDialog, type TextEditorHandle } from "./TextEditorDialog";
+import { DASHED_TOP, SHADE } from "./styles";
 
 const GAME_PAGE = "/game";
 const VISIBILITY_KEY = { private: "private", semi: "semiPrivate", public: "public" } as const;
@@ -54,29 +55,35 @@ export function RoomPage() {
         <HangingButton className="room-leave" href={host ? "/home" : "/home#rooms"} onClick={host ? forgetRoom : undefined}>
           {t("room.leave")}
         </HangingButton>
-        <div className="room-shade text-right phone:w-full">
-          <h1 className="room-title">{displayName}</h1>
-          <p className="room-subtitle">{`${t(host ? "room.host" : "room.guest")} · ${t(`room.${VISIBILITY_KEY[room.visibility]}`)}`}</p>
+        <div className={`${SHADE} text-right phone:w-full`}>
+          <h1 className="font-sans text-[clamp(20px,3.4vh,32px)] leading-[1.1] font-light tracking-[.1em]">{displayName}</h1>
+          <p className="mt-2 font-mono text-[max(11px,1.3vh)] leading-none font-normal tracking-[.2em] text-muted uppercase">{`${t(host ? "room.host" : "room.guest")} · ${t(`room.${VISIBILITY_KEY[room.visibility]}`)}`}</p>
         </div>
       </header>
 
-      <main className={host ? "relative z-1 isolate" : "relative z-1 isolate room-guest"}>
-        <form className="room-form" noValidate onSubmit={(e) => e.preventDefault()}>
+      <main className="relative z-1 isolate">
+        <form
+          className="grid grid-cols-[minmax(0,1fr)_minmax(240px,280px)] grid-rows-[auto_1fr] [align-items:start] gap-x-[clamp(20px,3vw,48px)] [grid-template-areas:'left_preview'_'settings_preview'] phone:grid-cols-[minmax(0,1fr)] phone:grid-rows-none phone:[grid-template-areas:'left'_'settings'_'preview']"
+          noValidate
+          onSubmit={(e) => e.preventDefault()}>
           <RoomIntro state={state} />
           <RoomTicket state={state} />
           <RoomSettings
             state={state}
             onEditText={openEditor}
             action={
-              <div className="room-action">
+              <div className="room-action fixed right-[clamp(16px,4vw,56px)] bottom-[clamp(16px,3vh,28px)] z-5 w-[min(300px,calc(100vw-32px))] phone:mt-0.5 narrow:right-4 narrow:bottom-[14px] narrow:left-4 narrow:w-auto">
                 <FlipButton label={t("room.start")} backLabel={t("room.startBack")} disabled={!ready} hidden={!host} onClick={launch} />
-                <p className="room-missing" hidden={!host || ready}>{t("room.notEnough")}</p>
-                <p className="room-waiting" role="status" hidden={host}>{t("room.waiting")}</p>
+                <p className="mt-2 bg-black font-mono text-[max(11px,1.2vh)] leading-[1.5] font-normal text-muted" hidden={!host || ready}>{t("room.notEnough")}</p>
+                <p
+                  className="flex min-h-[max(46px,6.2vh)] items-center justify-center border border-dashed border-line-soft bg-black px-3 py-2 text-center font-mono text-[max(12px,1.4vh)] leading-[1.3] font-normal tracking-[.1em] text-muted"
+                  role="status"
+                  hidden={host}>{t("room.waiting")}</p>
               </div>
             }
           />
         </form>
-        <LiveList state={live} className="room-live" />
+        <LiveList state={live} className={`${SHADE} ${DASHED_TOP} mt-[clamp(24px,4vh,40px)] max-w-[640px] pt-[clamp(16px,2.6vh,24px)]`} />
         <TextEditorDialog ref={editor} text={room.text} onUse={(text) => update({ text, textType: "custom" })} />
         <section className="sr-only" aria-labelledby="players-title">
           <h2 id="players-title">{t("room.players")}</h2>

@@ -9,11 +9,7 @@
 @import "../../base/tokens.css";
 @import "../../base/reset.css" layer(base);
 @import "../../base/animations.css";
-@import "../../base/utilities.css";
 
-@import "../../components/buttons/hanging-button.css";
-@import "../../components/tabs/hanging-tabs.css";
-@import "../../components/live-list.css";
 
 @import "./game.css";
 @import "./pool.css";

@@ -52,9 +52,10 @@ describe("I18N-02 — langue choisie, conservée, sinon celle du navigateur", ()
   });
 
   test("l'en-tête du profil laisse la place au sélecteur flottant", () => {
-    const css = readFileSync("src/styles/pages/profile/profile.css", "utf8");
-    const head = /\.profile-head\s*\{([^}]*)\}/.exec(css)?.[1] ?? "";
-    expect(head).toMatch(/padding-top:\s*(8\d|9\d|1\d\d)px/);
+    // TECH-03 : l'en-tête est stylé en Tailwind (constante HEAD de src/views/profile/styles.ts)
+    const styles = readFileSync("src/views/profile/styles.ts", "utf8");
+    const head = /export const HEAD = "([^"]*)"/.exec(styles)?.[1] ?? "";
+    expect(head).toMatch(/(^|\s)pt-\[(8\d|9\d|1\d\d)px\](\s|$)/);
   });
 
   test("chaque page lit sa langue et son titre côté serveur depuis le cookie", () => {
