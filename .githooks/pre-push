@@ -9,7 +9,7 @@ main=$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")
 fail() { echo "pre-push : $1" >&2; exit 1; }
 
 # valeurs secrètes du .env local (12 caractères ou plus)
-secrets=$(for f in "$root/.env" "$main/.env"; do [ -f "$f" ] && sed -nE 's/^[A-Za-z_][A-Za-z0-9_]*=["'\'']?([^"'\'' #]{12,}).*/\1/p' "$f"; done | sort -u)
+secrets=$(for f in "$root/.env" "$main/.env"; do [ -f "$f" ] && sed -nE 's/^[A-Za-z_][A-Za-z0-9_]*=["'\'']?([^"'\'' #]{12,}).*/\1/p' "$f"; done | grep -Ev '^https?://(localhost|127\.0\.0\.1)(:[0-9]+)?/?$' | sort -u)
 pattern='-----BEGIN [A-Z ]*PRIVATE KEY-----|AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{30,}|sk-[A-Za-z0-9_-]{20,}|xox[abp]-[A-Za-z0-9-]{10,}'
 
 while read -r local_ref local_sha remote_ref remote_sha; do
