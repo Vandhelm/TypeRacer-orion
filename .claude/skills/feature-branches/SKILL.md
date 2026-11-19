@@ -148,8 +148,8 @@ Deux agents `dev` peuvent travailler en parallèle sur deux critères indépenda
 Quand l'utilisateur demande une section d'exigences d'un coup (« fais la section 5.3 », « tous les TECH »), c'est le skill `overseer` qui orchestre (portée section). Dans ce projet :
 
 - **Une branche par exigence**, comme d'habitude (`feature/<page>/<id>` depuis `dev`), plus une **branche de section** depuis `dev` : `feature/section/<numéro>-<préfixe>` en minuscules, par exemple `feature/section/5-3-salle` ou `feature/section/3-tech`. Chaque branche d'exigence validée par la QA y est mergée en `--no-ff`.
-- Sur la branche de section : conflits résolus, `bun test`, `bun run test:smoke`, `bun run typecheck`, `bun run lint`, puis (en complex seulement) une QA de la section entière (skill `criteria-check`, portée section), puis les lignes de `docs/EXIGENCES.md` dans un commit `docs: update requirement matrix` avec `Refs:` listant les ID.
-- **Aucun point de validation** : merge `--no-ff` de la branche de section dans `dev` en local, push des branches d'exigence et de la branche de section (`git push -u origin <branche>`), puis rapport de section avec `git push origin dev` prêt à copier : `dev` et `main`, l'utilisateur les pousse lui-même.
+- Sur la branche de section : conflits résolus, `bun test`, `bun run test:smoke`, `bun run typecheck`, `bun run lint`, puis (en complex seulement) une QA de la section entière (skill `criteria-check`, portée section). Les lignes de matrice ne s'écrivent pas sur la branche de section : elles s'écrivent sur `dev`, juste après le merge (point suivant).
+- **Aucun point de validation** : merge `--no-ff` de la branche de section dans `dev` en local. Ensuite, sur `dev`, écris les lignes de `docs/EXIGENCES.md` et les entrées de `docs/qa/state.json` dans un commit `docs: update requirement matrix` avec `Refs:` listant les ID. Push des branches d'exigence et de la branche de section (`git push -u origin <branche>`), puis rapport de section avec `git push origin dev` prêt à copier : `dev` et `main`, l'utilisateur les pousse lui-même.
 - **Mode** : medium par défaut. Pour 5.6 COURSE, 5.7 BOT, 5.8 BONUS et 6.4 SEC (serveur autoritaire, triche, droits), passe directement en complex sans demander, et dis-le dans le rapport.
 - **Décisions réservées à l'utilisateur**, à demander avant de coder la section concernée : architecture du temps réel (TECH-06, qui conditionne COURSE et CONF-12), dessin de la piste (DES-04), hébergement (TECH-05), comptes, secrets et variables de production (AUTH-01, TECH-10). **Jamais d'IA** pour le nom, le logo et la démarche créative (DES-01 à DES-03) ni pour la réflexion de `docs/IA.md` : ces parties restent à l'utilisateur ; les agents peuvent seulement les vérifier.
 - **Ordre conseillé** : 3 TECH → 5.3 SALLE + 5.4 JOIN → 5.5 CONF → 5.6 COURSE + 5.7 BOT + 5.8 BONUS → 5.9 RES + 5.10 HIST → 5.11 I18N et 6 Qualité → 4 DES (DES-04 à DES-06).
@@ -160,7 +160,7 @@ Une feature est terminée quand le critère est implémenté et que l'utilisateu
 
 1. Vérifie que tout est commité (`git status --short`), puis lance la suite de régression (`bun test`) et les smoke tests (`bun run test:smoke`, avec Postgres démarré par `bun run db:up`). Un test rouge bloque le push : montre-le à l'utilisateur plutôt que de le contourner.
 2. **QA du critère.** Si un agent `qa` lancé par la conversation principale a déjà rendu un verdict « Rempli » sur cette branche, et que rien n'a été commité depuis, utilise-le. Sinon, lance l'agent `qa` sur le critère de la branche (portée « critère », ex. « Vérifie AUTH-03 sur `fix/home/auth-03` »), sans lui dire ce que tu penses avoir fait : il doit le constater lui-même. Pendant qu'il tourne, ne pousse rien.
-   - Verdict « Rempli » : reporte sa ligne de matrice dans `docs/EXIGENCES.md` (statut, fichiers, tests, notes), commite-la sur la branche (`docs: update requirement matrix` + `Refs: <ID>`), puis passe à l'étape suivante.
+   - Verdict « Rempli » : garde sa ligne de matrice pour l'étape 4, **sans l'écrire sur la branche**, puis passe à l'étape suivante.
    - Tout autre verdict : arrête-toi. Montre le rapport (parties ⚠️ / ❌, hors scope) et demande s'il faut corriger d'abord ou pousser quand même. Si l'utilisateur pousse quand même, la ligne de matrice prend le statut de la QA (`partiel`, `non fait`), jamais `complet`.
    - Si l'agent `qa` n'existe pas dans ce dépôt, dis-le et passe à l'étape suivante.
 3. Push de la branche, sans confirmation : `git push -u origin <branche>`. Les hooks refusent `dev`, `main`, les pushs forcés, les suppressions et les secrets ; si le push est refusé, arrête-toi et montre la raison, ne la contourne pas.
@@ -170,6 +170,8 @@ Une feature est terminée quand le critère est implémenté et que l'utilisateu
    git merge --no-ff --no-edit <branche>
    ```
    En cas de conflit, arrête-toi et montre les fichiers en conflit ; ne résous pas à l'aveugle.
+
+   Puis, **sur `dev`**, reporte la ligne de matrice de la QA dans `docs/EXIGENCES.md` et son entrée dans `docs/qa/state.json` (skill `criteria-check`, étape 8), et commite les deux ensemble : `docs: update requirement matrix` + `Refs: <ID>`.
 5. Ne merge jamais dans `main` sauf demande explicite.
 6. Résume en une ou deux lignes : verdict QA, merge dans dev (sha), branche poussée, puis `git push origin dev` prêt à copier.
 
@@ -184,5 +186,5 @@ Une feature est terminée quand le critère est implémenté et que l'utilisateu
 | Commit | Conventional Commits, anglais, sujet ≤ 50 caractères, footer `Refs: <CRITÈRE>`, sans co-auteur, sur la branche du critère |
 | Travail non commité de la branche courante | stash, puis pop au retour (pas de commit à la place de l'utilisateur) |
 | Coder un critère | agent `dev` en light (il lance `qa` et corrige, 1 tour) ; `overseer` pour plusieurs critères ou en medium / complex |
-| Section entière | skill `overseer` (portée section) → branche `feature/section/<n>-<préfixe>` → push des branches → merge local dans dev → `git push origin dev` pour l'utilisateur |
-| Feature terminée | QA du critère (agent `qa`) → matrice → push de la branche → merge `--no-ff` dans dev → `git push origin dev` pour l'utilisateur |
+| Section entière | skill `overseer` (portée section) → branche `feature/section/<n>-<préfixe>` → push des branches → merge local dans dev → matrice commitée sur dev → `git push origin dev` pour l'utilisateur |
+| Feature terminée | QA du critère (agent `qa`) → push de la branche → merge `--no-ff` dans dev → matrice commitée sur dev → `git push origin dev` pour l'utilisateur |
