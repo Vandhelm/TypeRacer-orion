@@ -1,9 +1,10 @@
+"use client";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import { HangingButton } from "../../components/buttons/HangingButton";
 import { LanguageSwitcher } from "../../components/tabs/LanguageSwitcher";
 import { buildResults, buildSummary, markSessionStart, rememberSubmit, saveResults, sessionSeconds, submitRace } from "../podium/results";
-import { useRoom } from "../room/hooks/useRoom";
+import { useRoom, type RoomState } from "../room/hooks/useRoom";
 import { rememberGuestRace } from "../profile/stats";
 import { useRealtimeRoom } from "../../realtime/useRealtimeRoom";
 import { LiveList } from "../room/LiveList";
@@ -13,10 +14,28 @@ import { laneProgress, myWpm } from "./race";
 import { RacePool } from "./RacePool";
 import { TypingPanel } from "./TypingPanel";
 
-/** The race: one lane per player and the shared text. It hands over to the podium at the end. */
+/**
+ * The race: one lane per player and the shared text. It hands over to the podium at the end.
+ * TECH-01 : le serveur rend le cadre de la page ; la course (son texte tiré au hasard, ses couloirs) naît au montage,
+ * avec le salon lu dans ce navigateur.
+ */
 export function GamePage() {
   const { t } = useTranslation();
-  const { room, players, displayName } = useRoom();
+  const state = useRoom();
+  if (state) return <Race state={state} />;
+  return (
+    <div className="game-root">
+      <LanguageSwitcher className="hanging-tabs-floating" />
+      <HangingButton className="game-leave" href="/room">{t("room.leave")}</HangingButton>
+      <header className="game-header" />
+      <div className="race-pool" />
+    </div>
+  );
+}
+
+function Race({ state }: { state: RoomState }) {
+  const { t } = useTranslation();
+  const { room, players, displayName } = state;
   const [images, setImages] = useState<RacePoolImages | null>(null);
   const { race, onInput, showResults } = useRace(room, players, images !== null);
 

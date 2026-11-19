@@ -1,3 +1,4 @@
+"use client";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FlipButton } from "../../components/buttons/FlipButton";
@@ -7,7 +8,7 @@ import { LanguageSwitcher } from "../../components/tabs/LanguageSwitcher";
 import { useRealtimeRoom } from "../../realtime/useRealtimeRoom";
 import { FishPond } from "./FishPond";
 import { LiveList } from "./LiveList";
-import { useRoom } from "./hooks/useRoom";
+import { useRoom, type RoomState } from "./hooks/useRoom";
 import { forgetRoom, isPlayer } from "./room";
 import { RoomIntro } from "./RoomIntro";
 import { RoomSettings } from "./RoomSettings";
@@ -17,10 +18,25 @@ import { TextEditorDialog, type TextEditorHandle } from "./TextEditorDialog";
 const GAME_PAGE = "/game";
 const VISIBILITY_KEY = { private: "private", semi: "semiPrivate", public: "public" } as const;
 
-/** Waiting room: the host sets up the race, a guest sees the settings read-only. */
+/**
+ * Waiting room: the host sets up the race, a guest sees the settings read-only.
+ * TECH-01 : rendue par le serveur avec le bassin et les onglets de langue ; le salon arrive au montage (useRoom).
+ */
 export function RoomPage() {
-  const { t } = useTranslation();
   const state = useRoom();
+  return (
+    <>
+      <FishPond players={state?.players ?? NO_PLAYERS} />
+      <LanguageSwitcher className="absolute top-0 right-[clamp(16px,4vw,56px)] z-20 flex items-start gap-2" />
+      {state && <WaitingRoom state={state} />}
+    </>
+  );
+}
+
+const NO_PLAYERS: RoomState["players"] = [];
+
+function WaitingRoom({ state }: { state: RoomState }) {
+  const { t } = useTranslation();
   const { room, update, host, seats, players, displayName } = state;
   const editor = useRef<TextEditorHandle>(null);
   const launched = useRef(false);
@@ -46,8 +62,6 @@ export function RoomPage() {
 
   return (
     <>
-      <FishPond players={players} />
-      <LanguageSwitcher className="absolute top-0 right-[clamp(16px,4vw,56px)] z-20 flex items-start gap-2" />
       <Stamp className="room-stamp" label={t("home.stampPlay")} visible={stampOn} playKey={0} />
 
       <header className="relative z-1 isolate mb-[clamp(20px,4vh,40px)] flex flex-wrap items-center justify-between gap-x-6 gap-y-3 pr-[124px] phone:mb-[14px] phone:pr-0">

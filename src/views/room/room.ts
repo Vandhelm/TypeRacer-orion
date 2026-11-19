@@ -1,7 +1,6 @@
 // Room model. À BRANCHER : sans serveur de jeu, le salon est gardé dans ce navigateur et les autres joueurs sont simulés.
 import type { TFunction } from "i18next";
 import { BOT_NAMES } from "../../players/bots";
-import { isGuestPlayer, myName } from "../../players/nickname";
 import { cleanRoomCode, newInviteToken, newRoomCode, VISIBILITIES, type Visibility } from "../../rooms/access";
 
 const PLAYER_NAMES = ["Maki_77", "Ikura_21", "Tamago_8", "Sake_Bomb", "Kani_404", "Hotate_3", "Toro_19"];
@@ -147,7 +146,7 @@ export function saveRoom(room: Room) {
 
 /** Qui arrive ? ?new : l'hôte crée ; ?code ou ?table : un joueur entre ; sinon : l'hôte revient dans son salon.
  * AUTH-03 : un invité n'est jamais hôte — null s'il n'a pas de salon à rejoindre (le serveur l'a déjà refusé). */
-export function readSession(search: string, t: TFunction, guest = isGuestPlayer()): Session | null {
+export function readSession(search: string, t: TFunction, guest: boolean): Session | null {
   const query = new URLSearchParams(search);
   const stored = storedRoom(t);
   const code = cleanRoomCode(query.get("code") || "");
@@ -184,10 +183,9 @@ export function readSession(search: string, t: TFunction, guest = isGuestPlayer(
   return { room: stored, host: true, present: 1 };
 }
 
-/** La liste des places : joueurs présents, puis bots ou places libres. */
-export function seatsOf(room: Pick<Room, "guests" | "bots">, host: boolean, present: number): Seat[] {
+/** La liste des places : joueurs présents, puis bots ou places libres. me : mon nom, vérifié par le serveur. */
+export function seatsOf(room: Pick<Room, "guests" | "bots">, host: boolean, present: number, me: string): Seat[] {
   const people: Omit<Player, "color">[] = [];
-  const me = myName();
   if (host) people.push({ name: me, host: true, me: true });
   else {
     people.push({ name: PLAYER_NAMES[0]!, host: true });

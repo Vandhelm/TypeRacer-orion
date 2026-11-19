@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { TFunction } from "i18next";
-import { readSession } from "./room";
+import { isPlayer, readSession, seatsOf } from "./room";
 
 const t = ((key: string) => key) as unknown as TFunction;
 
@@ -19,5 +19,17 @@ describe("AUTH-03 — a guest is never the host of a room", () => {
 
   test("a signed-in user still creates and hosts a room", () => {
     expect(readSession("?new", t, false)?.host).toBe(true);
+  });
+});
+
+describe("AUTH-02 — name in the room", () => {
+  test("my seat carries the name verified by the server", () => {
+    const me = seatsOf({ guests: 4, bots: true }, true, 1, "Corail_418").filter(isPlayer).find((seat) => seat.me);
+    expect(me?.name).toBe("Corail_418");
+  });
+
+  test("no guest name is invented without a chosen nickname", () => {
+    const names = seatsOf({ guests: 4, bots: true }, true, 1, "").filter(isPlayer).map((seat) => seat.name);
+    expect(names.some((name) => /^Invite_/.test(name))).toBe(false);
   });
 });

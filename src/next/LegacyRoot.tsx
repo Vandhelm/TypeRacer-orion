@@ -2,7 +2,7 @@
 // Chargé seulement dans le navigateur (voir LegacyPage) : les pages lisent encore document, window et
 // sessionStorage dès leur import. Les traductions viennent de <I18nProvider> (app/layout.tsx).
 import { lazy, StrictMode, Suspense, type ComponentType } from "react";
-import { setPlayerName } from "../players/nickname";
+import { PlayerProvider } from "../players/PlayerProvider";
 
 export type LegacyPageName = "room" | "game";
 
@@ -13,15 +13,16 @@ const pages: Record<LegacyPageName, ComponentType> = {
 };
 
 export default function LegacyRoot({ name, player, guest }: { name: LegacyPageName; player?: string; guest?: boolean }) {
-  setPlayerName(player ?? null, guest ?? false);
   const Page = pages[name];
   return (
     <StrictMode>
-      <div id="root">
-        <Suspense fallback={null}>
-          <Page />
-        </Suspense>
-      </div>
+      <PlayerProvider name={player ?? ""} guest={guest ?? false}>
+        <div id="root">
+          <Suspense fallback={null}>
+            <Page />
+          </Suspense>
+        </div>
+      </PlayerProvider>
     </StrictMode>
   );
 }
