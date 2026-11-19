@@ -50,7 +50,7 @@ export async function handleRoomsApi(req: Request, db: Db, auth: Auth, secret = 
     if (who.kind !== "account") return json({ error: "account_required" }, 403);
     const input = CreateRoomSchema.safeParse(await bodyOf(req));
     if (!input.success) return json({ error: "invalid_body" }, 400);
-    return run(() => createRoom(db, { playerId: who.playerId }, input.data), 201);
+    return run(() => createRoom(db, { playerId: who.playerId, ip: clientIp(req.headers, ip) }, input.data), 201);
   }
 
   // GET /api/rooms — SALLE-03 : les salons publics seulement, pour l'explorateur et « Faire une course »

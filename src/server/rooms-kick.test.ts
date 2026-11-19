@@ -82,6 +82,13 @@ describe("SALLE-07 — the host kicks a participant or a spectator, who can no l
     expect((await t.join(fresh.cookie, { code: room.code }, "198.51.100.41")).status).toBe(200);
   });
 
+  test("the creator's IP is stored too, so the same rule holds if a later host kicks them", async () => {
+    const { room, host } = await t.open("Exp_IP_Createur");
+    const [row] = await t.db.select({ ip: roomMembers.ip }).from(roomMembers).innerJoin(rooms, eq(rooms.id, roomMembers.roomId)).where(eq(rooms.code, room.code));
+    expect(row?.ip).toBe("203.0.113.1");
+    expect(host.key).toBeTruthy();
+  });
+
   test("a kicked account who opens a second account from the same IP is refused", async () => {
     const { room, host } = await t.open("Exp_IP_Second");
     const first = await t.signUp("Exp_IP_Premier");

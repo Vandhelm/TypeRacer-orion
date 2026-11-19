@@ -226,9 +226,9 @@ async function membership(db: Db, roomId: number, key: string) {
  * SALLE-01 : un compte crée un salon et en devient l'hôte, participant ou spectateur.
  * Seul un compte (playerId) peut créer : la route refuse avant d'arriver ici un invité ou une requête sans session.
  */
-export async function createRoom(db: Db, host: { playerId: number }, input: CreateRoomInput, draw: () => string = newRoomCode): Promise<RoomResult> {
+export async function createRoom(db: Db, host: { playerId: number; ip?: string | null }, input: CreateRoomInput, draw: () => string = newRoomCode): Promise<RoomResult> {
   const settings = { ...DEFAULT_SETTINGS, ...input.settings };
-  const key = memberKey(host);
+  const key = memberKey({ playerId: host.playerId });
   // SALLE-06 : déjà membre d'un salon, on ne crée pas le deuxième ; la page propose de quitter le premier
   await settleCurrentRoom(db, key);
   const current = await currentRoomOf(db, key);
@@ -241,7 +241,7 @@ export async function createRoom(db: Db, host: { playerId: number }, input: Crea
           .insert(rooms)
           .values({ code, ...roomColumnsOf(settings), hostId: host.playerId, configId: config!.id })
           .returning({ id: rooms.id });
-        await tx.insert(roomMembers).values({ roomId: room!.id, memberKey: key, playerId: host.playerId, role: input.role, ...placeFor(input.role, [], settings.guests) });
+        await tx.insert(roomMembers).values({ roomId: room!.id, memberKey: key, playerId: host.playerId, role: input.role, ...placeFor(input.role, [], settings.guests), ip: host.ip ?? null });
         return room!.id;
       }),
     draw,
