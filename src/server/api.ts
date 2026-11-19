@@ -1,14 +1,16 @@
-// Toutes les routes /api/*. Le même code tourne en local (server.ts) et sous Next.js (app/api/[...path]/route.ts), en local comme sur Vercel.
+// Toutes les routes /api/*. Servies par Next.js (app/api/[...path]/route.ts), en local comme sur Vercel.
 import { sql } from "drizzle-orm";
 import { connect } from "../../db/client";
-import { handleRace, playerStats } from "./races";
+import { handleRace, handleStats } from "./races";
 import { handleAvatar, saveAvatar } from "./account";
 import { handleGuest } from "./guest";
+import { handleRealtimeTicket } from "./realtime-ticket";
+import { handleHistory } from "./history";
 import { createAuth, type Auth } from "./auth";
 import { socketIp } from "./client-ip";
 import { joinGuard } from "./rate-limit";
 import { handleRoomsApi } from "./rooms-api";
-import { roomEvents } from "./room-events";
+import { notifyRoom } from "./room-events";
 
 let database: ReturnType<typeof connect> | null = null;
 /** Une seule connexion par processus : une fonction Vercel réutilise son instance d'un appel à l'autre. */
@@ -37,24 +39,21 @@ const routes: Record<string, Handler> = {
   },
 };
 
-async function getStats(name: string) {
-  const stats = await playerStats(db(), name);
-  return stats ? Response.json(stats) : Response.json({ error: "not_found" }, { status: 404 });
-}
-
-/** `context` : le serveur Bun (server.ts), qui donne l'IP de la socket (SALLE-10), ou le contexte de route de Next.js. */
+/** `context` : le contexte de route de Next.js ; client-ip.ts y cherche l'IP de la socket (SALLE-10), sinon lit les en-têtes. */
 export async function handleApi(req: Request, context?: unknown): Promise<Response> {
   const { pathname } = new URL(req.url);
   if (pathname === "/api/races") return handleRace(req, db(), auth());
   if (pathname === "/api/account/avatar") return handleAvatar(req, auth(), saveAvatar(db()));
   if (pathname === "/api/guest") return handleGuest(req);
+  if (pathname === "/api/realtime/ticket") return handleRealtimeTicket(req, auth());
+  if (pathname === "/api/history" || pathname.startsWith("/api/history/")) return handleHistory(req, db(), auth());
   if (pathname === "/api/rooms" || pathname.startsWith("/api/rooms/")) {
     // une seule IP pour la limite de débit (SALLE-10) et la liaison des liens d'invitation (SALLE-04)
     const peer = socketIp(context, req);
-    return handleRoomsApi(req, db(), auth(), undefined, roomEvents.emit, joinGuard(db(), { peer }), { peer });
+    return handleRoomsApi(req, db(), auth(), undefined, (code) => notifyRoom(db(), code), joinGuard(db(), { peer }), { peer });
   }
   const stats = pathname.match(/^\/api\/players\/([^/]+)\/stats$/);
-  if (stats) return getStats(decodeURIComponent(stats[1]!));
+  if (stats) return handleStats(stats[1]!, db());
   if (pathname.startsWith("/api/auth/")) return auth().handler(req);
   const route = routes[pathname.replace(/\/$/, "")];
   return route ? route(req) : Response.json({ error: "not_found" }, { status: 404 });

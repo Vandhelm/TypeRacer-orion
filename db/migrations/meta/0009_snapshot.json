@@ -1,6 +1,6 @@
 {
-  "id": "c039dd55-a88e-4f8f-be9e-f07ec47b1653",
-  "prevId": "d2b00964-80c8-4dbf-971e-23a17c9badde",
+  "id": "d2b00964-80c8-4dbf-971e-23a17c9badde",
+  "prevId": "1caf5ed9-4fcd-4a2c-a426-229c7306e88c",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -500,6 +500,13 @@
           "type": "uuid",
           "primaryKey": false,
           "notNull": false
+        },
+        "others": {
+          "name": "others",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
         }
       },
       "indexes": {
@@ -1594,7 +1601,6 @@
       "values": [
         "waiting",
         "racing",
-        "results",
         "closed"
       ]
     },

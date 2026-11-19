@@ -1,6 +1,6 @@
 {
-  "id": "7057b4fa-4c6c-4757-bdab-c2dbb46accfb",
-  "prevId": "c039dd55-a88e-4f8f-be9e-f07ec47b1653",
+  "id": "c039dd55-a88e-4f8f-be9e-f07ec47b1653",
+  "prevId": "d2b00964-80c8-4dbf-971e-23a17c9badde",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -500,6 +500,13 @@
           "type": "uuid",
           "primaryKey": false,
           "notNull": false
+        },
+        "others": {
+          "name": "others",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
         }
       },
       "indexes": {
@@ -770,12 +777,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
-        },
-        "finished_at": {
-          "name": "finished_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {

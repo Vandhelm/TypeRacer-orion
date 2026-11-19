@@ -1,6 +1,6 @@
 {
-  "id": "c8973276-0324-42d8-b9ea-4ae8c97b6560",
-  "prevId": "f0180242-4980-409e-a4db-23fa4df72397",
+  "id": "f0180242-4980-409e-a4db-23fa4df72397",
+  "prevId": "09c9be72-e140-4280-9796-f818a9841bba",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -500,6 +500,13 @@
           "type": "uuid",
           "primaryKey": false,
           "notNull": false
+        },
+        "others": {
+          "name": "others",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
         }
       },
       "indexes": {
@@ -1717,51 +1724,6 @@
       },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.rate_limits": {
-      "name": "rate_limits",
-      "schema": "",
-      "columns": {
-        "bucket": {
-          "name": "bucket",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "key": {
-          "name": "key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "window_start": {
-          "name": "window_start",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "count": {
-          "name": "count",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "rate_limits_bucket_key_pk": {
-          "name": "rate_limits_bucket_key_pk",
-          "columns": [
-            "bucket",
-            "key"
-          ]
-        }
-      },
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},

@@ -6,7 +6,7 @@
 //   celle qu'ajoute le proxy (les précédentes viennent du client) ; x-real-ip seulement sans x-forwarded-for.
 //   Un hébergement autonome (VPS) passe par un seul proxy (nginx, Caddy…) qui pose ces en-têtes.
 // - Un en-tête de confiance présent mais illisible donne null : pas de repli sur un autre en-tête ni sur la socket.
-// - Sinon : l'IP de la socket quand le serveur Bun la donne (server.ts, `peer`) ; à défaut, null (inconnue).
+// - Sinon : l'IP de la socket quand un serveur Bun la donne (`peer`, tests) ; à défaut, null (inconnue).
 // Une valeur qui n'est pas une IP n'est jamais prise.
 import { isIP } from "node:net";
 
@@ -50,7 +50,7 @@ export function clientIp(headers: Headers, { env = process.env, peer = null }: I
   return clean(peer);
 }
 
-/** L'IP de la socket, quand `server` est un serveur Bun (server.ts) ; null sous Next.js, qui passe un contexte de route. */
+/** L'IP de la socket, quand `server` est un serveur Bun ; null sous Next.js, qui passe un contexte de route. */
 export function socketIp(server: unknown, req: Request): string | null {
   const requestIP = (server as { requestIP?: unknown } | null | undefined)?.requestIP;
   if (typeof requestIP !== "function") return null;

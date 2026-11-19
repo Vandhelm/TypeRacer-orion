@@ -1,13 +1,16 @@
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import { HangingButton } from "../../components/buttons/HangingButton";
-import { buildResults, buildSummary, markSessionStart, saveResults, sessionSeconds, submitRace } from "../podium/results";
+import { LanguageSwitcher } from "../../components/tabs/LanguageSwitcher";
+import { buildResults, buildSummary, markSessionStart, rememberSubmit, saveResults, sessionSeconds, submitRace } from "../podium/results";
 import { useRoom, type RoomState } from "../room/hooks/useRoom";
 import { roomHrefOutsideRace } from "../room/room";
 import { rememberGuestRace } from "../profile/stats";
+import { useRealtimeRoom } from "../../realtime/useRealtimeRoom";
+import { LiveList } from "../room/LiveList";
 import { useRace } from "./hooks/useRace";
 import { loadRacePoolImages, type RacePoolImages } from "./pool/createRacePool";
-import { laneProgress } from "./race";
+import { laneProgress, myWpm } from "./race";
 import { RacePool } from "./RacePool";
 import { TypingPanel } from "./TypingPanel";
 
@@ -45,6 +48,14 @@ function GameRace({ state }: { state: RoomState }) {
   const [images, setImages] = useState<RacePoolImages | null>(null);
   const { race, onInput, showResults } = useRace(room, players, images !== null);
 
+  // TECH-06 : ma progression part dans le salon (10 envois par seconde au plus), celle des autres arrive en direct
+  const { state: live, sendProgress } = useRealtimeRoom(room.code || null);
+  const mine = laneProgress(race, race.myLane);
+  const wpm = myWpm(race);
+  useEffect(() => {
+    if (race.phase !== "countdown") sendProgress(mine, wpm);
+  }, [race.phase, mine, wpm, sendProgress]);
+
   useEffect(markSessionStart, []);
 
   useEffect(() => {
@@ -53,24 +64,33 @@ function GameRace({ state }: { state: RoomState }) {
     return () => { cancelled = true; };
   }, []);
 
+  const submitted = useRef(false);
   useEffect(() => {
-    if (!showResults) return;
+    // une seule fois : une frappe ou un salon mis à jour pendant l'envoi relancerait l'effet
+    if (!showResults || submitted.current) return;
+    submitted.current = true;
     const results = { players: buildResults(race, players), summary: buildSummary(race, room, sessionSeconds()), room: room.code };
     saveResults(results);
     const rank = results.players.findIndex((player) => player.me);
     const me = results.players[rank];
     if (me) rememberGuestRace({ at: new Date().toISOString(), wpm: me.wpm, accuracy: me.accuracy, rank: rank + 1, keys: me.keys });
-    submitRace(results, race.course.words.join(" "));
+    const sent = submitRace(results, race.course.words.join(" "));
     finish(); // SALLE-09 : le salon passe aux résultats et accepte de nouveau des arrivants
-    location.replace("/podium"); // le retour arrière ne relance pas une course
+    // le retour arrière ne relance pas une course ; la page attend la réponse (un instant en keepalive), un refus est dit au podium
+    void sent.then((outcome) => {
+      rememberSubmit(outcome);
+      location.replace("/podium");
+    });
   }, [showResults, race, players, room, finish]);
 
   return (
     <div className="game-root" style={{ "--lanes": players.length } as CSSProperties}>
+      <LanguageSwitcher className="hanging-tabs-floating" />
       {/* quitter la course quitte le salon ; /room sans code créerait un nouveau salon */}
       <HangingButton className="game-leave" href="/home" onClick={leave}>{t("room.leave")}</HangingButton>
       <header className="game-header">
         <h1 className="game-title">{displayName}</h1>
+        <LiveList state={live} mine={mine} showMe={false} className="game-live" />
       </header>
 
       {images ? <RacePool players={players} images={images} race={race} label={t("game.poolLabel", { count: players.length })} /> : <div className="race-pool" />}

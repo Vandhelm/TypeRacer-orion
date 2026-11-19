@@ -1,6 +1,6 @@
 {
-  "id": "f0180242-4980-409e-a4db-23fa4df72397",
-  "prevId": "09c9be72-e140-4280-9796-f818a9841bba",
+  "id": "09c9be72-e140-4280-9796-f818a9841bba",
+  "prevId": "bf300972-cc9f-4316-8209-cbeb5f5980bb",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -500,6 +500,13 @@
           "type": "uuid",
           "primaryKey": false,
           "notNull": false
+        },
+        "others": {
+          "name": "others",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
         }
       },
       "indexes": {
@@ -770,128 +777,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.room_invites": {
-      "name": "room_invites",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "integer",
-          "primaryKey": true,
-          "notNull": true,
-          "identity": {
-            "type": "always",
-            "name": "room_invites_id_seq",
-            "schema": "public",
-            "increment": "1",
-            "startWith": "1",
-            "minValue": "1",
-            "maxValue": "2147483647",
-            "cache": "1",
-            "cycle": false
-          }
-        },
-        "room_id": {
-          "name": "room_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "token": {
-          "name": "token",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "used_by": {
-          "name": "used_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "used_name": {
-          "name": "used_name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "used_ip": {
-          "name": "used_ip",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "used_at": {
-          "name": "used_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "revoked_at": {
-          "name": "revoked_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {
-        "room_invites_room": {
-          "name": "room_invites_room",
-          "columns": [
-            {
-              "expression": "room_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "room_invites_room_id_rooms_id_fk": {
-          "name": "room_invites_room_id_rooms_id_fk",
-          "tableFrom": "room_invites",
-          "tableTo": "rooms",
-          "columnsFrom": [
-            "room_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "room_invites_token_unique": {
-          "name": "room_invites_token_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "token"
-          ]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {
-        "room_invites_used": {
-          "name": "room_invites_used",
-          "value": "(\"room_invites\".\"used_by\" is null) = (\"room_invites\".\"used_ip\" is null) and (\"room_invites\".\"used_by\" is null) = (\"room_invites\".\"used_at\" is null)"
-        }
-      },
-      "isRLSEnabled": false
-    },
     "public.room_members": {
       "name": "room_members",
       "schema": "",
@@ -1076,6 +961,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "invite_token": {
+          "name": "invite_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
         "name": {
           "name": "name",
           "type": "text",
@@ -1200,6 +1091,13 @@
           "nullsNotDistinct": false,
           "columns": [
             "code"
+          ]
+        },
+        "rooms_invite_token_unique": {
+          "name": "rooms_invite_token_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "invite_token"
           ]
         }
       },

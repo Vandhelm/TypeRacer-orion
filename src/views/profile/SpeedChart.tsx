@@ -1,5 +1,6 @@
 import { useLayoutEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import { useTranslation } from "react-i18next";
+import { formatNumber } from "../../i18n/format";
 import type { PlayerResult } from "../podium/results";
 import { buildChart } from "./chart";
 import { useChartSize } from "./hooks/useChartSize";
@@ -8,7 +9,7 @@ const TIP_MARGIN = 12;
 
 /** Speed per second, with a tooltip on hover and an equivalent table for screen readers. */
 export function SpeedChart({ player }: { player: PlayerResult }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { wpmSeries: wpm, rawSeries: raw, errorSeries: errors } = player;
   const root = useRef<HTMLDivElement>(null);
   const plot = useRef<HTMLDivElement>(null);
@@ -73,15 +74,15 @@ export function SpeedChart({ player }: { player: PlayerResult }) {
       {hover !== null && (
         <div ref={tip} className="chart-tip">
           <p><span>{labels.second}</span>{hover + 1}</p>
-          <p><span>{labels.wpm}</span>{wpm[hover]}</p>
-          <p><span>{labels.raw}</span>{raw[hover]}</p>
-          <p><span>{labels.errors}</span>{errors[hover]}</p>
+          <p><span>{labels.wpm}</span>{formatNumber(i18n.language, wpm[hover]!)}</p>
+          <p><span>{labels.raw}</span>{formatNumber(i18n.language, raw[hover]!)}</p>
+          <p><span>{labels.errors}</span>{formatNumber(i18n.language, errors[hover]!)}</p>
         </div>
       )}
 
       <table className="sr-only">
         <thead><tr><th>{labels.second}</th><th>{labels.wpm}</th><th>{labels.raw}</th><th>{labels.errors}</th></tr></thead>
-        <tbody>{wpm.map((value, i) => <tr key={i}><td>{i + 1}</td><td>{value}</td><td>{raw[i]}</td><td>{errors[i]}</td></tr>)}</tbody>
+        <tbody>{wpm.map((value, i) => <tr key={i}><td>{i + 1}</td><td>{formatNumber(i18n.language, value)}</td><td>{formatNumber(i18n.language, raw[i]!)}</td><td>{formatNumber(i18n.language, errors[i]!)}</td></tr>)}</tbody>
       </table>
     </div>
   );

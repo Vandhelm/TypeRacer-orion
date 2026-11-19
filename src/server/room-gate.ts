@@ -14,8 +14,9 @@ async function verifiedPlayer(headers: Headers, auth: Auth, secret: string): Pro
     const user = session.user as { displayUsername?: string | null; username?: string | null; name: string };
     return { name: user.displayUsername || user.username || user.name, guest: false };
   }
+  // SALLE-03 : un cookie d'avant l'id de session ne suffit plus, on redemande le pseudo
   const guest = readGuestSession(headers, secret);
-  return guest ? { name: guest.nickname, guest: true } : null;
+  return guest?.id ? { name: guest.nickname, guest: true } : null;
 }
 
 /** SALLE-01 : qui agit sur un salon, d'après sa session (compte et son joueur, ou invité signé) ; null sans session. */
@@ -28,7 +29,7 @@ export async function roomIdentity(headers: Headers, auth: Auth, secret = guestS
   }
   // SALLE-03 : l'invité est l'id signé de sa session, pas son pseudonyme
   const guest = readGuestSession(headers, secret);
-  return guest ? { kind: "guest", name: guest.nickname, sessionId: guest.id } : null;
+  return guest?.id ? { kind: "guest", name: guest.nickname, sessionId: guest.id } : null;
 }
 
 /** Le nom sous lequel ces en-têtes entrent dans un salon, ou null s'il faut d'abord choisir un pseudonyme. */
@@ -42,7 +43,7 @@ export function joinsRoom(query: URLSearchParams) {
 }
 
 // TECH-07 : les paramètres d'URL reçus par la page sont validés avant d'être lus.
-const RoomParams = z.record(z.string(), z.union([z.string(), z.array(z.string())]).optional());
+const RoomParams = z.record(z.string(), z.union([z.string().max(256), z.array(z.string().max(256))]).optional());
 
 /** Les searchParams de Next.js en requête : la première valeur d'une clé répétée ; une entrée invalide est ignorée. */
 export function roomQuery(params: unknown): URLSearchParams {

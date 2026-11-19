@@ -1,5 +1,5 @@
 /* Rooms view: hanging tickets in the middle of the room.
-   The .rooms wrapper is laid out with Tailwind in home.html. */
+   The .rooms wrapper is laid out with Tailwind in the home page components. */
 .rooms-stall{
     pointer-events: auto;
     position: relative;

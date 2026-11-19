@@ -1,7 +1,8 @@
-import { describe, expect, test } from "bun:test";
-import { createCourse, createRace, type Race } from "../game/race";
+import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
+import { advanceBots, createCourse, createRace, type Race } from "../game/race";
 import type { Player } from "../room/room";
-import { backToRoomHref, buildResults, parseResults, raceBody } from "./results";
+import { parseRace } from "../../server/races";
+import { backToRoomHref, buildResults, parseResults, raceBody, rememberSubmit, submitFailed, submitRace, type RaceSummary } from "./results";
 
 const PLAYERS: Player[] = [
   { name: "me", color: "red", me: true },
@@ -95,5 +96,80 @@ describe("SALLE-09 — the podium leads back to the same room, never to a new on
   test("the room code is not sent with the race to /api/races", () => {
     const body = raceBody({ players: [], summary: {}, room: "ABC234" } as unknown as Parameters<typeof raceBody>[0], "le riz");
     expect(body).not.toHaveProperty("room");
+  });
+});
+
+describe("HIST-01 — a 600-second race stays within what the server accepts", () => {
+  const SUMMARY: RaceSummary = {
+    textType: "words", language: "fr", duration: 600, level: "common", punctuation: false, numbers: false, specials: false, accents: true,
+    excluded: "", mistakes: "fix", botSpeed: "medium", botAccuracy: "high", length: "short", wordCount: 3, sessionSeconds: 700,
+  };
+  const late = () => {
+    const race = createRace(createCourse(["le", "riz", "attend"], 600, "fix"), PLAYERS, "medium", "high", () => 0.5);
+    // un seul tick, tardif : 600,6 s après le départ, aucun bot n'est arrivé
+    return advanceBots({ ...race, phase: "racing", count: null, startedAt: 1000, now: 1000 }, 1000 + 600_600, [0.5, 0.5]);
+  };
+
+  test("a late final tick never counts more than the configured duration", () => {
+    const players = buildResults(late(), PLAYERS);
+    expect(players.some((player) => !player.finished && !player.me)).toBe(true);
+    for (const player of players) {
+      expect(player.seconds).toBeLessThanOrEqual(600);
+      for (const series of [player.wpmSeries, player.rawSeries, player.errorSeries]) expect(series.length).toBeLessThanOrEqual(600);
+    }
+  });
+
+  test("the server accepts the whole race", () => {
+    expect(() => parseRace(raceBody({ players: buildResults(late(), PLAYERS), summary: SUMMARY }, "le riz attend"))).not.toThrow();
+  });
+});
+
+describe("HIST-01 — a refused race is reported, not swallowed", () => {
+  const realFetch = globalThis.fetch;
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+  });
+  const results = { players: buildResults(finished({}), PLAYERS), summary: {} as RaceSummary };
+  const answer = (status: number) => {
+    globalThis.fetch = (async () => Response.json({ error: "Invalid race: seconds" }, { status })) as unknown as typeof fetch;
+  };
+
+  test("a 400 is reported as a failure", async () => {
+    answer(400);
+    expect(await submitRace(results, "le riz")).toBe("failed");
+  });
+
+  test("a network error is reported as a failure", async () => {
+    globalThis.fetch = (async () => {
+      throw new TypeError("offline");
+    }) as unknown as typeof fetch;
+    expect(await submitRace(results, "le riz")).toBe("failed");
+  });
+
+  test("a recorded race is reported as saved", async () => {
+    answer(201);
+    expect(await submitRace(results, "le riz")).toBe("saved");
+  });
+});
+
+describe("HIST-01 — the podium learns that the race was refused", () => {
+  const store = new Map<string, string>();
+  const realStorage = globalThis.sessionStorage;
+  beforeAll(() => {
+    globalThis.sessionStorage = {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => void store.set(key, value),
+      removeItem: (key: string) => void store.delete(key),
+    } as Storage;
+  });
+  afterAll(() => {
+    globalThis.sessionStorage = realStorage;
+  });
+
+  test("a failure is kept for the podium, the next saved race clears it", () => {
+    rememberSubmit("failed");
+    expect(submitFailed()).toBe(true);
+    rememberSubmit("saved");
+    expect(submitFailed()).toBe(false);
   });
 });

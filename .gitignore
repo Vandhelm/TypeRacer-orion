@@ -44,3 +44,5 @@ next-env.d.ts
 # Copies iCloud (« fichier 2.ts »)
 * 2
 * 2.*
+# rapports générés (scripts/requirement-tests.ts)
+reports/

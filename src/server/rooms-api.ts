@@ -23,10 +23,10 @@ async function bodyOf(req: Request): Promise<unknown> {
 }
 
 /** Exécute une action ; un refus attendu devient son statut HTTP, une erreur inattendue remonte. */
-async function run<T = RoomResult>(action: () => Promise<T>, status = 200, done?: (result: T) => void): Promise<Response> {
+async function run<T = RoomResult>(action: () => Promise<T>, status = 200, done?: (result: T) => void | Promise<void>): Promise<Response> {
   try {
     const result = await action();
-    done?.(result);
+    await done?.(result);
     return json(result, status);
   } catch (error) {
     if (error instanceof RoomRefused) return refusal(error);
@@ -36,7 +36,7 @@ async function run<T = RoomResult>(action: () => Promise<T>, status = 200, done?
 }
 
 /** Notifié après chaque changement d'un salon : le temps réel s'y abonne pour pousser le nouvel état aux membres. */
-export type RoomChanged = (code: string) => void;
+export type RoomChanged = (code: string) => void | Promise<void>;
 
 /** `joinLimit` (SALLE-10) : la limite de tentatives par IP sur /join ; api.ts la branche toujours, les tests la passent. */
 export async function handleRoomsApi(req: Request, db: Db, auth: Auth, secret = guestSecret(), changed: RoomChanged = () => {}, joinLimit?: Guard, ip: IpContext = {}): Promise<Response> {
@@ -74,7 +74,7 @@ export async function handleRoomsApi(req: Request, db: Db, auth: Auth, secret = 
     if (!who) return json({ error: "unauthorized" }, 401);
     try {
       const result = await leaveRoom(db, code, who);
-      if (result.left) changed(code);
+      if (result.left) await changed(code);
       return json(result);
     } catch (error) {
       if (error instanceof RoomRefused) return refusal(error);

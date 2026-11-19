@@ -1,6 +1,6 @@
 {
-  "id": "eabd3277-6d0c-4645-88e5-6afe8ba32aba",
-  "prevId": "5a4baea9-368f-4a95-add2-768314513aaa",
+  "id": "5a4baea9-368f-4a95-add2-768314513aaa",
+  "prevId": "24023ebc-0023-4a30-9d58-7f8f771aac26",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -500,6 +500,13 @@
           "type": "uuid",
           "primaryKey": false,
           "notNull": false
+        },
+        "others": {
+          "name": "others",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
         }
       },
       "indexes": {
@@ -839,13 +846,6 @@
           "columns": [
             "room_id",
             "seat"
-          ]
-        },
-        "room_members_member_unique": {
-          "name": "room_members_member_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "member_key"
           ]
         }
       },

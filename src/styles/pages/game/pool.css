@@ -1,5 +1,5 @@
 /* The pool: the room drawn as a wireframe, one lane per player.
-   Lane elements are created by pool/createRacePool.js. */
+   Lane elements are created by pool/createRacePool.ts. */
 .race-pool{
     position: relative;
     min-height: 0;

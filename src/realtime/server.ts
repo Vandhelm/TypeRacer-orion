@@ -1,0 +1,300 @@
+// Serveur temps réel (TECH-06) : Bun.serve + WebSocket, séparé de Next.js, état des salles en mémoire.
+// - Connexion : ticket signé à usage unique (src/realtime/ticket.ts) en paramètre `ticket`, Origin autorisée.
+//   Un ticket émis avant le démarrage du serveur est refusé : les nonces vus sont perdus au redémarrage.
+// - Chaque message reçu est validé par le schéma du protocole (TECH-07) ; un message invalide reçoit
+//   une erreur, n'est jamais diffusé et ne ferme pas la connexion. Un déluge de messages la ferme (1008).
+// - Progression : diffusée aux autres membres de la salle, au plus 10 fois par seconde par joueur (PERF-02).
+//   Les messages en trop sont fusionnés : la dernière valeur part dès que la limite le permet.
+// - Suivi d'un salon (join avec follow, page salle) : seul un membre le suit (SALLE-03) ; il reçoit l'état du salon
+//   à chaque changement (routes HTTP, via `rooms.changes`) et à chaque échéance (SALLE-08 / SALLE-09). Un membre
+//   retiré (SALLE-07) reçoit not_member et ne suit plus. Quand la dernière page salle d'un membre se ferme et ne
+//   revient pas dans le délai, il quitte le salon, sauf pendant une course (SALLE-09) : la page course ne suit pas.
+import type { Server, ServerWebSocket } from "bun";
+import { MAX_MESSAGE_BYTES, parseClientMessage, type Player, PROGRESS_INTERVAL_MS, type ServerMessage } from "./protocol";
+import type { RoomBackend } from "./room-backend";
+import { TICKET_TTL_MS, verifyTicket } from "./ticket";
+
+/** Au-delà, sur une fenêtre d'une seconde, la connexion est fermée : aucun client honnête n'en envoie autant. */
+export const MAX_MESSAGES_PER_SECOND = 60;
+const POLICY_VIOLATION = 1008;
+
+type Connection = { player: Player; room: string | null; windowStart: number; windowCount: number; follow: { room: string; key: string } | null };
+type Socket = ServerWebSocket<Connection>;
+type Member = { player: Player; connections: number };
+type Throttle = { lastSent: number; pending: { ws: Socket; text: string } | null; timer: ReturnType<typeof setTimeout> | null };
+
+export type RealtimeOptions = {
+  port?: number;
+  hostname?: string;
+  secret: string;
+  /** Origines des pages autorisées à se connecter. Vide : pas de contrôle (outils, tests). */
+  allowedOrigins?: string[];
+  /** Les salons en base (room-backend.ts) ; sans eux, follow ne donne que la présence. */
+  rooms?: RoomBackend;
+  /** Délai avant qu'un membre sans page salle ouverte quitte le salon : un rechargement ou une coupure brève. */
+  leaveAfterMs?: number;
+  /** SALLE-08 / SALLE-09 : rythme de mise à jour des salons suivis (échéances, membres silencieux, hôte). */
+  refreshMs?: number;
+};
+
+const LEAVE_AFTER_MS = 15_000;
+const REFRESH_MS = 5_000;
+
+const topic = (room: string) => `room:${room}`;
+const encode = (message: ServerMessage) => JSON.stringify(message);
+
+export function createRealtimeServer({ port = 3001, hostname, secret, allowedOrigins = [], rooms: backend, leaveAfterMs = LEAVE_AFTER_MS, refreshMs = REFRESH_MS }: RealtimeOptions): Server<Connection> {
+  /** Salles en mémoire : code → joueurs présents, dans l'ordre d'arrivée. */
+  const rooms = new Map<string, Map<string, Member>>();
+  /** Limite de fréquence par salle et par joueur, partagée par ses onglets. */
+  const throttles = new Map<string, Throttle>();
+  /** Nonces des tickets déjà utilisés, jusqu'à leur expiration. */
+  const usedNonces = new Map<string, number>();
+  /** Les nonces vivent en mémoire : un ticket émis avant ce démarrage a pu servir avant un redémarrage, il est refusé. */
+  const startedAt = Date.now();
+
+  const throttleKey = (room: string, playerId: string) => `${room}\n${playerId}`;
+
+  function presence(room: string) {
+    const members = rooms.get(room);
+    server.publish(topic(room), encode({ type: "presence", room, players: [...(members?.values() ?? [])].map((m) => m.player) }));
+  }
+
+  /** Sockets qui suivent chaque salon ; pages salle ouvertes par membre (deux onglets ne comptent pas double). */
+  const followers = new Map<string, Set<Socket>>();
+  const following = new Map<string, number>();
+  const leaving = new Map<string, ReturnType<typeof setTimeout>>();
+  const followKey = (room: string, key: string) => `${room}\n${key}`;
+
+  /** Pousse l'état du salon à ses seuls membres qui le suivent ; un membre retiré apprend qu'il ne l'est plus. */
+  async function publishRoom(code: string) {
+    if (!backend || !followers.has(code)) return;
+    try {
+      const room = await backend.view(code);
+      const sockets = [...(followers.get(code) ?? [])];
+      if (!room) {
+        for (const ws of sockets) {
+          unfollow(ws, false);
+          send(ws, { type: "closed", room: code });
+        }
+        return;
+      }
+      const members = new Set(room.members.map((m) => m.key));
+      for (const ws of sockets) {
+        if (members.has(ws.data.follow!.key)) send(ws, { type: "room", room });
+        else {
+          unfollow(ws, false);
+          leave(ws);
+          send(ws, { type: "error", code: "not_member" });
+        }
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  }
+  backend?.changes((code) => void publishRoom(code));
+
+  let refreshTimer: ReturnType<typeof setInterval> | null = null;
+  let refreshing = false;
+  async function refreshAll() {
+    if (!backend || refreshing) return;
+    if (!followers.size) {
+      if (refreshTimer) clearInterval(refreshTimer);
+      refreshTimer = null;
+      return;
+    }
+    refreshing = true;
+    try {
+      for (const [code, sockets] of followers) {
+        const present = [...new Set([...sockets].map((ws) => ws.data.follow!.key))];
+        if (await backend.refresh(code, present)) await publishRoom(code);
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      refreshing = false;
+    }
+  }
+
+  async function followRoom(ws: Socket, room: string) {
+    if (!backend) return join(ws, room);
+    const entry = await backend.enter(ws.data.player, room).catch((error: unknown) => {
+      console.error(error);
+      return null;
+    });
+    if (ws.readyState !== 1) return;
+    if (!entry) return send(ws, { type: "error", code: "not_member" });
+    unfollow(ws);
+    join(ws, room);
+    ws.data.follow = { room, key: entry.key };
+    const id = followKey(room, entry.key);
+    clearTimeout(leaving.get(id));
+    leaving.delete(id);
+    following.set(id, (following.get(id) ?? 0) + 1);
+    const sockets = followers.get(room) ?? new Set<Socket>();
+    followers.set(room, sockets.add(ws));
+    refreshTimer ??= setInterval(() => void refreshAll(), refreshMs);
+    send(ws, { type: "room", room: entry.room });
+  }
+
+  /** La socket ne suit plus son salon. Si c'était la dernière page salle du membre, il part après le délai. */
+  function unfollow(ws: Socket, scheduleLeave = true) {
+    const follow = ws.data.follow;
+    if (!follow) return;
+    ws.data.follow = null;
+    const sockets = followers.get(follow.room);
+    sockets?.delete(ws);
+    if (sockets && !sockets.size) followers.delete(follow.room);
+    const id = followKey(follow.room, follow.key);
+    const left = (following.get(id) ?? 1) - 1;
+    if (left > 0) return void following.set(id, left);
+    following.delete(id);
+    if (!scheduleLeave || !backend) return;
+    const player = ws.data.player;
+    leaving.set(
+      id,
+      setTimeout(async () => {
+        leaving.delete(id);
+        if (following.has(id)) return;
+        try {
+          if (await backend.leave(player, follow.room, leaveAfterMs)) {
+            // les autres membres l'apprennent tout de suite, les routes HTTP aussi (notifyRoom n'est pas appelé ici)
+            await publishRoom(follow.room);
+          }
+        } catch (error) {
+          console.error(error);
+        }
+      }, leaveAfterMs),
+    );
+  }
+
+  function leave(ws: Socket) {
+    unfollow(ws);
+    const room = ws.data.room;
+    if (!room) return;
+    ws.data.room = null;
+    if (ws.readyState === 1) ws.unsubscribe(topic(room));
+    const members = rooms.get(room);
+    const member = members?.get(ws.data.player.id);
+    if (members && member) {
+      member.connections -= 1;
+      if (member.connections <= 0) {
+        members.delete(ws.data.player.id);
+        const key = throttleKey(room, ws.data.player.id);
+        const throttle = throttles.get(key);
+        if (throttle?.timer) clearTimeout(throttle.timer);
+        throttles.delete(key);
+      }
+      if (members.size === 0) rooms.delete(room);
+    }
+    presence(room);
+  }
+
+  function join(ws: Socket, room: string) {
+    if (ws.data.room === room) return presence(room);
+    leave(ws);
+    ws.data.room = room;
+    ws.subscribe(topic(room));
+    const members = rooms.get(room) ?? new Map<string, Member>();
+    rooms.set(room, members);
+    const member = members.get(ws.data.player.id);
+    if (member) member.connections += 1;
+    else members.set(ws.data.player.id, { player: ws.data.player, connections: 1 });
+    presence(room);
+  }
+
+  /** Diffuse aux autres : l'expéditeur ne reçoit pas sa propre progression. */
+  function broadcastFrom(ws: Socket, room: string, text: string) {
+    if (ws.readyState === 1 && ws.data.room === room) ws.publish(topic(room), text);
+    else server.publish(topic(room), text);
+  }
+
+  function progress(ws: Socket, room: string, value: number, wpm: number) {
+    const text = encode({ type: "progress", playerId: ws.data.player.id, progress: value, wpm });
+    const key = throttleKey(room, ws.data.player.id);
+    const throttle = throttles.get(key) ?? { lastSent: -Infinity, pending: null, timer: null };
+    throttles.set(key, throttle);
+    const now = performance.now();
+    if (now - throttle.lastSent >= PROGRESS_INTERVAL_MS && !throttle.timer) {
+      throttle.lastSent = now;
+      broadcastFrom(ws, room, text);
+      return;
+    }
+    throttle.pending = { ws, text };
+    throttle.timer ??= setTimeout(() => {
+      throttle.timer = null;
+      const pending = throttle.pending;
+      throttle.pending = null;
+      if (!pending || throttles.get(key) !== throttle) return;
+      throttle.lastSent = performance.now();
+      broadcastFrom(pending.ws, room, pending.text);
+    }, Math.max(0, throttle.lastSent + PROGRESS_INTERVAL_MS - now));
+  }
+
+  function send(ws: Socket, message: ServerMessage) {
+    ws.send(encode(message));
+  }
+
+  /** Fenêtre fixe d'une seconde par connexion. Faux si la connexion vient d'être fermée. */
+  function withinFloodLimit(ws: Socket) {
+    const now = Date.now();
+    if (now - ws.data.windowStart >= 1000) {
+      ws.data.windowStart = now;
+      ws.data.windowCount = 0;
+    }
+    ws.data.windowCount += 1;
+    if (ws.data.windowCount <= MAX_MESSAGES_PER_SECOND) return true;
+    ws.close(POLICY_VIOLATION, "too_many_messages");
+    return false;
+  }
+
+  function useTicket(value: string | null): Player | null {
+    if (!value) return null;
+    const now = Date.now();
+    const ticket = verifyTicket(value, secret, now);
+    if (!ticket || usedNonces.has(ticket.nonce) || ticket.expires - TICKET_TTL_MS < startedAt) return null;
+    for (const [nonce, expires] of usedNonces) if (expires <= now) usedNonces.delete(nonce);
+    usedNonces.set(ticket.nonce, ticket.expires);
+    return ticket.player;
+  }
+
+  const server: Server<Connection> = Bun.serve<Connection>({
+    port,
+    hostname,
+    fetch(req, srv) {
+      const url = new URL(req.url);
+      if (url.pathname === "/health") return new Response("ok");
+      if (req.headers.get("upgrade")?.toLowerCase() !== "websocket") return new Response("upgrade required", { status: 426 });
+      const origin = req.headers.get("origin");
+      if (allowedOrigins.length > 0 && (!origin || !allowedOrigins.includes(origin))) return new Response("forbidden origin", { status: 403 });
+      const player = useTicket(url.searchParams.get("ticket"));
+      if (!player) return new Response("unauthorized", { status: 401 });
+      if (srv.upgrade(req, { data: { player, room: null, windowStart: Date.now(), windowCount: 0, follow: null } })) return undefined;
+      return new Response("upgrade failed", { status: 400 });
+    },
+    websocket: {
+      maxPayloadLength: MAX_MESSAGE_BYTES,
+      open(ws) {
+        send(ws, { type: "welcome", you: ws.data.player });
+      },
+      message(ws, data) {
+        if (!withinFloodLimit(ws)) return;
+        const message = parseClientMessage(data);
+        if (!message) return send(ws, { type: "error", code: "invalid_message" });
+        switch (message.type) {
+          case "join":
+            return message.follow ? void followRoom(ws, message.room) : join(ws, message.room);
+          case "leave":
+            return leave(ws);
+          case "progress":
+            if (!ws.data.room) return send(ws, { type: "error", code: "not_in_room" });
+            return progress(ws, ws.data.room, message.progress, message.wpm);
+        }
+      },
+      close(ws) {
+        leave(ws);
+      },
+    },
+  });
+  return server;
+}

@@ -1,6 +1,6 @@
 // Appels du salon vers le serveur (/api/rooms…). Le serveur décide de tout : cette page n'envoie que des demandes.
 import type { Role, RoomSettings } from "../../rooms/settings";
-import type { RoomSocketMessage } from "../../server/realtime";
+import { connectRealtime } from "../../realtime/client";
 import type { InviteView } from "../../server/room-invites";
 import type { RefusalReason, RoomResult, RoomView } from "../../server/rooms";
 
@@ -66,43 +66,46 @@ export function arrivalRequest<T>(holder: { current: { key: string; request: Pro
   return holder.current.request;
 }
 
-/** Sans WebSocket (Next.js, Vercel), on relit l'état à ce rythme. */
+/** Tant que le temps réel n'est pas joignable, on relit l'état à ce rythme. */
 const POLL_MS = 3000;
 
 /**
- * Suit un salon en direct : WebSocket si le serveur l'offre (Bun, server.ts), sinon relecture HTTP régulière.
+ * Suit un salon en direct : par le serveur temps réel (TECH-06, follow) quand il répond, sinon relecture HTTP régulière.
+ * SALLE-07 : quand le serveur dit que l'on n'est plus membre, la page relit le salon par HTTP et apprend pourquoi (« kicked »).
  * Renvoie la fonction qui arrête de suivre.
  */
 export function watchRoom(code: string, onRoom: (room: RoomView) => void, onError: (error: RoomError) => void): () => void {
   let stopped = false;
   let poll = 0;
+  const reread = async () => {
+    const reply = await roomApi.read(code);
+    if (stopped) return;
+    if (reply.ok) onRoom(reply.result.room);
+    else if (reply.error !== "network") onError(reply.error);
+  };
   const startPolling = () => {
     if (stopped || poll) return;
-    poll = window.setInterval(async () => {
-      const reply = await roomApi.read(code);
-      if (stopped) return;
-      if (reply.ok) onRoom(reply.result.room);
-      else if (reply.error !== "network") onError(reply.error);
-    }, POLL_MS);
+    poll = window.setInterval(() => void reread(), POLL_MS);
   };
-  let socket: WebSocket | null = null;
-  try {
-    socket = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws/rooms/${code}`);
-    socket.onmessage = (event) => {
-      const message = JSON.parse(String(event.data)) as RoomSocketMessage;
-      if (message.type === "room") onRoom(message.room);
-      else onError("closed");
-    };
-    socket.onclose = startPolling;
-  } catch {
-    startPolling();
-  }
+  const stopPolling = () => {
+    clearInterval(poll);
+    poll = 0;
+  };
+  startPolling();
+  const connection = connectRealtime({
+    room: code,
+    onChange: (state) => (state.status === "open" ? stopPolling() : startPolling()),
+    onRoom: (event) => {
+      if (stopped) return;
+      // le serveur pousse la même vue que GET /api/rooms/:code (roomView), validée par le protocole
+      if (event.type === "room") onRoom(event.room as unknown as RoomView);
+      else if (event.type === "closed") onError("closed");
+      else void reread();
+    },
+  });
   return () => {
     stopped = true;
-    clearInterval(poll);
-    if (socket) {
-      socket.onclose = null;
-      socket.close();
-    }
+    stopPolling();
+    connection.close();
   };
 }

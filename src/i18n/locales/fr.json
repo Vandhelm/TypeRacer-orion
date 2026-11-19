@@ -1,6 +1,7 @@
 {
   "home": {
     "langChoice": "Choix de la langue",
+    "pageTitle": "O.R.I.O.N — Accueil",
     "viewChoice": "Jouer ou compte",
     "overline": "RESTAURANT DE SUSHI",
     "viewPlay": "JOUER",
@@ -240,7 +241,21 @@
     "copyManually": "Copie impossible : sélectionne l'adresse.",
     "inviteUrlN": "Adresse du lien {{n}}",
     "linkCopied": "Lien copié",
-    "inviteRoomName": "Salon sur invitation"
+    "inviteRoomName": "Salon sur invitation",
+    "live": {
+      "title": "En direct",
+      "progress": "Progression de {{name}}",
+      "percent": "{{percent}} %",
+      "status": {
+        "connecting": "Connexion au salon…",
+        "reconnecting": "Connexion perdue, nouvelle tentative…",
+        "unauthorized": "Choisis un pseudo pour apparaître en direct.",
+        "closed": "Déconnecté du salon.",
+        "open_zero": "Tu es seul dans le salon.",
+        "open_one": "{{count}} autre personne présente.",
+        "open_other": "{{count}} autres personnes présentes."
+      }
+    }
   },
   "game": {
     "pageTitle": "O.R.I.O.N — L'épreuve",
@@ -263,20 +278,30 @@
     "avatar": "{{name}}, {{rank}} place, {{speed}} mots par seconde",
     "yourPlace": "Ta place",
     "allPlayers": "Tous les joueurs ({{count}})",
-    "ranks": [
-      "1re",
-      "2e",
-      "3e",
-      "4e",
-      "5e",
-      "6e",
-      "7e",
-      "8e"
-    ],
-    "viewStats": "Voir les stats de {{name}}"
+    "rank_ordinal_one": "{{count}}re",
+    "rank_ordinal_two": "{{count}}e",
+    "rank_ordinal_few": "{{count}}e",
+    "rank_ordinal_other": "{{count}}e",
+    "viewStats": "Voir les stats de {{name}}",
+    "loading": "Chargement des résultats…",
+    "notSaved": "Cette course n’a pas pu être enregistrée dans l’historique.",
+    "backToHistory": "Historique",
+    "errors": {
+      "not_found": "Cette course n’existe pas.",
+      "unauthorized": "Connecte-toi pour revoir tes courses.",
+      "account_required": "Les invités n’ont pas d’historique : crée un compte pour garder tes courses.",
+      "invalid_race": "Adresse de course invalide.",
+      "network": "Impossible de charger cette course."
+    }
+  },
+  "notFound": {
+    "title": "Page introuvable",
+    "text": "Cette page n'existe pas.",
+    "home": "Retour à l'accueil"
   },
   "profile": {
     "pageTitle": "O.R.I.O.N — {{name}}",
+    "defaultTitle": "O.R.I.O.N — Statistiques",
     "back": "← Podium",
     "place": "{{rank}} place",
     "accuracy": "Précision",
@@ -353,7 +378,21 @@
     "wrong": "faux",
     "extra": "en trop",
     "missed_one": "manqué",
-    "missed_other": "manqués"
+    "missed_other": "manqués",
+    "history": {
+      "title": "Historique",
+      "loading": "Chargement de l’historique…",
+      "empty": "Aucune course terminée pour l’instant.",
+      "pastEnd": "Cette page est vide.",
+      "error": "Impossible de charger l’historique.",
+      "pagination": "Pages de l’historique",
+      "previous": "← Plus récentes",
+      "next": "Plus anciennes →",
+      "page": "Page {{page}} / {{pages}}",
+      "rank": "{{rank}} sur {{players}}",
+      "open": "Revoir les résultats de la course du {{date}}",
+      "raceTitle": "Course de l’historique"
+    }
   },
   "account": {
     "tabs": {

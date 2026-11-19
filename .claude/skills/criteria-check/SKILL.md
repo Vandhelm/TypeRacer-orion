@@ -20,7 +20,7 @@ La vérification tourne dans l'agent **`qa`** (`.claude/agents/qa.md`), qui char
 
 - Si tu es la conversation principale : lance l'agent `qa` avec la portée et, pour un critère, la branche. Ne fais la vérification toi-même que si l'agent n'est pas disponible.
 - Pour plusieurs sections (portée « site »), lance un agent `qa` par section, en parallèle, puis rassemble leurs rapports.
-- Seule la conversation principale écrit `docs/EXIGENCES.md`, à partir des lignes renvoyées par les agents : un seul rédacteur, pas de conflit.
+- Seule la conversation principale écrit `docs/EXIGENCES.md`, à partir des lignes renvoyées par les agents : un seul rédacteur, sur `dev` seulement, pas de conflit. Elle tient aussi `docs/qa/state.json` à jour (étape 8).
 
 ## 1. Choisir la portée
 
@@ -29,7 +29,10 @@ La vérification tourne dans l'agent **`qa`** (`.claude/agents/qa.md`), qui char
 | **Critère** | « vérifie AUTH-03 », fin de feature | le diff de la branche du critère contre `dev` | oui |
 | **Section** | « section 5.2 », « les AUTH » | l'état actuel de `dev` | non |
 | **Page** | « QA de la page room » | `dev`, critères de la page + transversaux | non |
-| **Site** | « audit complet », « où j'en suis » | `dev`, toutes les sections + parcours | non |
+| **Suivi** | « où j'en suis », « qu'est-ce qui a changé », après des merges | `dev`, seulement les exigences périmées | non |
+| **Site** | « audit complet », avant une remise ou un jalon | `dev`, toutes les sections + parcours | non |
+
+« Où j'en suis » se traite en **suivi**, pas en site : on ne revérifie que ce qui a pu changer. Lance `bun scripts/qa-stale.ts` (cible `dev` par défaut). Il liste les exigences jamais vérifiées, celles dont un des « Fichiers principaux » a changé depuis le commit de leur dernière QA (`docs/qa/state.json`), et celles qu'un commit de code cite dans un footer `Refs:` depuis. Vérifie seulement celles-là, avec un agent `qa` par section concernée ; reprends les autres telles quelles dans le rapport, avec leur date de vérification. Un changement purement visuel (CSS, refonte Tailwind) peut être jugé sur le diff seul ; dis-le dans les notes. L'audit **site** complet reste obligatoire avant une remise : le suivi ne voit pas un effet indirect hors des fichiers listés.
 
 Sans précision, déduis-la : branche de critère courante (`feature/home/auth-03`) → critère ; sinon demande en une question.
 
@@ -107,6 +110,28 @@ Statut de l'exigence, pour la matrice :
 - **non fait** : aucune partie obligatoire n'est réalisée ;
 - une exigence dont une partie reste ❓ n'est jamais « complet » : « partiel » avec la vérification à faire dans les notes.
 
+## 4 bis. Vérifier le rendu (modes medium et complex)
+
+En medium et complex, toute partie visible se vérifie aussi **dans le navigateur** : les transversaux DES-04, DES-05, DES-06, I18N-01 à I18N-03, A11Y, et les pages `home`, `room`, `game`, `podium`, `profile`. En light, saute cette étape et laisse ces parties à ❓ « rendu non vérifié » si le code seul ne tranche pas.
+
+**Serveur.** Postgres d'abord (`bun run db:up`). Checkout principal : `preview_start` avec `orion` (port 3000) de `.claude/launch.json` ; `orion-next` (3002) pour une page déjà migrée vers Next.js. Worktree : lance `bun --env-file=.env.example server.ts` depuis le worktree en tâche de fond avec `PORT=3010` (ou un autre port libre), puis navigue vers ce port, et arrête-le à la fin.
+
+**URL.** `/` (home), `/room`, `/game`, `/podium`, `/profile` (voir `server.ts`). `room`, `game` et `podium` demandent un état : atteins-le par le parcours, en invité (pseudonyme de test → « Faire une course » ou créer une salle). Pour `podium`, termine une course avec des bots si c'est possible ; sinon dis jusqu'où tu es allé.
+
+**Contrôles par exigence :**
+
+| Exigence | Ce qu'on regarde à l'écran |
+|---|---|
+| toutes | la page se charge, aucune erreur console, rien de vide ni de chevauché, le contenu attendu par les critères de la page est là |
+| DES-04 | capture de la page : rien qui ressemble au rendu par défaut (signes listés dans `docs/criteres.md`) |
+| DES-05 | bascule le thème (sélecteur de la page, ou `resize_window` avec `colorScheme`) : lisible dans les deux, contraste correct, aucun bloc resté dans l'autre thème |
+| DES-06 | `resize_window` à 360 × 800 : pas de défilement horizontal (`document.documentElement.scrollWidth <= 360`), tout reste utilisable ; sur `/game`, le message « clavier physique » remplace la course |
+| I18N-01 | change de langue : aucun texte resté dans l'autre langue, aucune clé de traduction brute (`home.title`), `<title>` traduit |
+| I18N-02 | le sélecteur est sur la page ; recharge : le choix tient |
+| I18N-03 | une date ou un nombre affiché change de format avec la langue |
+
+Rapporte une capture par contrôle visuel. Ce que l'écran montre l'emporte sur le code : si le code est juste mais la page cassée, c'est ⚠️ avec ce que montre la capture. Une page que tu n'as pas pu ouvrir reste ❓ avec la raison, jamais ✅.
+
 ## 5. Hors scope (portée critère seulement)
 
 Passe chaque fichier du diff et chaque bloc de changement significatif, et rattache-le :
@@ -130,7 +155,7 @@ Lance aussi `bun run test:smoke` (il faut Postgres : `bun run db:up`) : il véri
 
 ## 7. Rapport
 
-En français, sans rien ajouter avant. Portée critère : 25 lignes au plus, une ligne par partie et par problème, preuves en `fichier:ligne`, jamais de code cité. Sortie des tests coupée (`2>&1 | tail -30`).
+En français, sans rien ajouter avant. Sans remplissage : une ligne par partie et par problème, preuves en `fichier:ligne`, jamais de code cité. Sortie des tests coupée (`2>&1 | tail -30`).
 
 ### Portée critère
 
@@ -205,4 +230,7 @@ C'est la matrice demandée par l'énoncé. Format :
 - Ne passe jamais une ligne à `complet` sans un rapport QA qui le dit. Si la matrice dit `complet` et que la QA dit autre chose, la QA gagne, et signale-le en tête du rapport : c'est exactement la fausse déclaration que l'énoncé pénalise.
 - Les choix faits face à une ambiguïté (« règle de bonus retenue : … ») vont dans « Notes et choix » ; ne les efface pas en mettant à jour.
 - Ajoute la date et la portée de la vérification dans les notes.
-- Commit à part : `docs: update requirement matrix` avec un footer `Refs:` listant les ID vérifiés, sur la branche où la vérification a été faite.
+- « Fichiers principaux » doit lister les fichiers ou dossiers qui réalisent l'exigence, même pour une exigence partielle : c'est ce que le suivi surveille. Une exigence non faite peut rester sans fichier ; elle sera revue quand un commit la citera en `Refs:`.
+- **La matrice ne s'écrit que sur `dev`.** Jamais sur une branche de critère, de section ou d'outillage : chaque branche aurait sa version, et elles divergent. Une QA faite sur une branche non mergée renvoie ses lignes dans son rapport ; elles sont reportées sur `dev` juste après le merge (skill `feature-branches`, fin de feature). Une QA de suivi ou de site porte sur `dev` et s'y écrit directement.
+- **À chaque ligne écrite, mets à jour `docs/qa/state.json`** : `"<ID>": { "commit": "<sha court du code vérifié>", "date": "<AAAA-MM-JJ>", "scope": "<portée>" }`. Le commit est celui du code lu par la QA (la pointe de la branche vérifiée, ou `dev` au moment de la vérification), pas celui de la matrice.
+- Commit à part, sur `dev` : `docs: update requirement matrix` avec un footer `Refs:` listant les ID vérifiés. Ce commit ne touche que `docs/EXIGENCES.md` et `docs/qa/state.json` (le suivi ignore ces commits pour la détection par `Refs:`).

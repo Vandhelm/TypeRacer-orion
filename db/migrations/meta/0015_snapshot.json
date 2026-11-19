@@ -1,6 +1,6 @@
 {
-  "id": "09c9be72-e140-4280-9796-f818a9841bba",
-  "prevId": "bf300972-cc9f-4316-8209-cbeb5f5980bb",
+  "id": "bf300972-cc9f-4316-8209-cbeb5f5980bb",
+  "prevId": "eabd3277-6d0c-4645-88e5-6afe8ba32aba",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -500,6 +500,13 @@
           "type": "uuid",
           "primaryKey": false,
           "notNull": false
+        },
+        "others": {
+          "name": "others",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
         }
       },
       "indexes": {
@@ -830,13 +837,6 @@
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
-        },
-        "last_seen_at": {
-          "name": "last_seen_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
         }
       },
       "indexes": {

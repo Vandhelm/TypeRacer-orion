@@ -1,5 +1,5 @@
 {
-  "id": "d2b00964-80c8-4dbf-971e-23a17c9badde",
+  "id": "1caf5ed9-4fcd-4a2c-a426-229c7306e88c",
   "prevId": "22d03c57-b7de-4f75-ab7c-901d056f7940",
   "version": "7",
   "dialect": "postgresql",
@@ -500,6 +500,13 @@
           "type": "uuid",
           "primaryKey": false,
           "notNull": false
+        },
+        "others": {
+          "name": "others",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
         }
       },
       "indexes": {
@@ -726,43 +733,23 @@
           "primaryKey": false,
           "notNull": true
         },
-        "member_key": {
-          "name": "member_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
         "player_id": {
           "name": "player_id",
           "type": "integer",
           "primaryKey": false,
-          "notNull": false
-        },
-        "guest_name": {
-          "name": "guest_name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "role": {
-          "name": "role",
-          "type": "member_role",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'player'"
+          "notNull": true
         },
         "seat": {
           "name": "seat",
           "type": "integer",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
         "color": {
           "name": "color",
           "type": "text",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
         "joined_at": {
           "name": "joined_at",
@@ -818,11 +805,11 @@
         }
       },
       "compositePrimaryKeys": {
-        "room_members_room_id_member_key_pk": {
-          "name": "room_members_room_id_member_key_pk",
+        "room_members_room_id_player_id_pk": {
+          "name": "room_members_room_id_player_id_pk",
           "columns": [
             "room_id",
-            "member_key"
+            "player_id"
           ]
         }
       },
@@ -841,14 +828,6 @@
         "room_members_seat_range": {
           "name": "room_members_seat_range",
           "value": "\"room_members\".\"seat\" between 0 and 7"
-        },
-        "room_members_identity": {
-          "name": "room_members_identity",
-          "value": "(\"room_members\".\"player_id\" is null) <> (\"room_members\".\"guest_name\" is null)"
-        },
-        "room_members_seat_role": {
-          "name": "room_members_seat_role",
-          "value": "(\"room_members\".\"role\" = 'player') = (\"room_members\".\"seat\" is not null)"
         }
       },
       "isRLSEnabled": false
@@ -1569,14 +1548,6 @@
         "common",
         "rich",
         "expert"
-      ]
-    },
-    "public.member_role": {
-      "name": "member_role",
-      "schema": "public",
-      "values": [
-        "player",
-        "spectator"
       ]
     },
     "public.mistake_mode": {

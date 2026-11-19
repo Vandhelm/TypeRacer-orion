@@ -1,6 +1,6 @@
 {
-  "id": "bf300972-cc9f-4316-8209-cbeb5f5980bb",
-  "prevId": "eabd3277-6d0c-4645-88e5-6afe8ba32aba",
+  "id": "eabd3277-6d0c-4645-88e5-6afe8ba32aba",
+  "prevId": "5a4baea9-368f-4a95-add2-768314513aaa",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -500,6 +500,13 @@
           "type": "uuid",
           "primaryKey": false,
           "notNull": false
+        },
+        "others": {
+          "name": "others",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
         }
       },
       "indexes": {
@@ -714,60 +721,6 @@
           "value": "length(\"race_configs\".\"custom_text\") <= 5000"
         }
       },
-      "isRLSEnabled": false
-    },
-    "public.room_bans": {
-      "name": "room_bans",
-      "schema": "",
-      "columns": {
-        "room_id": {
-          "name": "room_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "member_key": {
-          "name": "member_key",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "room_bans_room_id_rooms_id_fk": {
-          "name": "room_bans_room_id_rooms_id_fk",
-          "tableFrom": "room_bans",
-          "tableTo": "rooms",
-          "columnsFrom": [
-            "room_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "room_bans_room_id_member_key_pk": {
-          "name": "room_bans_room_id_member_key_pk",
-          "columns": [
-            "room_id",
-            "member_key"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.room_members": {
