@@ -57,7 +57,7 @@ export function RoomInvites({ state }: { state: RoomState }) {
             return (
               <li
                 key={invite.token}
-                className={`room-invite grid min-h-[44px] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border-b border-dashed border-line-soft font-mono text-[max(12px,1.4vh)] leading-[1.3] ${invite.status === "revoked" ? "opacity-60" : ""}`}>
+                className={`room-invite grid min-h-[44px] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border-b border-line-soft [border-bottom-style:dashed] font-mono text-[max(12px,1.4vh)] leading-[1.3] ${invite.status === "revoked" ? "opacity-60" : ""}`}>
                 <span className="tracking-[.1em] uppercase">{t("room.inviteN", { n: index + 1 })}</span>
                 <span className={`overflow-hidden text-ellipsis whitespace-nowrap ${invite.status === "used" ? "" : "text-muted"}`}>{t(status.key, { name: status.name })}</span>
                 {invite.status !== "revoked" && (

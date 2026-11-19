@@ -119,7 +119,7 @@ export function RoomPage() {
             <h2 id="members-title" className={LABEL}>{t("room.members")}</h2>
             <ul className="mt-2">
               {others.map((m) => (
-                <li key={m.key} className="flex flex-wrap items-center gap-x-3.5 gap-y-1 border-b border-dashed border-line-soft py-1.5">
+                <li key={m.key} className="flex flex-wrap items-center gap-x-3.5 gap-y-1 border-b border-line-soft [border-bottom-style:dashed] py-1.5">
                   <span className="min-w-[8em] flex-1 font-sans text-[max(14px,1.7vh)] leading-[1.3] text-white [overflow-wrap:anywhere]">{m.name}</span>
                   <span className="font-mono text-[max(11px,1.2vh)] leading-none tracking-[.16em] text-muted uppercase">{t(`room.role_${m.role}`)}</span>
                   <button type="button" className={`${ACTION} min-h-[36px]`} onClick={() => confirm(t("room.kickConfirm", { name: m.name })) && void kick(m.key)}>
