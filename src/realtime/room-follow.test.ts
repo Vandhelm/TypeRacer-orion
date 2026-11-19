@@ -344,3 +344,38 @@ describe("SALLE-03 / SALLE-10 / SALLE-09 — only a member joins a room's presen
     tab.ws.close();
   });
 });
+
+describe("SALLE-07 — a kicked member's race socket leaves the room at once", () => {
+  let h: Awaited<ReturnType<typeof harness>>;
+  beforeAll(async () => {
+    h = await harness();
+  });
+  afterAll(() => h.server.stop(true));
+
+  test("the race socket gets not_member, leaves the presence, and its progress reaches no one", async () => {
+    const hostCookie = await h.signUp("Hote_Course_Expulse");
+    const code = await created(await h.call("POST", "/api/rooms", hostCookie, { role: "player", settings: { visibility: "public" } }));
+    const cookie = `${GUEST_COOKIE}=${signGuest("Expulse_Course", SECRET)}`;
+    const { you } = (await (await h.call("POST", "/api/rooms/join", cookie, { code })).json()) as { you: string };
+    const host = await raw(h.server, h.auth, hostCookie);
+    host.send({ type: "join", room: code });
+    const victim = await raw(h.server, h.auth, cookie);
+    victim.send({ type: "join", room: code });
+    const lists = (name: string) => (m: (typeof host.seen)[number]) => m.type === "presence" && !!m.players?.some((p) => p.name === name);
+    while (!host.seen.some(lists("Expulse_Course"))) await Bun.sleep(10);
+
+    expect((await h.call("POST", `/api/rooms/${code}/kick`, hostCookie, { member: you })).status).toBe(200);
+    while (!victim.seen.some((m) => m.type === "error")) await Bun.sleep(10);
+    expect(victim.seen.find((m) => m.type === "error")?.code).toBe("not_member");
+    const last = () => host.seen.filter((m) => m.type === "presence").at(-1);
+    while (last()?.players?.some((p) => p.name === "Expulse_Course")) await Bun.sleep(10);
+
+    victim.send({ type: "progress", progress: 0.42, wpm: 60 });
+    while (victim.seen.filter((m) => m.type === "error").length < 2) await Bun.sleep(10);
+    expect(victim.seen.filter((m) => m.type === "error")[1]?.code).toBe("not_in_room");
+    await Bun.sleep(50);
+    expect(host.seen.some((m) => m.type === "progress")).toBe(false);
+    host.ws.close();
+    victim.ws.close();
+  });
+});

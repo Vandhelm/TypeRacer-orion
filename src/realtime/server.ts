@@ -19,7 +19,7 @@ import { TICKET_TTL_MS, verifyTicket } from "./ticket";
 export const MAX_MESSAGES_PER_SECOND = 60;
 const POLICY_VIOLATION = 1008;
 
-type Connection = { player: Player; room: string | null; windowStart: number; windowCount: number; follow: { room: string; key: string } | null };
+type Connection = { player: Player; room: string | null; windowStart: number; windowCount: number; follow: { room: string; key: string } | null; key: string | null };
 type Socket = ServerWebSocket<Connection>;
 type Member = { player: Player; connections: number };
 type Throttle = { lastSent: number; pending: { ws: Socket; text: string } | null; timer: ReturnType<typeof setTimeout> | null };
@@ -67,11 +67,23 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
   const leaving = new Map<string, ReturnType<typeof setTimeout>>();
   const followKey = (room: string, key: string) => `${room}\n${key}`;
 
-  /** Pousse l'état du salon à ses seuls membres qui le suivent ; un membre retiré apprend qu'il ne l'est plus. */
+  /** Toutes les sockets entrées dans chaque salon (présence et course), suivies ou non. */
+  const joined = new Map<string, Set<Socket>>();
+
+  /**
+   * Pousse l'état du salon à ses seuls membres qui le suivent ; un membre retiré apprend qu'il ne l'est plus.
+   * SALLE-07 : une socket de course (join sans follow) d'un membre retiré quitte aussitôt la présence et la course.
+   */
   async function publishRoom(code: string) {
-    if (!backend || !followers.has(code)) return;
+    if (!backend || !joined.has(code)) return;
     try {
       const room = await backend.view(code);
+      const members = new Set(room?.members.map((m) => m.key) ?? []);
+      for (const ws of [...(joined.get(code) ?? [])]) {
+        if (ws.data.follow || !ws.data.key || members.has(ws.data.key)) continue;
+        leave(ws);
+        send(ws, { type: "error", code: "not_member" });
+      }
       const sockets = [...(followers.get(code) ?? [])];
       if (!room) {
         for (const ws of sockets) {
@@ -80,7 +92,6 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
         }
         return;
       }
-      const members = new Set(room.members.map((m) => m.key));
       for (const ws of sockets) {
         if (members.has(ws.data.follow!.key)) send(ws, { type: "room", room });
         else {
@@ -127,6 +138,7 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
     if (ws.readyState !== 1) return;
     if (!entry) return send(ws, { type: "error", code: "not_member" });
     join(ws, room);
+    ws.data.key = entry.key;
   }
 
   async function followRoom(ws: Socket, room: string) {
@@ -140,6 +152,7 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
     unfollow(ws);
     join(ws, room);
     ws.data.follow = { room, key: entry.key };
+    ws.data.key = entry.key;
     const id = followKey(room, entry.key);
     clearTimeout(leaving.get(id));
     leaving.delete(id);
@@ -186,6 +199,10 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
     const room = ws.data.room;
     if (!room) return;
     ws.data.room = null;
+    ws.data.key = null;
+    const inRoom = joined.get(room);
+    inRoom?.delete(ws);
+    if (inRoom && !inRoom.size) joined.delete(room);
     if (ws.readyState === 1) ws.unsubscribe(topic(room));
     const members = rooms.get(room);
     const member = members?.get(ws.data.player.id);
@@ -207,6 +224,7 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
     if (ws.data.room === room) return presence(room);
     leave(ws);
     ws.data.room = room;
+    joined.set(room, (joined.get(room) ?? new Set<Socket>()).add(ws));
     ws.subscribe(topic(room));
     const members = rooms.get(room) ?? new Map<string, Member>();
     rooms.set(room, members);
@@ -282,7 +300,7 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
       if (allowedOrigins.length > 0 && (!origin || !allowedOrigins.includes(origin))) return new Response("forbidden origin", { status: 403 });
       const player = useTicket(url.searchParams.get("ticket"));
       if (!player) return new Response("unauthorized", { status: 401 });
-      if (srv.upgrade(req, { data: { player, room: null, windowStart: Date.now(), windowCount: 0, follow: null } })) return undefined;
+      if (srv.upgrade(req, { data: { player, room: null, windowStart: Date.now(), windowCount: 0, follow: null, key: null } })) return undefined;
       return new Response("upgrade failed", { status: 400 });
     },
     websocket: {
