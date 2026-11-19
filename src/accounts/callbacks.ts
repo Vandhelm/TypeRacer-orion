@@ -8,6 +8,11 @@ import { inviteReturn, isInviteToken } from "../rooms/access";
 export function socialCallbacks(provider: string, search: string) {
   const query = new URLSearchParams(search);
   const token = query.get("invite");
-  const keep = token && isInviteToken(token) ? `&invite=${token}` : "";
-  return { callbackURL: inviteReturn(query) ?? "/", errorCallbackURL: `/?authError=${provider}${keep}` };
+  const valid = !!token && isInviteToken(token);
+  return {
+    callbackURL: inviteReturn(query) ?? "/",
+    // un nouveau compte (nom à choisir, AUTH-01) repasse par l'accueil, qui le ramène au lien une fois le nom choisi
+    newUserCallbackURL: valid ? `/?invite=${token}` : "/",
+    errorCallbackURL: `/?authError=${provider}${valid ? `&invite=${token}` : ""}`,
+  };
 }

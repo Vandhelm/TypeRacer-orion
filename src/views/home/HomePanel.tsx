@@ -70,7 +70,11 @@ export function HomePanel({ ref }: { ref?: Ref<HTMLElement> }) {
     if (me.needsUsername) {
       setPane("account");
       setUsername(me.displayUsername || "");
+      return;
     }
+    // SALLE-04 : compte prêt (retour OAuth d'un nouveau compte) arrivé par /?invite=T : on rejoint le lien
+    const back = inviteReturn(new URLSearchParams(location.search));
+    if (back) location.replace(back);
   }, [me?.id, me?.needsUsername]);
 
   function showStamp(key: StampKey) {
