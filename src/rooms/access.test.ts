@@ -1,5 +1,5 @@
 import { describe, expect, spyOn, test } from "bun:test";
-import { allows, canJoin, cleanRoomCode, CODE_ALPHABET, isListed, inviteDetour, inviteReturn, isInviteToken, isRoomCode, newInviteToken, newRoomCode } from "./access";
+import { allows, canJoin, cleanRoomCode, CODE_ALPHABET, isListed, inviteDetour, inviteReturn, isInviteToken, isRoomCode, joinByCodeHref, newInviteToken, newRoomCode } from "./access";
 
 describe("room code", () => {
   test("has no ambiguous characters", () => {
@@ -105,5 +105,29 @@ describe("SALLE-04 — a visitor without a session keeps their invite link while
 
   test("a real token is well formed", () => {
     expect(isInviteToken(newInviteToken())).toBe(true);
+  });
+});
+
+describe("JOIN-01 — the home code field leads to the room, or says the code is malformed", () => {
+  test("a well-formed code leads to /room?code=<code>", () => {
+    expect(joinByCodeHref("K7Q2M9")).toBe("/room?code=K7Q2M9");
+  });
+
+  test("the typed code is cleaned first: lowercase, spaces and dashes", () => {
+    expect(joinByCodeHref(" k7q-2m9 ")).toBe("/room?code=K7Q2M9");
+  });
+
+  test("an empty or too short code leads nowhere", () => {
+    expect(joinByCodeHref("")).toBeNull();
+    expect(joinByCodeHref("K7Q2M")).toBeNull();
+  });
+
+  test("ambiguous or foreign characters do not make a code", () => {
+    expect(joinByCodeHref("O1IL00")).toBeNull();
+    expect(joinByCodeHref("<script>")).toBeNull();
+  });
+
+  test("a code too long is not silently cut into another room's code", () => {
+    expect(joinByCodeHref("K7Q2M9X")).toBeNull();
   });
 });

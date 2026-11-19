@@ -13,6 +13,7 @@
     "rooms": "SALONS",
     "code": "Tu as un code ?",
     "enterCode": "ENTRER",
+    "badCode": "Ce code n'est pas valide : il a 6 lettres ou chiffres, comme K7Q2M9.",
     "username": "Pseudo",
     "password": "Mot de passe",
     "show": "AFFICHER",
@@ -125,7 +126,8 @@
       "no_free_code": "Impossible de créer le salon pour l'instant. Réessaie.",
       "rate_limited": "Trop d'essais de code. Réessaie dans une minute.",
       "network": "Le serveur ne répond pas. Vérifie ta connexion.",
-      "unauthorized": "Choisis d'abord un pseudo."
+      "unauthorized": "Choisis d'abord un pseudo.",
+      "bad_code": "Ce code n'est pas valide : un code de salon a 6 lettres ou chiffres, comme K7Q2M9."
     },
     "textLanguage": "Langue du texte",
     "french": "Français",

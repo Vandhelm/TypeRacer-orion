@@ -7,7 +7,7 @@ import { TextField, TextInput } from "../../components/forms/TextField";
 import { DiscordIcon, GithubIcon } from "../../components/icons";
 import { Stamp } from "../../components/Stamp";
 import { ViewTabs } from "../../components/tabs/ViewTabs";
-import { cleanRoomCode, inviteReturn } from "../../rooms/access";
+import { cleanRoomCode, inviteReturn, joinByCodeHref } from "../../rooms/access";
 import { isValidNickname, NICKNAME_MAX, NICKNAME_PATTERN, startGuestSession, storedNickname } from "../../players/nickname";
 import { authClient, changeUsername, isProvider, linkProvider, PROVIDER_NAMES, signInWith, signInWithUsername, signUpWithUsername, SOCIAL_PROVIDERS, type SocialProvider } from "../../accounts/client";
 import { isValidUsername, PASSWORD_MIN } from "../../accounts/username";
@@ -36,6 +36,7 @@ export function HomePanel({ ref, initialMe = null }: { ref?: Ref<HTMLElement>; i
   const { t } = useTranslation();
   const [pane, setPane] = useState<Pane>("play");
   const [code, setCode] = useState("");
+  const [codeError, setCodeError] = useState("");
   const [nickname, setNickname] = useState("");
   const [playError, setPlayError] = useState("");
   const nicknameInput = useRef<HTMLInputElement>(null);
@@ -160,12 +161,17 @@ export function HomePanel({ ref, initialMe = null }: { ref?: Ref<HTMLElement>; i
     backToInvite();
   }
 
-  // code saisi : on rejoint le salon avec le code déjà inscrit
+  // JOIN-01 : code saisi, on rejoint le salon ; mal formé, on le dit. Le serveur répond ensuite si le salon existe.
   async function enterCode() {
-    if (code.length !== 6) return codeInput.current?.focus();
+    const href = joinByCodeHref(code);
+    if (!href) {
+      setCodeError(t("home.badCode"));
+      return codeInput.current?.focus();
+    }
+    setCodeError("");
     if (!(await ensurePlayer())) return;
     showStamp("stampCode");
-    setTimeout(() => { location.href = "/room?code=" + code; }, 900);
+    setTimeout(() => { location.href = href; }, 900);
   }
 
   return (
@@ -226,7 +232,12 @@ export function HomePanel({ ref, initialMe = null }: { ref?: Ref<HTMLElement>; i
                   maxLength={6}
                   placeholder="K7Q2M9"
                   value={code}
-                  onChange={(e) => setCode(cleanRoomCode(e.target.value))}
+                  aria-invalid={codeError ? true : undefined}
+                  aria-describedby="code-error"
+                  onChange={(e) => {
+                    setCode(cleanRoomCode(e.target.value));
+                    setCodeError("");
+                  }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.preventDefault();
@@ -236,6 +247,7 @@ export function HomePanel({ ref, initialMe = null }: { ref?: Ref<HTMLElement>; i
                 />
                 <OutlineButton id="enter-code" onClick={() => void enterCode()}>{t("home.enterCode")}</OutlineButton>
               </div>
+              <p id="code-error" role="alert" className="min-h-[1.4em] font-mono text-[max(11px,1.3vh)] tracking-[.08em] text-red-text">{codeError}</p>
             </TextField>
           </form>
 

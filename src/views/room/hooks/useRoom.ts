@@ -66,6 +66,11 @@ export function useRoom(page: "room" | "game" = "room") {
       location.replace(page === "game" ? "/home" : "/home#rooms");
       return;
     }
+    // JOIN-01 : un code mal formé s'affiche comme une erreur, sans demande au serveur
+    if (arrival.action === "refused") {
+      setError(arrival.error);
+      return;
+    }
     let live = true;
     // SALLE-03 : le serveur décide si ce code ou ce lien ouvre le salon ; un membre qui revient le retrouve
     const request = arrivalRequest(sent, `${attempt}|${joinRole ?? ""}`, () =>

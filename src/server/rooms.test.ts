@@ -714,3 +714,50 @@ describe("SALLE-10 — no room route tells a closed or foreign room from an unkn
     expect(row!.status).toBe("waiting");
   });
 });
+
+describe("JOIN-01 — the code typed on the home page opens the room, or the server says why not", () => {
+  let t: Awaited<ReturnType<typeof setup>>;
+  beforeAll(async () => {
+    t = await setup();
+  });
+
+  for (const visibility of ["semi", "public"] as const) {
+    test(`a guest typing the code of an existing ${visibility} room enters it as a member`, async () => {
+      const host = await t.newHost("Hote_Code");
+      const created = await t.call("POST", "/api/rooms", host.cookie, { role: "player", settings: { visibility } });
+      const { room } = (await created.json()) as Joined;
+      const name = `Saisie_${visibility}`;
+      const res = await t.call("POST", "/api/rooms/join", t.guest(name), { code: room.code });
+      expect(res.status).toBe(200);
+      const joined = (await res.json()) as Joined;
+      expect(joined.room.code).toBe(room.code);
+      expect(joined.room.members.map((m) => m.name)).toContain(name);
+      expect(await t.db.$count(roomMembers, eq(roomMembers.guestName, name))).toBe(1);
+    });
+  }
+
+  test("a well-formed code of no room answers 404 not_found, and nothing is created", async () => {
+    const code = "ZZZZZZ";
+    expect(await t.db.$count(rooms, eq(rooms.code, code))).toBe(0);
+    const before = await t.db.$count(rooms);
+    const res = await t.call("POST", "/api/rooms/join", t.guest("Code_Faux"), { code });
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: "not_found" });
+    expect(await t.db.$count(rooms)).toBe(before);
+    expect(await t.db.$count(roomMembers, eq(roomMembers.guestName, "Code_Faux"))).toBe(0);
+  });
+
+  test("a malformed code sent straight to the API is refused (400), never looked up", async () => {
+    for (const code of ["ZZZ", "zzzzzz", "ZZZZZZZ", "O0O0O0", 123456, null, "' OR 1=1 --"]) {
+      const res = await t.call("POST", "/api/rooms/join", t.guest("Code_Casse"), { code });
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({ error: "invalid_body" });
+    }
+    expect(await t.db.$count(roomMembers, eq(roomMembers.guestName, "Code_Casse"))).toBe(0);
+  });
+
+  test("a code with an extra field is refused (400)", async () => {
+    const res = await t.call("POST", "/api/rooms/join", t.guest("Code_Plus"), { code: "ZZZZZZ", host: true });
+    expect(res.status).toBe(400);
+  });
+});

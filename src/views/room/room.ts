@@ -1,5 +1,5 @@
 // Room model. Le salon vit sur le serveur (src/server/rooms.ts) : cette page n'en garde qu'une copie, sans stockage local.
-import { cleanRoomCode, isRoomCode, type Visibility } from "../../rooms/access";
+import { cleanRoomCode, isRoomCode, joinByCodeHref, type Visibility } from "../../rooms/access";
 import { MAX_GUESTS, MIN_GUESTS, MAX_TEXT_LENGTH, type Role, type RoomSettings } from "../../rooms/settings";
 import type { MemberView, RoomView } from "../../server/rooms";
 import { BOT_NAMES } from "../../players/bots";
@@ -58,7 +58,11 @@ export function readSession(search: string, _t: unknown, guest: boolean): Sessio
 }
 
 /** Ce que la page demande au serveur en arrivant : créer son salon, y entrer, ou relire celui dont on est membre. */
-export type Arrival = { action: "create" } | { action: "join"; via: { code: string } | { invite: string } } | { action: "read"; code: string };
+export type Arrival =
+  | { action: "create" }
+  | { action: "join"; via: { code: string } | { invite: string } }
+  | { action: "read"; code: string }
+  | { action: "refused"; error: "bad_code" };
 
 /**
  * /room crée (compte) ou rejoint (code, lien) ; /game relit seulement le salon lancé, donné par ?code, et ne crée
@@ -69,6 +73,11 @@ export function arrivalOf(search: string, page: "room" | "game", guest: boolean)
     const code = cleanRoomCode(new URLSearchParams(search).get("code") || "");
     return isRoomCode(code) ? { action: "read", code } : null;
   }
+  // JOIN-01 : un code saisi à la main qui n'en est pas un (trop court, trop long, caractères ambigus) est refusé ici,
+  // avec un message, au lieu de partir au serveur ou, pour un compte, de créer un salon
+  const query = new URLSearchParams(search);
+  const typed = query.get("code")?.trim();
+  if (typed && !query.get("invite")?.trim() && !joinByCodeHref(typed)) return { action: "refused", error: "bad_code" };
   const session = readSession(search, undefined, guest);
   if (!session) return null;
   if (session.host) return { action: "create" };
