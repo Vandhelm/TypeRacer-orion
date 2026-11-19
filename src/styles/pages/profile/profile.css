@@ -7,13 +7,6 @@
 .keymap-head .view-tabs{ gap: 8px; border: 0; animation: none; }
 .keymap-head .view-tab{ height: 32px; min-height: 32px; padding: 0 18px; border: 1px solid var(--color-line); font-size: 11px; letter-spacing: .2em; }
 .keymap-head .view-tab + .view-tab{ border-left: 1px solid var(--color-line); }
-/* width : margin auto dans une colonne flex rétrécirait le clavier à son contenu */
-.keymap-board{ display: grid; gap: 4px; width: 100%; max-width: 640px; margin: auto auto 0; }
-.keymap-row{ display: flex; gap: 4px; }
-.keymap-row:nth-child(2){ padding-left: 3%; }
-.keymap-row:nth-child(3){ padding-left: 5%; }
-.keymap-row:nth-child(4){ padding-left: 7%; }
-.keymap-row:nth-child(5){ justify-content: center; }
 .keymap-key{
     flex: 1 1 0;
     min-width: 0;

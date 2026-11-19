@@ -11,6 +11,8 @@ type Props = { keys: KeyCounts; layout: Layout; onLayout: (layout: Layout) => vo
 const levelOf = (rate: number) => Math.min(1, rate / RATE_MAX);
 
 /** Le taux d'erreur de chaque touche, sur un clavier AZERTY ou QWERTY, avec les touches les plus ratées en clair. */
+// Staggered rows, like a real keyboard; the space bar row is centered.
+const ROW_SHIFT = ["", "pl-[3%]", "pl-[5%]", "pl-[7%]", "justify-center"];
 // The board keys keep their CSS (heat color, rows, swap animation): styles/pages/profile/profile.css.
 const WORST = "mt-auto pt-7 font-mono text-[max(12px,1.4vh)] leading-[1.6] font-normal text-muted";
 // A small key tinted by its error rate (--heat, 0 to 100 %)
@@ -39,9 +41,9 @@ export function KeyboardHeatmap({ keys, layout, onLayout }: Props) {
         />
       </div>
 
-      <div className="keymap-board" aria-hidden="true">
+      <div className="m-[auto_auto_0] grid w-full max-w-[640px] gap-1" aria-hidden="true">
         {rowsOf(layout).map((row, r) => (
-          <div key={r} className="keymap-row">
+          <div key={r} className={`flex gap-1 ${ROW_SHIFT[r] ?? ""}`}>
             {row.map((cap, c) => {
               const value = heat.get(cap);
               const known = !!value && value.typed >= MIN_TYPED;
