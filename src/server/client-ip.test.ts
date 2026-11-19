@@ -60,3 +60,22 @@ describe("SALLE-04 — the client IP is read reliably behind a declared proxy", 
     expect(clientIp(headers({ "x-forwarded-for": "1.2.3.4" }), { env: {} })).toBeNull();
   });
 });
+
+describe("SALLE-04 — local dev (next dev) gets an IP without any proxy setting", () => {
+  // next dev pose x-forwarded-for depuis la socket quand il manque (base-server.js) ; une IP forgée en local ne coûte rien
+  const dev = (init: Record<string, string>, peer: string | null = null) =>
+    clientIp(headers(init), { env: { NODE_ENV: "development" }, peer });
+
+  test("x-forwarded-for set by next dev is the client", () => {
+    expect(dev({ "x-forwarded-for": "::1" })).toBe("::1");
+    expect(dev({ "x-forwarded-for": "::ffff:127.0.0.1" })).toBe("127.0.0.1");
+  });
+
+  test("the socket address still wins when a Bun server gives one", () => {
+    expect(dev({ "x-forwarded-for": "1.2.3.4" }, "192.0.2.7")).toBe("192.0.2.7");
+  });
+
+  test("production without VERCEL nor TRUST_PROXY still ignores x-forwarded-for", () => {
+    expect(clientIp(headers({ "x-forwarded-for": "1.2.3.4" }), { env: { NODE_ENV: "production" } })).toBeNull();
+  });
+});

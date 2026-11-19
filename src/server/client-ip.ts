@@ -7,6 +7,8 @@
 //   Un hébergement autonome (VPS) passe par un seul proxy (nginx, Caddy…) qui pose ces en-têtes.
 // - Un en-tête de confiance présent mais illisible donne null : pas de repli sur un autre en-tête ni sur la socket.
 // - Sinon : l'IP de la socket quand un serveur Bun la donne (`peer`, tests) ; à défaut, null (inconnue).
+// - En `next dev` seulement (NODE_ENV=development), sans socket : x-forwarded-for, que Next pose depuis la socket
+//   quand il manque. Il reste forgeable, ce qui ne coûte rien en local ; `next start` sans proxy demande TRUST_PROXY.
 // Une valeur qui n'est pas une IP n'est jamais prise.
 import { isIP } from "node:net";
 
@@ -47,7 +49,12 @@ export function clientIp(headers: Headers, { env = process.env, peer = null }: I
     const real = headers.get("x-real-ip");
     if (real !== null) return clean(real);
   }
-  return clean(peer);
+  const socket = clean(peer);
+  if (socket === null && env.NODE_ENV === "development") {
+    const forwarded = headers.get("x-forwarded-for");
+    if (forwarded !== null) return clean(last(forwarded));
+  }
+  return socket;
 }
 
 /** L'IP de la socket, quand `server` est un serveur Bun ; null sous Next.js, qui passe un contexte de route. */
