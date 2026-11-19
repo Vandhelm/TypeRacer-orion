@@ -15,6 +15,12 @@ else
   git switch -q -c "$branch" "$base"
 fi
 
+# Tableau partagé : une branche d'exigence (…/salle-04) réserve son exigence, ou s'arrête si une autre branche la tient.
+id=$(basename "$branch" | grep -oiE '^[a-z0-9]+-[0-9]+' | tr '[:lower:]' '[:upper:]' || true)
+if [ -n "$id" ] && [ -f scripts/board.ts ] && git show dev:docs/EXIGENCES.md 2>/dev/null | grep -q "^| $id |"; then
+  bun scripts/board.ts claim "$id" --branch "$branch" || { echo "worktree-setup : arrêt, $id n'est pas libre (bun scripts/board.ts status)" >&2; exit 1; }
+fi
+
 [ -d node_modules ] || bun install --frozen-lockfile --silent
 
 if [ ! -f .env ]; then

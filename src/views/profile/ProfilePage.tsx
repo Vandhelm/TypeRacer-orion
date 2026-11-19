@@ -3,7 +3,7 @@
 import { useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { HangingButton } from "../../components/buttons/HangingButton";
-import { LanguageSwitcher } from "../../components/tabs/LanguageSwitcher";
+import { FLOATING_TABS, LanguageSwitcher } from "../../components/tabs/LanguageSwitcher";
 import { useRaceResults } from "../podium/hooks/useRaceResults";
 import { podiumHref, raceErrorKey, rankLabel, type PlayerResult, type RaceResults } from "../podium/results";
 import { CareerStats } from "./CareerStats";
@@ -13,6 +13,7 @@ import { LastRace } from "./LastRace";
 import { OwnProfile, type Me } from "./OwnProfile";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { guestStats, statsSource, type PlayerStats, type SessionState } from "./stats";
+import { HEAD, NAME, NOTE, PAGE, TITLE } from "./styles";
 
 type Subject = { name: string; result: PlayerResult | null; index: number; fromPodium: boolean };
 
@@ -51,7 +52,7 @@ export function ProfilePage({ me, query, stats }: Props) {
   // I18N-02 : le sélecteur est ici, donc présent sur chaque variante de la page (profil propre, profil d'un joueur)
   return (
     <>
-      <LanguageSwitcher className="hanging-tabs-floating" />
+      <LanguageSwitcher className={FLOATING_TABS} />
       {own && me ? <OwnProfile me={me} stats={stats} />
         : <PlayerProfile session={me ? "signed-in" : "signed-out"} query={query} stats={stats} />}
     </>
@@ -105,12 +106,12 @@ function PlayerView({ session, query, preloaded, results, raceId, error }: ViewP
 
   if (!subject) {
     return (
-      <main className="profile" aria-labelledby="profile-name">
-        <header className="profile-head">
+      <main className={PAGE} aria-labelledby="profile-name">
+        <header className={HEAD}>
           <HangingButton className="profile-back" href="/home">{t("profile.home")}</HangingButton>
-          <div className="profile-title"><h1 id="profile-name" className="profile-name">{t("nav.profile")}</h1></div>
+          <div className={TITLE}><h1 id="profile-name" className={NAME}>{t("nav.profile")}</h1></div>
         </header>
-        <p className="profile-note">{t(error ? raceErrorKey(error) : "profile.empty")}</p>
+        <p className={NOTE}>{t(error ? raceErrorKey(error) : "profile.empty")}</p>
       </main>
     );
   }
@@ -119,13 +120,13 @@ function PlayerView({ session, query, preloaded, results, raceId, error }: ViewP
   const place = result ? t("profile.place", { rank: rankLabel(t, result.rank) }) : "";
 
   return (
-    <main className="profile" aria-labelledby="profile-name">
-      <header className="profile-head">
+    <main className={PAGE} aria-labelledby="profile-name">
+      <header className={HEAD}>
         {subject.fromPodium && <HangingButton className="profile-back" href={back}>{t("profile.back")}</HangingButton>}
-        <div className="profile-id">
-          <div className="profile-title">
-            <h1 id="profile-name" className="profile-name">{subject.name}</h1>
-            {result && <p className="profile-rank">{result.me ? `${place} · ${t("room.you")}` : place}</p>}
+        <div className="ml-auto flex min-w-0 items-center gap-4">
+          <div className={TITLE}>
+            <h1 id="profile-name" className={NAME}>{subject.name}</h1>
+            {result && <p className="mt-2 font-mono text-[max(11px,1.3vh)] leading-none font-normal tracking-[.2em] text-muted uppercase">{result.me ? `${place} · ${t("room.you")}` : place}</p>}
           </div>
           <ProfileAvatar name={subject.name} src={stats.status === "ready" ? stats.stats?.image : null} />
         </div>

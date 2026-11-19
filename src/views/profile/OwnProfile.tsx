@@ -15,6 +15,7 @@ import type { PlayerStats } from "./stats";
 import { LastRace } from "./LastRace";
 import { RaceHistory } from "./RaceHistory";
 import { storedAvatar } from "../../players/avatar";
+import { HEAD, PAGE } from "./styles";
 
 const TABS = ["compte", "stats"] as const;
 type Tab = (typeof TABS)[number];
@@ -74,19 +75,19 @@ export function OwnProfile({ me, stats: preloaded }: { me: Me; stats?: PlayerSta
   }
 
   return (
-    <main className="profile" aria-label={t("nav.profile")}>
-      <header className="profile-head">
+    <main className={PAGE} aria-label={t("nav.profile")}>
+      <header className={HEAD}>
         <HangingButton className="profile-back" href="/home">{t("profile.home")}</HangingButton>
       </header>
 
-      <div className="profile-tabs">
+      <div className="profile-tabs mb-[clamp(20px,3vh,32px)]">
         <ViewTabs options={TABS.map((value) => ({ value, label: t(`account.tabs.${value}`) }))} value={tab} onChange={show} ariaLabel={t("nav.profile")} />
       </div>
 
       {/* la clé remonte le panneau : il arrive en fondu à chaque changement d'onglet */}
-      <div key={tab} className="tab-enter">
+      <div key={tab} className="animate-[tab-enter_.26s_cubic-bezier(.2,.8,.2,1)_both] motion-reduce:animate-none">
         {tab === "compte" ? (
-          <div className="account-panel">
+          <div>
             <PhotoSection name={name} image={image} onChange={setImage} />
             <NameSection name={name} onChange={setName} />
             <LinksSection notice={notice} />

@@ -2,18 +2,10 @@
 @layer theme, base, components, utilities;
 @import "tailwindcss/theme.css" layer(theme);
 @import "tailwindcss/utilities.css" layer(utilities);
+@source "../../../../app/not-found.tsx";
+@source "../../../next";
+@source "../../../components";
 
 @import "../../base/tokens.css";
 @import "../../base/reset.css" layer(base);
 @import "../../base/animations.css";
-@import "../../components/tabs/hanging-tabs.css";
-
-.not-found{
-    min-height: 100vh;
-    display: grid;
-    place-items: center;
-    text-align: center;
-    padding: 24px;
-    font-family: var(--font-mono);
-}
-.not-found a{ color: inherit; text-decoration: underline; }

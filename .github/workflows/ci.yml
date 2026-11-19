@@ -47,14 +47,11 @@ jobs:
       - name: Types (tsc --noEmit)
         run: bun run typecheck
 
-      - name: Tests unitaires et de régression
-        run: bun test
-
-      # Tests rattachés à chaque exigence par l'ID de leur nom (`describe("AUTH-02 — …")`) :
-      # tableau dans le résumé du job, JSON pour la QA. Tourne même si l'étape précédente a échoué.
-      - name: Tests par exigence
-        if: ${{ !cancelled() }}
-        run: bun run test:requirements
+      # Tests unitaires et de régression, lancés une seule fois et rattachés aux exigences par l'ID qui
+      # ouvre leur nom (`describe("AUTH-02 — …")`) : tableau dans le résumé du job, JSON pour la QA.
+      # --strict : tout test en échec fait échouer l'étape, avec ou sans ID.
+      - name: Tests unitaires et par exigence
+        run: bun run test:requirements --strict
 
       - name: Rapport des tests par exigence
         if: ${{ !cancelled() }}

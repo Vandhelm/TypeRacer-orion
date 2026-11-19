@@ -31,7 +31,7 @@ describe("TECH-01 — /profile rendu côté serveur", () => {
 
   test("connecté, sans paramètre : son profil (onglets Compte et Stats), sans attendre la session", () => {
     const html = render({ me: { name: "Compte_Ssr", displayUsername: "Compte_Ssr" }, query: none, stats: { ...STATS, name: "Compte_Ssr" } });
-    expect(html).toContain('class="view-tabs"');
+    expect(html).toMatch(/class="view-tabs[ "]/);
     expect(html).not.toContain('aria-busy="true"');
   });
 

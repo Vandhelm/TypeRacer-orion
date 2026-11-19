@@ -19,6 +19,10 @@ body{
 
 img{ max-width: 100%; }
 
+/* Tailwind has no all:unset utility, and [all:unset] would be sorted after the other utilities
+   and wipe them. This class lives in the base layer, below the utilities that style the element. */
+.unset{ all: unset; }
+
 [hidden]:not([hidden=until-found i]){ display: none !important; }
 
 @media (max-width: 700px){

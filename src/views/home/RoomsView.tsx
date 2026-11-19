@@ -1,9 +1,15 @@
-import { useImperativeHandle, useRef, useState, type CSSProperties, type Ref } from "react";
+import { useEffect, useImperativeHandle, useRef, useState, type CSSProperties, type Ref } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { Ticket, TicketStub } from "../../components/cards/Ticket";
 import { useTicketSway } from "./hooks/useTicketSway";
-import { ROOMS, WAITING_PAGE } from "./rooms";
+import { fetchPublicRooms, WAITING_PAGE, type Room } from "./rooms";
+
+// Ticket sizes scale with --u and --hang (components/cards/ticket.css): 3 columns, 4 on a wide stall, 2 on a narrow one.
+const TICKETS =
+  "mx-[4cqw] grid grid-cols-[repeat(3,minmax(0,1fr))] [align-items:start] gap-[2.6cqw] pt-0 [--hang:34px] [--u:.32cqw] narrow:m-0 " +
+  "[@container(min-width:460px)]:grid-cols-[repeat(4,minmax(0,1fr))] [@container(min-width:460px)]:[--u:.235cqw] " +
+  "[@container(max-width:420px)]:grid-cols-[repeat(2,minmax(0,1fr))] [@container(max-width:420px)]:gap-3 [@container(max-width:420px)]:[--u:calc((100cqw-12px)/200)]";
 
 export type RoomsViewHandle = { tickets(): HTMLDivElement[] };
 
@@ -17,12 +23,26 @@ export function RoomsView({ descending, ref }: { descending: boolean; ref?: Ref<
   const [taken, setTaken] = useState(-1);
   const [cut, setCut] = useState<string>();
   const [flying, setFlying] = useState<Flying | null>(null);
+  const [tables, setRooms] = useState<Room[]>([]);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    let live = true;
+    fetchPublicRooms().then((list) => {
+      if (!live) return;
+      setRooms(list);
+      setLoaded(true);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
 
   const roots = useRef<(HTMLDivElement | null)[]>([]);
   const papers = useRef<(HTMLDivElement | null)[]>([]);
   const stubs = useRef<(HTMLDivElement | null)[]>([]);
   const holes = useRef<(HTMLSpanElement | null)[]>([]);
-  const sway = useTicketSway(papers, ROOMS.length);
+  const sway = useTicketSway(papers, tables.length);
 
   useImperativeHandle(ref, () => ({ tickets: () => roots.current.filter((el): el is HTMLDivElement => !!el) }), []);
 
@@ -35,16 +55,16 @@ export function RoomsView({ descending, ref }: { descending: boolean; ref?: Ref<
     // le ticket est coupé net à la perforation
     setCut(`inset(-20px -20px ${paper.offsetHeight - stub.offsetTop}px -20px)`);
     setTaken(i);
-    const room = ROOMS[i]!;
+    const room = tables[i]!;
     const reduce = reducedMotion();
+    // SALLE-03 : un salon public s'ouvre directement ; le serveur vérifie l'entrée par son code
     setTimeout(() => {
-      const [present, max] = room.guests.split(" / ");
-      location.href = `${WAITING_PAGE}?table=${room.n}&serial=${room.serial}&lang=${room.lang}&guests=${max}&present=${present}&bots=${room.bots ? 1 : 0}`;
+      location.href = `${WAITING_PAGE}?code=${room.code}`;
     }, reduce ? 500 : 1700);
   }
 
   const stubOf = (i: number) => {
-    const room = ROOMS[i]!;
+    const room = tables[i]!;
     return {
       label: t("rooms.stub"),
       actionLabel: t("rooms.take"),
@@ -55,20 +75,21 @@ export function RoomsView({ descending, ref }: { descending: boolean; ref?: Ref<
   return (
     <main className="rooms pointer-events-none fixed inset-0 z-10 flex items-start justify-center px-4 narrow:min-h-screen narrow:items-start narrow:px-2 narrow:pt-[110px] narrow:pb-6">
       <h1 className="sr-only">{t("rooms.pageTitle")}</h1>
-      <div className="rooms-stall">
-        <div className={taken >= 0 ? "tickets locked" : "tickets"} id="tickets" {...sway.container}>
-          {ROOMS.map((room, i) => (
+      <div className="pointer-events-auto relative @container mt-[36vh] w-[min(100%,940px,calc((100vh-36vh-40px)/.42))] animate-[rise_1s_.15s_cubic-bezier(.2,.8,.2,1)_both] motion-reduce:animate-none! narrow:mt-[30vh]">
+        {loaded && !tables.length && <p className="pointer-events-auto mx-[4cqw] rounded-[12px] border border-dashed border-line px-[18px] py-[14px] text-center text-muted" role="status">{t("rooms.empty")}</p>}
+        <div className={taken >= 0 ? `${TICKETS} [&_.ticket-button]:pointer-events-none` : TICKETS} id="tickets" {...sway.container}>
+          {tables.map((room, i) => (
             <Ticket
-              key={room.n}
+              key={room.code}
               data-i={i}
               header={t("rooms.reservation")}
               number={String(room.n).padStart(2, "0")}
               title={`${t("rooms.table")} ${room.n}`}
               serial={`${t("rooms.serial")} ${room.serial}`}
               rows={[
-                { label: t("rooms.lang"), value: t(room.lang === "fr" ? "rooms.codeFr" : "rooms.codeEn"), valueClassName: "v-lang" },
+                { label: t("rooms.lang"), value: t(room.lang === "fr" ? "rooms.codeFr" : "rooms.codeEn") },
                 { label: t("rooms.guests"), value: room.guests },
-                { label: t("rooms.bots"), value: t(room.bots ? "rooms.yes" : "rooms.no"), valueClassName: room.bots ? "v-bots yes" : "v-bots" },
+                { label: t("rooms.bots"), value: t(room.bots ? "rooms.yes" : "rooms.no"), highlight: room.bots },
               ]}
               stampLabel={t("rooms.reserved")}
               stub={{ ...stubOf(i), onAction: () => take(i) }}

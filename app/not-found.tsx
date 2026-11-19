@@ -12,7 +12,7 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function NotFound() {
   const text = notFoundText(await requestLanguage());
   return (
-    <main className="not-found">
+    <main className="grid min-h-screen place-items-center p-6 text-center font-mono [&_a]:[color:inherit] [&_a]:underline">
       <NotFoundLanguage />
       <div>
         <h1>{text.title}</h1>

@@ -15,6 +15,8 @@ export type RealtimeState = {
   progress: Record<string, PlayerProgress>;
 };
 export type TicketGrant = { ticket: string; url: string };
+/** Ce que reçoit une page qui suit son salon (follow) : son état, sa fermeture, ou le refus du serveur (pas ou plus membre). */
+export type RoomEvent = { type: "room"; room: Record<string, unknown> } | { type: "closed" } | { type: "not_member" };
 
 export type RealtimeOptions = {
   room: string;
@@ -23,6 +25,8 @@ export type RealtimeOptions = {
   getTicket?: () => Promise<TicketGrant | null>;
   WebSocket?: typeof WebSocket;
   retryDelayMs?: number;
+  /** La page salle suit l'état du salon (membres, réglages, hôte) : il faut en être membre. */
+  onRoom?: (event: RoomEvent) => void;
 };
 
 export type RealtimeConnection = { sendProgress: (progress: number, wpm: number) => void; close: () => void };
@@ -39,7 +43,7 @@ export async function fetchTicket(): Promise<TicketGrant | null> {
 
 const clamp = (value: number, max: number) => (Number.isFinite(value) ? Math.min(max, Math.max(0, value)) : 0);
 
-export function connectRealtime({ room, onChange, getTicket = fetchTicket, WebSocket: Socket = WebSocket, retryDelayMs = 1000 }: RealtimeOptions): RealtimeConnection {
+export function connectRealtime({ room, onChange, getTicket = fetchTicket, WebSocket: Socket = WebSocket, retryDelayMs = 1000, onRoom }: RealtimeOptions): RealtimeConnection {
   let state: RealtimeState = { status: "connecting", you: null, room, players: [], progress: {} };
   let ws: WebSocket | null = null;
   let closed = false;
@@ -102,7 +106,7 @@ export function connectRealtime({ room, onChange, getTicket = fetchTicket, WebSo
         case "welcome":
           attempts = 0;
           update({ you: message.you });
-          return send({ type: "join", room });
+          return send(onRoom ? { type: "join", room, follow: true } : { type: "join", room });
         case "presence": {
           const present = new Set(message.players.map((p) => p.id));
           const progress = Object.fromEntries(Object.entries(state.progress).filter(([id]) => present.has(id)));
@@ -114,7 +118,12 @@ export function connectRealtime({ room, onChange, getTicket = fetchTicket, WebSo
         }
         case "progress":
           return update({ progress: { ...state.progress, [message.playerId]: { progress: message.progress, wpm: message.wpm } } });
+        case "room":
+          return onRoom?.({ type: "room", room: message.room });
+        case "closed":
+          return onRoom?.({ type: "closed" });
         case "error":
+          if (message.code === "not_member") onRoom?.({ type: "not_member" });
           return;
       }
     };

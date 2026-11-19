@@ -7,7 +7,7 @@ import { TextField, TextInput } from "../../components/forms/TextField";
 import { DiscordIcon, GithubIcon } from "../../components/icons";
 import { Stamp } from "../../components/Stamp";
 import { ViewTabs } from "../../components/tabs/ViewTabs";
-import { cleanRoomCode } from "../../rooms/access";
+import { cleanRoomCode, inviteReturn } from "../../rooms/access";
 import { isValidNickname, NICKNAME_MAX, NICKNAME_PATTERN, startGuestSession, storedNickname } from "../../players/nickname";
 import { authClient, changeUsername, isProvider, linkProvider, PROVIDER_NAMES, signInWith, signInWithUsername, signUpWithUsername, SOCIAL_PROVIDERS, type SocialProvider } from "../../accounts/client";
 import { isValidUsername, PASSWORD_MIN } from "../../accounts/username";
@@ -20,6 +20,13 @@ const PROVIDER_ICONS: Record<SocialProvider, () => React.JSX.Element> = { github
 const FORM = "col-start-1 row-start-1 flex flex-col gap-[2.1vh] [align-self:start]";
 
 type Me = { id: string; displayUsername?: string | null; username?: string | null; name: string; needsUsername?: boolean };
+
+// The panel with Play / Account forms, with blueprint-style corner marks.
+const PANEL =
+  "pointer-events-auto relative flex max-h-full w-full max-w-[min(520px,58vh)] flex-col items-center justify-center gap-[3.2vh] border border-line bg-black px-[3vh] pt-[6vh] pb-[4vh] " +
+  "animate-[rise_.8s_.2s_cubic-bezier(.2,.8,.2,1)_both] motion-reduce:animate-none phone:max-w-[460px] phone:gap-7 phone:px-5 phone:pt-10 phone:pb-8 " +
+  "before:absolute before:-top-[7px] before:-left-[7px] before:size-4 before:border-t before:border-l before:border-white " +
+  "after:absolute after:-right-[7px] after:-bottom-[7px] after:size-4 after:border-r after:border-b after:border-white";
 
 /**
  * Home view panel: Play / Account forms.
@@ -73,7 +80,11 @@ export function HomePanel({ ref, initialMe = null }: { ref?: Ref<HTMLElement>; i
     if (me.needsUsername) {
       setPane("account");
       setUsername(me.displayUsername || "");
+      return;
     }
+    // SALLE-04 : compte prêt (retour OAuth d'un nouveau compte) arrivé par /?invite=T : on rejoint le lien
+    const back = inviteReturn(new URLSearchParams(location.search));
+    if (back) location.replace(back);
   }, [me?.id, me?.needsUsername]);
 
   function showStamp(key: StampKey) {
@@ -94,7 +105,15 @@ export function HomePanel({ ref, initialMe = null }: { ref?: Ref<HTMLElement>; i
   }
   async function play(e: FormEvent) {
     e.preventDefault();
-    if (await ensurePlayer()) showStamp("stampPlay");
+    if (await ensurePlayer()) {
+      showStamp("stampPlay");
+      backToInvite();
+    }
+  }
+  // SALLE-04 : arrivé depuis un lien d'invitation sans session (/?invite=T), on y retourne une fois prêt
+  function backToInvite() {
+    const back = inviteReturn(new URLSearchParams(location.search));
+    if (back) setTimeout(() => { location.href = back; }, 900);
   }
   // AUTH-03 : un invité ne crée pas de salon, on l'envoie vers l'onglet compte
   function createRoom() {
@@ -115,13 +134,14 @@ export function HomePanel({ ref, initialMe = null }: { ref?: Ref<HTMLElement>; i
     if (error) return setAuthError(t(mode === "signIn" ? "home.signInFailed" : "home.signUpFailed"));
     setPassword("");
     showStamp("stampAccount");
+    backToInvite();
   }
 
   // Départ vers GitHub ou Discord : en cas d'erreur avant la redirection, on reste ici avec le message
   function goTo(provider: SocialProvider, action: "signIn" | "link") {
     setBusy(true);
     setAuthError("");
-    void (action === "link" ? linkProvider(provider) : signInWith(provider)).then(({ error }) => {
+    void (action === "link" ? linkProvider(provider) : signInWith(provider, location.search)).then(({ error }) => {
       if (!error) return;
       setBusy(false);
       setAuthError(t(action === "link" ? "home.linkFailed" : "home.socialFailed", { provider: PROVIDER_NAMES[provider] }));
@@ -137,6 +157,7 @@ export function HomePanel({ ref, initialMe = null }: { ref?: Ref<HTMLElement>; i
     if (error) return setAuthError(t("home.signUpFailed"));
     await authClient.getSession({ query: { disableCookieCache: true } });
     showStamp("stampAccount");
+    backToInvite();
   }
 
   // code saisi : on rejoint le salon avec le code déjà inscrit
@@ -148,7 +169,7 @@ export function HomePanel({ ref, initialMe = null }: { ref?: Ref<HTMLElement>; i
   }
 
   return (
-    <section ref={ref} className="panel">
+    <section ref={ref} className={PANEL}>
       <Stamp label={stamp.key ? t(`home.${stamp.key}`) : ""} visible={stamp.on} playKey={stamp.play} />
 
       <LogoTitle overline={t("home.overline")} name="O.R.I.O.N" />
@@ -164,8 +185,8 @@ export function HomePanel({ ref, initialMe = null }: { ref?: Ref<HTMLElement>; i
           ]}
         />
 
-        <div className="panes grid grid-cols-[minmax(0,1fr)]">
-          <form className={pane === "play" ? FORM : `is-hidden ${FORM}`} id="pane-play" aria-hidden={pane !== "play"} onSubmit={(e) => void play(e)}>
+        <div className="grid animate-[rise_.7s_.65s_cubic-bezier(.2,.8,.2,1)_both] grid-cols-[minmax(0,1fr)] motion-reduce:animate-none">
+          <form className={pane === "play" ? FORM : `pointer-events-none invisible ${FORM}`} id="pane-play" aria-hidden={pane !== "play"} onSubmit={(e) => void play(e)}>
             <TextField
               id="nickname"
               num="01"
@@ -195,7 +216,7 @@ export function HomePanel({ ref, initialMe = null }: { ref?: Ref<HTMLElement>; i
             </div>
 
             <TextField id="code" num="02" label={t("home.code")}>
-              <div className="code-field">
+              <div className="flex items-end gap-[1.6vh] [&_.outline-button]:h-[4.4vh] [&_.outline-button]:min-h-[40px] [&_.outline-button]:pr-[1.8vh] [&_.outline-button]:pl-[2.1vh] [&_.text-field-input]:min-w-0 [&_.text-field-input]:grow [&_input]:font-mono [&_input]:tracking-[.5em] [&_input]:uppercase">
                 <TextInput
                   ref={codeInput}
                   id="code"
@@ -219,7 +240,7 @@ export function HomePanel({ ref, initialMe = null }: { ref?: Ref<HTMLElement>; i
           </form>
 
           <form
-            className={pane === "account" ? FORM : `is-hidden ${FORM}`}
+            className={pane === "account" ? FORM : `pointer-events-none invisible ${FORM}`}
             id="pane-account"
             aria-hidden={pane !== "account"}
             onSubmit={(e) => {
@@ -272,7 +293,9 @@ export function HomePanel({ ref, initialMe = null }: { ref?: Ref<HTMLElement>; i
               label={t("home.password")}
               inputProps={{ name: "password", type: showPassword ? "text" : "password", autoComplete: "current-password", value: password, onChange: (e) => setPassword(e.target.value) }}
               action={
-                <button className="text-field-action" type="button" id="reveal-password" aria-pressed={showPassword} onClick={() => setShowPassword((v) => !v)}>
+                <button
+                  className="unset min-h-[36px] cursor-pointer pl-3 font-mono text-[max(10px,1.1vh)] leading-none font-normal tracking-[.2em] text-line-soft hover:text-white focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-white"
+                  type="button" id="reveal-password" aria-pressed={showPassword} onClick={() => setShowPassword((v) => !v)}>
                   {t(showPassword ? "home.hide" : "home.show")}
                 </button>
               }

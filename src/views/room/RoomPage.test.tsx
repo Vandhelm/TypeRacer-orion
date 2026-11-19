@@ -27,11 +27,12 @@ describe("TECH-01 — /room et /game rendus côté serveur", () => {
     expect(html).not.toContain("room-form");
   });
 
-  test("la course : le cadre de la page est dans le HTML, sans texte tiré au hasard côté serveur", () => {
+  test("la course : le HTML montre l'attente du salon, sans texte tiré au hasard côté serveur", () => {
+    // SALLE-09 : la course part du salon lu sur le serveur de jeu ; le HTML ne montre que l'attente
     const html = render(GamePage);
-    expect(html).toContain("game-root");
-    expect(html).toContain('href="/room"');
-    expect(html).toContain("race-pool");
+    expect(html).toContain('role="status"');
+    expect(html).toContain("Ouverture du salon");
+    expect(html).not.toContain("<canvas");
   });
 
   test("les routes /room et /game n'utilisent plus LegacyPage", () => {

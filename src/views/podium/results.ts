@@ -2,6 +2,7 @@
 import { CHARS_PER_WORD, laneElapsedMs, laneProgress, laneWpm, myAccuracy, type Race, type Sample } from "../game/race";
 import { parseKeys, roundKeys, type KeyCounts } from "../../players/keys";
 import type { TFunction } from "i18next";
+import { isRoomCode } from "../../rooms/access";
 import type { Player, Room } from "../room/room";
 import { formatNumber } from "../../i18n/format";
 
@@ -33,7 +34,8 @@ export type RaceSummary = Pick<Room, "textType" | "language" | "duration" | "lev
   wordCount: number;
   sessionSeconds: number;
 };
-export type RaceResults = { players: PlayerResult[]; summary: RaceSummary };
+/** `room` : le code du salon de la course, pour y revenir depuis le podium (SALLE-09). Jamais envoyé au serveur. */
+export type RaceResults = { players: PlayerResult[]; summary: RaceSummary; room?: string };
 
 const RESULTS_KEY = "orion-results";
 const SESSION_KEY = "orion-session-start";
@@ -125,7 +127,7 @@ const byRank = (players: Record<string, unknown>[]) =>
 /** Des résultats confiés par le jeu (sessionStorage) ou relus sur le serveur (HIST-02), vérifiés champ par champ. */
 export function toResults(value: unknown): RaceResults | null {
   try {
-    const stored = value as { summary?: unknown; players?: unknown } | null;
+    const stored = value as { summary?: unknown; players?: unknown; room?: unknown } | null;
     if (!stored || !stored.summary || !Array.isArray(stored.players) || !stored.players.length) return null;
     const players = byRank(stored.players).map(({ p, rank }): PlayerResult => {
       const [correct = 0, wrong = 0, extra = 0, missed = 0] = numbersOf(p.chars);
@@ -149,7 +151,8 @@ export function toResults(value: unknown): RaceResults | null {
         keys: parseKeys(p.keys),
       };
     });
-    return { players, summary: stored.summary as RaceSummary };
+    const room = typeof stored.room === "string" && isRoomCode(stored.room) ? stored.room : undefined;
+    return { players, summary: stored.summary as RaceSummary, ...(room ? { room } : {}) };
   } catch {
     return null;
   }
@@ -160,8 +163,13 @@ export function saveResults(results: RaceResults) {
 }
 
 /** Le corps envoyé au serveur : la course et son identifiant unique, pour que le serveur refuse un rejeu (AUTH-06). */
-export function raceBody(results: RaceResults, content: string) {
+export function raceBody({ room: _room, ...results }: RaceResults, content: string) {
   return { id: crypto.randomUUID(), ...results, content };
+}
+
+/** Retour au salon de la course ; sans code, l'accueil (un /room nu créerait un nouveau salon). */
+export function backToRoomHref(room: string | undefined) {
+  return room ? `/room?code=${room}` : "/home";
 }
 
 /** Les navigateurs refusent un corps keepalive de plus de 64 Kio : une longue course à 8 joueurs le dépasse. */

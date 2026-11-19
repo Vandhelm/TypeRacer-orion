@@ -1,6 +1,6 @@
 import { createHmac } from "node:crypto";
 import { describe, expect, test } from "bun:test";
-import { GUEST_COOKIE, GUEST_TTL_MS, guestCookie, guestSecret, handleGuest, readGuest, readGuestSession, signGuest, verifyGuest } from "./guest";
+import { GUEST_COOKIE, GUEST_TTL_MS, guestCookie, guestSecret, handleGuest, readGuest, readGuestSession, signGuest, verifyGuest, verifyGuestSession } from "./guest";
 
 const SECRET = "guest-secret-guest-secret-guest-secret";
 const NOW = 1_800_000_000_000;
@@ -160,5 +160,34 @@ describe("TECH-06 — each guest session has its own random id", () => {
   test("an older cookie can be re-signed with an id, keeping its nickname and expiry", () => {
     const value = signGuest("Corail_418", SECRET, NOW + 1000 - GUEST_TTL_MS, "6f1c2a52-6a8d-4b8a-9f0e-0c1d2e3f4a5b");
     expect(readGuestSession(withCookie(value), SECRET, NOW)).toEqual({ nickname: "Corail_418", id: "6f1c2a52-6a8d-4b8a-9f0e-0c1d2e3f4a5b", expires: NOW + 1000 });
+  });
+});
+
+describe("SALLE-03 — a guest session has its own unguessable id, signed in the cookie", () => {
+  test("each signed cookie carries a fresh random id, even for the same nickname", () => {
+    const first = verifyGuestSession(signGuest("Corail_418", SECRET, NOW), SECRET, NOW);
+    const second = verifyGuestSession(signGuest("Corail_418", SECRET, NOW), SECRET, NOW);
+    expect(first?.nickname).toBe("Corail_418");
+    expect(first?.id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(second?.id).not.toBe(first?.id);
+  });
+
+  test("the id cannot be swapped without breaking the signature", () => {
+    const [, sig] = signGuest("Corail_418", SECRET, NOW, "11111111-1111-4111-8111-111111111111").split(".");
+    const forged = `${Buffer.from(JSON.stringify({ n: "Corail_418", e: NOW + 1000, i: "22222222-2222-4222-8222-222222222222" })).toString("base64url")}.${sig}`;
+    expect(verifyGuestSession(forged, SECRET, NOW)).toBeNull();
+  });
+
+  test("a signed cookie without an id (older format) carries no session id", () => {
+    const payload = Buffer.from(JSON.stringify({ n: "Corail_418", e: NOW + 1000 })).toString("base64url");
+    const old = `${payload}.${createHmac("sha256", SECRET).update(payload).digest("base64url")}`;
+    expect(verifyGuest(old, SECRET, NOW)).toBe("Corail_418");
+    expect(verifyGuestSession(old, SECRET, NOW)?.id).toBeNull();
+  });
+
+  test("readGuestSession reads the id from the request cookies", () => {
+    const value = signGuest("Corail_418", SECRET, NOW, "33333333-3333-4333-8333-333333333333");
+    expect(readGuestSession(withCookie(value), SECRET, NOW)).toMatchObject({ nickname: "Corail_418", id: "33333333-3333-4333-8333-333333333333" });
+    expect(readGuestSession(new Headers(), SECRET, NOW)).toBeNull();
   });
 });

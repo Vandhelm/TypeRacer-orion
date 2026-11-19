@@ -11,6 +11,15 @@ type Props = { keys: KeyCounts; layout: Layout; onLayout: (layout: Layout) => vo
 const levelOf = (rate: number) => Math.min(1, rate / RATE_MAX);
 
 /** Le taux d'erreur de chaque touche, sur un clavier AZERTY ou QWERTY, avec les touches les plus ratées en clair. */
+// Staggered rows, like a real keyboard; the space bar row is centered.
+const ROW_SHIFT = ["", "pl-[3%]", "pl-[5%]", "pl-[7%]", "justify-center"];
+// The board keys keep their CSS (heat color, rows, swap animation): styles/pages/profile/profile.css.
+const WORST = "mt-auto pt-7 font-mono text-[max(12px,1.4vh)] leading-[1.6] font-normal text-muted";
+// A small key tinted by its error rate (--heat, 0 to 100 %)
+const MINI_KEY =
+  "inline-flex h-[26px] min-w-[26px] items-center justify-center border border-line-faint px-1.5 font-mono leading-none font-normal text-white " +
+  "bg-[color-mix(in_srgb,var(--color-red-solid)_var(--heat,0%),var(--color-face-front-b))]";
+
 export function KeyboardHeatmap({ keys, layout, onLayout }: Props) {
   const { t, i18n } = useTranslation();
   const heat = useMemo(() => heatOf(layout, keys), [layout, keys]);
@@ -19,9 +28,11 @@ export function KeyboardHeatmap({ keys, layout, onLayout }: Props) {
   const nameOf = (label: string) => label || t("profile.keys.space");
 
   return (
-    <div className="keymap">
-      <div className="keymap-head">
-        <h3 className="keymap-title"><i className="key-swatch" />{t("profile.keys.title")}</h3>
+    <div className="flex min-w-0 flex-1 flex-col">
+      <div className="keymap-head mb-7 flex flex-wrap items-center justify-between gap-x-5 gap-y-3">
+        <h3 className="inline-flex items-center gap-2 font-mono text-[max(11px,1.2vh)] leading-none font-normal tracking-[.08em] text-muted">
+          <i className="inline-block size-2.5 border border-line-faint bg-[linear-gradient(135deg,var(--color-face-front-b),var(--color-red-solid))]" />
+          {t("profile.keys.title")}</h3>
         <ViewTabs
           options={LAYOUTS.map((value) => ({ value, label: value.toUpperCase() }))}
           value={layout}
@@ -30,9 +41,9 @@ export function KeyboardHeatmap({ keys, layout, onLayout }: Props) {
         />
       </div>
 
-      <div className="keymap-board" aria-hidden="true">
+      <div className="m-[auto_auto_0] grid w-full max-w-[640px] gap-1" aria-hidden="true">
         {rowsOf(layout).map((row, r) => (
-          <div key={r} className="keymap-row">
+          <div key={r} className={`flex gap-1 ${ROW_SHIFT[r] ?? ""}`}>
             {row.map((cap, c) => {
               const value = heat.get(cap);
               const known = !!value && value.typed >= MIN_TYPED;
@@ -53,19 +64,19 @@ export function KeyboardHeatmap({ keys, layout, onLayout }: Props) {
         ))}
       </div>
 
-      <div className="keymap-legend">
+      <div className="mt-7 flex items-center gap-2.5 font-mono text-[11px] leading-none font-normal text-muted">
         <span>0 %</span>
-        <i className="keymap-scale" />
+        <i className="h-2 w-[120px] border border-line-faint bg-[linear-gradient(90deg,var(--color-face-front-b),var(--color-red-solid))]" />
         <span>{`${percent(RATE_MAX)}+`}</span>
       </div>
 
       {worst.length ? (
-        <div className="keymap-worst">
+        <div className={WORST}>
           <span>{t("profile.keys.weakest")}</span>
-          <ul className="worst-list">
+          <ul className="mt-2 flex list-none flex-wrap gap-x-[18px] gap-y-2 [&>li]:flex [&>li]:items-center [&>li]:gap-2 [&>li]:whitespace-nowrap [&>li]:text-white [&>li]:tabular-nums">
             {worst.map(([cap, value]) => (
               <li key={cap.label}>
-                <span className={`mini-key${cap.wide ? " is-wide" : ""}`} style={{ "--heat": `${Math.round(levelOf(value.rate) * 100)}%` } as CSSProperties}>
+                <span className={`${MINI_KEY} ${cap.wide ? "text-[10px] tracking-[.08em]" : "text-[12px]"}`} style={{ "--heat": `${Math.round(levelOf(value.rate) * 100)}%` } as CSSProperties}>
                   {nameOf(cap.label)}
                 </span>
                 {percent(value.rate)}
@@ -74,7 +85,7 @@ export function KeyboardHeatmap({ keys, layout, onLayout }: Props) {
           </ul>
         </div>
       ) : (
-        <p className="keymap-worst">{t(heat.size ? "profile.keys.clean" : "profile.keys.none")}</p>
+        <p className={WORST}>{t(heat.size ? "profile.keys.clean" : "profile.keys.none")}</p>
       )}
     </div>
   );

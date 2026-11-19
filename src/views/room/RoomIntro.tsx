@@ -2,17 +2,26 @@ import { useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { IconButton } from "../../components/buttons/IconButton";
-import { CheckIcon, CopyIcon, LinkIcon, MinusIcon, PlusIcon } from "../../components/icons";
+import { CheckIcon, CopyIcon, MinusIcon, PlusIcon } from "../../components/icons";
 import { allows } from "../../rooms/access";
 import type { RoomState } from "./hooks/useRoom";
 import { clampGuests, MAX_GUESTS, MIN_GUESTS } from "./room";
+import { RoomInvites } from "./RoomInvites";
+import { LABEL, SHADE } from "./styles";
 
 /** Big numbers (guests, entry code) and the room name. */
+const VALUE = "block font-sans text-[clamp(48px,10vh,92px)] leading-none font-light tabular-nums phone:text-[clamp(40px,12vw,64px)]";
+// The room name sits on a dashed line; for the host, a white line grows under it while typing.
+const NAME_BOX = "relative mt-1 flex border-b [border-bottom-style:dashed] after:absolute after:inset-x-0 after:-bottom-px after:h-px after:bg-white";
+const NAME_LINE =
+  "after:origin-left after:[transform:scaleX(0)] after:transition-[transform] after:duration-[.35s] after:ease-[cubic-bezier(.2,.8,.2,1)] " +
+  "focus-within:after:[transform:scaleX(1)] motion-reduce:after:transition-none";
+
 export function RoomIntro({ state }: { state: RoomState }) {
   const { t } = useTranslation();
   const { room, update, host, humans } = state;
   const [nameDraft, setNameDraft] = useState(room.autoName ? "" : room.name);
-  const [copied, setCopied] = useState<"code" | "link" | null>(null);
+  const [copied, setCopied] = useState(false);
   const copyTimer = useRef(0);
   const plus = useRef<HTMLButtonElement>(null);
   const minus = useRef<HTMLButtonElement>(null);
@@ -34,53 +43,50 @@ export function RoomIntro({ state }: { state: RoomState }) {
     if (delta < 0 && next <= minGuests) plus.current?.focus();
   }
 
-  async function copy(what: "code" | "link") {
-    const text = what === "code" ? room.code : `${location.origin}/room?invite=${room.invite}`;
+  async function copyCode() {
     try {
-      await navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(room.code);
     } catch {
       return;
     }
-    setCopied(what);
+    setCopied(true);
     clearTimeout(copyTimer.current);
-    copyTimer.current = window.setTimeout(() => setCopied(null), 1500);
+    copyTimer.current = window.setTimeout(() => setCopied(false), 1500);
   }
 
-  // Salon privé : le code n'ouvre rien, seul le lien d'invitation compte (SALLE-03).
+  // Salon privé : le code n'ouvre rien, seul un lien d'invitation compte (SALLE-03, SALLE-04 : RoomInvites).
   const byCode = allows(room.visibility, "code");
 
   return (
     <div className="[grid-area:left]">
-      <div className="room-hero">
-        <div className="room-shade" role="group" aria-labelledby="guests-label">
-          <span className="room-label" id="guests-label">{t("room.guests")}</span>
-          <div className="room-value-row">
-            <output className="room-value" aria-live="polite">{room.guests}</output>
+      <div className="flex flex-wrap gap-x-[clamp(32px,5vw,72px)] gap-y-[clamp(16px,3vh,28px)]">
+        <div className={SHADE} role="group" aria-labelledby="guests-label">
+          <span className={LABEL} id="guests-label">{t("room.guests")}</span>
+          <div className="mt-2 flex items-center gap-3">
+            <output className={VALUE} aria-live="polite">{room.guests}</output>
             <div className="flex flex-col gap-1" hidden={!host}>
               <IconButton ref={plus} label={t("room.addGuest")} disabled={room.guests >= MAX_GUESTS} onClick={() => changeGuests(1)}><PlusIcon /></IconButton>
               <IconButton ref={minus} label={t("room.removeGuest")} disabled={room.guests <= minGuests} onClick={() => changeGuests(-1)}><MinusIcon /></IconButton>
             </div>
           </div>
         </div>
-        <div className="room-shade">
-          <span className="room-label">{t(byCode ? "room.entryCode" : "room.inviteOnly")}</span>
-          <div className="room-value-row">
-            <span className="room-value room-code">{byCode ? room.code : t("room.link")}</span>
+        <div className={SHADE}>
+          <span className={LABEL}>{t(byCode ? "room.entryCode" : "room.inviteOnly")}</span>
+          <div className="mt-2 flex items-center gap-3">
+            <span className={`${VALUE} tracking-[.04em]`}>{byCode ? room.code : t("room.link")}</span>
             {byCode && (
-              <IconButton label={t(copied === "code" ? "room.codeCopied" : "room.copy")} confirmed={copied === "code"} onClick={() => copy("code")}>
-                {copied === "code" ? <CheckIcon /> : <CopyIcon />}
+              <IconButton label={t(copied ? "room.codeCopied" : "room.copy")} confirmed={copied} onClick={copyCode}>
+                {copied ? <CheckIcon /> : <CopyIcon />}
               </IconButton>
             )}
-            <IconButton label={t(copied === "link" ? "room.linkCopied" : "room.copyLink")} confirmed={copied === "link"} onClick={() => copy("link")}>
-              {copied === "link" ? <CheckIcon /> : <LinkIcon />}
-            </IconButton>
           </div>
         </div>
       </div>
-      <div className="room-shade room-name">
-        <label className="room-label" htmlFor="room-name">{t("room.roomName")}</label>
-        <div className="room-name-box">
+      <div className={`${SHADE} mt-[clamp(20px,4vh,36px)] max-w-[640px] phone:mt-3`}>
+        <label className={LABEL} htmlFor="room-name">{t("room.roomName")}</label>
+        <div className={host ? `${NAME_BOX} border-b-line-soft ${NAME_LINE}` : `${NAME_BOX} border-b-transparent after:hidden`}>
           <input
+            className={`unset h-[52px] min-w-0 flex-1 font-sans text-[clamp(22px,3.4vh,32px)] leading-[1.1] font-light text-white caret-red-text placeholder:text-[rgba(255,255,255,.3)] ${host ? "" : "cursor-default"}`}
             id="room-name"
             name="name"
             type="text"
@@ -95,6 +101,7 @@ export function RoomIntro({ state }: { state: RoomState }) {
           />
         </div>
       </div>
+      <RoomInvites state={state} />
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { buildReport, idsInName, parseJunit, parseRequirementIds, renderTable } from "./requirement-tests.ts";
+import { buildReport, exitCode, idsInName, parseJunit, parseRequirementIds, primaryIds, renderTable } from "./requirement-tests.ts";
 
 const criteres = `# Exigences
 
@@ -63,25 +63,40 @@ describe("TECH-09 — requirement-tests : lecture du rapport JUnit", () => {
     expect(idsInName("TECH-01 — x > cite TECH-01 et RES-02")).toEqual(["TECH-01", "RES-02"]);
     expect(idsInName("UTF-8, ISO-8601 et rien d'autre")).toEqual([]);
   });
+
+  test("primaryIds ne garde que les ID en tête d'un describe ou d'un test", () => {
+    expect(primaryIds("HIST-02 — x > every RES-02 column")).toEqual(["HIST-02"]);
+    expect(primaryIds("bloc > AUTH-01 ignoré > TECH-01 — y")).toEqual(["AUTH-01", "TECH-01"]);
+    expect(primaryIds("voir TECH-01")).toEqual([]);
+  });
 });
 
 describe("TECH-09 — requirement-tests : rattachement et verdict", () => {
   const report = buildReport(["TECH-02", "TECH-01", "AUTH-01", "SEC-03"], parseJunit(junit));
+  const find = (id: string) => report.requirements.find((r) => r.id === id);
 
-  test("chaque test est rattaché à tous les ID de son nom complet", () => {
-    const tech01 = report.requirements.find((r) => r.id === "TECH-01");
-    expect(tech01).toMatchObject({ total: 2, passed: 1, failed: 1, skipped: 0 });
-    expect(report.requirements.find((r) => r.id === "TECH-02")).toMatchObject({ total: 1, passed: 1 });
-    expect(report.requirements.find((r) => r.id === "AUTH-01")).toMatchObject({ total: 1, skipped: 1 });
+  test("un test compte pour l'ID qui ouvre un de ses noms", () => {
+    expect(find("TECH-01")).toMatchObject({ total: 2, passed: 1, failed: 1, skipped: 0, cited: 0, files: ["src/a.test.ts"] });
   });
 
-  test("un test sans ID est ignoré, seulement compté", () => {
+  test("un ID seulement cité ne compte pas comme testé", () => {
+    expect(find("TECH-02")).toMatchObject({ total: 0, cited: 1 });
+    expect(report.citedOnly).toEqual(["TECH-02"]);
+    expect(report.untested).toEqual(["TECH-02", "SEC-03"]);
+  });
+
+  test("une exigence dont tous les tests sont ignorés est signalée", () => {
+    expect(find("AUTH-01")).toMatchObject({ total: 1, skipped: 1, passed: 0 });
+    expect(report.allSkipped).toEqual(["AUTH-01"]);
+  });
+
+  test("un test sans ID est ignoré, seulement compté avec son fichier", () => {
     expect(report.unlinkedTests).toBe(1);
+    expect(report.unlinkedFiles).toEqual(["src/a.test.ts"]);
     expect(report.requirements.flatMap((r) => r.tests).some((t) => t.name === "sans identifiant")).toBe(false);
   });
 
   test("une exigence sans test est signalée sans faire échouer", () => {
-    expect(report.untested).toEqual(["SEC-03"]);
     expect(buildReport(["SEC-03"], []).ok).toBe(true);
   });
 
@@ -94,11 +109,22 @@ describe("TECH-09 — requirement-tests : rattachement et verdict", () => {
     expect(buildReport(["TECH-02"], parseJunit(junit)).ok).toBe(true);
   });
 
-  test("le tableau Markdown liste chaque exigence dans l'ordre", () => {
+  test("--strict fait aussi échouer quand la suite échoue hors exigences", () => {
+    const green = buildReport(["SEC-03"], []);
+    expect(exitCode(green, 1, false)).toBe(0);
+    expect(exitCode(green, 1, true)).toBe(1);
+    expect(exitCode(green, 0, true)).toBe(0);
+    expect(exitCode(report, 0, false)).toBe(1);
+  });
+
+  test("le tableau ne liste que les exigences testées ou citées, le reste replié", () => {
     const table = renderTable(report);
     const rows = table.split("\n").filter((l) => /^\| [A-Z]+-\d+ /.test(l));
-    expect(rows.map((l) => l.split("|")[1]?.trim())).toEqual(["TECH-02", "TECH-01", "AUTH-01", "SEC-03"]);
-    expect(table).toContain("| TECH-01 | 2 | 1 | 1 |");
+    expect(rows.map((l) => l.split("|")[1]?.trim())).toEqual(["TECH-02", "TECH-01", "AUTH-01"]);
+    expect(table).toContain("| TECH-01 | 2 | 1 | 1 | 0 | ❌ échec |");
+    expect(table).toContain("| TECH-02 | 0 | 0 | 0 | 1 | cité seulement |");
+    expect(table).toContain("| AUTH-01 | 1 | 0 | 0 | 0 | ⚠️ ignorés |");
+    expect(table).toMatch(/<details><summary>2 exigences sans test<\/summary>\s+TECH-02, SEC-03\s+<\/details>/);
     expect(table).toContain("ZZZ-42");
   });
 });

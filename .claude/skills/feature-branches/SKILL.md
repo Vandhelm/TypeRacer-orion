@@ -27,6 +27,8 @@ Si une branche existante du critère est en majuscules (`feature/profile-stats/A
 
 ## Avant de travailler : choisir la branche
 
+Avant tout, **réserve l'exigence sur le tableau partagé** : `bun scripts/board.ts claim <ID> --branch <branche>` (`worktree-setup.sh` le fait pour toi). Refus → une autre branche la tient ou touche les mêmes fichiers : ne commence pas, dis-le. Libère avec `release <ID>` après le merge dans `dev`. Pour enchaîner les exigences sans toi : skill `autopilot`.
+
 1. `git status --short` et `git branch --show-current`. Note les changements non commités et la branche courante.
 2. Identifie le type, la page et le critère de la tâche.
 3. Si la branche `<type>/<page>/<critère>` existe déjà (locale ou `origin/`), bascule dessus (`git switch`, ou `git switch --track origin/...`).
@@ -133,7 +135,7 @@ Si tu as commité sur la mauvaise branche par erreur et que ce n'est pas poussé
 
 ## Déléguer à l'agent dev
 
-Pour coder un critère entier, ou corriger les problèmes d'un rapport QA, la conversation principale peut confier le travail à l'agent **`dev`** (`.claude/agents/dev.md`, générique). Il charge les skills du projet (`orion-conventions`, ce skill, `criteria-check`), crée la branche, code test d'abord, commite et rend la main. Un sous-agent ne peut pas lancer d'agents : c'est la conversation principale (skill `overseer`) qui lance ensuite l'agent **`qa`**, puis relance `dev` avec son rapport, dans la limite de tours du mode (light : 1, medium : 3, complex : 10). Il ne pousse pas et ne merge pas.
+Pour coder un critère entier, ou corriger les problèmes d'un rapport QA, la conversation principale peut confier le travail à l'agent **`dev`** (`~/.claude/agents/dev.md`, générique, copie globale unique). Il charge les skills du projet (`orion-conventions`, ce skill, `criteria-check`), crée la branche, code test d'abord, commite et rend la main. Un sous-agent ne peut pas lancer d'agents : c'est la conversation principale (skill `overseer`) qui lance ensuite l'agent **`qa`**, puis relance `dev` avec son rapport, dans la limite de tours du mode (light : 1, medium : 3, complex : 10). Il ne pousse pas et ne merge pas.
 
 **Mode.** Par défaut, tout part en **light** : un seul `dev`, une QA rapide sur le critique, une correction au plus. **medium** et **complex** seulement si l'utilisateur les nomme (« en medium », « go for it »). Pour plusieurs critères à la fois, ou un mode medium ou complex, applique plutôt le skill **`overseer`** dans la conversation principale, qui répartit le travail entre plusieurs `dev` et `qa` selon le mode. Dans ce projet, l'`overseer` suit ce skill : pas de push ni de merge sans l'accord de l'utilisateur.
 

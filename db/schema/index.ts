@@ -4,3 +4,4 @@ export * from "./races";
 export * from "./rooms";
 export * from "./texts";
 export * from "./auth";
+export * from "./rate-limits";

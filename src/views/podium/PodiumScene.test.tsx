@@ -11,7 +11,7 @@ const player = (name: string, rank: number): PlayerResult => ({
 });
 const PLAYERS = [player("Moi", 1), player("Nori_Ninja", 2)];
 const render = (raceId?: number | null) =>
-  renderToStaticMarkup(<I18nextProvider i18n={instance}><PodiumScene players={PLAYERS} arrived raceId={raceId} /></I18nextProvider>);
+  renderToStaticMarkup(<I18nextProvider i18n={instance}><PodiumScene players={PLAYERS} arrived raceId={raceId} roomHref="/room?code=ABC234" /></I18nextProvider>);
 
 describe("HIST-02 — the podium of a past race", () => {
   test("offers no replay: /game would start a race of the current room", () => {
@@ -21,7 +21,7 @@ describe("HIST-02 — the podium of a past race", () => {
     expect(html).toContain('href="/profile#stats"');
   });
 
-  test("after a race just played, the replay link stays", () => {
-    expect(render()).toContain('<a class="podium-play" href="/game">');
+  test("after a race just played, the replay link stays, through the room of the race (SALLE-09)", () => {
+    expect(render()).toContain('<a class="podium-play" href="/room?code=ABC234">');
   });
 });
