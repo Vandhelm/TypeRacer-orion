@@ -13,6 +13,7 @@
     "rooms": "ROOMS",
     "code": "Got a code?",
     "enterCode": "ENTER",
+    "badCode": "This code isn't valid: it has 6 letters or digits, like K7Q2M9.",
     "username": "Username",
     "password": "Password",
     "show": "SHOW",
@@ -125,7 +126,8 @@
       "no_free_code": "The room can't be created right now. Try again.",
       "rate_limited": "Too many code attempts. Try again in a minute.",
       "network": "The server isn't answering. Check your connection.",
-      "unauthorized": "Choose a nickname first."
+      "unauthorized": "Choose a nickname first.",
+      "bad_code": "This code isn't valid: a room code has 6 letters or digits, like K7Q2M9."
     },
     "textLanguage": "Text language",
     "french": "French",

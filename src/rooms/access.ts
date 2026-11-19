@@ -32,6 +32,15 @@ export function isRoomCode(value: string) {
   return new RegExp(CODE_PATTERN).test(value);
 }
 
+/**
+ * JOIN-01 : où mène le champ « Tu as un code ? » de l'accueil. Null : la saisie ne fait pas un code (trop courte, trop
+ * longue, caractères ambigus) ; l'accueil le dit au lieu d'ouvrir une salle. Le serveur décide ensuite si le salon existe.
+ */
+export function joinByCodeHref(input: string): string | null {
+  const code = [...input.toUpperCase()].filter((c) => CODE_ALPHABET.includes(c)).join("");
+  return isRoomCode(code) ? `/room?code=${code}` : null;
+}
+
 /** SALLE-04 : octets d'aléa d'un jeton d'invitation, 256 bits (le minimum exigé est 128). */
 export const INVITE_TOKEN_BYTES = 32;
 
