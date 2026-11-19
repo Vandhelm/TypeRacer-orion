@@ -72,9 +72,9 @@ export function RoomsView({ descending, ref }: { descending: boolean; ref?: Ref<
               title={`${t("rooms.table")} ${room.n}`}
               serial={`${t("rooms.serial")} ${room.serial}`}
               rows={[
-                { label: t("rooms.lang"), value: t(room.lang === "fr" ? "rooms.codeFr" : "rooms.codeEn"), valueClassName: "v-lang" },
+                { label: t("rooms.lang"), value: t(room.lang === "fr" ? "rooms.codeFr" : "rooms.codeEn") },
                 { label: t("rooms.guests"), value: room.guests },
-                { label: t("rooms.bots"), value: t(room.bots ? "rooms.yes" : "rooms.no"), valueClassName: room.bots ? "v-bots yes" : "v-bots" },
+                { label: t("rooms.bots"), value: t(room.bots ? "rooms.yes" : "rooms.no"), highlight: room.bots },
               ]}
               stampLabel={t("rooms.reserved")}
               stub={{ ...stubOf(i), onAction: () => take(i) }}
