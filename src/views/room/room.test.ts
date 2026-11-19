@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import type { TFunction } from "i18next";
 import { arrivalOf, raceHref, readSession, roomHrefOutsideRace, seatsOf } from "./room";
 
@@ -94,6 +95,44 @@ describe("SALLE-09 — /game finds the launched room and never creates one", () 
     expect(raceHref("racing", "ABC234", true)).toBeNull();
     expect(raceHref("racing", "ABC234", false)).toBe("/game?code=ABC234");
   });
+});
+
+describe("JOIN-01 — a code typed by hand is checked before anything opens", () => {
+  test("a well-formed code joins the room, whoever arrives", () => {
+    expect(arrivalOf("?code=K7Q2M9", "room", true)).toEqual({ action: "join", via: { code: "K7Q2M9" } });
+    expect(arrivalOf("?code=k7q2m9", "room", false)).toEqual({ action: "join", via: { code: "K7Q2M9" } });
+  });
+
+  test("a malformed code is refused on the page, without asking the server", () => {
+    expect(arrivalOf("?code=K7Q", "room", true)).toEqual({ action: "refused", error: "bad_code" });
+    expect(arrivalOf("?code=K7Q2M9X", "room", false)).toEqual({ action: "refused", error: "bad_code" });
+  });
+
+  test("a code made only of invalid characters never creates a room for an account", () => {
+    expect(arrivalOf("?code=0000", "room", false)).toEqual({ action: "refused", error: "bad_code" });
+    expect(arrivalOf("?code=%3Cscript%3E", "room", false)).toEqual({ action: "refused", error: "bad_code" });
+  });
+
+  test("an empty code parameter keeps the usual arrival", () => {
+    expect(arrivalOf("?code=", "room", false)).toEqual({ action: "create" });
+    expect(arrivalOf("?code=", "room", true)).toBeNull();
+  });
+});
+
+describe("JOIN-01 — the errors of a code are written in French and English", () => {
+  const fr: unknown = JSON.parse(readFileSync("src/i18n/locales/fr.json", "utf8"));
+  const en: unknown = JSON.parse(readFileSync("src/i18n/locales/en.json", "utf8"));
+  const at = (tree: unknown, path: string[]) => path.reduce<unknown>((node, key) => (node as Record<string, unknown> | undefined)?.[key], tree);
+
+  for (const path of [["home", "badCode"], ["room", "errors", "not_found"], ["room", "errors", "bad_code"]]) {
+    test(`${path.join(".")} is a sentence in both languages, not the same one`, () => {
+      const [a, b] = [at(fr, path), at(en, path)];
+      expect(typeof a).toBe("string");
+      expect(typeof b).toBe("string");
+      expect(String(a).length).toBeGreaterThan(10);
+      expect(a).not.toBe(b);
+    });
+  }
 });
 
 describe("SALLE-09 — /game runs a race only while the room is racing", () => {
