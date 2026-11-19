@@ -2,6 +2,7 @@
 // refus → statut HTTP. Toute règle (hôte, accès, état) est dans rooms.ts, appliquée par le serveur (SEC-01).
 import type { Db } from "../../db/client";
 import { isRoomCode } from "../rooms/access";
+import { parseRoomFilters } from "../rooms/explorer";
 import { CreateRoomSchema, JoinRoomSchema, KickSchema, UpdateRoomSchema } from "../rooms/settings";
 import type { Auth } from "./auth";
 import { clientIp, type IpContext } from "./client-ip";
@@ -53,8 +54,13 @@ export async function handleRoomsApi(req: Request, db: Db, auth: Auth, secret = 
     return run(() => createRoom(db, { playerId: who.playerId, ip: clientIp(req.headers, ip) }, input.data), 201);
   }
 
-  // GET /api/rooms — SALLE-03 : les salons publics seulement, pour l'explorateur et « Faire une course »
-  if (parts.length === 0 && req.method === "GET") return json({ rooms: await listPublicRooms(db) });
+  // GET /api/rooms — SALLE-03 : les salons publics seulement, pour l'explorateur et « Faire une course ».
+  // JOIN-02 : filtres ?language= et ?level=, validés (TECH-07) ; tout autre paramètre est refusé.
+  if (parts.length === 0 && req.method === "GET") {
+    const filters = parseRoomFilters(new URL(req.url).searchParams);
+    if (!filters) return json({ error: "invalid_query" }, 400);
+    return json({ rooms: await listPublicRooms(db, filters) });
+  }
 
   // POST /api/rooms/join — SALLE-03 : par code (public, sur code) ou par lien d'invitation (toutes visibilités)
   if (parts.length === 1 && parts[0] === "join" && req.method === "POST") {

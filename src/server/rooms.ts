@@ -5,6 +5,7 @@ import type { z } from "zod";
 import type { Db } from "../../db/client";
 import { players, raceConfigs, roomBans, roomMembers, rooms } from "../../db/schema";
 import { allows, canJoin, newRoomCode } from "../rooms/access";
+import type { RoomFilters } from "../rooms/explorer";
 import { seatColor } from "../rooms/seats";
 import { claimInvite, revokeInvitesOf, roomOfInvite } from "./room-invites";
 import { DEFAULT_SETTINGS, type CreateRoomSchema, type Role, type RoomSettings, type UpdateRoomSchema } from "../rooms/settings";
@@ -305,18 +306,29 @@ export async function updateRoom(db: Db, code: string, who: Identity, input: Upd
 // ---------------------------------------------------------------------------------------------------------------------
 // SALLE-03 : liste et entrée
 
-/** Ce que montre l'explorateur d'un salon public. Ni lien d'invitation, ni membres nommés. */
-export type ListedRoom = { code: string; name: string; autoName: boolean; language: RoomSettings["language"]; guests: number; bots: boolean; players: number; status: RoomStatus };
+/**
+ * Ce que montre l'explorateur d'un salon public. Ni lien d'invitation, ni clé de membre : seulement le nom de l'hôte.
+ * JOIN-02 : participants et capacité (guests), langue du texte, complexité (level), hôte et état.
+ */
+export type ListedRoom = { code: string; name: string; autoName: boolean; language: RoomSettings["language"]; level: RoomSettings["level"]; guests: number; bots: boolean; players: number; host: string; status: RoomStatus };
 
-/** Les salons publics ouverts, les plus récents d'abord. Un salon « sur code » ou privé n'y est jamais. */
-export async function listPublicRooms(db: Db, limit = 50): Promise<ListedRoom[]> {
+/** Les salons publics ouverts, les plus récents d'abord. Un salon « sur code » ou privé n'y est jamais. JOIN-02 : filtres langue et complexité. */
+export async function listPublicRooms(db: Db, filters: RoomFilters = {}, limit = 50): Promise<ListedRoom[]> {
   await sweepAll(db);
   const playerCount = sql<number>`(select count(*) from ${roomMembers} where ${roomMembers.roomId} = ${rooms.id} and ${roomMembers.role} = 'player')`.mapWith(Number);
   return db
-    .select({ code: rooms.code, name: rooms.name, autoName: rooms.autoName, language: raceConfigs.language, guests: rooms.guests, bots: rooms.bots, players: playerCount, status: rooms.status })
+    .select({ code: rooms.code, name: rooms.name, autoName: rooms.autoName, language: raceConfigs.language, level: raceConfigs.level, guests: rooms.guests, bots: rooms.bots, players: playerCount, host: players.name, status: rooms.status })
     .from(rooms)
     .innerJoin(raceConfigs, eq(raceConfigs.id, rooms.configId))
-    .where(and(eq(rooms.visibility, "public"), ne(rooms.status, "closed")))
+    .innerJoin(players, eq(players.id, rooms.hostId))
+    .where(
+      and(
+        eq(rooms.visibility, "public"),
+        ne(rooms.status, "closed"),
+        filters.language ? eq(raceConfigs.language, filters.language) : undefined,
+        filters.level ? eq(raceConfigs.level, filters.level) : undefined,
+      ),
+    )
     .orderBy(desc(rooms.createdAt), desc(rooms.id))
     .limit(limit);
 }
