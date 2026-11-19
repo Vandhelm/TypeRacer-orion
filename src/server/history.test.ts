@@ -5,7 +5,7 @@ import { createMockDatabase } from "../../db/mocks/test-database";
 import { placeholderEmail } from "../accounts/username";
 import { createAuth } from "./auth";
 import { GUEST_COOKIE, signGuest } from "./guest";
-import { handleHistory, HISTORY_PAGE_SIZE } from "./history";
+import { handleHistory, HISTORY_PAGE_SIZE, loadHistoryRace } from "./history";
 import { handleRace, parseRace, recordRace } from "./races";
 import { RACE_ERRORS, submitRace, toResults } from "../views/podium/results";
 
@@ -334,5 +334,30 @@ describe("HIST-02 — a past race shows every participant at their real rank, hu
     const theirs = (await (await t.call("/api/history", friend.cookie)).json()) as ListBody;
     expect(theirs.races).toEqual([]);
     expect((await t.call(`/api/history/${id}`, friend.cookie)).status).toBe(404);
+  });
+});
+
+describe("TECH-01 — /podium?race=N lit la course côté serveur, avec les mêmes refus que l'API", () => {
+  let t: Awaited<ReturnType<typeof setup>>;
+  beforeAll(async () => {
+    t = await setup();
+  });
+  const load = (raw: string, cookie?: string) => loadHistoryRace(new Headers(cookie ? { cookie } : {}), t.auth, t.db, raw, SECRET);
+
+  test("sa propre course : les résultats, au format du podium", async () => {
+    const me = await t.signUp("Podium_Ssr");
+    const id = await t.race(me.playerId, "Podium_Ssr", 64);
+    const loaded = await load(String(id), me.cookie);
+    expect("results" in loaded && toResults(loaded.results)?.players.map((p) => p.name)).toEqual(["Nori_Ninja", "Podium_Ssr"]);
+  });
+
+  test("sans session, invité, id mal formé ou course d'un autre : le code d'erreur de l'API", async () => {
+    const owner = await t.signUp("Podium_Owner");
+    const other = await t.signUp("Podium_Other");
+    const id = String(await t.race(owner.playerId, "Podium_Owner", 50));
+    expect(await load(id)).toEqual({ error: "unauthorized" });
+    expect(await load(id, t.guest("Invite_7"))).toEqual({ error: "account_required" });
+    expect(await load("0x1", owner.cookie)).toEqual({ error: "invalid_race" });
+    expect(await load(id, other.cookie)).toEqual({ error: "not_found" });
   });
 });

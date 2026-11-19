@@ -153,31 +153,46 @@ export async function raceDetail(db: Db, playerId: number, raceId: number) {
 export type RaceDetail = Awaited<ReturnType<typeof raceDetail>>;
 
 /** Le joueur du compte de la session ; "guest" pour un invité signé ; null sans session. */
-async function accountOf(req: Request, auth: Auth, secret: string): Promise<number | "guest" | "none" | null> {
-  const session = await auth.api.getSession({ headers: req.headers }).catch(() => null);
+async function accountOf(headers: Headers, auth: Auth, secret: string): Promise<number | "guest" | "none" | null> {
+  const session = await auth.api.getSession({ headers }).catch(() => null);
   if (session) return (session.user as { playerId?: number | null }).playerId ?? "none";
-  return readGuest(req.headers, secret) ? "guest" : null;
+  return readGuest(headers, secret) ? "guest" : null;
+}
+
+const HTTP_STATUS = { unauthorized: 401, account_required: 403, invalid_race: 400, not_found: 404 } as const;
+export type RaceLoad = { results: RaceDetail } | { error: keyof typeof HTTP_STATUS };
+
+/**
+ * HIST-02 : une course de l'historique pour ces en-têtes, ou le refus. Partagé par GET /api/history/<id>
+ * et par la page /podium?race=<id>, rendue côté serveur (TECH-01) : mêmes contrôles, mêmes codes, dans le même ordre.
+ */
+export async function loadHistoryRace(headers: Headers, auth: Auth, db: Db, rawId: string, secret = guestSecret()): Promise<RaceLoad> {
+  const who = await accountOf(headers, auth, secret);
+  if (who === null) return { error: "unauthorized" };
+  if (who === "guest") return { error: "account_required" };
+  const raceId = RaceIdSchema.safeParse(rawId);
+  if (!raceId.success) return { error: "invalid_race" };
+  if (who === "none") return { error: "not_found" };
+  try {
+    return { results: await raceDetail(db, who, raceId.data) };
+  } catch (error) {
+    if (error instanceof HistoryRefused) return { error: error.reason };
+    throw error;
+  }
 }
 
 /** GET /api/history?page=N (HIST-01) et GET /api/history/<id> (HIST-02). */
 export async function handleHistory(req: Request, db: Db, auth: Auth, secret = guestSecret()): Promise<Response> {
   if (req.method !== "GET") return json({ error: "method_not_allowed" }, 405);
-  const who = await accountOf(req, auth, secret);
-  if (who === null) return json({ error: "unauthorized" }, 401);
-  if (who === "guest") return json({ error: "account_required" }, 403);
   const url = new URL(req.url);
   const detail = url.pathname.match(/^\/api\/history\/([^/]+)\/?$/);
   if (detail) {
-    const raceId = RaceIdSchema.safeParse(detail[1]);
-    if (!raceId.success) return json({ error: "invalid_race" }, 400);
-    if (who === "none") return json({ error: "not_found" }, 404);
-    try {
-      return json(await raceDetail(db, who, raceId.data));
-    } catch (error) {
-      if (error instanceof HistoryRefused) return json({ error: error.reason }, 404);
-      throw error;
-    }
+    const loaded = await loadHistoryRace(req.headers, auth, db, detail[1]!, secret);
+    return "results" in loaded ? json(loaded.results) : json({ error: loaded.error }, HTTP_STATUS[loaded.error]);
   }
+  const who = await accountOf(req.headers, auth, secret);
+  if (who === null) return json({ error: "unauthorized" }, 401);
+  if (who === "guest") return json({ error: "account_required" }, 403);
   const raw = url.searchParams.get("page");
   const page = PageSchema.safeParse(raw ?? "1");
   if (!page.success) return json({ error: "invalid_page" }, 400);
