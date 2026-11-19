@@ -16,7 +16,7 @@ Le skill **ne modifie pas le code** : ni fichier source, ni commit, ni branche. 
 
 ## Qui exécute
 
-La vérification tourne dans l'agent **`qa`** (`.claude/agents/qa.md`), qui charge ce skill et n'a que des outils de lecture. Il n'a pas le contexte de celui qui a écrit le code, donc il lit ce qui est écrit, pas ce qui était voulu.
+La vérification tourne dans l'agent **`qa`** (`~/.claude/agents/qa.md`, copie globale unique), qui charge ce skill et n'a que des outils de lecture. Il n'a pas le contexte de celui qui a écrit le code, donc il lit ce qui est écrit, pas ce qui était voulu.
 
 - Si tu es la conversation principale : lance l'agent `qa` avec la portée et, pour un critère, la branche. Ne fais la vérification toi-même que si l'agent n'est pas disponible.
 - Pour plusieurs sections (portée « site »), lance un agent `qa` par section, en parallèle, puis rassemble leurs rapports.
