@@ -55,9 +55,9 @@
     "scope": "site (light)"
   },
   "DES-02": {
-    "commit": "2acdffe",
+    "commit": "31ba082",
     "date": "2026-11-19",
-    "scope": "suivi (light)"
+    "scope": "critère (light)"
   },
   "DES-03": {
     "commit": "1fba673",
