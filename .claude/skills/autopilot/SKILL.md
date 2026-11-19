@@ -17,7 +17,7 @@ Lancement conseillé : `/loop /autopilot` (rythme libre). Chaque tour reprend l'
 - **Mode** : medium par exigence (3 tours dev → qa au plus), sauf mode nommé par l'utilisateur.
 - **Merge** : le pilote merge seul dans `dev`, une branche à la fois, sous `lock merge`. Il pousse les branches de travail, **jamais `dev` ni `main`**.
 - **Matrice** : écrite par le pilote seul, sur `dev`, dans un commit à part (le hook `pre-commit` refuse le reste).
-- **Pas de nettoyage** : le pilote ne supprime ni branche ni worktree qu'il n'a pas créés.
+- **Nettoyage** : après chaque merge, le pilote supprime le worktree et la branche locale qu'il vient de merger (étape 3.6). Il ne supprime jamais une branche non mergée, ni une branche ou un worktree qu'il n'a pas créés, ni rien sur `origin`.
 
 ## Un tour
 
@@ -36,6 +36,7 @@ Lancement conseillé : `/loop /autopilot` (rythme libre). Chaque tour reprend l'
       rouge → `git merge --abort`, `stage <ID> fix` et relance le `dev` avec la sortie ;
       conflit → `git merge --abort`, `stage <ID> fix`, relance le `dev` : « merge dev dans ta branche et résous ».
    5. `git switch --detach` (libère `dev`), `lock merge release --branch <branche>`.
+   6. Si le merge est fait : `git worktree remove <worktree du dev>` (refus s'il reste des fichiers modifiés : laisse-le et note-le pour le rapport), puis `git branch -d <branche>` (`-d` seulement : il refuse une branche non mergée).
 4. **Créneaux libres** : `bun scripts/board.ts next --slots <2 - dev en cours>`. Pour chaque exigence proposée :
    - `claim <ID> --branch feature/<page>/<id-minuscule>` (convention de `feature-branches`) ;
    - lance le `dev` en arrière-plan, worktree isolé, base `dev`, avec la ligne de matrice et le texte de `docs/criteres.md`.
