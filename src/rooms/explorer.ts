@@ -15,3 +15,12 @@ export function parseRoomFilters(params: URLSearchParams): RoomFilters | null {
   return parsed.success ? parsed.data : null;
 }
 
+
+/** La requête de l'explorateur pour ces filtres : « » sans filtre, sinon « ?language=fr&level=rich ». */
+export function roomFiltersQuery(filters: RoomFilters): string {
+  const params = new URLSearchParams();
+  if (filters.language) params.set("language", filters.language);
+  if (filters.level) params.set("level", filters.level);
+  const query = params.toString();
+  return query ? `?${query}` : "";
+}
