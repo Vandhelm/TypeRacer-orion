@@ -1,5 +1,5 @@
 import { describe, expect, spyOn, test } from "bun:test";
-import { allows, canJoin, cleanRoomCode, CODE_ALPHABET, isListed, isRoomCode, newInviteToken, newRoomCode } from "./access";
+import { allows, canJoin, cleanRoomCode, CODE_ALPHABET, isListed, inviteDetour, inviteReturn, isInviteToken, isRoomCode, newInviteToken, newRoomCode } from "./access";
 
 describe("room code", () => {
   test("has no ambiguous characters", () => {
@@ -84,5 +84,26 @@ describe("SALLE-09 — joinable states", () => {
     expect(canJoin("results")).toBe(true);
     expect(canJoin("racing")).toBe(false);
     expect(canJoin("closed")).toBe(false);
+  });
+});
+
+describe("SALLE-04 — a visitor without a session keeps their invite link while choosing a nickname", () => {
+  const token = "A".repeat(42) + "_";
+  const q = (init: Record<string, string>) => new URLSearchParams(init);
+
+  test("the room page sends them home with the token, and home sends them back to the room", () => {
+    expect(inviteDetour(q({ invite: token }))).toBe(`/?invite=${token}`);
+    expect(inviteReturn(q({ invite: token }))).toBe(`/room?invite=${token}`);
+  });
+
+  test("without a well-formed token: plain home, and no return", () => {
+    for (const bad of [{} as Record<string, string>, { invite: "" }, { invite: "short" }, { invite: `${token}x` }, { invite: "A".repeat(42) + "/" }]) {
+      expect(inviteDetour(q(bad))).toBe("/");
+      expect(inviteReturn(q(bad))).toBeNull();
+    }
+  });
+
+  test("a real token is well formed", () => {
+    expect(isInviteToken(newInviteToken())).toBe(true);
   });
 });

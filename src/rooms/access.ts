@@ -41,6 +41,21 @@ export function newInviteToken(random: RandomBytes = cryptoBytes) {
   return btoa(String.fromCharCode(...random(INVITE_TOKEN_BYTES))).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
 }
 
+/** SALLE-04 : un jeton d'invitation bien formé, tel que newInviteToken le tire (43 caractères base64url). */
+export const isInviteToken = (value: string) => /^[A-Za-z0-9_-]{43}$/.test(value);
+
+/** SALLE-04 : sans session, /room?invite=T renvoie choisir un pseudonyme à l'accueil en gardant le jeton. */
+export function inviteDetour(query: URLSearchParams): string {
+  const token = query.get("invite");
+  return token && isInviteToken(token) ? `/?invite=${token}` : "/";
+}
+
+/** SALLE-04 : une fois le pseudonyme choisi ou le compte ouvert, l'accueil ramène au lien gardé, s'il y en a un. */
+export function inviteReturn(query: URLSearchParams): string | null {
+  const token = query.get("invite");
+  return token && isInviteToken(token) ? `/room?invite=${token}` : null;
+}
+
 export const VISIBILITIES = ["private", "semi", "public"] as const;
 export type Visibility = (typeof VISIBILITIES)[number];
 export type Access = "listed" | "code" | "invite";

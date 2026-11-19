@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { inviteDetour } from "../../../rooms/access";
 import { DEFAULT_SETTINGS, type Role, type RoomSettings } from "../../../rooms/settings";
 import type { RoomResult } from "../../../server/rooms";
 import { arrivalRequest, roomApi, watchRoom, type Answer, type RoomError } from "../api";
@@ -44,7 +45,7 @@ export function useRoom(page: "room" | "game" = "room") {
   const answer = useCallback(
     (reply: Answer) => {
       if (reply.ok) apply(reply.result);
-      else if (reply.error === "unauthorized") location.replace("/");
+      else if (reply.error === "unauthorized") location.replace(inviteDetour(new URLSearchParams(location.search)));
       else {
         setCurrent(reply.current ?? null);
         setError(reply.error);
