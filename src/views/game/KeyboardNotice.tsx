@@ -24,7 +24,7 @@ export function KeyboardNotice({ room, onLeave }: { room: string; onLeave: () =>
   return (
     <main className="grid min-h-screen place-content-center justify-items-center gap-6 bg-black px-6 py-24 text-center font-sans text-white">
       <LanguageSwitcher className={FLOATING_TABS} />
-      <HangingButton className="game-leave" href="/home" onClick={onLeave}>{t("room.leave")}</HangingButton>
+      <HangingButton href="/home" onClick={onLeave}>{t("room.leave")}</HangingButton>
       <p className="flex items-center gap-3 font-mono text-[11px] leading-none tracking-[.22em] text-muted uppercase before:size-[.72em] before:flex-none before:border before:border-[rgba(255,140,120,.4)] before:bg-red before:[transform:rotate(45deg)]">
         {room}
       </p>
