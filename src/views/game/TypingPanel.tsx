@@ -7,6 +7,14 @@ import { TypingText } from "./TypingText";
 const LOCKED_KEYS = ["Enter", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"];
 
 /** Timer, stats and the text itself. The real input is invisible and covers the panel: the player writes "in" the text. */
+// The player writes directly in the text: the real input is an invisible layer over the panel.
+const PANEL =
+  "group game-panel relative grid cursor-text grid-cols-[minmax(0,1fr)_auto] items-center gap-x-[3vw] gap-y-[1.4vh] py-[1.4vh] compact:col-[1/-1] narrow:py-2.5 " +
+  "animate-[rise_.8s_.2s_cubic-bezier(.2,.8,.2,1)_both] motion-reduce:animate-none";
+const STAT = "flex items-baseline gap-[.7vh]";
+const STAT_LABEL = "min-w-0 truncate font-mono text-[max(10px,1.1vh)] leading-none font-normal tracking-[.2em] text-muted";
+const STAT_VALUE = "-order-1 font-sans text-[max(18px,2.4vh)] leading-none font-light tracking-[.04em] whitespace-nowrap tabular-nums";
+
 export function TypingPanel({ race, onInput, lang }: { race: Race; onInput: (value: string) => void; lang: string }) {
   const { t, i18n } = useTranslation();
   const input = useRef<HTMLInputElement>(null);
@@ -34,19 +42,19 @@ export function TypingPanel({ race, onInput, lang }: { race: Race; onInput: (val
   }, []);
 
   return (
-    <section className="game-panel" aria-label={t("game.typingArea")}>
-      <div className="game-stats">
-        <p className="game-stat"><span className="game-stat-label">{t("game.wpm")}</span><b>{formatNumber(i18n.language, myWpm(race))}</b></p>
-        <p className="game-stat"><span className="game-stat-label">{t("game.accuracy")}</span><b>{formatNumber(i18n.language, myAccuracy(race))} %</b></p>
+    <section className={PANEL} aria-label={t("game.typingArea")}>
+      <div className="col-start-2 row-start-1 flex gap-[2.4vh] narrow:gap-4">
+        <p className={STAT}><span className={STAT_LABEL}>{t("game.wpm")}</span><b className={STAT_VALUE}>{formatNumber(i18n.language, myWpm(race))}</b></p>
+        <p className={STAT}><span className={STAT_LABEL}>{t("game.accuracy")}</span><b className={STAT_VALUE}>{formatNumber(i18n.language, myAccuracy(race))} %</b></p>
       </div>
-      <p className="game-timer" role="timer" aria-label={`${t("game.time")} ${seconds} s`}>{timerPrefix}{seconds}</p>
+      <p className="col-start-1 row-start-1 font-mono text-[max(18px,2.6vh)] leading-none font-normal text-red-text tabular-nums" role="timer" aria-label={`${t("game.time")} ${seconds} s`}>{timerPrefix}{seconds}</p>
       <TypingText words={race.course.words} wordIndex={race.wordIndex} typed={race.typed} missed={race.missedWords} active={racing} lang={lang} />
-      <div className="game-input-layer">
+      <div className="absolute inset-0 z-2">
         <label htmlFor="game-input" className="sr-only">{t("game.typeHere")}</label>
         <input
           ref={input}
           id="game-input"
-          className="game-input"
+          className="unset box-border block size-full cursor-text text-[16px] text-transparent caret-transparent opacity-0"
           type="text"
           lang={lang}
           autoComplete="off"

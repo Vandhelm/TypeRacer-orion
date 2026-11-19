@@ -4,7 +4,10 @@ import { HangingTabs } from "./HangingTabs";
 
 const TABS = (["fr", "en"] as const).map((code) => ({ value: code, label: code.toUpperCase(), ariaLabel: languages[code] }));
 
-/** I18N-02: FR / EN switcher hanging from the top edge, shared by every page (styles: components/tabs/hanging-tabs.css). */
+/** Pinned to the top-right corner, for pages without a navbar. */
+export const FLOATING_TABS = "fixed top-0 right-[clamp(16px,4vw,56px)] z-50 flex items-start gap-2";
+
+/** I18N-02: FR / EN switcher hanging from the top edge, shared by every page (Tailwind). */
 export function LanguageSwitcher({ className = "", onChanged }: { className?: string; onChanged?: () => void }) {
   const { t, i18n } = useTranslation();
   return (

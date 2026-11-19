@@ -6,6 +6,7 @@ import { CheckIcon, LinkIcon } from "../../components/icons";
 import { useInvites } from "./hooks/useInvites";
 import { inviteHref, inviteStatus } from "./invites";
 import type { RoomState } from "./hooks/useRoom";
+import { LABEL, SHADE } from "./styles";
 
 /** SALLE-04 : l'hôte génère un lien par invité, le copie et voit qui l'a utilisé. Rien pour les autres membres. */
 export function RoomInvites({ state }: { state: RoomState }) {
@@ -39,32 +40,39 @@ export function RoomInvites({ state }: { state: RoomState }) {
   }
 
   return (
-    <section className="room-shade room-invites" aria-labelledby="invites-label">
-      <div className="room-invites-head">
-        <h2 className="room-label" id="invites-label">{t("room.invites")}</h2>
+    <section className={`${SHADE} mt-[clamp(20px,4vh,36px)] max-w-[640px]`} aria-labelledby="invites-label">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className={LABEL} id="invites-label">{t("room.invites")}</h2>
         <SmallButton onClick={createAndCopy} disabled={busy}>{t("room.newInvite")}</SmallButton>
       </div>
-      {error && <p className="room-invites-error" role="alert">{t(`room.errors.${error}`)}</p>}
+      {error && <p className="mt-2.5 font-mono text-[max(12px,1.4vh)] leading-[1.4] text-red-text" role="alert">{t(`room.errors.${error}`)}</p>}
       {invites.length === 0 ? (
-        <p className="room-invites-empty">{t("room.noInvite")}</p>
+        <p className="mt-2.5 font-mono text-[max(12px,1.4vh)] leading-[1.4] text-muted">{t("room.noInvite")}</p>
       ) : (
-        <ol className="room-invites-list">
+        // sans défilement propre : une liste qui défile couperait l'infobulle du bouton copier (barre horizontale à 360 px)
+        <ol className="mt-2 list-none p-0">
           {invites.map((invite, index) => {
             const status = inviteStatus(invite);
             const done = copied === invite.token;
             return (
-              <li key={invite.token} className={`room-invite room-invite-${invite.status}`}>
-                <span className="room-invite-name">{t("room.inviteN", { n: index + 1 })}</span>
-                <span className="room-invite-status">{t(status.key, { name: status.name })}</span>
+              <li
+                key={invite.token}
+                className={`room-invite grid min-h-[44px] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border-b border-dashed border-line-soft font-mono text-[max(12px,1.4vh)] leading-[1.3] ${invite.status === "revoked" ? "opacity-60" : ""}`}>
+                <span className="tracking-[.1em] uppercase">{t("room.inviteN", { n: index + 1 })}</span>
+                <span className={`overflow-hidden text-ellipsis whitespace-nowrap ${invite.status === "used" ? "" : "text-muted"}`}>{t(status.key, { name: status.name })}</span>
                 {invite.status !== "revoked" && (
                   <IconButton label={t(done ? "room.linkCopied" : "room.copyInviteN", { n: index + 1 })} confirmed={done} onClick={() => copy(invite.token)}>
                     {done ? <CheckIcon /> : <LinkIcon />}
                   </IconButton>
                 )}
                 {shown === invite.token && (
-                  <label className="room-invite-url">
+                  <label className="col-span-full grid gap-1 pb-2 text-muted">
                     <span>{t("room.copyManually")}</span>
-                    <input type="text" readOnly autoFocus value={inviteHref(location.origin, invite.token)} aria-label={t("room.inviteUrlN", { n: index + 1 })} onFocus={(e) => e.currentTarget.select()} />
+                    <input
+                      className="min-w-0 rounded-[6px] border border-line-soft bg-transparent px-2 py-1.5 text-white [font:inherit] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                      type="text"
+                      readOnly
+                      autoFocus value={inviteHref(location.origin, invite.token)} aria-label={t("room.inviteUrlN", { n: index + 1 })} onFocus={(e) => e.currentTarget.select()} />
                   </label>
                 )}
               </li>

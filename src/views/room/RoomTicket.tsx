@@ -4,6 +4,15 @@ import { isPlayer } from "./room";
 import { TEXT_TYPE_KEY, useRoomLabels } from "./useRoomLabels";
 
 /** Live preview of the room's coupon, as it hangs in the kiosk. */
+// On a phone the ticket shrinks to its list of players: the rest is already in the settings.
+// The swaying string and the perforation stay in styles/pages/room/ticket.css.
+const PAPER =
+  "relative flex flex-col gap-[14px] border border-line bg-[#060606] px-[18px] pt-7 pb-0 phone:gap-0 phone:px-3 phone:pt-2 phone:pb-1.5 " +
+  "after:pointer-events-none after:absolute after:inset-x-[5px] after:top-[5px] after:bottom-0 after:border-x after:border-t after:border-x-line-faint after:border-t-line-faint phone:after:hidden";
+const SEAT = "flex min-w-0 items-center gap-[7px] font-mono text-[11px] leading-[1.2]";
+const DIAMOND = "size-2 flex-none border [transform:rotate(45deg)]";
+const NAME = "min-w-0 truncate";
+
 export function RoomTicket({ state }: { state: RoomState }) {
   const { t } = useTranslation();
   const { room, seats, players, humans, displayName } = state;
@@ -19,37 +28,36 @@ export function RoomTicket({ state }: { state: RoomState }) {
   ];
 
   return (
-    <aside className="room-preview" aria-hidden="true">
+    <aside className="relative pt-(--hang) [--hang:26px] [grid-area:preview] phone:mt-3 phone:[--hang:0px]" aria-hidden="true">
       <div className="room-ticket">
-        <div className="room-ticket-paper">
-          <i className="room-ticket-hole" />
-          <p className="room-ticket-header">{t("room.reservation")}</p>
-          <div className="room-ticket-number">
-            <span className="room-ticket-digits">{String(room.guests).padStart(2, "0")}</span>
-            <span className="room-ticket-name">{displayName}</span>
+        <div className={PAPER}>
+          <i className="absolute top-2 left-1/2 z-2 size-[11px] rounded-[50%] border border-line bg-black [transform:translateX(-50%)] phone:hidden" />
+          <p className="pl-[.26em] text-center font-mono text-[10px] leading-none font-medium tracking-[.26em] text-muted phone:hidden">{t("room.reservation")}</p>
+          <div className="flex flex-col items-center gap-2 border-y border-y-line-soft py-3 phone:hidden">
+            <span className="font-sans text-[46px] leading-none font-extralight tracking-[.02em] tabular-nums">{String(room.guests).padStart(2, "0")}</span>
+            <span className="max-w-full text-center font-sans text-[11px] leading-[1.3] font-medium tracking-[.16em] uppercase wrap-anywhere">{displayName}</span>
           </div>
-          <div className="room-ticket-rows">
+          <div className="flex flex-col gap-[11px] phone:hidden">
             {rows.map((row) => (
-              <p className="room-ticket-row" key={row.label}>
-                <span className="room-ticket-label">{row.label}</span>
-                <span className={row.highlight ? "room-ticket-value yes" : "room-ticket-value"}>{row.value}</span>
+              <p className="flex items-center gap-1.5 after:order-1 after:flex-1 after:[border-top:1px_dotted_rgba(255,255,255,.22)]" key={row.label}>
+                <span className="font-mono text-[11px] leading-none font-normal tracking-[.12em] text-[rgba(255,255,255,.7)]">{row.label}</span>
+                <span className={`order-2 font-mono text-[12px] leading-none font-medium tracking-[.04em] ${row.highlight ? "text-red-text" : ""}`.trim()}>{row.value}</span>
               </p>
             ))}
           </div>
           <div className="room-ticket-perforation" />
-          <p className="room-ticket-stub"><span>{t("room.players")}</span><span>{`${players.length} / ${room.guests}`}</span></p>
-          <ul className="room-ticket-players">
+          <p className="flex items-center justify-between pt-1 pb-2 font-mono text-[10px] leading-none font-normal tracking-[.24em] text-muted"><span>{t("room.players")}</span><span>{`${players.length} / ${room.guests}`}</span></p>
+          <ul className="grid list-none gap-1.5 pb-[14px] phone:grid-cols-[repeat(2,minmax(0,1fr))] phone:gap-x-[14px]">
             {seats.map((seat, i) => {
               if (!isPlayer(seat)) {
-                return <li key={i} className="free"><i /><span className="name">{t("room.freeSeat")}</span></li>;
+                return <li key={i} className={`${SEAT} font-normal text-[rgba(255,255,255,.35)]`}><i className={`${DIAMOND} border-[rgba(255,255,255,.35)]`} /><span className={NAME}>{t("room.freeSeat")}</span></li>;
               }
               const tag = [seat.host ? t("room.host").toUpperCase() : "", seat.me ? t("room.you") : "", seat.bot ? t("room.bot") : ""].filter(Boolean).join(" · ");
-              const classes = [seat.me && "me", seat.host && "host"].filter(Boolean).join(" ");
               return (
-                <li key={i} className={classes || undefined}>
-                  <i style={{ background: seat.color }} />
-                  <span className="name">{seat.name}</span>
-                  {tag && <span className="tag">{tag}</span>}
+                <li key={i} className={`${SEAT} ${seat.me ? "font-medium text-white" : "font-normal text-[rgba(255,255,255,.75)]"}`}>
+                  <i className={`${DIAMOND} border-white`} style={{ background: seat.color }} />
+                  <span className={NAME}>{seat.name}</span>
+                  {tag && <span className={`ml-auto flex-none text-[10px] tracking-[.06em] ${seat.host ? "text-red-text" : "text-muted"}`}>{tag}</span>}
                 </li>
               );
             })}

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import { HangingButton } from "../../components/buttons/HangingButton";
-import { LanguageSwitcher } from "../../components/tabs/LanguageSwitcher";
+import { FLOATING_TABS, LanguageSwitcher } from "../../components/tabs/LanguageSwitcher";
 import { buildResults, buildSummary, markSessionStart, rememberSubmit, saveResults, sessionSeconds, submitRace } from "../podium/results";
 import { useRoom, type RoomState } from "../room/hooks/useRoom";
 import { roomHrefOutsideRace } from "../room/room";
@@ -13,6 +13,18 @@ import { loadRacePoolImages, type RacePoolImages } from "./pool/createRacePool";
 import { laneProgress, myWpm } from "./race";
 import { RacePool } from "./RacePool";
 import { TypingPanel } from "./TypingPanel";
+
+// One row per area: header, pool, names, typing panel. Compact screens scroll and put "Leave" beside the header.
+const ROOT =
+  "relative grid h-screen grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto_auto] gap-[2vh] overflow-hidden bg-black px-[3vw] pt-[30px] pb-[3vh] font-sans text-white " +
+  "compact:h-auto compact:min-h-screen compact:grid-cols-[auto_minmax(0,1fr)] compact:grid-rows-[auto_max(52vh,280px)_auto_auto] compact:overflow-visible compact:px-3 compact:pt-[30px] compact:pb-7";
+// The room name, centered, after a red diamond
+const TITLE =
+  "absolute top-1/2 left-1/2 flex items-center gap-3 font-sans text-[clamp(15px,2.2vh,20px)] leading-[1.1] font-light tracking-[.14em] whitespace-nowrap uppercase [transform:translate(-50%,-50%)] narrow:hidden " +
+  "before:size-[.72em] before:flex-none before:border before:border-[rgba(255,140,120,.4)] before:bg-red before:[transform:rotate(45deg)]";
+const NAME_LINE = "flex max-w-full items-center overflow-hidden font-mono text-[max(10px,1.2vh)] leading-[1.2] tracking-[.1em] whitespace-nowrap";
+// The countdown hits like a stamp (keyframe game-count-hit in styles/pages/game/game.css)
+const COUNT = "leading-none tracking-[.02em] animate-[game-count-hit_.8s_cubic-bezier(.2,.9,.3,1)_both] motion-reduce:animate-none";
 
 /** The race of the launched room (/game?code=…): read back from the server, never created here (SALLE-09). */
 export function GamePage() {
@@ -32,7 +44,7 @@ export function GamePage() {
   // la course part des réglages et des joueurs du salon : rien à lancer tant que le serveur n'a pas répondu
   if (!state.ready || elsewhere) {
     return (
-      <div className="game-root" role={state.error ? "alert" : "status"}>
+      <div className="grid min-h-screen place-content-center justify-items-center gap-5 bg-black p-6 text-center font-mono text-[13px] leading-[1.6] text-muted" role={state.error ? "alert" : "status"}>
         <p>{t(state.error ? `room.errors.${state.error}` : "room.loading")}</p>
         {state.error && <HangingButton className="game-leave" href="/home">{t("room.leave")}</HangingButton>}
       </div>
@@ -84,22 +96,26 @@ function GameRace({ state }: { state: RoomState }) {
   }, [showResults, race, players, room, finish]);
 
   return (
-    <div className="game-root" style={{ "--lanes": players.length } as CSSProperties}>
-      <LanguageSwitcher className="hanging-tabs-floating" />
+    <div className={ROOT} style={{ "--lanes": players.length } as CSSProperties}>
+      <LanguageSwitcher className={FLOATING_TABS} />
       {/* quitter la course quitte le salon ; /room sans code créerait un nouveau salon */}
       <HangingButton className="game-leave" href="/home" onClick={leave}>{t("room.leave")}</HangingButton>
-      <header className="game-header">
-        <h1 className="game-title">{displayName}</h1>
-        <LiveList state={live} mine={mine} showMe={false} className="game-live" />
+      <header className="relative flex min-h-[42px] items-center justify-end compact:col-start-2 compact:row-start-1">
+        <h1 className={TITLE}>{displayName}</h1>
+        <LiveList state={live} mine={mine} showMe={false} className="game-live relative z-1 w-[min(320px,45vw)] narrow:w-full" />
       </header>
 
       {images ? <RacePool players={players} images={images} race={race} label={t("game.poolLabel", { count: players.length })} /> : <div className="race-pool" />}
 
-      <div className="game-names" aria-hidden="true">
+      <div className="grid grid-cols-[repeat(var(--lanes),minmax(0,1fr))] compact:col-[1/-1]" aria-hidden="true">
         {players.map((player, lane) => (
-          <div key={player.name} className={player.me ? "game-name is-me" : "game-name"} style={{ "--progress": laneProgress(race, lane) } as CSSProperties}>
-            <p className="game-name-line"><span>{player.me ? `${player.name} · ${t("room.you")}` : player.name}</span></p>
-            <span className="game-progress"><i /></span>
+          <div key={player.name} className="@container flex min-w-0 flex-col items-center gap-[.5vh] px-[.6vh] text-center" style={{ "--progress": laneProgress(race, lane) } as CSSProperties}>
+            <p className={`${NAME_LINE} ${player.me ? "font-medium text-white" : "font-normal text-muted"}`}>
+              <span className="min-w-0 overflow-hidden text-ellipsis [@container(max-width:56px)]:hidden">{player.me ? `${player.name} · ${t("room.you")}` : player.name}</span>
+            </p>
+            <span className={`block w-[70%] bg-line-faint ${player.me ? "h-0.5" : "h-px"}`}>
+              <i className={`block h-full w-[calc(var(--progress)*100%)] transition-[width] duration-500 ease-[ease] motion-reduce:transition-none ${player.me ? "bg-red-text" : "bg-line"}`} />
+            </span>
           </div>
         ))}
       </div>
@@ -107,11 +123,11 @@ function GameRace({ state }: { state: RoomState }) {
       <TypingPanel race={race} onInput={onInput} lang={room.language} />
 
       {race.count !== null && images && (
-        <div className="game-overlay" role="status">
-          <b key={race.count} className={race.count > 0 ? "game-count" : "game-count is-go"} lang={race.count > 0 ? undefined : "ja"}>
+        <div className="fixed inset-0 z-40 flex flex-col items-center justify-center gap-[3vh] bg-[rgba(0,0,0,.82)] p-6" role="status">
+          <b key={race.count} className={`${COUNT} ${race.count > 0 ? "font-sans text-[26vh] font-extralight" : "font-serif text-[20vh] font-bold text-red-text"}`} lang={race.count > 0 ? undefined : "ja"}>
             {race.count > 0 ? race.count : "始"}
           </b>
-          {race.count <= 0 && <p className="game-count-label">{t("game.go")}</p>}
+          {race.count <= 0 && <p className="font-mono text-[max(11px,1.4vh)] leading-none font-normal tracking-[.3em] text-muted">{t("game.go")}</p>}
         </div>
       )}
     </div>

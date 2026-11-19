@@ -4,6 +4,7 @@ import { formatNumber } from "../../i18n/format";
 import { oneDecimal, type PlayerResult, type RaceSummary } from "../podium/results";
 import { SpeedChart } from "./SpeedChart";
 import { StatBlock, Swatch, Unit } from "./StatBlock";
+import { CROSS, RACE_CARD, SECTION, SECTION_TITLE } from "./styles";
 
 const IDLE_ALERT = 50;
 const NBSP = " ";
@@ -42,21 +43,21 @@ export function LastRace({ player, summary, title }: { player: PlayerResult; sum
   ] as const;
 
   return (
-    <section className="profile-section" aria-labelledby="last-race-title">
-      <h2 id="last-race-title" className="profile-section-title">{title ?? t("profile.lastRace")}</h2>
-      <p className="race-context">
-        <span className="race-settings">
+    <section className={SECTION} aria-labelledby="last-race-title">
+      <h2 id="last-race-title" className={SECTION_TITLE}>{title ?? t("profile.lastRace")}</h2>
+      <p className="mb-4 flex flex-wrap items-baseline justify-between gap-x-8 gap-y-1.5 font-mono text-[max(12px,1.4vh)] leading-[1.6] font-normal text-muted">
+        <span className="min-w-0 [&_i]:mr-[.5em] [&_i]:text-line-soft [&_i]:not-italic">
           {settings.map((setting, i) => (
             <Fragment key={i}>{i > 0 && <>{NBSP}<i>·</i> </>}{keep(setting)}</Fragment>
           ))}
         </span>
-        <span className="race-meta">
-          {outcome.map((line) => <span key={line} className="race-outcome">{line}</span>)}
+        <span className="flex flex-wrap gap-x-5 gap-y-1 whitespace-nowrap">
+          {outcome.map((line) => <span key={line} className="text-white">{line}</span>)}
           <span>{`${t("profile.session")} ${clock(summary.sessionSeconds)}`}</span>
         </span>
       </p>
 
-      <div className="profile-card profile-card--race">
+      <div className={RACE_CARD}>
         <StatBlock hero marker={<Swatch series="wpm" />} label={t("game.wpm")} value={formatNumber(i18n.language, player.wpm)} />
         <StatBlock hero label={t("profile.accuracy")} value={<>{formatNumber(i18n.language, player.accuracy)}<Unit>%</Unit></>} />
         <StatBlock marker={<Swatch series="raw" />} label={t("profile.raw")} value={formatNumber(i18n.language, player.raw)} />
@@ -71,9 +72,9 @@ export function LastRace({ player, summary, title }: { player: PlayerResult; sum
           value={formatNumber(i18n.language, player.chars[0])}
           notes={[
             <>
-              <i className="chart-cross">×</i>{NBSP}
+              <i className={CROSS}>×</i>{NBSP}
               {errors.map(([count, word], i) => (
-                <Fragment key={i}>{i > 0 && `${NBSP}· `}<b className="stat-error">{formatNumber(i18n.language, count)}</b>{NBSP}{keep(word)}</Fragment>
+                <Fragment key={i}>{i > 0 && `${NBSP}· `}<b className="font-normal text-red-text">{formatNumber(i18n.language, count)}</b>{NBSP}{keep(word)}</Fragment>
               ))}
             </>,
           ]}

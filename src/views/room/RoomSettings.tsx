@@ -10,6 +10,7 @@ import { ROLES } from "../../rooms/settings";
 import type { RoomState } from "./hooks/useRoom";
 import { cleanExcluded, countWords, type Room, type TextLength } from "./room";
 import { LENGTH_KEY, useRoomLabels } from "./useRoomLabels";
+import { DASHED_TOP, LABEL, PLAIN_VALUE, SHADE } from "./styles";
 
 type Section = "room" | "content" | "typing" | "bots";
 const SECTIONS: { value: Section; num: string; key: string }[] = [
@@ -23,13 +24,27 @@ const LENGTHS = ["very-short", "short", "medium", "long"] as const;
 
 type RowProps = { id: string; label: string; help?: string; role?: "radiogroup" | "group"; inactive?: boolean; children: ReactNode };
 
+// One setting per line: its name on the left, its choices on the right (stacked on narrow screens).
+const ROW = "grid min-h-[42px] grid-cols-[minmax(150px,200px)_minmax(0,1fr)] items-center gap-x-6 narrow:min-h-0 narrow:grid-cols-[minmax(0,1fr)] narrow:gap-y-2 narrow:py-1";
+const CHOICES = "flex flex-wrap items-center gap-x-4 gap-y-0.5 pt-0.5 narrow:gap-x-[22px] narrow:gap-y-1.5";
+const PANEL = `${SHADE} grid gap-y-1 narrow:gap-y-[18px]`;
+const SHORT_INPUT =
+  "unset box-border h-[34px] w-[9em] border-b border-b-line-soft [border-bottom-style:dashed] font-mono text-[max(15px,1.9vh)] leading-none font-normal tracking-[.3em] text-white caret-red-text " +
+  "focus:border-b-white focus:[border-bottom-style:solid] placeholder:tracking-[.04em] placeholder:text-[rgba(255,255,255,.35)]";
+
 /** One setting: its name on the left, its choices on the right. */
 function Row({ id, label, help, role = "radiogroup", inactive, children }: RowProps) {
-  const name = <span className="room-label" id={id}>{label}</span>;
   return (
-    <div className={inactive ? "room-row inactive" : "room-row"} role={role} aria-labelledby={id}>
-      {help ? <span className="room-row-name">{name}<InfoTip text={help} /></span> : name}
-      <div className="room-choices">{children}</div>
+    <div className={ROW} role={role} aria-labelledby={id}>
+      {help ? (
+        <span className="inline-flex items-center gap-2.5">
+          <span className={LABEL} id={id}>{label}</span>
+          <InfoTip text={help} />
+        </span>
+      ) : (
+        <span className={`${LABEL} self-center`} id={id}>{label}</span>
+      )}
+      <div className={inactive ? `${CHOICES} opacity-35` : CHOICES}>{children}</div>
     </div>
   );
 }
@@ -39,11 +54,11 @@ function ExcludedRow({ room, host, update }: Pick<RoomState, "room" | "host" | "
   const [draft, setDraft] = useState(room.excluded);
   const inactive = room.textType === "custom";
   return (
-    <div className={inactive ? "room-row inactive" : "room-row"}>
-      <label className="room-label" htmlFor="room-excluded">{t("room.excluded")}</label>
-      <div className="room-choices">
+    <div className={ROW}>
+      <label className={`${LABEL} self-center`} htmlFor="room-excluded">{t("room.excluded")}</label>
+      <div className={inactive ? `${CHOICES} opacity-35` : CHOICES}>
         <input
-          className="room-short-input"
+          className={`${SHORT_INPUT} ${inactive ? "opacity-35" : ""}`.trim()}
           id="room-excluded"
           name="excluded"
           type="text"
@@ -116,8 +131,8 @@ export function RoomSettings({ state, onEditText, action }: RoomSettingsProps) {
   };
 
   return (
-    <div className="room-settings">
-      <div className="room-toolbar">
+    <div className={`relative mt-[clamp(20px,3.4vh,36px)] pt-[clamp(16px,2.6vh,24px)] [grid-area:settings] ${DASHED_TOP} narrow:mt-[26px] narrow:pt-[22px]`}>
+      <div className="mb-[clamp(12px,2vh,20px)] flex flex-wrap items-center justify-between gap-x-6 gap-y-[14px] phone:flex-col-reverse phone:items-stretch narrow:mb-[22px]">
         <SectionTabs
           ariaLabel={t("room.settingsSections")}
           value={section}
@@ -127,7 +142,7 @@ export function RoomSettings({ state, onEditText, action }: RoomSettingsProps) {
         {action}
       </div>
 
-      <div className="room-panel" role="tabpanel" id="panel-room" aria-labelledby="tab-room" hidden={section !== "room"}>
+      <div className={PANEL} role="tabpanel" id="panel-room" aria-labelledby="tab-room" hidden={section !== "room"}>
         <Row id="label-visibility" label={t("room.visibility")} help={help.visibility}>
           {radios("visibility", [["private", "private"], ["semi", "semiPrivate"], ["public", "public"]])}
         </Row>
@@ -150,12 +165,12 @@ export function RoomSettings({ state, onEditText, action }: RoomSettingsProps) {
               )}
             </>
           ) : (
-            <span className="room-plain-value">{durationLabel(room.duration)}</span>
+            <span className={PLAIN_VALUE}>{durationLabel(room.duration)}</span>
           )}
         </Row>
       </div>
 
-      <div className="room-panel" role="tabpanel" id="panel-bots" aria-labelledby="tab-bots" hidden={section !== "bots"}>
+      <div className={PANEL} role="tabpanel" id="panel-bots" aria-labelledby="tab-bots" hidden={section !== "bots"}>
         <Row id="label-bots" label={t("room.bots")} help={t("room.helpBots")}>
           {[true, false].map((value) => (
             <TextChoice key={String(value)} type="radio" name="bots" value={value ? "yes" : "no"} label={t(value ? "room.yes" : "room.no")} checked={room.bots === value} disabled={!host} hidden={!host && room.bots !== value} onChange={() => update({ bots: value })} />
@@ -169,7 +184,7 @@ export function RoomSettings({ state, onEditText, action }: RoomSettingsProps) {
         </Row>
       </div>
 
-      <div className="room-panel" role="tabpanel" id="panel-content" aria-labelledby="tab-content" hidden={section !== "content"}>
+      <div className={PANEL} role="tabpanel" id="panel-content" aria-labelledby="tab-content" hidden={section !== "content"}>
         <Row id="label-type" label={t("room.textType")} help={help.type}>
           {radios("textType", [["coherent", "coherent"], ["quote", "quote"], ["words", "scrambled"], ["custom", "custom"]], pickTextType)}
         </Row>
@@ -178,15 +193,15 @@ export function RoomSettings({ state, onEditText, action }: RoomSettingsProps) {
           {checkbox("numbers", "numbers", !host || isCustom)}
           {checkbox("specials", "specials", !host || isCustom)}
           {checkbox("accents", "accents", !host || isCustom)}
-          <span className="room-plain-value" hidden={host || room.punctuation || room.numbers || room.specials || room.accents}>{t("room.noOption")}</span>
+          <span className={PLAIN_VALUE} hidden={host || room.punctuation || room.numbers || room.specials || room.accents}>{t("room.noOption")}</span>
         </Row>
         <Row id="label-text" label={t("room.text")} role="group">
-          <span className="room-plain-value">{countWords(room.text) ? words : t("room.noText")}</span>
+          <span className={PLAIN_VALUE}>{countWords(room.text) ? words : t("room.noText")}</span>
           {host && <SmallButton onClick={onEditText}>{t("room.edit")}</SmallButton>}
         </Row>
       </div>
 
-      <div className="room-panel" role="tabpanel" id="panel-typing" aria-labelledby="tab-typing" hidden={section !== "typing"}>
+      <div className={PANEL} role="tabpanel" id="panel-typing" aria-labelledby="tab-typing" hidden={section !== "typing"}>
         <Row id="label-language" label={t("room.textLanguage")}>
           {radios("language", [["fr", "french"], ["en", "english"]])}
         </Row>
@@ -195,9 +210,9 @@ export function RoomSettings({ state, onEditText, action }: RoomSettingsProps) {
         </Row>
         <Row id="label-length" label={t("room.length")}>
           {isCustom ? (
-            <span className="room-plain-value">{words}</span>
+            <span className={PLAIN_VALUE}>{words}</span>
           ) : !host ? (
-            <span className="room-plain-value">{lengthLabel}</span>
+            <span className={PLAIN_VALUE}>{lengthLabel}</span>
           ) : (
             <>
               {LENGTHS.map((value) => (
