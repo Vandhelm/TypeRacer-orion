@@ -4,7 +4,8 @@ import { FLOATING_TABS, LanguageSwitcher } from "../../components/tabs/LanguageS
 import { useRaceResults } from "./hooks/useRaceResults";
 import { PodiumBoard } from "./PodiumBoard";
 import { PodiumScene } from "./PodiumScene";
-import { raceErrorKey, submitFailed } from "./results";
+import { keepPresence } from "../room/presence";
+import { backToRoomHref, raceErrorKey, submitFailed } from "./results";
 
 /** After the race, or for a race of the history (?race=N, HIST-02): the top three on the podium, then every player. */
 export function PodiumPage() {
@@ -23,6 +24,10 @@ export function PodiumPage() {
     document.title = t("podium.pageTitle");
   }, [t]);
 
+  // SALLE-08 : sur le podium d'une course jouée, le membre reste présent dans son salon (sans signe de vie, il en serait retiré)
+  const roomCode = loaded.status === "ready" && loaded.raceId === null ? loaded.results.room : undefined;
+  useEffect(() => (roomCode ? keepPresence(roomCode) : undefined), [roomCode]);
+
   if (loaded.status === "loading") return <p className="grid min-h-screen place-content-center justify-items-center gap-5 p-6 text-center font-mono text-[13px] leading-[1.6] font-normal text-muted" role="status">{t("podium.loading")}</p>;
   if (loaded.status === "error") {
     return (
@@ -39,7 +44,7 @@ export function PodiumPage() {
     <>
       <LanguageSwitcher className={FLOATING_TABS} />
       {raceId === null && notSaved ? <p className="fixed top-4 left-1/2 z-20 m-0 w-max max-w-[calc(100vw-32px)] border border-red-text bg-black px-3.5 py-2 text-center font-mono text-[12px] leading-[1.5] font-normal text-white [transform:translateX(-50%)]" role="alert">{t("podium.notSaved")}</p> : null}
-      <PodiumScene players={results.players} arrived={arrived} raceId={raceId} />
+      <PodiumScene players={results.players} arrived={arrived} raceId={raceId} roomHref={backToRoomHref(results.room)} />
       <PodiumBoard players={results.players} showPlace arrived={arrived} raceId={raceId} />
     </>
   );

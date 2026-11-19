@@ -14,7 +14,8 @@ export const WPM_MAX = 500;
 export const RoomCode = z.string().regex(new RegExp(CODE_PATTERN));
 
 export const ClientMessage = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("join"), room: RoomCode }).strict(),
+  // follow : la page salle suit l'état du salon (membres, réglages, hôte) ; il faut en être membre (SALLE-03).
+  z.object({ type: z.literal("join"), room: RoomCode, follow: z.literal(true).optional() }).strict(),
   z.object({ type: z.literal("leave") }).strict(),
   // Progression = caractères validés ÷ longueur du texte (annexe A), donc entre 0 et 1.
   z.object({ type: z.literal("progress"), progress: z.number().min(0).max(1), wpm: z.number().min(0).max(WPM_MAX) }).strict(),
@@ -24,13 +25,17 @@ export type ClientMessage = z.infer<typeof ClientMessage>;
 export const Player = z.object({ id: z.string(), name: z.string(), guest: z.boolean() });
 export type Player = z.infer<typeof Player>;
 
-export const ERROR_CODES = ["invalid_message", "not_in_room"] as const;
+// not_member : le salon suivi n'admet pas (ou plus) ce joueur, ou n'existe pas (SALLE-07, SALLE-10 : même réponse).
+export const ERROR_CODES = ["invalid_message", "not_in_room", "not_member"] as const;
 
 export const ServerMessage = z.discriminatedUnion("type", [
   z.object({ type: z.literal("welcome"), you: Player }),
   z.object({ type: z.literal("presence"), room: RoomCode, players: z.array(Player) }),
   z.object({ type: z.literal("progress"), playerId: z.string(), progress: z.number(), wpm: z.number() }),
   z.object({ type: z.literal("error"), code: z.enum(ERROR_CODES) }),
+  // l'état d'un salon suivi (follow), tel que le lit GET /api/rooms/:code, sans lien d'invitation (SALLE-04)
+  z.object({ type: z.literal("room"), room: z.record(z.string(), z.unknown()) }),
+  z.object({ type: z.literal("closed"), room: RoomCode }),
 ]);
 export type ServerMessage = z.infer<typeof ServerMessage>;
 

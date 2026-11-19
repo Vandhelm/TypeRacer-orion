@@ -5,15 +5,21 @@
 //   une erreur, n'est jamais diffusé et ne ferme pas la connexion. Un déluge de messages la ferme (1008).
 // - Progression : diffusée aux autres membres de la salle, au plus 10 fois par seconde par joueur (PERF-02).
 //   Les messages en trop sont fusionnés : la dernière valeur part dès que la limite le permet.
+// - Avec les salons en base (`rooms`), tout join exige d'être membre du salon (SALLE-03, SALLE-09, SALLE-10).
+// - Suivi d'un salon (join avec follow, page salle) : seul un membre le suit (SALLE-03) ; il reçoit l'état du salon
+//   à chaque changement (routes HTTP, via `rooms.changes`) et à chaque échéance (SALLE-08 / SALLE-09). Un membre
+//   retiré (SALLE-07) reçoit not_member et ne suit plus. Quand la dernière page salle d'un membre se ferme et ne
+//   revient pas dans le délai, il quitte le salon, sauf pendant une course (SALLE-09) : la page course ne suit pas.
 import type { Server, ServerWebSocket } from "bun";
 import { MAX_MESSAGE_BYTES, parseClientMessage, type Player, PROGRESS_INTERVAL_MS, type ServerMessage } from "./protocol";
+import type { RoomBackend } from "./room-backend";
 import { TICKET_TTL_MS, verifyTicket } from "./ticket";
 
 /** Au-delà, sur une fenêtre d'une seconde, la connexion est fermée : aucun client honnête n'en envoie autant. */
 export const MAX_MESSAGES_PER_SECOND = 60;
 const POLICY_VIOLATION = 1008;
 
-type Connection = { player: Player; room: string | null; windowStart: number; windowCount: number };
+type Connection = { player: Player; room: string | null; windowStart: number; windowCount: number; follow: { room: string; key: string } | null; key: string | null };
 type Socket = ServerWebSocket<Connection>;
 type Member = { player: Player; connections: number };
 type Throttle = { lastSent: number; pending: { ws: Socket; text: string } | null; timer: ReturnType<typeof setTimeout> | null };
@@ -24,12 +30,21 @@ export type RealtimeOptions = {
   secret: string;
   /** Origines des pages autorisées à se connecter. Vide : pas de contrôle (outils, tests). */
   allowedOrigins?: string[];
+  /** Les salons en base (room-backend.ts) ; sans eux, follow ne donne que la présence. */
+  rooms?: RoomBackend;
+  /** Délai avant qu'un membre sans page salle ouverte quitte le salon : un rechargement ou une coupure brève. */
+  leaveAfterMs?: number;
+  /** SALLE-08 / SALLE-09 : rythme de mise à jour des salons suivis (échéances, membres silencieux, hôte). */
+  refreshMs?: number;
 };
+
+const LEAVE_AFTER_MS = 15_000;
+const REFRESH_MS = 5_000;
 
 const topic = (room: string) => `room:${room}`;
 const encode = (message: ServerMessage) => JSON.stringify(message);
 
-export function createRealtimeServer({ port = 3001, hostname, secret, allowedOrigins = [] }: RealtimeOptions): Server<Connection> {
+export function createRealtimeServer({ port = 3001, hostname, secret, allowedOrigins = [], rooms: backend, leaveAfterMs = LEAVE_AFTER_MS, refreshMs = REFRESH_MS }: RealtimeOptions): Server<Connection> {
   /** Salles en mémoire : code → joueurs présents, dans l'ordre d'arrivée. */
   const rooms = new Map<string, Map<string, Member>>();
   /** Limite de fréquence par salle et par joueur, partagée par ses onglets. */
@@ -46,10 +61,148 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
     server.publish(topic(room), encode({ type: "presence", room, players: [...(members?.values() ?? [])].map((m) => m.player) }));
   }
 
+  /** Sockets qui suivent chaque salon ; pages salle ouvertes par membre (deux onglets ne comptent pas double). */
+  const followers = new Map<string, Set<Socket>>();
+  const following = new Map<string, number>();
+  const leaving = new Map<string, ReturnType<typeof setTimeout>>();
+  const followKey = (room: string, key: string) => `${room}\n${key}`;
+
+  /** Toutes les sockets entrées dans chaque salon (présence et course), suivies ou non. */
+  const joined = new Map<string, Set<Socket>>();
+
+  /**
+   * Pousse l'état du salon à ses seuls membres qui le suivent ; un membre retiré apprend qu'il ne l'est plus.
+   * SALLE-07 : une socket de course (join sans follow) d'un membre retiré quitte aussitôt la présence et la course.
+   */
+  async function publishRoom(code: string) {
+    if (!backend || !joined.has(code)) return;
+    try {
+      const room = await backend.view(code);
+      const members = new Set(room?.members.map((m) => m.key) ?? []);
+      for (const ws of [...(joined.get(code) ?? [])]) {
+        if (ws.data.follow || !ws.data.key || members.has(ws.data.key)) continue;
+        leave(ws);
+        send(ws, { type: "error", code: "not_member" });
+      }
+      const sockets = [...(followers.get(code) ?? [])];
+      if (!room) {
+        for (const ws of sockets) {
+          unfollow(ws, false);
+          send(ws, { type: "closed", room: code });
+        }
+        return;
+      }
+      for (const ws of sockets) {
+        if (members.has(ws.data.follow!.key)) send(ws, { type: "room", room });
+        else {
+          unfollow(ws, false);
+          leave(ws);
+          send(ws, { type: "error", code: "not_member" });
+        }
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  }
+  backend?.changes((code) => void publishRoom(code));
+
+  let refreshTimer: ReturnType<typeof setInterval> | null = null;
+  let refreshing = false;
+  async function refreshAll() {
+    if (!backend || refreshing) return;
+    if (!followers.size) {
+      if (refreshTimer) clearInterval(refreshTimer);
+      refreshTimer = null;
+      return;
+    }
+    refreshing = true;
+    try {
+      for (const [code, sockets] of followers) {
+        const present = [...new Set([...sockets].map((ws) => ws.data.follow!.key))];
+        if (await backend.refresh(code, present)) await publishRoom(code);
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      refreshing = false;
+    }
+  }
+
+  /** Avec les salons en base, seul un membre rejoint la présence et la course (SALLE-03, SALLE-09) ; un salon inconnu répond pareil (SALLE-10). */
+  async function joinMember(ws: Socket, room: string) {
+    if (!backend) return join(ws, room);
+    const entry = await backend.enter(ws.data.player, room).catch((error: unknown) => {
+      console.error(error);
+      return null;
+    });
+    if (ws.readyState !== 1) return;
+    if (!entry) return send(ws, { type: "error", code: "not_member" });
+    join(ws, room);
+    ws.data.key = entry.key;
+  }
+
+  async function followRoom(ws: Socket, room: string) {
+    if (!backend) return join(ws, room);
+    const entry = await backend.enter(ws.data.player, room).catch((error: unknown) => {
+      console.error(error);
+      return null;
+    });
+    if (ws.readyState !== 1) return;
+    if (!entry) return send(ws, { type: "error", code: "not_member" });
+    unfollow(ws);
+    join(ws, room);
+    ws.data.follow = { room, key: entry.key };
+    ws.data.key = entry.key;
+    const id = followKey(room, entry.key);
+    clearTimeout(leaving.get(id));
+    leaving.delete(id);
+    following.set(id, (following.get(id) ?? 0) + 1);
+    const sockets = followers.get(room) ?? new Set<Socket>();
+    followers.set(room, sockets.add(ws));
+    refreshTimer ??= setInterval(() => void refreshAll(), refreshMs);
+    send(ws, { type: "room", room: entry.room });
+  }
+
+  /** La socket ne suit plus son salon. Si c'était la dernière page salle du membre, il part après le délai. */
+  function unfollow(ws: Socket, scheduleLeave = true) {
+    const follow = ws.data.follow;
+    if (!follow) return;
+    ws.data.follow = null;
+    const sockets = followers.get(follow.room);
+    sockets?.delete(ws);
+    if (sockets && !sockets.size) followers.delete(follow.room);
+    const id = followKey(follow.room, follow.key);
+    const left = (following.get(id) ?? 1) - 1;
+    if (left > 0) return void following.set(id, left);
+    following.delete(id);
+    if (!scheduleLeave || !backend) return;
+    const player = ws.data.player;
+    leaving.set(
+      id,
+      setTimeout(async () => {
+        leaving.delete(id);
+        if (following.has(id)) return;
+        try {
+          if (await backend.leave(player, follow.room, leaveAfterMs)) {
+            // les autres membres l'apprennent tout de suite, les routes HTTP aussi (notifyRoom n'est pas appelé ici)
+            await publishRoom(follow.room);
+          }
+        } catch (error) {
+          console.error(error);
+        }
+      }, leaveAfterMs),
+    );
+  }
+
   function leave(ws: Socket) {
+    unfollow(ws);
     const room = ws.data.room;
     if (!room) return;
     ws.data.room = null;
+    ws.data.key = null;
+    const inRoom = joined.get(room);
+    inRoom?.delete(ws);
+    if (inRoom && !inRoom.size) joined.delete(room);
     if (ws.readyState === 1) ws.unsubscribe(topic(room));
     const members = rooms.get(room);
     const member = members?.get(ws.data.player.id);
@@ -71,6 +224,7 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
     if (ws.data.room === room) return presence(room);
     leave(ws);
     ws.data.room = room;
+    joined.set(room, (joined.get(room) ?? new Set<Socket>()).add(ws));
     ws.subscribe(topic(room));
     const members = rooms.get(room) ?? new Map<string, Member>();
     rooms.set(room, members);
@@ -146,7 +300,7 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
       if (allowedOrigins.length > 0 && (!origin || !allowedOrigins.includes(origin))) return new Response("forbidden origin", { status: 403 });
       const player = useTicket(url.searchParams.get("ticket"));
       if (!player) return new Response("unauthorized", { status: 401 });
-      if (srv.upgrade(req, { data: { player, room: null, windowStart: Date.now(), windowCount: 0 } })) return undefined;
+      if (srv.upgrade(req, { data: { player, room: null, windowStart: Date.now(), windowCount: 0, follow: null, key: null } })) return undefined;
       return new Response("upgrade failed", { status: 400 });
     },
     websocket: {
@@ -160,7 +314,7 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
         if (!message) return send(ws, { type: "error", code: "invalid_message" });
         switch (message.type) {
           case "join":
-            return join(ws, message.room);
+            return void (message.follow ? followRoom(ws, message.room) : joinMember(ws, message.room));
           case "leave":
             return leave(ws);
           case "progress":

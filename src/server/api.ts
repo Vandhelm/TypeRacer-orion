@@ -7,6 +7,10 @@ import { handleGuest } from "./guest";
 import { handleRealtimeTicket } from "./realtime-ticket";
 import { handleHistory } from "./history";
 import { createAuth, type Auth } from "./auth";
+import { socketIp } from "./client-ip";
+import { joinGuard } from "./rate-limit";
+import { handleRoomsApi } from "./rooms-api";
+import { notifyRoom } from "./room-events";
 
 let database: ReturnType<typeof connect> | null = null;
 /** Une seule connexion par processus : une fonction Vercel réutilise son instance d'un appel à l'autre. */
@@ -35,13 +39,19 @@ const routes: Record<string, Handler> = {
   },
 };
 
-export async function handleApi(req: Request): Promise<Response> {
+/** `context` : le contexte de route de Next.js ; client-ip.ts y cherche l'IP de la socket (SALLE-10), sinon lit les en-têtes. */
+export async function handleApi(req: Request, context?: unknown): Promise<Response> {
   const { pathname } = new URL(req.url);
   if (pathname === "/api/races") return handleRace(req, db(), auth());
   if (pathname === "/api/account/avatar") return handleAvatar(req, auth(), saveAvatar(db()));
   if (pathname === "/api/guest") return handleGuest(req);
   if (pathname === "/api/realtime/ticket") return handleRealtimeTicket(req, auth());
   if (pathname === "/api/history" || pathname.startsWith("/api/history/")) return handleHistory(req, db(), auth());
+  if (pathname === "/api/rooms" || pathname.startsWith("/api/rooms/")) {
+    // une seule IP pour la limite de débit (SALLE-10) et la liaison des liens d'invitation (SALLE-04)
+    const peer = socketIp(context, req);
+    return handleRoomsApi(req, db(), auth(), undefined, (code) => notifyRoom(db(), code), joinGuard(db(), { peer }), { peer });
+  }
   const stats = pathname.match(/^\/api\/players\/([^/]+)\/stats$/);
   if (stats) return handleStats(stats[1]!, db());
   if (pathname.startsWith("/api/auth/")) return auth().handler(req);

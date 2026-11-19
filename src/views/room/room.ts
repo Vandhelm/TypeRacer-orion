@@ -1,92 +1,38 @@
-// Room model. À BRANCHER : sans serveur de jeu, le salon est gardé dans ce navigateur et les autres joueurs sont simulés.
-import type { TFunction } from "i18next";
+// Room model. Le salon vit sur le serveur (src/server/rooms.ts) : cette page n'en garde qu'une copie, sans stockage local.
+import { isGuestPlayer } from "../../players/nickname";
+import { cleanRoomCode, isRoomCode, type Visibility } from "../../rooms/access";
+import { MAX_GUESTS, MIN_GUESTS, MAX_TEXT_LENGTH, type Role, type RoomSettings } from "../../rooms/settings";
+import type { MemberView, RoomView } from "../../server/rooms";
 import { BOT_NAMES } from "../../players/bots";
-import { isGuestPlayer, myName } from "../../players/nickname";
-import { cleanRoomCode, newInviteToken, newRoomCode, VISIBILITIES, type Visibility } from "../../rooms/access";
+import { seatColor } from "../../rooms/seats";
 
-const PLAYER_NAMES = ["Maki_77", "Ikura_21", "Tamago_8", "Sake_Bomb", "Kani_404", "Hotate_3", "Toro_19"];
-// Une couleur par joueur : celle de son poisson et de sa puce sur le billet
-const PLAYER_COLORS = ["hsl(6, 71%, 58%)", "hsl(266, 85%, 59%)", "hsl(54, 100%, 74%)", "hsl(25, 100%, 63%)", "hsl(326, 47%, 47%)", "hsl(161, 65%, 60%)", "hsl(220, 85%, 65%)", "hsl(0, 0%, 72%)"];
-
-export const MIN_GUESTS = 2;
-export const MAX_GUESTS = 8;
-export const MAX_TEXT_LENGTH = 5000;
-const ROOM_KEY = "orion-room";
 const TEXTS_KEY = "orion-texts";
 
-const LANGUAGES = ["fr", "en"] as const;
-const BOT_SPEEDS = ["slow", "medium", "fast", "mixed"] as const;
-const BOT_ACCURACIES = ["shaky", "decent", "high"] as const;
-const TEXT_TYPES = ["coherent", "quote", "words", "custom"] as const;
-const TEXT_LENGTHS = ["very-short", "short", "medium", "long", "other"] as const;
-const LEVELS = ["common", "rich", "expert"] as const;
-const MISTAKE_MODES = ["fix", "carry-on", "fatal"] as const;
+export { MAX_GUESTS, MIN_GUESTS, MAX_TEXT_LENGTH };
+export type { MemberView, Role, RoomView, Visibility };
+export type TextLanguage = RoomSettings["language"];
+export type BotSpeed = RoomSettings["botSpeed"];
+export type BotAccuracy = RoomSettings["botAccuracy"];
+export type TextType = RoomSettings["textType"];
+export type TextLength = RoomSettings["length"];
+export type Level = RoomSettings["level"];
+export type MistakeMode = RoomSettings["mistakes"];
 
-export type { Visibility };
-export type TextLanguage = (typeof LANGUAGES)[number];
-export type BotSpeed = (typeof BOT_SPEEDS)[number];
-export type BotAccuracy = (typeof BOT_ACCURACIES)[number];
-export type TextType = (typeof TEXT_TYPES)[number];
-export type TextLength = (typeof TEXT_LENGTHS)[number];
-export type Level = (typeof LEVELS)[number];
-export type MistakeMode = (typeof MISTAKE_MODES)[number];
-
-export type Room = {
-  name: string;
-  autoName: boolean;
-  visibility: Visibility;
-  language: TextLanguage;
-  guests: number;
-  bots: boolean;
-  code: string;
-  /** Jeton du lien d'invitation. */
-  invite: string;
-  botSpeed: BotSpeed;
-  botAccuracy: BotAccuracy;
-  textType: TextType;
-  length: TextLength;
-  wordCount: number;
-  duration: number;
-  level: Level;
-  punctuation: boolean;
-  numbers: boolean;
-  specials: boolean;
-  accents: boolean;
-  mistakes: MistakeMode;
-  excluded: string;
-  text: string;
-};
+/** Les réglages du salon et son code. Les liens d'invitation se lisent à part (SALLE-04, hooks/useInvites). */
+export type Room = RoomSettings & { code: string };
 
 export type Player = { name: string; color: string; host?: boolean; me?: boolean; bot?: boolean };
 export type Seat = Player | { free: true };
-export type Session = { room: Room; host: boolean; present: number };
 export type SavedText = { name: string; text: string };
 
-const RACE_DEFAULTS = {
-  botSpeed: "medium",
-  botAccuracy: "decent",
-  textType: "coherent",
-  length: "medium",
-  wordCount: 50,
-  duration: 120,
-  level: "common",
-  punctuation: false,
-  numbers: false,
-  specials: false,
-  accents: true,
-  mistakes: "fix",
-  excluded: "",
-  text: "",
-} satisfies Partial<Room>;
+/** Ce que l'adresse demande : créer un salon (hôte) ou en rejoindre un. Null : un invité sans salon à rejoindre. */
+export type Session = { host: true } | { host: false; code?: string; invite?: string };
 
 function read(key: string) {
   try { return localStorage.getItem(key); } catch { return null; }
 }
 function write(key: string, value: string) {
   try { localStorage.setItem(key, value); } catch { /* stockage indisponible */ }
-}
-export function forgetRoom() {
-  try { localStorage.removeItem(ROOM_KEY); } catch { /* stockage indisponible */ }
 }
 
 export function clampGuests(n: unknown, fallback: number) {
@@ -100,104 +46,65 @@ export function countWords(text: string) {
   const trimmed = text.trim();
   return trimmed ? trimmed.split(/\s+/).length : 0;
 }
-function oneOf<T extends string>(list: readonly T[], value: unknown, fallback: T): T {
-  return list.includes(value as T) ? (value as T) : fallback;
-}
-
-export function newRoom(t: TFunction): Room {
-  return { ...RACE_DEFAULTS, name: t("room.defaultName"), autoName: true, visibility: "private", language: "fr", guests: 4, bots: true, code: newRoomCode(), invite: newInviteToken() };
-}
-
-function storedRoom(t: TFunction): Room | null {
-  try {
-    const s = JSON.parse(read(ROOM_KEY) ?? "null");
-    if (!s || !s.code) return null;
-    return {
-      name: String(s.name || t("room.defaultName")),
-      autoName: !!s.autoName,
-      visibility: oneOf(VISIBILITIES, s.visibility, "private"),
-      language: s.language === "en" ? "en" : "fr",
-      guests: clampGuests(s.guests, 4),
-      bots: s.bots !== false,
-      code: String(s.code),
-      invite: String(s.invite || newInviteToken()),
-      textType: oneOf(TEXT_TYPES, s.textType, RACE_DEFAULTS.textType),
-      length: oneOf(TEXT_LENGTHS, s.length, RACE_DEFAULTS.length),
-      wordCount: Number(s.wordCount) >= 1 ? Math.min(1000, Math.round(Number(s.wordCount))) : RACE_DEFAULTS.wordCount,
-      duration: Number(s.duration) >= 10 ? Math.min(600, Number(s.duration)) : RACE_DEFAULTS.duration,
-      level: oneOf(LEVELS, s.level, RACE_DEFAULTS.level),
-      mistakes: oneOf(MISTAKE_MODES, s.mistakes, RACE_DEFAULTS.mistakes),
-      punctuation: !!s.punctuation,
-      numbers: !!s.numbers,
-      specials: !!s.specials,
-      accents: s.accents !== false,
-      excluded: cleanExcluded(s.excluded),
-      text: String(s.text || ""),
-      botSpeed: oneOf(BOT_SPEEDS, s.botSpeed, RACE_DEFAULTS.botSpeed),
-      botAccuracy: oneOf(BOT_ACCURACIES, s.botAccuracy, RACE_DEFAULTS.botAccuracy),
-    };
-  } catch {
-    return null;
-  }
-}
-
-export function saveRoom(room: Room) {
-  write(ROOM_KEY, JSON.stringify(room));
-}
-
-/** Qui arrive ? ?new : l'hôte crée ; ?code ou ?table : un joueur entre ; sinon : l'hôte revient dans son salon.
+/** Qui arrive ? ?code ou ?invite : on rejoint ; sinon : on crée son salon.
  * AUTH-03 : un invité n'est jamais hôte — null s'il n'a pas de salon à rejoindre (le serveur l'a déjà refusé). */
-export function readSession(search: string, t: TFunction, guest = isGuestPlayer()): Session | null {
+export function readSession(search: string, _t?: unknown, guest = isGuestPlayer()): Session | null {
   const query = new URLSearchParams(search);
-  const stored = storedRoom(t);
   const code = cleanRoomCode(query.get("code") || "");
-  // À BRANCHER : le serveur retrouvera le salon par son jeton et refusera le code pour un salon privé.
-  const invite = query.get("invite");
-
-  if (invite && !(stored && stored.invite === invite)) {
-    const room: Room = { ...RACE_DEFAULTS, name: t("room.inviteRoomName"), autoName: false, visibility: "private", language: "fr", guests: 4, bots: true, code: newRoomCode(), invite };
-    return { room, host: false, present: 2 };
-  }
-
-  if (code && !(stored && stored.code === code)) {
-    const room: Room = { ...RACE_DEFAULTS, name: t("room.codeRoomName", { code }), autoName: false, visibility: "semi", language: "fr", guests: 4, bots: true, code, invite: newInviteToken() };
-    return { room, host: false, present: 2 };
-  }
-  const table = query.get("table");
-  if (table) {
-    const guests = clampGuests(query.get("guests"), 4);
-    const room: Room = {
-      ...RACE_DEFAULTS,
-      name: t("room.tableName", { n: parseInt(table, 10) || 1 }),
-      autoName: false,
-      visibility: "public",
-      language: query.get("lang") === "en" ? "en" : "fr",
-      guests,
-      bots: query.get("bots") !== "0",
-      code: newRoomCode(),
-      invite: newInviteToken(),
-    };
-    return { room, host: false, present: Math.min(guests, Math.max(2, (parseInt(query.get("present") ?? "", 10) || 1) + 1)) };
-  }
+  const invite = query.get("invite")?.trim();
+  if (invite) return { host: false, invite };
+  if (code) return { host: false, code };
   if (guest) return null;
-  if (query.has("new") || !stored) return { room: newRoom(t), host: true, present: 1 };
-  return { room: stored, host: true, present: 1 };
+  return { host: true };
 }
 
-/** La liste des places : joueurs présents, puis bots ou places libres. */
-export function seatsOf(room: Pick<Room, "guests" | "bots">, host: boolean, present: number): Seat[] {
-  const people: Omit<Player, "color">[] = [];
-  const me = myName();
-  if (host) people.push({ name: me, host: true, me: true });
-  else {
-    people.push({ name: PLAYER_NAMES[0]!, host: true });
-    people.push({ name: me, me: true });
-    for (let i = 2; i < present; i++) people.push({ name: PLAYER_NAMES[i - 1]! });
+/** Ce que la page demande au serveur en arrivant : créer son salon, y entrer, ou relire celui dont on est membre. */
+export type Arrival = { action: "create" } | { action: "join"; via: { code: string } | { invite: string } } | { action: "read"; code: string };
+
+/**
+ * /room crée (compte) ou rejoint (code, lien) ; /game relit seulement le salon lancé, donné par ?code, et ne crée
+ * jamais de salon (SALLE-09). Null : rien à ouvrir, la page renvoie à l'accueil.
+ */
+export function arrivalOf(search: string, page: "room" | "game", guest = isGuestPlayer()): Arrival | null {
+  if (page === "game") {
+    const code = cleanRoomCode(new URLSearchParams(search).get("code") || "");
+    return isRoomCode(code) ? { action: "read", code } : null;
   }
+  const session = readSession(search, undefined, guest);
+  if (!session) return null;
+  if (session.host) return { action: "create" };
+  return { action: "join", via: session.invite ? { invite: session.invite } : { code: session.code ?? "" } };
+}
+
+/**
+ * SALLE-09 : la page de course d'un salon lancé ; chaque membre y suit l'hôte. Null hors course, et pour un membre qui
+ * a déjà fini (revenu du podium pendant que les autres courent) : /game lui relancerait une course.
+ */
+export function raceHref(status: RoomView["status"], code: string, finished = false): string | null {
+  return status === "racing" && code && !finished ? `/game?code=${code}` : null;
+}
+
+/** SALLE-09 : /game ne fait courir que pendant la course ; sinon, retour à la salle. Null : la course est en cours. */
+export function roomHrefOutsideRace(status: RoomView["status"], code: string): string | null {
+  return status === "racing" ? null : `/room?code=${code}`;
+}
+
+/** La copie locale d'un salon reçu du serveur. */
+export function roomOf(view: RoomView): Room {
+  return { ...view.settings, code: view.code };
+}
+
+/** La liste des places : les participants à leur place, puis des bots ou des places libres. Les spectateurs n'en ont pas. */
+export function seatsOf(room: Pick<Room, "guests" | "bots">, members: MemberView[], you: string): Seat[] {
+  const seats: Seat[] = members
+    .filter((m) => m.role === "player" && m.seat !== null)
+    .sort((a, b) => a.seat! - b.seat!)
+    .map((m) => ({ name: m.name, color: m.color ?? seatColor(m.seat!), host: m.host || undefined, me: m.key === you || undefined }));
   let bot = 0;
-  const seats: Seat[] = people.map((p, i) => ({ ...p, color: PLAYER_COLORS[i]! }));
   while (seats.length < room.guests) {
-    seats.push(room.bots ? { name: BOT_NAMES[bot++]!, color: PLAYER_COLORS[seats.length]!, bot: true } : { free: true });
+    // SALLE-05 : un bot par nom de la liste fermée (le serveur ne reconnaît qu'elle) ; au-delà, des places libres
+    const name = room.bots ? BOT_NAMES[bot++] : undefined;
+    seats.push(name ? { name, color: seatColor(seats.length), bot: true } : { free: true });
   }
   return seats;
 }

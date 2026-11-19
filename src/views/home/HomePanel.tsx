@@ -7,7 +7,7 @@ import { TextField, TextInput } from "../../components/forms/TextField";
 import { DiscordIcon, GithubIcon } from "../../components/icons";
 import { Stamp } from "../../components/Stamp";
 import { ViewTabs } from "../../components/tabs/ViewTabs";
-import { cleanRoomCode } from "../../rooms/access";
+import { cleanRoomCode, inviteReturn } from "../../rooms/access";
 import { isValidNickname, NICKNAME_MAX, NICKNAME_PATTERN, startGuestSession, storedNickname } from "../../players/nickname";
 import { authClient, changeUsername, isProvider, linkProvider, PROVIDER_NAMES, signInWith, signInWithUsername, signUpWithUsername, SOCIAL_PROVIDERS, type SocialProvider } from "../../accounts/client";
 import { isValidUsername, PASSWORD_MIN } from "../../accounts/username";
@@ -91,7 +91,15 @@ export function HomePanel({ ref }: { ref?: Ref<HTMLElement> }) {
   }
   async function play(e: FormEvent) {
     e.preventDefault();
-    if (await ensurePlayer()) showStamp("stampPlay");
+    if (await ensurePlayer()) {
+      showStamp("stampPlay");
+      backToInvite();
+    }
+  }
+  // SALLE-04 : arrivé depuis un lien d'invitation sans session (/?invite=T), on y retourne une fois prêt
+  function backToInvite() {
+    const back = inviteReturn(new URLSearchParams(location.search));
+    if (back) setTimeout(() => { location.href = back; }, 900);
   }
   // AUTH-03 : un invité ne crée pas de salon, on l'envoie vers l'onglet compte
   function createRoom() {
@@ -112,6 +120,7 @@ export function HomePanel({ ref }: { ref?: Ref<HTMLElement> }) {
     if (error) return setAuthError(t(mode === "signIn" ? "home.signInFailed" : "home.signUpFailed"));
     setPassword("");
     showStamp("stampAccount");
+    backToInvite();
   }
 
   // Départ vers GitHub ou Discord : en cas d'erreur avant la redirection, on reste ici avec le message

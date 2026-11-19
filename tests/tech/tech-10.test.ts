@@ -6,7 +6,7 @@ const tracked = (await Bun.$`git ls-files`.text()).split("\n").filter(Boolean);
 const example = readFileSync(".env.example", "utf8");
 
 /** Fournies par la plateforme (Bun, Next.js, Vercel, Fly.io) : jamais à définir dans .env, seulement notées en commentaire. */
-const PLATFORM = new Set(["NODE_ENV", "PORT", "VERCEL_ENV", "VERCEL_URL", "VERCEL_BRANCH_URL", "VERCEL_PROJECT_PRODUCTION_URL"]);
+const PLATFORM = new Set(["NODE_ENV", "PORT", "VERCEL", "VERCEL_ENV", "VERCEL_URL", "VERCEL_BRANCH_URL", "VERCEL_PROJECT_PRODUCTION_URL"]);
 
 const ENV_OBJECT = /(?:process\.env|Bun\.env|import\.meta\.env|\benv)\.([A-Z][A-Z0-9_]*)\b/g;
 const DESTRUCTURED = /\{([^}]*)\}\s*=\s*(?:process\.env|Bun\.env|import\.meta\.env)\b/g;
@@ -56,7 +56,7 @@ describe("TECH-10 .env.example documente toutes les variables", () => {
   });
 
   test("les exceptions plateforme ne cachent aucune variable de l'application", () => {
-    for (const name of PLATFORM) expect(name).toMatch(/^(NODE_ENV|PORT|VERCEL_[A-Z_]+)$/);
+    for (const name of PLATFORM) expect(name).toMatch(/^(NODE_ENV|PORT|VERCEL(_[A-Z_]+)?)$/);
   });
 });
 

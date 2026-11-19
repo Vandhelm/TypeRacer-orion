@@ -3,7 +3,8 @@
 // AUTH-03 : un invité ne crée pas de salon ; il n'entre que pour en rejoindre un (code, invitation, table).
 import { z } from "zod";
 import type { Auth } from "./auth";
-import { guestSecret, readGuest } from "./guest";
+import { guestSecret, readGuestSession } from "./guest";
+import type { Identity } from "./rooms";
 
 type Player = { name: string; guest: boolean };
 
@@ -13,8 +14,22 @@ async function verifiedPlayer(headers: Headers, auth: Auth, secret: string): Pro
     const user = session.user as { displayUsername?: string | null; username?: string | null; name: string };
     return { name: user.displayUsername || user.username || user.name, guest: false };
   }
-  const guest = readGuest(headers, secret);
-  return guest ? { name: guest, guest: true } : null;
+  // SALLE-03 : un cookie d'avant l'id de session ne suffit plus, on redemande le pseudo
+  const guest = readGuestSession(headers, secret);
+  return guest?.id ? { name: guest.nickname, guest: true } : null;
+}
+
+/** SALLE-01 : qui agit sur un salon, d'après sa session (compte et son joueur, ou invité signé) ; null sans session. */
+export async function roomIdentity(headers: Headers, auth: Auth, secret = guestSecret()): Promise<Identity | null> {
+  const session = await auth.api.getSession({ headers }).catch(() => null);
+  if (session) {
+    const user = session.user as { displayUsername?: string | null; username?: string | null; name: string; playerId?: number | null };
+    if (!user.playerId) return null;
+    return { kind: "account", playerId: user.playerId, name: user.displayUsername || user.username || user.name };
+  }
+  // SALLE-03 : l'invité est l'id signé de sa session, pas son pseudonyme
+  const guest = readGuestSession(headers, secret);
+  return guest?.id ? { kind: "guest", name: guest.nickname, sessionId: guest.id } : null;
 }
 
 /** Le nom sous lequel ces en-têtes entrent dans un salon, ou null s'il faut d'abord choisir un pseudonyme. */

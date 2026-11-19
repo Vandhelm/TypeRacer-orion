@@ -13,3 +13,8 @@ export const PLAIN_VALUE = "flex min-h-[40px] items-center font-sans text-[clamp
 
 /** Dashed rule above a section of the page. */
 export const DASHED_TOP = "border-t border-t-line-soft [border-top-style:dashed]";
+
+/** A secondary action in a refusal (watch, leave the other room) or the member list (kick). Margin and height at the call site. */
+export const ACTION =
+  "unset box-border inline-flex cursor-pointer items-center border border-dashed border-line-soft bg-black px-4 font-mono text-[12px] leading-none tracking-[.16em] text-white uppercase " +
+  "hover:border-white focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-red-text";

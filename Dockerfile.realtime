@@ -1,11 +1,13 @@
 # Serveur temps réel (TECH-06) pour Fly.io : voir fly.toml et docs/ARCHITECTURE.md.
-# Le site reste sur Vercel ; cette image ne contient que src/realtime, regroupé en un seul fichier.
+# Le site reste sur Vercel ; cette image ne contient que src/realtime (et le code des salons qu'il lit), regroupé en un seul fichier.
 FROM oven/bun:1.4.2-alpine AS build
 WORKDIR /app
 COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile --ignore-scripts
 COPY tsconfig.json ./
 COPY src ./src
+# la page salle suit l'état du salon en base (room-backend.ts) : schéma et client Drizzle
+COPY db ./db
 RUN bun run realtime:build
 
 FROM oven/bun:1.4.2-alpine

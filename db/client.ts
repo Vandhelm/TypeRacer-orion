@@ -13,5 +13,10 @@ export type Db = PgDatabase<PgQueryResultHKT, typeof schema>;
 export function connect(url = process.env.DATABASE_URL) {
   if (!url) throw new Error("DATABASE_URL is not set: copy .env.example to .env.");
   const client = postgres(url, { max: 5, onnotice: () => {} });
-  return { db: drizzle(client, { schema }), close: () => client.end() };
+  return {
+    db: drizzle(client, { schema }),
+    close: () => client.end(),
+    /** LISTEN sur un canal Postgres (serveur temps réel : room-events.ts) ; la connexion d'écoute se rétablit seule. */
+    listen: (channel: string, onMessage: (payload: string) => void) => client.listen(channel, onMessage),
+  };
 }

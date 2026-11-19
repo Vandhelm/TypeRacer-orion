@@ -37,3 +37,7 @@ body{ height: auto; min-height: 100vh; overflow: visible; font-size: 16px; paddi
 @media (max-width: 760px){
     body{ padding-bottom: 104px; }
 }
+
+/* SALLE-04 : le bouton copier d'un lien d'invitation est au bord droit ; son infobulle s'aligne à droite au lieu de dépasser de l'écran */
+.room-invite [data-tip]::after{ left: auto; right: 0; transform: translate(0, 4px); }
+.room-invite [data-tip]:hover::after, .room-invite [data-tip]:focus-visible::after{ transform: none; }
