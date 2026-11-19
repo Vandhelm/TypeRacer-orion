@@ -32,7 +32,8 @@ const RoomParams = z.record(z.string(), z.union([z.string().max(256), z.array(z.
 
 /** Les searchParams de Next.js en requête : la première valeur d'une clé répétée ; une entrée invalide est ignorée. */
 export function roomQuery(params: unknown): URLSearchParams {
-  const parsed = RoomParams.safeParse(params);
+  // recopié dans un objet simple : Zod 4 refuse comme record l'objet searchParams que Next.js passe à la page
+  const parsed = RoomParams.safeParse(params && typeof params === "object" ? { ...params } : params);
   const query = new URLSearchParams();
   if (!parsed.success) return query;
   for (const [key, value] of Object.entries(parsed.data)) {
