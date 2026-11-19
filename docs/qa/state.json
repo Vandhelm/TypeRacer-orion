@@ -110,54 +110,54 @@
     "scope": "suivi (light)"
   },
   "SALLE-01": {
-    "commit": "2acdffe",
+    "commit": "808f024",
     "date": "2026-11-19",
-    "scope": "suivi (light)"
+    "scope": "section 5.3 (light, feature/room/salle-integration)"
   },
   "SALLE-02": {
-    "commit": "1fba673",
-    "date": "2026-11-18",
-    "scope": "site (light)"
+    "commit": "808f024",
+    "date": "2026-11-19",
+    "scope": "section 5.3 (light, feature/room/salle-integration)"
   },
   "SALLE-03": {
-    "commit": "1fba673",
-    "date": "2026-11-18",
-    "scope": "site (light)"
+    "commit": "808f024",
+    "date": "2026-11-19",
+    "scope": "section 5.3 (light, feature/room/salle-integration)"
   },
   "SALLE-04": {
-    "commit": "2acdffe",
+    "commit": "1c8c316",
     "date": "2026-11-19",
-    "scope": "suivi (light)"
+    "scope": "critère (light, feature/room/salle-integration)"
   },
   "SALLE-05": {
-    "commit": "2acdffe",
+    "commit": "808f024",
     "date": "2026-11-19",
-    "scope": "suivi (light)"
+    "scope": "section 5.3 (light, feature/room/salle-integration)"
   },
   "SALLE-06": {
-    "commit": "1fba673",
-    "date": "2026-11-18",
-    "scope": "site (light)"
+    "commit": "808f024",
+    "date": "2026-11-19",
+    "scope": "section 5.3 (light, feature/room/salle-integration)"
   },
   "SALLE-07": {
-    "commit": "1fba673",
-    "date": "2026-11-18",
-    "scope": "site (light)"
+    "commit": "1c8c316",
+    "date": "2026-11-19",
+    "scope": "critère (light, feature/room/salle-integration)"
   },
   "SALLE-08": {
-    "commit": "1fba673",
-    "date": "2026-11-18",
-    "scope": "site (light)"
+    "commit": "808f024",
+    "date": "2026-11-19",
+    "scope": "section 5.3 (light, feature/room/salle-integration)"
   },
   "SALLE-09": {
-    "commit": "1fba673",
-    "date": "2026-11-18",
-    "scope": "site (light)"
+    "commit": "808f024",
+    "date": "2026-11-19",
+    "scope": "section 5.3 (light, feature/room/salle-integration)"
   },
   "SALLE-10": {
-    "commit": "1fba673",
-    "date": "2026-11-18",
-    "scope": "site (light)"
+    "commit": "808f024",
+    "date": "2026-11-19",
+    "scope": "section 5.3 (light, feature/room/salle-integration)"
   },
   "JOIN-01": {
     "commit": "2acdffe",
