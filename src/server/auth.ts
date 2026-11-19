@@ -21,7 +21,20 @@ const baseURL = process.env.BETTER_AUTH_URL || (VERCEL_ENV === "production" ? ht
 /** Toutes les adresses d'où le site peut appeler l'API (domaines, alias Vercel, prévisualisation). */
 const trustedOrigins = ["https://vandhelm.com", "https://www.vandhelm.com", https(VERCEL_URL), https(VERCEL_BRANCH_URL), https(VERCEL_PROJECT_PRODUCTION_URL)].filter((origin): origin is string => !!origin);
 
-const { GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, DISCORD_CLIENT_ID, DISCORD_CLIENT_SECRET } = process.env;
+type Env = Record<string, string | undefined>;
+
+/** Valeur non vide : des espaces seuls ne configurent rien. */
+const filled = (value?: string) => value?.trim() || undefined;
+
+/** AUTH-01 : les variables OAuth, lues par leur nom (tests/tech/tech-10.test.ts les cherche dans le code). */
+function oauthVariables(env: Env) {
+  return {
+    GITHUB_CLIENT_ID: filled(env.GITHUB_CLIENT_ID),
+    GITHUB_CLIENT_SECRET: filled(env.GITHUB_CLIENT_SECRET),
+    DISCORD_CLIENT_ID: filled(env.DISCORD_CLIENT_ID),
+    DISCORD_CLIENT_SECRET: filled(env.DISCORD_CLIENT_SECRET),
+  };
+}
 
 /** Pseudo GitHub ou Discord ramené à la règle des pseudonymes : « octo-cat » ou « octo.cat » devient « octo_cat ». */
 export function usernameFromLogin(login: string) {
@@ -41,7 +54,34 @@ const imageNotAllowed = () => new APIError("BAD_REQUEST", { code: "IMAGE_NOT_ALL
 
 const invalidDisplayUsername = () => new APIError("BAD_REQUEST", { code: "INVALID_DISPLAY_USERNAME", message: "Display username is invalid." });
 
-export function createAuth(db: Db) {
+/**
+ * AUTH-01 : chaque fournisseur n'est activé que si son application OAuth est configurée (identifiant et secret).
+ * Pas de « username » dans mapProfileToUser : le plugin refuserait un nom pris. Le hook de createAuth choisit le nom libre.
+ */
+export function socialProviders(env: Env = process.env) {
+  const { GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, DISCORD_CLIENT_ID, DISCORD_CLIENT_SECRET } = oauthVariables(env);
+  return {
+    ...(GITHUB_CLIENT_ID && GITHUB_CLIENT_SECRET && {
+      github: { clientId: GITHUB_CLIENT_ID, clientSecret: GITHUB_CLIENT_SECRET, mapProfileToUser: (profile: { login: string }) => ({ displayUsername: usernameFromLogin(profile.login) }) },
+    }),
+    ...(DISCORD_CLIENT_ID && DISCORD_CLIENT_SECRET && {
+      discord: { clientId: DISCORD_CLIENT_ID, clientSecret: DISCORD_CLIENT_SECRET, mapProfileToUser: (profile: { username: string }) => ({ displayUsername: usernameFromLogin(profile.username) }) },
+    }),
+  };
+}
+
+/**
+ * AUTH-01 : en production, un fournisseur sans ses variables disparaîtrait sans bruit ; on le signale au démarrage.
+ * En développement local et en test, l'absence est normale : rien n'est signalé.
+ */
+export function warnMissingProviders(env: Env = process.env, warn: (message: string) => void = console.warn) {
+  if (env.NODE_ENV !== "production") return;
+  const missing = Object.entries(oauthVariables(env)).filter(([, value]) => !value).map(([name]) => name);
+  if (missing.length) warn(`[auth] AUTH-01: OAuth sign-in incomplete in production, missing variables: ${missing.join(", ")}`);
+}
+
+export function createAuth(db: Db, env: Env = process.env) {
+  warnMissingProviders(env);
   return betterAuth({
     secret: process.env.BETTER_AUTH_SECRET,
     baseURL,
@@ -53,16 +93,7 @@ export function createAuth(db: Db) {
       // Hash natif de Bun (argon2id) ; verify reconnaît aussi le bcrypt des données de démo.
       password: { hash: (password) => Bun.password.hash(password), verify: ({ hash, password }) => Bun.password.verify(password, hash) },
     },
-    // Chaque fournisseur n'est activé que si son application OAuth est configurée.
-    // Pas de « username » dans mapProfileToUser : le plugin refuserait un nom pris. Le hook plus bas choisit le nom libre.
-    socialProviders: {
-      ...(GITHUB_CLIENT_ID && GITHUB_CLIENT_SECRET && {
-        github: { clientId: GITHUB_CLIENT_ID, clientSecret: GITHUB_CLIENT_SECRET, mapProfileToUser: (profile) => ({ displayUsername: usernameFromLogin(profile.login) }) },
-      }),
-      ...(DISCORD_CLIENT_ID && DISCORD_CLIENT_SECRET && {
-        discord: { clientId: DISCORD_CLIENT_ID, clientSecret: DISCORD_CLIENT_SECRET, mapProfileToUser: (profile) => ({ displayUsername: usernameFromLogin(profile.username) }) },
-      }),
-    },
+    socialProviders: socialProviders(env),
     // Un compte peut lier GitHub ou Discord même si son e-mail (interne, pour les comptes par identifiants) diffère.
     account: { accountLinking: { enabled: true, allowDifferentEmails: true } },
     user: {
