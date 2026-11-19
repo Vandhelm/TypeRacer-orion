@@ -1,0 +1,34 @@
+#!/bin/bash
+# Refuse un push qui supprime une branche distante, réécrit son historique
+# ou contient un secret (fichier .env, clé privée, jeton connu, valeur du .env local).
+# Activé par : git config core.hooksPath .githooks
+set -uo pipefail
+zero=0000000000000000000000000000000000000000
+root=$(git rev-parse --show-toplevel)
+main=$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")
+fail() { echo "pre-push : $1" >&2; exit 1; }
+
+# valeurs secrètes du .env local (12 caractères ou plus)
+secrets=$(for f in "$root/.env" "$main/.env"; do [ -f "$f" ] && sed -nE 's/^[A-Za-z_][A-Za-z0-9_]*=["'\'']?([^"'\'' #]{12,}).*/\1/p' "$f"; done | sort -u)
+pattern='-----BEGIN [A-Z ]*PRIVATE KEY-----|AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{30,}|sk-[A-Za-z0-9_-]{20,}|xox[abp]-[A-Za-z0-9-]{10,}'
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ -z "${local_ref:-}" ] && continue
+  [ "$local_sha" = "$zero" ] && fail "suppression de $remote_ref refusée"
+  if [ "$remote_sha" != "$zero" ]; then
+    git merge-base --is-ancestor "$remote_sha" "$local_sha" 2>/dev/null || fail "réécriture d'historique de $remote_ref refusée (push forcé)"
+    range="$remote_sha..$local_sha"
+  else
+    range="$local_sha --not --remotes=origin"
+  fi
+  files=$(git log --format= --name-only --diff-filter=AM $range | sort -u)
+  if printf '%s\n' "$files" | grep -Eq '(^|/)\.env(\..+)?$' && printf '%s\n' "$files" | grep -Ev '(^|/)\.env\.example$' | grep -Eq '(^|/)\.env(\..+)?$'; then
+    fail "un fichier .env est dans les commits poussés"
+  fi
+  added=$(git log -p --format= $range | grep -E '^\+' | grep -v '^+++')
+  printf '%s\n' "$added" | grep -Eq -- "$pattern" && fail "motif de secret trouvé dans les lignes ajoutées"
+  if [ -n "$secrets" ]; then
+    printf '%s\n' "$added" | grep -Fq -f <(printf '%s\n' "$secrets") && fail "une valeur du .env local apparaît dans les lignes ajoutées"
+  fi
+done
+exit 0
