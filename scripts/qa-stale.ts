@@ -86,7 +86,8 @@ if (import.meta.main) {
   // Un seul appel git par commit de QA distinct.
   for (const c of new Set(Object.values(state).map((e) => e.commit))) {
     diffCache.set(c, (await $`git diff --name-only ${c} ${target}`.cwd(root).text()).split("\n").filter(Boolean));
-    const log = await $`git log ${c}..${target} --format=%B%x00`.cwd(root).text();
+    // Les commits de matrice seule ne comptent pas : ils citent les ID sans toucher au code.
+    const log = await $`git log ${c}..${target} --format=%B%x00 -- . :!docs/EXIGENCES.md :!docs/qa`.cwd(root).text();
     refsCache.set(c, refsOf(log));
   }
   const stale = findStale(parseMatrix(matrix), state, (c) => diffCache.get(c) ?? [], (c) => refsCache.get(c) ?? new Set());
