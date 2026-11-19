@@ -40,3 +40,6 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 # next.js
 .next
 next-env.d.ts
+
+# rapports générés (scripts/requirement-tests.ts)
+reports/
