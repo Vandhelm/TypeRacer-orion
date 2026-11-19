@@ -20,14 +20,14 @@
     "scope": "suivi (light)"
   },
   "TECH-05": {
-    "commit": "b436148",
-    "date": "2026-11-18",
-    "scope": "voir notes de la matrice"
+    "commit": "8106c20",
+    "date": "2026-11-19",
+    "scope": "critère (production, déploiement CLI au commit inconnu)"
   },
   "TECH-06": {
-    "commit": "2acdffe",
+    "commit": "c6a19e6",
     "date": "2026-11-19",
-    "scope": "suivi (light)"
+    "scope": "critère feature/room/tech-06 (light)"
   },
   "TECH-07": {
     "commit": "2acdffe",
@@ -65,9 +65,9 @@
     "scope": "site (light)"
   },
   "DES-04": {
-    "commit": "2acdffe",
+    "commit": "8106c20",
     "date": "2026-11-19",
-    "scope": "suivi (light)"
+    "scope": "critère (medium)"
   },
   "DES-05": {
     "commit": "2acdffe",
