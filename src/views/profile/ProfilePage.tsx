@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+"use client";
+// TECH-01 : rendu côté serveur par app/profile/page.tsx, qui lui passe la session, les paramètres et les stats.
+import { useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { authClient } from "../../accounts/client";
 import { HangingButton } from "../../components/buttons/HangingButton";
 import { LanguageSwitcher } from "../../components/tabs/LanguageSwitcher";
 import { useRaceResults } from "../podium/hooks/useRaceResults";
@@ -11,72 +12,81 @@ import { usePlayerStats, type StatsState } from "./hooks/usePlayerStats";
 import { LastRace } from "./LastRace";
 import { OwnProfile, type Me } from "./OwnProfile";
 import { ProfileAvatar } from "./ProfileAvatar";
-import { guestStats, statsSource, type SessionState } from "./stats";
+import { guestStats, statsSource, type PlayerStats, type SessionState } from "./stats";
 
 type Subject = { name: string; result: PlayerResult | null; index: number; fromPodium: boolean };
 
+/** Les paramètres d'adresse de la page, déjà lus et validés par le serveur (src/server/profile-page.ts). */
+export type ProfileQuery = { player: string | null; name: string | null; race: string | null };
+
 /**
  * Qui montrer ? ?player=N : le N-ième joueur de la dernière course (depuis le podium) ; ?name=X : un joueur par son nom ;
- * sans paramètre : moi dans la dernière course. null : rien à montrer.
+ * sans paramètre : moi dans la dernière course. null : rien à montrer (ou pas encore : la course de l'onglet se charge).
+ * known : le nom exact du joueur, quand le serveur a trouvé ses stats.
  */
-function subjectOf(results: RaceResults | null): Subject | null {
-  const query = new URLSearchParams(location.search);
+function subjectOf(results: RaceResults | null, query: ProfileQuery, known: string | null): Subject | null {
   const players = results?.players ?? [];
-  const param = query.get("player");
-  if (param !== null) {
-    const index = Number(param);
+  if (query.player !== null) {
+    const index = Number(query.player);
     const result = Number.isInteger(index) ? players[index] : undefined;
     return result ? { name: result.name, result, index, fromPodium: true } : null;
   }
-  const name = query.get("name")?.trim();
-  if (name) {
+  if (query.name) {
+    const name = query.name;
     const index = players.findIndex((player) => player.name.toLowerCase() === name.toLowerCase());
-    return { name: players[index]?.name ?? name, result: players[index] ?? null, index, fromPodium: false };
+    return { name: players[index]?.name ?? known ?? name, result: players[index] ?? null, index, fromPodium: false };
   }
   const index = players.findIndex((player) => player.me);
   return index >= 0 ? { name: players[index]!.name, result: players[index]!, index, fromPodium: false } : null;
 }
 
-/** Sans ?player ni ?name (la navbar) et connecté : son propre profil, Compte et Stats. Sinon : la page de stats d'un joueur. */
-export function ProfilePage() {
-  const [own] = useState(() => { const query = new URLSearchParams(location.search); return !query.has("player") && !query.has("name"); });
-  const { data: session, isPending } = authClient.useSession();
-  // I18N-02 : le sélecteur est ici, donc présent sur chaque variante de la page (attente, profil propre, profil d'un joueur)
+/**
+ * me : le compte connecté (lu par le serveur), ou null. stats : celles que le serveur a déjà lues pour le joueur montré.
+ * Sans ?player ni ?name (la navbar) et connecté : son propre profil, Compte et Stats. Sinon : la page de stats d'un joueur.
+ */
+type Props = { me: Me | null; query: ProfileQuery; stats?: PlayerStats | null };
+
+export function ProfilePage({ me, query, stats }: Props) {
+  const own = query.player === null && query.name === null;
+  // I18N-02 : le sélecteur est ici, donc présent sur chaque variante de la page (profil propre, profil d'un joueur)
   return (
     <>
       <LanguageSwitcher className="hanging-tabs-floating" />
-      {own && isPending ? <main className="profile" aria-busy="true" />
-        : own && session ? <OwnProfile me={session.user as Me} />
-        : <PlayerProfile session={isPending ? "pending" : session ? "signed-in" : "signed-out"} />}
+      {own && me ? <OwnProfile me={me} stats={stats} />
+        : <PlayerProfile session={me ? "signed-in" : "signed-out"} query={query} stats={stats} />}
     </>
   );
 }
 
 /** Un joueur : le détail de la dernière course (ou d'une course de l'historique, ?race=N) s'il y était, puis ses statistiques. */
-function PlayerProfile({ session }: { session: SessionState }) {
-  const loaded = useRaceResults();
-  if (loaded.status === "loading") return <main className="profile" aria-busy="true" />;
+function PlayerProfile({ session, query, stats }: { session: SessionState; query: ProfileQuery; stats?: PlayerStats | null }) {
+  const loaded = useRaceResults(query.race ? `?race=${encodeURIComponent(query.race)}` : "");
+  // ?name=X : le serveur sait déjà qui montrer, la page s'affiche sans attendre la course de l'onglet
+  if (loaded.status === "loading" && !query.name) return <main className="profile" aria-busy="true" />;
   return (
     <PlayerView
       session={session}
+      query={query}
+      preloaded={stats}
       results={loaded.status === "ready" ? loaded.results : null}
-      raceId={loaded.status === "ready" || loaded.status === "error" ? loaded.raceId : null}
+      raceId={loaded.status === "missing" ? null : loaded.raceId}
       error={loaded.status === "error" ? loaded.code : null}
     />
   );
 }
 
-type ViewProps = { session: SessionState; results: RaceResults | null; raceId: number | null; error: string | null };
+type ViewProps = { session: SessionState; query: ProfileQuery; preloaded?: PlayerStats | null; results: RaceResults | null; raceId: number | null; error: string | null };
 
-function PlayerView({ session, results, raceId, error }: ViewProps) {
+function PlayerView({ session, query, preloaded, results, raceId, error }: ViewProps) {
   const { t } = useTranslation();
   const back = podiumHref(raceId);
-  const [subject] = useState(() => subjectOf(results));
+  const subject = useMemo(() => subjectOf(results, query, preloaded?.name ?? null), [results, query, preloaded]);
   // un invité n'a pas d'historique sur le serveur (AUTH-03) : ses stats viennent de sa session. Invité ou non : d'après la session.
   const source = subject ? statsSource({ me: !!subject.result?.me }, session) : null;
   const guest = source === "session";
-  const remote = usePlayerStats(subject && source === "server" ? subject.name : null);
-  const local = useMemo<StatsState | null>(() => (guest && subject ? { status: "ready", stats: guestStats(subject.name) } : null), [guest, subject]);
+  const remote = usePlayerStats(subject && source === "server" ? subject.name : null, preloaded);
+  // sessionStorage : lu seulement dans le navigateur, une fois la course de l'onglet chargée
+  const local = useMemo<StatsState | null>(() => (guest && subject && results ? { status: "ready", stats: guestStats(subject.name) } : null), [guest, subject, results]);
   const stats = local ?? remote;
   const [layout, setLayout] = useKeyboardLayout();
 
