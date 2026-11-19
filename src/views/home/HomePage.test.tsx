@@ -9,6 +9,24 @@ import { HomePage } from "./HomePage";
 const render = (props: Parameters<typeof HomePage>[0]) =>
   renderToString(createElement(I18nextProvider, { i18n: createI18n("fr") }, createElement(HomePage, props)));
 
+describe("AUTH-01 — le panneau de connexion offre GitHub, Discord et les identifiants", () => {
+  const html = render({ me: null });
+  const button = (id: string) => html.match(new RegExp(`<button[^>]*id="${id}"[^>]*>`))?.[0];
+
+  test("offers a GitHub button and a Discord button", () => {
+    expect(button("login-github")).toContain('data-provider="github"');
+    expect(button("login-discord")).toContain('data-provider="discord"');
+    expect(button("login-github")).not.toContain("disabled");
+    expect(button("login-discord")).not.toContain("disabled");
+  });
+
+  test("offers the username and password form next to them", () => {
+    const input = (id: string) => html.match(new RegExp(`<input[^>]*id="${id}"[^>]*>`))?.[0];
+    expect(input("username")).toContain('name="username"');
+    expect(input("password")).toContain('type="password"');
+  });
+});
+
 describe("TECH-01 — /home rendu côté serveur", () => {
   test("se rend sans window, document ni stockage du navigateur", () => {
     expect(typeof (globalThis as { window?: unknown }).window).toBe("undefined");
