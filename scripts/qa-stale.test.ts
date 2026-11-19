@@ -15,7 +15,7 @@ describe("parseMatrix", () => {
     const rows = parseMatrix(matrix);
     expect(rows.map((r) => r.id)).toEqual(["AUTH-01", "SALLE-07", "DES-01", "A11Y-02"]);
     expect(rows[0]).toEqual({ id: "AUTH-01", status: "complet", files: ["src/server/auth.ts", "db/schema"] });
-    expect(rows[1].files).toEqual([]);
+    expect(rows[1]?.files).toEqual([]);
   });
 });
 
@@ -60,7 +60,7 @@ describe("findStale", () => {
   test("un fichier principal modifié rend l'exigence périmée", () => {
     const stale = findStale(rows, state, (c) => (c === "aaa" ? ["db/schema/users.ts", "README.md"] : []), () => new Set());
     expect(stale.map((s) => s.id)).toEqual(["AUTH-01", "DES-01"]);
-    expect(stale[0].reasons[0]).toContain("db/schema/users.ts");
+    expect(stale[0]?.reasons[0]).toContain("db/schema/users.ts");
   });
 
   test("un commit Refs rend périmée une exigence sans fichiers", () => {

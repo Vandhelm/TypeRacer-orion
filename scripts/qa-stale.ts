@@ -21,8 +21,9 @@ export function parseMatrix(text: string): Row[] {
   for (const line of text.split("\n")) {
     const m = ROW.exec(line);
     if (!m) continue;
-    const files = [...m[3].matchAll(/`([^`]+)`/g)].map((f) => f[1].trim()).filter(Boolean);
-    rows.push({ id: m[1], status: m[2].trim(), files });
+    const [, id = "", status = "", cell = ""] = m;
+    const files = [...cell.matchAll(/`([^`]+)`/g)].map((f) => (f[1] ?? "").trim()).filter(Boolean);
+    rows.push({ id, status: status.trim(), files });
   }
   return rows;
 }
@@ -40,8 +41,8 @@ export function refsOf(message: string): Set<string> {
   for (const line of message.split("\n")) {
     const m = /^Refs:\s*(.*)$/.exec(line.trim());
     if (!m) continue;
-    for (const r of m[1].matchAll(/([A-Z0-9]+)-(\d+)(?:\.\.(\d+))?/g)) {
-      const [, prefix, from, to] = r;
+    for (const r of (m[1] ?? "").matchAll(/([A-Z0-9]+)-(\d+)(?:\.\.(\d+))?/g)) {
+      const [, prefix = "", from = "", to] = r;
       const width = from.length;
       const end = to ? Number(to) : Number(from);
       for (let n = Number(from); n <= end; n++) ids.add(`${prefix}-${String(n).padStart(width, "0")}`);
