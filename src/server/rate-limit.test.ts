@@ -24,11 +24,11 @@ const TRUSTED = { TRUST_PROXY: "1" };
 describe("SALLE-10 — client IP behind a declared proxy (TRUST_PROXY=1)", () => {
   const ip = (headers: Record<string, string>) => clientIp(new Headers(headers), { env: TRUSTED });
 
-  test("reads the first value of x-forwarded-for", () => {
-    expect(ip({ "x-forwarded-for": " 203.0.113.7 , 10.0.0.1" })).toBe("203.0.113.7");
+  test("reads the last value of x-forwarded-for, the one the proxy adds", () => {
+    expect(ip({ "x-forwarded-for": " 10.0.0.1 , 203.0.113.7 " })).toBe("203.0.113.7");
   });
 
-  test("falls back to x-real-ip, then to a shared unknown key", () => {
+  test("falls back to x-real-ip, then to no IP (null: the guard uses its shared unknown key)", () => {
     expect(ip({ "x-real-ip": "198.51.100.2" })).toBe("198.51.100.2");
     expect(ip({})).toBeNull();
   });
@@ -50,7 +50,7 @@ describe("SALLE-10 — client IP: proxy headers are only trusted behind a proxy"
     expect(clientIp(new Headers(spoofed), { env: {}, peer: "192.0.2.50" })).toBe("192.0.2.50");
   });
 
-  test("without a declared proxy nor a socket IP, the shared unknown key is used", () => {
+  test("without a declared proxy nor a socket IP, there is no IP (null: the guard uses its shared unknown key)", () => {
     expect(clientIp(new Headers(spoofed), { env: {} })).toBeNull();
   });
 
@@ -215,8 +215,8 @@ describe("SALLE-10 — POST /api/rooms/join is rate limited per IP", () => {
     expect((await join("198.51.100.11", "ZZZ222")).status).toBe(404);
   });
 
-  test("changing a later x-forwarded-for value does not escape the limit", async () => {
-    expect((await join("198.51.100.10, 10.0.0.9", "ZZZ222")).status).toBe(429);
+  test("changing an earlier x-forwarded-for value (sent by the client) does not escape the limit", async () => {
+    expect((await join("10.0.0.9, 198.51.100.10", "ZZZ222")).status).toBe(429);
   });
 
   test("successful joins count as attempts too", async () => {

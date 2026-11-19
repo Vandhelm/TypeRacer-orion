@@ -2,8 +2,10 @@
 // d'invitation liés à une IP ; SALLE-10 : limite de tentatives). Les en-têtes de proxy viennent du client tant
 // qu'aucun proxy ne les réécrit : on ne les croit que derrière un proxy connu.
 // - Sur Vercel (VERCEL défini) : x-vercel-forwarded-for seulement, que le proxy de Vercel réécrit toujours.
-// - Derrière un proxy déclaré (TRUST_PROXY=1 ou true, désactivé par défaut) : la première valeur de x-forwarded-for,
-//   puis x-real-ip. Un hébergement autonome (VPS) passe par un proxy (nginx, Caddy…) qui remplace ces en-têtes.
+// - Derrière un proxy déclaré (TRUST_PROXY=1 ou true, désactivé par défaut) : la dernière valeur de x-forwarded-for,
+//   celle qu'ajoute le proxy (les précédentes viennent du client) ; x-real-ip seulement sans x-forwarded-for.
+//   Un hébergement autonome (VPS) passe par un seul proxy (nginx, Caddy…) qui pose ces en-têtes.
+// - Un en-tête de confiance présent mais illisible donne null : pas de repli sur un autre en-tête ni sur la socket.
 // - Sinon : l'IP de la socket quand le serveur Bun la donne (server.ts, `peer`) ; à défaut, null (inconnue).
 // Une valeur qui n'est pas une IP n'est jamais prise.
 import { isIP } from "node:net";
@@ -30,17 +32,22 @@ function clean(value: string | null | undefined): string | null {
   return IP_PATTERN.test(ip) && isIP(ip) ? ip : null;
 }
 
-const first = (value: string | null) => value?.split(",")[0] ?? null;
+const first = (value: string) => value.split(",")[0]!;
+const last = (value: string) => value.split(",").at(-1)!;
 const trustsProxy = (env: Record<string, string | undefined>) => env.TRUST_PROXY === "1" || env.TRUST_PROXY === "true";
 
 /** L'IP du client selon les règles ci-dessus ; null si elle est inconnue ou n'a pas la forme d'une adresse. */
 export function clientIp(headers: Headers, { env = process.env, peer = null }: IpContext = {}): string | null {
-  const trusted = env.VERCEL ? [first(headers.get("x-vercel-forwarded-for"))] : trustsProxy(env) ? [first(headers.get("x-forwarded-for")), headers.get("x-real-ip")] : [];
-  for (const candidate of [...trusted, peer]) {
-    const ip = clean(candidate);
-    if (ip) return ip;
+  if (env.VERCEL) {
+    const vercel = headers.get("x-vercel-forwarded-for");
+    if (vercel !== null) return clean(first(vercel));
+  } else if (trustsProxy(env)) {
+    const forwarded = headers.get("x-forwarded-for");
+    if (forwarded !== null) return clean(last(forwarded));
+    const real = headers.get("x-real-ip");
+    if (real !== null) return clean(real);
   }
-  return null;
+  return clean(peer);
 }
 
 /** L'IP de la socket, quand `server` est un serveur Bun (server.ts) ; null sous Next.js, qui passe un contexte de route. */

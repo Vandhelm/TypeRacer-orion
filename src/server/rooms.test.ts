@@ -71,7 +71,7 @@ async function setup() {
     handleRoomsApi(
       new Request(`http://localhost${path}`, {
         method,
-        // SALLE-04 : derrière un proxy déclaré (TRUST_PROXY), l'IP du client est la première valeur de x-forwarded-for
+        // SALLE-04 : derrière un proxy déclaré (TRUST_PROXY), l'IP du client est la dernière valeur de x-forwarded-for
         headers: { ...(cookie ? { cookie } : {}), "x-forwarded-for": "203.0.113.1", ...(body === undefined ? {} : { "content-type": "application/json" }) },
         body: body === undefined ? undefined : typeof body === "string" ? body : JSON.stringify(body),
       }),

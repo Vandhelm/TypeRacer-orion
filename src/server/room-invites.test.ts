@@ -31,12 +31,12 @@ async function setup() {
   const sessions = new Map<string, string>();
   const freshGuest = (name: string) => `${GUEST_COOKIE}=${signGuest(name, SECRET)}`;
   const guest = (name: string) => sessions.get(name) ?? sessions.set(name, freshGuest(name)).get(name)!;
-  /** ip : la première valeur de x-forwarded-for, derrière un proxy déclaré (TRUST_PROXY) ; null : sans en-tête. */
+  /** ip : la dernière valeur de x-forwarded-for, ajoutée par un proxy déclaré (TRUST_PROXY) ; null : sans en-tête. */
   const call = (method: string, path: string, cookie?: string, body?: unknown, ip: string | null = IP_A) =>
     handleRoomsApi(
       new Request(`http://localhost${path}`, {
         method,
-        headers: { ...(cookie ? { cookie } : {}), ...(ip ? { "x-forwarded-for": `${ip}, 10.0.0.1` } : {}), ...(body === undefined ? {} : { "content-type": "application/json" }) },
+        headers: { ...(cookie ? { cookie } : {}), ...(ip ? { "x-forwarded-for": `10.0.0.1, ${ip}` } : {}), ...(body === undefined ? {} : { "content-type": "application/json" }) },
         body: body === undefined ? undefined : JSON.stringify(body),
       }),
       db,

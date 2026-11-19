@@ -2,16 +2,24 @@ import { describe, expect, test } from "bun:test";
 import { clientIp } from "./client-ip";
 
 const headers = (init: Record<string, string>) => new Headers(init);
-/** Derrière un proxy déclaré (TRUST_PROXY) : x-forwarded-for est réécrit par lui, donc lu. */
+/** Derrière un proxy déclaré (TRUST_PROXY) : il ajoute l'adresse du client à la fin de x-forwarded-for, qui est donc lue. */
 const proxied = (init: Record<string, string>) => clientIp(headers(init), { env: { TRUST_PROXY: "1" } });
 
 describe("SALLE-04 — the client IP is read reliably behind a declared proxy", () => {
-  test("x-forwarded-for: the first value is the client", () => {
-    expect(proxied({ "x-forwarded-for": "203.0.113.5, 10.0.0.1, 10.0.0.2" })).toBe("203.0.113.5");
+  test("x-forwarded-for: the last value, added by the proxy, is the client", () => {
+    expect(proxied({ "x-forwarded-for": "10.0.0.2, 10.0.0.1, 203.0.113.5" })).toBe("203.0.113.5");
+  });
+
+  test("a value sent by the client before the proxy's own is ignored (nginx $proxy_add_x_forwarded_for)", () => {
+    expect(proxied({ "x-forwarded-for": "6.6.6.6, 203.0.113.9" })).toBe("203.0.113.9");
+  });
+
+  test("an x-forwarded-for that is not an IP does not fall back to x-real-ip", () => {
+    expect(proxied({ "x-forwarded-for": "junk", "x-real-ip": "6.6.6.6" })).toBeNull();
   });
 
   test("spaces around the value are ignored", () => {
-    expect(proxied({ "x-forwarded-for": "  2001:db8::1 ,10.0.0.1" })).toBe("2001:db8::1");
+    expect(proxied({ "x-forwarded-for": "10.0.0.1,  2001:db8::1 " })).toBe("2001:db8::1");
   });
 
   test("falls back to x-real-ip when x-forwarded-for is missing", () => {
@@ -20,7 +28,7 @@ describe("SALLE-04 — the client IP is read reliably behind a declared proxy", 
 
   test("no header: unknown (null), never an empty string", () => {
     expect(proxied({})).toBeNull();
-    expect(proxied({ "x-forwarded-for": " , 10.0.0.1" })).toBeNull();
+    expect(proxied({ "x-forwarded-for": "10.0.0.1 , " })).toBeNull();
   });
 
   test("an IPv4-mapped IPv6 address is the same client as its IPv4 form", () => {
