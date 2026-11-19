@@ -160,9 +160,9 @@
     "scope": "section 5.3 (light, feature/room/salle-integration)"
   },
   "JOIN-01": {
-    "commit": "2acdffe",
+    "commit": "a97ab02",
     "date": "2026-11-19",
-    "scope": "suivi (light)"
+    "scope": "critère feature/home/join-01 (medium)"
   },
   "JOIN-02": {
     "commit": "2acdffe",

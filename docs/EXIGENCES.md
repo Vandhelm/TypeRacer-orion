@@ -62,7 +62,7 @@ Les statuts viennent des rapports de l'agent `qa` (skill `criteria-check`). Une 
 
 | ID | Statut | Fichiers principaux | Tests associés | Notes et choix |
 |---|---|---|---|---|
-| JOIN-01 | partiel | `src/views/home/HomePanel.tsx`, `src/rooms/access.ts` | `src/rooms/access.test.ts` | Champ présent ; un code inexistant ouvre une salle simulée, aucune vérification serveur. Vérifié le 2026-11-19 (QA suivi, light). |
+| JOIN-01 | complet | `src/views/home/HomePanel.tsx`, `src/rooms/access.ts`, `src/views/room/room.ts`, `src/views/room/hooks/useRoom.ts`, `src/rooms/settings.ts`, `src/server/rooms-api.ts` | `src/rooms/access.test.ts`, `src/server/rooms.test.ts`, `src/views/home/HomePage.test.tsx`, `src/views/room/room.test.ts` (`bun test -t JOIN-01`) | Champ code sur l'accueil, sans compte. Le code est nettoyé (majuscules, alphabet sans caractères ambigus). Un code mal formé est refusé avec un message, à l'accueil comme dans l'URL directe. Un code bien formé part au serveur (schéma Zod), qui répond `not_found` s'il n'existe pas : plus de salle simulée. Vérifié le 2026-11-19 (QA critère, medium, branche `feature/home/join-01`, rendu fr et en et à 360 px). |
 | JOIN-02 | partiel | `src/views/home/RoomsView.tsx`, `src/views/home/rooms.ts` | aucun | Liste fixe ; ni filtres, ni hôte/état/complexité, ni mise à jour. Vérifié le 2026-11-19 (QA suivi, light). |
 | JOIN-03 | non fait | — | aucun | Pas de « Faire une course » fonctionnel. Vérifié le 2026-11-18 (QA site, light). |
 
