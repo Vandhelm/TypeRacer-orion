@@ -19,7 +19,8 @@ const PROVIDER_ICONS: Record<SocialProvider, () => React.JSX.Element> = { github
 
 const FORM = "col-start-1 row-start-1 flex flex-col gap-[2.1vh] [align-self:start]";
 
-/** Home view panel: Play / Account forms. */
+type Me = { id: string; displayUsername?: string | null; username?: string | null; name: string; needsUsername?: boolean };
+
 // The panel with Play / Account forms, with blueprint-style corner marks.
 const PANEL =
   "pointer-events-auto relative flex max-h-full w-full max-w-[min(520px,58vh)] flex-col items-center justify-center gap-[3.2vh] border border-line bg-black px-[3vh] pt-[6vh] pb-[4vh] " +
@@ -27,11 +28,15 @@ const PANEL =
   "before:absolute before:-top-[7px] before:-left-[7px] before:size-4 before:border-t before:border-l before:border-white " +
   "after:absolute after:-right-[7px] after:-bottom-[7px] after:size-4 after:border-r after:border-b after:border-white";
 
-export function HomePanel({ ref }: { ref?: Ref<HTMLElement> }) {
+/**
+ * Home view panel: Play / Account forms.
+ * initialMe : le compte lu par le serveur (TECH-01), affiché tant que la session du navigateur se charge.
+ */
+export function HomePanel({ ref, initialMe = null }: { ref?: Ref<HTMLElement>; initialMe?: Me | null }) {
   const { t } = useTranslation();
   const [pane, setPane] = useState<Pane>("play");
   const [code, setCode] = useState("");
-  const [nickname, setNickname] = useState(() => storedNickname() ?? "");
+  const [nickname, setNickname] = useState("");
   const [playError, setPlayError] = useState("");
   const nicknameInput = useRef<HTMLInputElement>(null);
   const [showPassword, setShowPassword] = useState(false);
@@ -39,8 +44,8 @@ export function HomePanel({ ref }: { ref?: Ref<HTMLElement> }) {
   const [password, setPassword] = useState("");
   const [authError, setAuthError] = useState("");
   const [busy, setBusy] = useState(false);
-  const { data: session } = authClient.useSession();
-  const me = session?.user as { id: string; displayUsername?: string | null; username?: string | null; name: string; needsUsername?: boolean } | undefined;
+  const { data: session, isPending } = authClient.useSession();
+  const me = isPending ? (initialMe ?? undefined) : (session?.user as Me | undefined);
   const [linkedProviders, setLinkedProviders] = useState<string[]>([]);
   const [notice, setNotice] = useState("");
   const [stamp, setStamp] = useState<{ key: StampKey | null; on: boolean; play: number }>({ key: null, on: false, play: 0 });
@@ -48,6 +53,11 @@ export function HomePanel({ ref }: { ref?: Ref<HTMLElement> }) {
   const codeInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => () => clearTimeout(stampTimer.current), []);
+  // sessionStorage : lu seulement dans le navigateur, après le montage (le serveur rend le champ vide)
+  useEffect(() => {
+    const stored = storedNickname();
+    if (stored) setNickname((current) => current || stored);
+  }, []);
   // Retour de GitHub ou Discord (connexion ou liaison) : on ouvre l'onglet compte avec le message
   useEffect(() => {
     const params = new URLSearchParams(location.search);

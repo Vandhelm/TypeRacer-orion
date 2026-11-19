@@ -1,3 +1,4 @@
+"use client";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FlipButton } from "../../components/buttons/FlipButton";
@@ -56,28 +57,37 @@ export function RoomPage() {
   const enough = players.length >= 2;
 
   // le salon vient du serveur : rien à montrer tant qu'il n'a pas répondu, ou s'il refuse
+  // TECH-01 : le bassin et les onglets de langue sont déjà dans le HTML du serveur, aux mêmes places qu'une fois le salon reçu
+  const pond = (
+    <>
+      <FishPond players={players} />
+      <LanguageSwitcher className="absolute top-0 right-[clamp(16px,4vw,56px)] z-20 flex items-start gap-2" />
+    </>
+  );
   if (!ready) {
     return (
-      <main className="relative z-1 isolate">
-        <div className={`${SHADE} mt-[clamp(20px,4vh,36px)] max-w-[640px]`} role={error ? "alert" : "status"}>
-          <p>{t(error ? `room.errors.${error}` : "room.loading", elsewhere ? { code: elsewhere.code } : undefined)}</p>
-          {error && <HangingButton className="room-leave" href="/home#rooms">{t("room.leave")}</HangingButton>}
-          {watchInstead && <button type="button" className={`${ACTION} mt-3 ml-3 min-h-[42px]`} onClick={watchInstead}>{t("room.watchInstead")}</button>}
-          {elsewhere && (
-            <>
-              <button type="button" className={`${ACTION} mt-3 ml-3 min-h-[42px]`} onClick={elsewhere.leave}>{t("room.leaveCurrent", { code: elsewhere.code })}</button>
-              <a className={`${ACTION} mt-3 ml-3 min-h-[42px]`} href={`/room?code=${elsewhere.code}`}>{t("room.backToCurrent", { code: elsewhere.code })}</a>
-            </>
-          )}
-        </div>
-      </main>
+      <>
+        {pond}
+        <main className="relative z-1 isolate">
+          <div className={`${SHADE} mt-[clamp(20px,4vh,36px)] max-w-[640px]`} role={error ? "alert" : "status"}>
+            <p>{t(error ? `room.errors.${error}` : "room.loading", elsewhere ? { code: elsewhere.code } : undefined)}</p>
+            {error && <HangingButton className="room-leave" href="/home#rooms">{t("room.leave")}</HangingButton>}
+            {watchInstead && <button type="button" className={`${ACTION} mt-3 ml-3 min-h-[42px]`} onClick={watchInstead}>{t("room.watchInstead")}</button>}
+            {elsewhere && (
+              <>
+                <button type="button" className={`${ACTION} mt-3 ml-3 min-h-[42px]`} onClick={elsewhere.leave}>{t("room.leaveCurrent", { code: elsewhere.code })}</button>
+                <a className={`${ACTION} mt-3 ml-3 min-h-[42px]`} href={`/room?code=${elsewhere.code}`}>{t("room.backToCurrent", { code: elsewhere.code })}</a>
+              </>
+            )}
+          </div>
+        </main>
+      </>
     );
   }
 
   return (
     <>
-      <FishPond players={players} />
-      <LanguageSwitcher className="absolute top-0 right-[clamp(16px,4vw,56px)] z-20 flex items-start gap-2" />
+      {pond}
       <Stamp className="room-stamp" label={t("home.stampPlay")} visible={stampOn} playKey={0} />
 
       <header className="relative z-1 isolate mb-[clamp(20px,4vh,40px)] flex flex-wrap items-center justify-between gap-x-6 gap-y-3 pr-[124px] phone:mb-[14px] phone:pr-0">

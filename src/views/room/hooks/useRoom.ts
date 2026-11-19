@@ -1,11 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { usePlayer } from "../../../players/PlayerProvider";
 import { inviteDetour } from "../../../rooms/access";
 import { DEFAULT_SETTINGS, type Role, type RoomSettings } from "../../../rooms/settings";
 import type { RoomResult } from "../../../server/rooms";
 import { arrivalRequest, roomApi, watchRoom, type Answer, type RoomError } from "../api";
 import { keepPresence } from "../presence";
-import { arrivalOf, isPlayer, roomOf, seatsOf, type Room, type RoomView } from "../room";
+import { arrivalOf, isPlayer, roomOf, seatsOf, type Arrival, type Room, type RoomView } from "../room";
 
 /** Le temps d'attendre la fin d'une saisie avant d'envoyer les réglages au serveur. */
 const SAVE_DELAY_MS = 400;
@@ -18,7 +19,10 @@ const EMPTY_VIEW: RoomView = { code: "", status: "waiting", host: "", settings: 
  */
 export function useRoom(page: "room" | "game" = "room") {
   const { t } = useTranslation();
-  const [arrival] = useState(() => arrivalOf(location.search, page));
+  const player = usePlayer();
+  // TECH-01 : l'adresse ne se lit que dans le navigateur ; undefined pendant le rendu du serveur
+  const [arrival, setArrival] = useState<Arrival | null | undefined>(undefined);
+  useLayoutEffect(() => setArrival(arrivalOf(location.search, page, player.guest)), [page, player.guest]);
   const [view, setView] = useState<RoomView>(EMPTY_VIEW);
   const [you, setYou] = useState("");
   const [room, setRoom] = useState<Room>(() => roomOf(EMPTY_VIEW));
@@ -57,6 +61,7 @@ export function useRoom(page: "room" | "game" = "room") {
   // Arrivée : créer son salon (hôte), retrouver celui de l'adresse, ou relire le salon lancé (/game).
   // AUTH-03 : un invité sans salon repart.
   useEffect(() => {
+    if (arrival === undefined) return;
     if (!arrival) {
       location.replace(page === "game" ? "/home" : "/home#rooms");
       return;

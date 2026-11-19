@@ -16,7 +16,7 @@ export function LanguageSwitcher({ className = "", onChanged }: { className?: st
       ariaLabel={t("home.langChoice")}
       options={TABS}
       value={i18n.resolvedLanguage as Language | undefined}
-      onChange={(lng) => void setLanguage(lng).then(onChanged)}
+      onChange={(lng) => void setLanguage(i18n, lng).then(onChanged)}
     />
   );
 }

@@ -1,5 +1,4 @@
 // Room model. Le salon vit sur le serveur (src/server/rooms.ts) : cette page n'en garde qu'une copie, sans stockage local.
-import { isGuestPlayer } from "../../players/nickname";
 import { cleanRoomCode, isRoomCode, type Visibility } from "../../rooms/access";
 import { MAX_GUESTS, MIN_GUESTS, MAX_TEXT_LENGTH, type Role, type RoomSettings } from "../../rooms/settings";
 import type { MemberView, RoomView } from "../../server/rooms";
@@ -48,7 +47,7 @@ export function countWords(text: string) {
 }
 /** Qui arrive ? ?code ou ?invite : on rejoint ; sinon : on crée son salon.
  * AUTH-03 : un invité n'est jamais hôte — null s'il n'a pas de salon à rejoindre (le serveur l'a déjà refusé). */
-export function readSession(search: string, _t?: unknown, guest = isGuestPlayer()): Session | null {
+export function readSession(search: string, _t: unknown, guest: boolean): Session | null {
   const query = new URLSearchParams(search);
   const code = cleanRoomCode(query.get("code") || "");
   const invite = query.get("invite")?.trim();
@@ -65,7 +64,7 @@ export type Arrival = { action: "create" } | { action: "join"; via: { code: stri
  * /room crée (compte) ou rejoint (code, lien) ; /game relit seulement le salon lancé, donné par ?code, et ne crée
  * jamais de salon (SALLE-09). Null : rien à ouvrir, la page renvoie à l'accueil.
  */
-export function arrivalOf(search: string, page: "room" | "game", guest = isGuestPlayer()): Arrival | null {
+export function arrivalOf(search: string, page: "room" | "game", guest: boolean): Arrival | null {
   if (page === "game") {
     const code = cleanRoomCode(new URLSearchParams(search).get("code") || "");
     return isRoomCode(code) ? { action: "read", code } : null;

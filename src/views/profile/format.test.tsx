@@ -16,9 +16,7 @@ let TextEditorDialog: typeof import("../room/TextEditorDialog").TextEditorDialog
 let PodiumBoard: typeof import("../podium/PodiumBoard").PodiumBoard;
 
 beforeAll(async () => {
-  // src/i18n/index.ts lit `document.documentElement` et le détecteur de langue `document.cookie` : on en fournit un minimal.
-  (globalThis as { document?: unknown }).document ??= { documentElement: {}, cookie: "" };
-  i18n = (await import("../../i18n")).default;
+  i18n = (await import("../../i18n")).createI18n("fr");
   ({ CareerStats } = await import("./CareerStats"));
   ({ ProgressChart } = await import("./ProgressChart"));
   ({ KeyboardHeatmap } = await import("./KeyboardHeatmap"));
