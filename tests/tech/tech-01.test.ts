@@ -28,3 +28,11 @@ describe("TECH-01 Next.js App Router, ancienne pile Bun retiree", () => {
     expect(css.filter((f) => /\.html/.test(readFileSync(f, "utf8")))).toEqual([]);
   });
 });
+
+describe("TECH-01 — chaque page est rendue par le serveur", () => {
+  test("plus de LegacyPage ni de composant chargé seulement dans le navigateur (ssr: false)", () => {
+    const files = [...new Bun.Glob("{app,src}/**/*.{ts,tsx}").scanSync(".")].filter((file) => !file.includes(".test."));
+    expect(files.some((file) => file.includes("Legacy"))).toBe(false);
+    for (const file of files) expect({ file, ssrOff: /ssr:\s*false/.test(readFileSync(file, "utf8")) }).toEqual({ file, ssrOff: false });
+  });
+});

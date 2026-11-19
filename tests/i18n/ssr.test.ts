@@ -34,7 +34,7 @@ describe("TECH-01 — traductions rendues côté serveur", () => {
   test("le layout fournit les traductions à toutes les pages", () => {
     const layout = readFileSync("app/layout.tsx", "utf8");
     expect(layout).toContain("<I18nProvider language=");
-    for (const file of ["src/next/LegacyRoot.tsx", "src/next/NotFoundSwitcher.tsx"]) {
+    for (const file of ["src/next/NotFoundLanguage.tsx"]) {
       expect(readFileSync(file, "utf8")).not.toContain("I18nextProvider");
     }
   });
