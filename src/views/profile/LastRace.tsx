@@ -1,5 +1,6 @@
 import { Fragment } from "react";
 import { useTranslation } from "react-i18next";
+import { formatNumber } from "../../i18n/format";
 import { oneDecimal, type PlayerResult, type RaceSummary } from "../podium/results";
 import { SpeedChart } from "./SpeedChart";
 import { StatBlock, Swatch, Unit } from "./StatBlock";
@@ -14,14 +15,14 @@ const clock = (seconds: number) =>
 /** Un réglage ne se coupe jamais en deux, et le « · » reste collé au réglage d'avant. */
 const keep = (text: string) => text.replaceAll(" ", NBSP);
 
-/** La dernière course : ses réglages en une ligne, puis ses chiffres et son graphique dans une seule carte. */
-export function LastRace({ player, summary }: { player: PlayerResult; summary: RaceSummary }) {
+/** La dernière course (ou une course de l'historique, HIST-02, avec son titre) : ses réglages en une ligne, puis ses chiffres et son graphique dans une seule carte. */
+export function LastRace({ player, summary, title }: { player: PlayerResult; summary: RaceSummary; title?: string }) {
   const { t, i18n } = useTranslation();
 
   const settings = [
     t(`profile.textTypes.${summary.textType}`),
-    t("profile.words", { words: summary.wordCount }),
-    t("profile.seconds", { duration: summary.duration }),
+    t("profile.words", { words: formatNumber(i18n.language, summary.wordCount) }),
+    t("profile.seconds", { duration: formatNumber(i18n.language, summary.duration) }),
     t(`profile.languages.${summary.language}`),
     summary.textType === "words" && t(`profile.levels.${summary.level}`),
     summary.punctuation && t("profile.punctuation"),
@@ -43,7 +44,7 @@ export function LastRace({ player, summary }: { player: PlayerResult; summary: R
 
   return (
     <section className={SECTION} aria-labelledby="last-race-title">
-      <h2 id="last-race-title" className={SECTION_TITLE}>{t("profile.lastRace")}</h2>
+      <h2 id="last-race-title" className={SECTION_TITLE}>{title ?? t("profile.lastRace")}</h2>
       <p className="mb-4 flex flex-wrap items-baseline justify-between gap-x-8 gap-y-1.5 font-mono text-[max(12px,1.4vh)] leading-[1.6] font-normal text-muted">
         <span className="min-w-0 [&_i]:mr-[.5em] [&_i]:text-line-soft [&_i]:not-italic">
           {settings.map((setting, i) => (
@@ -57,23 +58,23 @@ export function LastRace({ player, summary }: { player: PlayerResult; summary: R
       </p>
 
       <div className={RACE_CARD}>
-        <StatBlock hero marker={<Swatch series="wpm" />} label={t("game.wpm")} value={player.wpm} />
-        <StatBlock hero label={t("profile.accuracy")} value={<>{player.accuracy}<Unit>%</Unit></>} />
-        <StatBlock marker={<Swatch series="raw" />} label={t("profile.raw")} value={player.raw} />
-        <StatBlock label={t("profile.consistency")} value={<>{player.consistency}<Unit>%</Unit></>} />
+        <StatBlock hero marker={<Swatch series="wpm" />} label={t("game.wpm")} value={formatNumber(i18n.language, player.wpm)} />
+        <StatBlock hero label={t("profile.accuracy")} value={<>{formatNumber(i18n.language, player.accuracy)}<Unit>%</Unit></>} />
+        <StatBlock marker={<Swatch series="raw" />} label={t("profile.raw")} value={formatNumber(i18n.language, player.raw)} />
+        <StatBlock label={t("profile.consistency")} value={<>{formatNumber(i18n.language, player.consistency)}<Unit>%</Unit></>} />
         <StatBlock
           label={t("profile.time")}
-          value={<>{player.seconds}<Unit>s</Unit></>}
+          value={<>{formatNumber(i18n.language, player.seconds)}<Unit>s</Unit></>}
           notes={[`${oneDecimal(i18n.language, player.idle)} % ${t("profile.idle")}`]}
         />
         <StatBlock
           label={t("profile.correctChars")}
-          value={player.chars[0]}
+          value={formatNumber(i18n.language, player.chars[0])}
           notes={[
             <>
               <i className={CROSS}>×</i>{NBSP}
               {errors.map(([count, word], i) => (
-                <Fragment key={i}>{i > 0 && `${NBSP}· `}<b className="font-normal text-red-text">{count}</b>{NBSP}{keep(word)}</Fragment>
+                <Fragment key={i}>{i > 0 && `${NBSP}· `}<b className="font-normal text-red-text">{formatNumber(i18n.language, count)}</b>{NBSP}{keep(word)}</Fragment>
               ))}
             </>,
           ]}

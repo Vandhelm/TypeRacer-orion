@@ -1,6 +1,7 @@
 {
   "home": {
     "langChoice": "Language",
+    "pageTitle": "O.R.I.O.N — Home",
     "viewChoice": "Play or account",
     "overline": "SUSHI RESTAURANT",
     "viewPlay": "PLAY",
@@ -235,20 +236,30 @@
     "avatar": "{{name}}, {{rank}} place, {{speed}} words per second",
     "yourPlace": "Your place",
     "allPlayers": "All players ({{count}})",
-    "ranks": [
-      "1st",
-      "2nd",
-      "3rd",
-      "4th",
-      "5th",
-      "6th",
-      "7th",
-      "8th"
-    ],
-    "viewStats": "See stats for {{name}}"
+    "rank_ordinal_one": "{{count}}st",
+    "rank_ordinal_two": "{{count}}nd",
+    "rank_ordinal_few": "{{count}}rd",
+    "rank_ordinal_other": "{{count}}th",
+    "viewStats": "See stats for {{name}}",
+    "loading": "Loading results…",
+    "notSaved": "This race could not be saved to the history.",
+    "backToHistory": "History",
+    "errors": {
+      "not_found": "This race does not exist.",
+      "unauthorized": "Sign in to see your races again.",
+      "account_required": "Guests have no history: create an account to keep your races.",
+      "invalid_race": "Invalid race address.",
+      "network": "Could not load this race."
+    }
+  },
+  "notFound": {
+    "title": "Page not found",
+    "text": "This page does not exist.",
+    "home": "Back to home"
   },
   "profile": {
     "pageTitle": "O.R.I.O.N — {{name}}",
+    "defaultTitle": "O.R.I.O.N — Stats",
     "back": "← Podium",
     "place": "{{rank}} place",
     "accuracy": "Accuracy",
@@ -325,7 +336,21 @@
     "wrong": "wrong",
     "extra": "extra",
     "missed_one": "missed",
-    "missed_other": "missed"
+    "missed_other": "missed",
+    "history": {
+      "title": "History",
+      "loading": "Loading history…",
+      "empty": "No finished race yet.",
+      "pastEnd": "This page is empty.",
+      "error": "Could not load the history.",
+      "pagination": "History pages",
+      "previous": "← Newer",
+      "next": "Older →",
+      "page": "Page {{page}} / {{pages}}",
+      "rank": "{{rank}} of {{players}}",
+      "open": "See the results of the race of {{date}}",
+      "raceTitle": "Race from history"
+    }
   },
   "account": {
     "tabs": {

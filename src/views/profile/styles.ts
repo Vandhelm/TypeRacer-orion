@@ -2,7 +2,8 @@
 // The keyboard heatmap keys stay in styles/pages/profile/profile.css.
 
 export const PAGE = "fixed inset-0 overflow-y-auto bg-black px-[clamp(16px,4vw,56px)] pt-[30px] pb-8 font-sans text-white";
-export const HEAD = "mb-[clamp(20px,4vh,40px)] flex flex-wrap items-center justify-between gap-x-6 gap-y-3";
+// pt: below the floating language tabs (up to 84px tall)
+export const HEAD = "mb-[clamp(20px,4vh,40px)] flex flex-wrap items-center justify-between gap-x-6 gap-y-3 pt-[88px]";
 export const TITLE = "min-w-0 text-right";
 export const NAME = "font-sans text-[clamp(20px,3.4vh,32px)] leading-[1.1] font-light tracking-[.1em] wrap-anywhere";
 

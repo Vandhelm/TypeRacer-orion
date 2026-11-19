@@ -1,0 +1,452 @@
+{
+  "TECH-01": {
+    "commit": "b436148",
+    "date": "2026-11-18",
+    "scope": "voir notes de la matrice"
+  },
+  "TECH-02": {
+    "commit": "b436148",
+    "date": "2026-11-18",
+    "scope": "voir notes de la matrice"
+  },
+  "TECH-03": {
+    "commit": "b436148",
+    "date": "2026-11-18",
+    "scope": "voir notes de la matrice"
+  },
+  "TECH-04": {
+    "commit": "b436148",
+    "date": "2026-11-18",
+    "scope": "voir notes de la matrice"
+  },
+  "TECH-05": {
+    "commit": "b436148",
+    "date": "2026-11-18",
+    "scope": "voir notes de la matrice"
+  },
+  "TECH-06": {
+    "commit": "b436148",
+    "date": "2026-11-18",
+    "scope": "voir notes de la matrice"
+  },
+  "TECH-07": {
+    "commit": "b436148",
+    "date": "2026-11-18",
+    "scope": "voir notes de la matrice"
+  },
+  "TECH-08": {
+    "commit": "b436148",
+    "date": "2026-11-18",
+    "scope": "voir notes de la matrice"
+  },
+  "TECH-09": {
+    "commit": "b436148",
+    "date": "2026-11-18",
+    "scope": "voir notes de la matrice"
+  },
+  "TECH-10": {
+    "commit": "b436148",
+    "date": "2026-11-18",
+    "scope": "voir notes de la matrice"
+  },
+  "DES-01": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "DES-02": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "DES-03": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "DES-04": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "DES-05": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "DES-06": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "AUTH-01": {
+    "commit": "6137881",
+    "date": "2026-11-18",
+    "scope": "voir notes de la matrice"
+  },
+  "AUTH-02": {
+    "commit": "c289e40",
+    "date": "2026-11-18",
+    "scope": "voir notes de la matrice"
+  },
+  "AUTH-03": {
+    "commit": "c8f8332",
+    "date": "2026-11-18",
+    "scope": "voir notes de la matrice"
+  },
+  "AUTH-04": {
+    "commit": "041c7b9",
+    "date": "2026-11-18",
+    "scope": "voir notes de la matrice"
+  },
+  "AUTH-05": {
+    "commit": "6137881",
+    "date": "2026-11-18",
+    "scope": "voir notes de la matrice"
+  },
+  "AUTH-06": {
+    "commit": "c8f8332",
+    "date": "2026-11-18",
+    "scope": "voir notes de la matrice"
+  },
+  "SALLE-01": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "SALLE-02": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "SALLE-03": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "SALLE-04": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "SALLE-05": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "SALLE-06": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "SALLE-07": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "SALLE-08": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "SALLE-09": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "SALLE-10": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "JOIN-01": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "JOIN-02": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "JOIN-03": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "CONF-01": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "CONF-02": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "CONF-03": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "CONF-04": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "CONF-05": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "CONF-06": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "CONF-07": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "CONF-08": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "CONF-09": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "CONF-10": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "CONF-11": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "CONF-12": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "COURSE-01": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "COURSE-02": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "COURSE-03": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "COURSE-04": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "COURSE-05": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "COURSE-06": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "COURSE-07": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "COURSE-08": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "COURSE-09": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "COURSE-10": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "COURSE-11": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "BOT-01": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "BOT-02": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "BOT-03": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "BOT-04": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "BOT-05": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "BONUS-01": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "BONUS-02": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "BONUS-03": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "BONUS-04": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "RES-01": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "RES-02": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "RES-03": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "RES-04": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "RES-05": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "HIST-01": {
+    "commit": "68e0395",
+    "date": "2026-11-18",
+    "scope": "voir notes de la matrice"
+  },
+  "HIST-02": {
+    "commit": "68e0395",
+    "date": "2026-11-18",
+    "scope": "voir notes de la matrice"
+  },
+  "I18N-01": {
+    "commit": "f8dd6de",
+    "date": "2026-11-18",
+    "scope": "voir notes de la matrice"
+  },
+  "I18N-02": {
+    "commit": "f8dd6de",
+    "date": "2026-11-18",
+    "scope": "voir notes de la matrice"
+  },
+  "I18N-03": {
+    "commit": "f8dd6de",
+    "date": "2026-11-18",
+    "scope": "voir notes de la matrice"
+  },
+  "TEST-01": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "TEST-02": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "TEST-03": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "PERF-01": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "PERF-02": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "PERF-03": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "A11Y-01": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "A11Y-02": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "A11Y-03": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "A11Y-04": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "SEC-01": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "SEC-02": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "SEC-03": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  }
+}

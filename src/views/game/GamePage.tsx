@@ -1,7 +1,8 @@
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import { HangingButton } from "../../components/buttons/HangingButton";
-import { buildResults, buildSummary, markSessionStart, saveResults, sessionSeconds, submitRace } from "../podium/results";
+import { FLOATING_TABS, LanguageSwitcher } from "../../components/tabs/LanguageSwitcher";
+import { buildResults, buildSummary, markSessionStart, rememberSubmit, saveResults, sessionSeconds, submitRace } from "../podium/results";
 import { useRoom } from "../room/hooks/useRoom";
 import { rememberGuestRace } from "../profile/stats";
 import { useRealtimeRoom } from "../../realtime/useRealtimeRoom";
@@ -51,19 +52,26 @@ export function GamePage() {
     return () => { cancelled = true; };
   }, []);
 
+  const submitted = useRef(false);
   useEffect(() => {
-    if (!showResults) return;
+    // une seule fois : une frappe ou un salon mis à jour pendant l'envoi relancerait l'effet
+    if (!showResults || submitted.current) return;
+    submitted.current = true;
     const results = { players: buildResults(race, players), summary: buildSummary(race, room, sessionSeconds()) };
     saveResults(results);
     const rank = results.players.findIndex((player) => player.me);
     const me = results.players[rank];
     if (me) rememberGuestRace({ at: new Date().toISOString(), wpm: me.wpm, accuracy: me.accuracy, rank: rank + 1, keys: me.keys });
-    submitRace(results, race.course.words.join(" "));
-    location.replace("/podium"); // le retour arrière ne relance pas une course
+    // le retour arrière ne relance pas une course ; la page attend la réponse (un instant en keepalive), un refus est dit au podium
+    void submitRace(results, race.course.words.join(" ")).then((outcome) => {
+      rememberSubmit(outcome);
+      location.replace("/podium");
+    });
   }, [showResults, race, players, room]);
 
   return (
     <div className={ROOT} style={{ "--lanes": players.length } as CSSProperties}>
+      <LanguageSwitcher className={FLOATING_TABS} />
       <HangingButton className="game-leave" href="/room">{t("room.leave")}</HangingButton>
       <header className="relative flex min-h-[42px] items-center justify-end compact:col-start-2 compact:row-start-1">
         <h1 className={TITLE}>{displayName}</h1>

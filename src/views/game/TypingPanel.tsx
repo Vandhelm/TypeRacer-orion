@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
+import { formatNumber } from "../../i18n/format";
 import { myAccuracy, myWpm, secondsLeft, type Race } from "./race";
 import { TypingText } from "./TypingText";
 
@@ -15,7 +16,7 @@ const STAT_LABEL = "min-w-0 truncate font-mono text-[max(10px,1.1vh)] leading-no
 const STAT_VALUE = "-order-1 font-sans text-[max(18px,2.4vh)] leading-none font-light tracking-[.04em] whitespace-nowrap tabular-nums";
 
 export function TypingPanel({ race, onInput, lang }: { race: Race; onInput: (value: string) => void; lang: string }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const input = useRef<HTMLInputElement>(null);
   const racing = race.phase === "racing";
   const disabled = !racing || race.finishedAt > 0;
@@ -43,8 +44,8 @@ export function TypingPanel({ race, onInput, lang }: { race: Race; onInput: (val
   return (
     <section className={PANEL} aria-label={t("game.typingArea")}>
       <div className="col-start-2 row-start-1 flex gap-[2.4vh] narrow:gap-4">
-        <p className={STAT}><span className={STAT_LABEL}>{t("game.wpm")}</span><b className={STAT_VALUE}>{myWpm(race)}</b></p>
-        <p className={STAT}><span className={STAT_LABEL}>{t("game.accuracy")}</span><b className={STAT_VALUE}>{myAccuracy(race)} %</b></p>
+        <p className={STAT}><span className={STAT_LABEL}>{t("game.wpm")}</span><b className={STAT_VALUE}>{formatNumber(i18n.language, myWpm(race))}</b></p>
+        <p className={STAT}><span className={STAT_LABEL}>{t("game.accuracy")}</span><b className={STAT_VALUE}>{formatNumber(i18n.language, myAccuracy(race))} %</b></p>
       </div>
       <p className="col-start-1 row-start-1 font-mono text-[max(18px,2.6vh)] leading-none font-normal text-red-text tabular-nums" role="timer" aria-label={`${t("game.time")} ${seconds} s`}>{timerPrefix}{seconds}</p>
       <TypingText words={race.course.words} wordIndex={race.wordIndex} typed={race.typed} missed={race.missedWords} active={racing} lang={lang} />

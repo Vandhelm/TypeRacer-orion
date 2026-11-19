@@ -1,6 +1,7 @@
 // TECH-06 : les personnes présentes dans la salle et leur progression, mises à jour en temps réel.
 // Partagé par la salle et la course ; la piste visuelle complète viendra avec COURSE-05.
 import { useTranslation } from "react-i18next";
+import { formatNumber } from "../../i18n/format";
 import type { RealtimeState } from "../../realtime/client";
 import { liveParticipants, liveStatusKey } from "./live";
 
@@ -20,7 +21,7 @@ const BAR =
   "motion-reduce:[&::-webkit-progress-value]:transition-none";
 
 export function LiveList({ state, mine = 0, showMe = true, className = "" }: Props) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const people = liveParticipants(state, mine).filter((person) => showMe || !person.me);
   const others = liveParticipants(state).filter((person) => !person.me).length;
   return (
@@ -35,7 +36,7 @@ export function LiveList({ state, mine = 0, showMe = true, className = "" }: Pro
           >
             <span className={person.me ? "truncate text-red-text" : "truncate"}>{person.me ? `${person.name} · ${t("room.you")}` : person.name}</span>
             <progress className={BAR} max={100} value={person.percent} aria-label={t("room.live.progress", { name: person.name })} />
-            <span className="text-right font-mono text-[max(12px,1.4vh)] leading-none font-normal tabular-nums">{t("room.live.percent", { percent: person.percent })}</span>
+            <span className="text-right font-mono text-[max(12px,1.4vh)] leading-none font-normal tabular-nums">{t("room.live.percent", { percent: formatNumber(i18n.language, person.percent) })}</span>
           </li>
         ))}
       </ul>

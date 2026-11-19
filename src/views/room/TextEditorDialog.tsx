@@ -1,6 +1,7 @@
 import { useImperativeHandle, useRef, useState, type ChangeEvent, type Ref } from "react";
 import { useTranslation } from "react-i18next";
 import { SMALL_BUTTON, SmallButton } from "../../components/buttons/SmallButton";
+import { formatNumber } from "../../i18n/format";
 import { countWords, MAX_TEXT_LENGTH, readSavedTexts, writeSavedTexts, type SavedText } from "./room";
 import { LABEL } from "./styles";
 
@@ -35,7 +36,7 @@ type TextEditorDialogProps = { text: string; onUse: (text: string) => void; ref?
 
 /** Modal editor for the custom text: cleanup tools, import, saved texts. */
 export function TextEditorDialog({ text, onUse, ref }: TextEditorDialogProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const dialog = useRef<HTMLDialogElement>(null);
   const area = useRef<HTMLTextAreaElement>(null);
   const [draft, setDraft] = useState("");
@@ -103,7 +104,7 @@ export function TextEditorDialog({ text, onUse, ref }: TextEditorDialogProps) {
           ref={area}
           className="block h-[clamp(120px,26vh,260px)] w-full resize-y rounded-none border border-line bg-black p-3 font-mono text-[max(15px,1.9vh)] leading-[1.5] font-normal text-white caret-red-text focus:outline focus:outline-offset-2 focus:outline-white"
           id="editor-text" maxLength={MAX_TEXT_LENGTH} spellCheck={false} value={draft} onChange={(e) => setDraft(e.target.value)} />
-        <p className="mt-2 mb-[14px] flex items-center justify-between gap-3 font-mono text-[max(11px,1.2vh)] leading-[1.4] font-normal text-muted"><span>{`${words} ${t("room.wordsUnit")}`}</span><span>{t("room.maxChars", { n: MAX_TEXT_LENGTH })}</span></p>
+        <p className="mt-2 mb-[14px] flex items-center justify-between gap-3 font-mono text-[max(11px,1.2vh)] leading-[1.4] font-normal text-muted"><span>{`${formatNumber(i18n.language, words)} ${t("room.wordsUnit")}`}</span><span>{t("room.maxChars", { n: formatNumber(i18n.language, MAX_TEXT_LENGTH) })}</span></p>
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <input
             className="unset box-border h-10 min-w-0 flex-[1_1_180px] border-b border-b-line-soft [border-bottom-style:dashed] font-mono text-[14px] leading-none font-normal text-white placeholder:text-[rgba(255,255,255,.35)] focus:border-b-white"

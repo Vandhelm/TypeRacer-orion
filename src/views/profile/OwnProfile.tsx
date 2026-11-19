@@ -12,6 +12,7 @@ import { CareerStats } from "./CareerStats";
 import { useKeyboardLayout } from "./hooks/useKeyboardLayout";
 import { usePlayerStats } from "./hooks/usePlayerStats";
 import { LastRace } from "./LastRace";
+import { RaceHistory } from "./RaceHistory";
 import { storedAvatar } from "../../players/avatar";
 import { HEAD, PAGE } from "./styles";
 
@@ -83,6 +84,7 @@ export function OwnProfile({ me }: { me: Me }) {
           <>
             {result && results && <LastRace player={result} summary={results.summary} />}
             <CareerStats state={stats} guest={false} layout={layout} onLayout={setLayout} />
+            <RaceHistory />
           </>
         )}
       </div>

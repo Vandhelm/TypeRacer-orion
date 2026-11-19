@@ -3,8 +3,7 @@ import { useTranslation } from "react-i18next";
 import { FlipButton } from "../../components/buttons/FlipButton";
 import { HangingButton } from "../../components/buttons/HangingButton";
 import { Stamp } from "../../components/Stamp";
-import { HangingTabs } from "../../components/tabs/HangingTabs";
-import { languages, type Language } from "../../i18n";
+import { LanguageSwitcher } from "../../components/tabs/LanguageSwitcher";
 import { useRealtimeRoom } from "../../realtime/useRealtimeRoom";
 import { FishPond } from "./FishPond";
 import { LiveList } from "./LiveList";
@@ -16,13 +15,12 @@ import { RoomTicket } from "./RoomTicket";
 import { TextEditorDialog, type TextEditorHandle } from "./TextEditorDialog";
 import { DASHED_TOP, SHADE } from "./styles";
 
-const LANGUAGE_TABS = (["fr", "en"] as const).map((code) => ({ value: code, label: code.toUpperCase(), ariaLabel: languages[code] }));
 const GAME_PAGE = "/game";
 const VISIBILITY_KEY = { private: "private", semi: "semiPrivate", public: "public" } as const;
 
 /** Waiting room: the host sets up the race, a guest sees the settings read-only. */
 export function RoomPage() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const state = useRoom();
   const { room, update, host, seats, players, displayName } = state;
   const editor = useRef<TextEditorHandle>(null);
@@ -50,13 +48,7 @@ export function RoomPage() {
   return (
     <>
       <FishPond players={players} />
-      <HangingTabs
-        className="absolute top-0 right-[clamp(16px,4vw,56px)] z-20 flex items-start gap-2"
-        ariaLabel={t("home.langChoice")}
-        options={LANGUAGE_TABS}
-        value={i18n.resolvedLanguage as Language | undefined}
-        onChange={(lng) => i18n.changeLanguage(lng)}
-      />
+      <LanguageSwitcher className="absolute top-0 right-[clamp(16px,4vw,56px)] z-20 flex items-start gap-2" />
       <Stamp className="room-stamp" label={t("home.stampPlay")} visible={stampOn} playKey={0} />
 
       <header className="relative z-1 isolate mb-[clamp(20px,4vh,40px)] flex flex-wrap items-center justify-between gap-x-6 gap-y-3 pr-[124px] phone:mb-[14px] phone:pr-0">

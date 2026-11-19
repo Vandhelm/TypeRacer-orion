@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
-import { profileHref, type PlayerResult } from "./results";
+import { formatNumber } from "../../i18n/format";
+import { profileHref, rankLabel, type PlayerResult } from "./results";
 
 // The board under the podium, with blueprint-style corner marks (keyframe podium-board-arrive in styles/pages/podium/board.css).
 const BOARD =
@@ -14,10 +15,9 @@ const ROW =
 const VALUE = "text-[.9em] whitespace-nowrap text-muted";
 
 /** Every player in final order, with the local player's place when the results come from a real race. */
-export function PodiumBoard({ players, showPlace, arrived }: { players: PlayerResult[]; showPlace: boolean; arrived: boolean }) {
-  const { t } = useTranslation();
-  const place = showPlace ? players.findIndex((player) => player.me) : -1;
-  const me = players[place];
+export function PodiumBoard({ players, showPlace, arrived, raceId = null }: { players: PlayerResult[]; showPlace: boolean; arrived: boolean; raceId?: number | null }) {
+  const { t, i18n } = useTranslation();
+  const me = showPlace ? players.find((player) => player.me) : undefined;
   const wpm = t("game.wpm");
 
   return (
@@ -26,18 +26,18 @@ export function PodiumBoard({ players, showPlace, arrived }: { players: PlayerRe
         <h2 id="podium-board-title" className="font-mono text-[max(11px,1.3vh)] leading-[1.4] font-normal tracking-[.16em] uppercase">{t("podium.allPlayers", { count: players.length })}</h2>
         {me && (
           <p className="text-right font-mono text-[max(11px,1.3vh)] leading-[1.4] font-normal tracking-[.1em] text-muted uppercase phone:text-left phone:text-[10px] phone:tracking-[.04em]">
-            {t("podium.yourPlace")} · <b className="font-medium text-white">{t(`podium.ranks.${place}`)}</b> · {me.wpm} {wpm} · {me.accuracy} % · {me.seconds} s
+            {t("podium.yourPlace")} · <b className="font-medium text-white">{rankLabel(t, me.rank)}</b> · {formatNumber(i18n.language, me.wpm)} {wpm} · {formatNumber(i18n.language, me.accuracy)} % · {formatNumber(i18n.language, me.seconds)} s
           </p>
         )}
       </header>
       <ol className="min-h-0 flex-[1_1_auto] list-none overflow-y-auto phone:pr-2 min-[900px]:grid min-[900px]:auto-cols-[minmax(0,1fr)] min-[900px]:grid-flow-col min-[900px]:grid-rows-[repeat(4,34px)] min-[900px]:gap-x-8">
         {players.map((player, index) => (
           <li key={player.name}>
-            <a className={`${ROW} ${player.me ? "font-medium text-white" : "font-normal text-[rgba(255,255,255,.7)]"}`} href={profileHref(index)}>
-              <span>{t(`podium.ranks.${index}`)}</span>
+            <a className={`${ROW} ${player.me ? "font-medium text-white" : "font-normal text-[rgba(255,255,255,.7)]"}`} href={profileHref(index, raceId)}>
+              <span>{rankLabel(t, player.rank)}</span>
               <span className="truncate">{player.me ? `${player.name} · ${t("room.you")}` : player.name}</span>
-              <span className={VALUE}>{player.wpm} {wpm}</span>
-              <span className={VALUE}>{player.accuracy} %</span>
+              <span className={VALUE}>{formatNumber(i18n.language, player.wpm)} {wpm}</span>
+              <span className={VALUE}>{formatNumber(i18n.language, player.accuracy)} %</span>
             </a>
           </li>
         ))}

@@ -1,12 +1,12 @@
-import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { titleFor } from "../../src/i18n/request";
 import { LegacyPage } from "../../src/next/LegacyPage";
 import { auth } from "../../src/server/api";
 import { roomPlayer } from "../../src/server/room-gate";
 import "../../src/styles/pages/game/index.css";
 
-export const metadata: Metadata = { title: "O.R.I.O.N — L'épreuve" };
+export const generateMetadata = titleFor("game");
 
 // AUTH-06 : en course, on porte le nom vérifié par le serveur (le compte connecté, sinon le pseudonyme d'invité),
 // celui que /api/races reconnaît pour garder la course dans l'historique du compte.

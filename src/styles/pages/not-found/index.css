@@ -1,0 +1,11 @@
+/* 404 page entry. */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+@source "../../../../app/not-found.tsx";
+@source "../../../next";
+@source "../../../components";
+
+@import "../../base/tokens.css";
+@import "../../base/reset.css" layer(base);
+@import "../../base/animations.css";

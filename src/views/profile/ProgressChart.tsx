@@ -1,5 +1,6 @@
 import { useLayoutEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import { useTranslation } from "react-i18next";
+import { formatDate, formatNumber } from "../../i18n/format";
 import { buildChart } from "./chart";
 import { useChartSize } from "./hooks/useChartSize";
 import type { ProgressPoint } from "./stats";
@@ -17,9 +18,8 @@ export function ProgressChart({ progress }: { progress: ProgressPoint[] }) {
   const wpm = useMemo(() => progress.map((point) => point.wpm), [progress]);
   const chart = useMemo(() => buildChart(wpm, [], size.width, size.plot), [wpm, size]);
   const [hover, setHover] = useState<number | null>(null);
-  const locale = i18n.language === "en" ? "en-CA" : "fr-CA";
-  const date = (at: string) => new Intl.DateTimeFormat(locale, { dateStyle: "medium" }).format(new Date(at));
-  const percent = (value: number) => `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(value)} %`;
+  const date = (at: string) => formatDate(i18n.language, at);
+  const percent = (value: number) => `${formatNumber(i18n.language, value)} %`;
   const labels = { race: t("profile.race"), wpm: t("game.wpm"), accuracy: t("profile.accuracy"), date: t("profile.date") };
 
   const onPointer = (event: PointerEvent<HTMLDivElement>) => {
@@ -72,14 +72,14 @@ export function ProgressChart({ progress }: { progress: ProgressPoint[] }) {
         <div ref={tip} className={TIP}>
           <p className={TIP_HEAD}>{`${labels.race} ${hover! + 1}`}</p>
           <p><span>{labels.date}</span>{date(point.at)}</p>
-          <p><span>{labels.wpm}</span>{point.wpm}</p>
+          <p><span>{labels.wpm}</span>{formatNumber(i18n.language, point.wpm)}</p>
           <p><span>{labels.accuracy}</span>{percent(point.accuracy)}</p>
         </div>
       )}
 
       <table className="sr-only">
         <thead><tr><th>{labels.race}</th><th>{labels.date}</th><th>{labels.wpm}</th><th>{labels.accuracy}</th></tr></thead>
-        <tbody>{progress.map((p, i) => <tr key={i}><td>{i + 1}</td><td>{date(p.at)}</td><td>{p.wpm}</td><td>{percent(p.accuracy)}</td></tr>)}</tbody>
+        <tbody>{progress.map((p, i) => <tr key={i}><td>{i + 1}</td><td>{date(p.at)}</td><td>{formatNumber(i18n.language, p.wpm)}</td><td>{percent(p.accuracy)}</td></tr>)}</tbody>
       </table>
     </div>
   );

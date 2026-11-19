@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { authClient } from "../../accounts/client";
 import { HangingButton } from "../../components/buttons/HangingButton";
-import { readResults, type PlayerResult, type RaceResults } from "../podium/results";
+import { FLOATING_TABS, LanguageSwitcher } from "../../components/tabs/LanguageSwitcher";
+import { useRaceResults } from "../podium/hooks/useRaceResults";
+import { podiumHref, raceErrorKey, rankLabel, type PlayerResult, type RaceResults } from "../podium/results";
 import { CareerStats } from "./CareerStats";
 import { useKeyboardLayout } from "./hooks/useKeyboardLayout";
 import { usePlayerStats, type StatsState } from "./hooks/usePlayerStats";
@@ -11,8 +13,6 @@ import { OwnProfile, type Me } from "./OwnProfile";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { guestStats, statsSource, type SessionState } from "./stats";
 import { HEAD, NAME, NOTE, PAGE, TITLE } from "./styles";
-
-const PODIUM_HREF = "/podium#arrived";
 
 type Subject = { name: string; result: PlayerResult | null; index: number; fromPodium: boolean };
 
@@ -42,15 +42,36 @@ function subjectOf(results: RaceResults | null): Subject | null {
 export function ProfilePage() {
   const [own] = useState(() => { const query = new URLSearchParams(location.search); return !query.has("player") && !query.has("name"); });
   const { data: session, isPending } = authClient.useSession();
-  if (own && isPending) return <main className={PAGE} aria-busy="true" />;
-  if (own && session) return <OwnProfile me={session.user as Me} />;
-  return <PlayerProfile session={isPending ? "pending" : session ? "signed-in" : "signed-out"} />;
+  // I18N-02 : le sélecteur est ici, donc présent sur chaque variante de la page (attente, profil propre, profil d'un joueur)
+  return (
+    <>
+      <LanguageSwitcher className={FLOATING_TABS} />
+      {own && isPending ? <main className={PAGE} aria-busy="true" />
+        : own && session ? <OwnProfile me={session.user as Me} />
+        : <PlayerProfile session={isPending ? "pending" : session ? "signed-in" : "signed-out"} />}
+    </>
+  );
 }
 
-/** Un joueur : le détail de la dernière course s'il y était, puis ses statistiques sur toutes ses courses. */
+/** Un joueur : le détail de la dernière course (ou d'une course de l'historique, ?race=N) s'il y était, puis ses statistiques. */
 function PlayerProfile({ session }: { session: SessionState }) {
+  const loaded = useRaceResults();
+  if (loaded.status === "loading") return <main className="profile" aria-busy="true" />;
+  return (
+    <PlayerView
+      session={session}
+      results={loaded.status === "ready" ? loaded.results : null}
+      raceId={loaded.status === "ready" || loaded.status === "error" ? loaded.raceId : null}
+      error={loaded.status === "error" ? loaded.code : null}
+    />
+  );
+}
+
+type ViewProps = { session: SessionState; results: RaceResults | null; raceId: number | null; error: string | null };
+
+function PlayerView({ session, results, raceId, error }: ViewProps) {
   const { t } = useTranslation();
-  const [results] = useState(readResults);
+  const back = podiumHref(raceId);
   const [subject] = useState(() => subjectOf(results));
   // un invité n'a pas d'historique sur le serveur (AUTH-03) : ses stats viennent de sa session. Invité ou non : d'après la session.
   const source = subject ? statsSource({ me: !!subject.result?.me }, session) : null;
@@ -61,17 +82,17 @@ function PlayerProfile({ session }: { session: SessionState }) {
   const [layout, setLayout] = useKeyboardLayout();
 
   useEffect(() => {
-    document.title = subject ? t("profile.pageTitle", { name: subject.name }) : t("nav.profile");
+    document.title = subject ? t("profile.pageTitle", { name: subject.name }) : t("profile.defaultTitle");
   }, [t, subject]);
 
   useEffect(() => {
     if (!subject?.fromPodium) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") location.assign(PODIUM_HREF);
+      if (event.key === "Escape") location.assign(back);
     };
     addEventListener("keydown", onKey);
     return () => removeEventListener("keydown", onKey);
-  }, [subject]);
+  }, [subject, back]);
 
   if (!subject) {
     return (
@@ -80,18 +101,18 @@ function PlayerProfile({ session }: { session: SessionState }) {
           <HangingButton className="profile-back" href="/home">{t("profile.home")}</HangingButton>
           <div className={TITLE}><h1 id="profile-name" className={NAME}>{t("nav.profile")}</h1></div>
         </header>
-        <p className={NOTE}>{t("profile.empty")}</p>
+        <p className={NOTE}>{t(error ? raceErrorKey(error) : "profile.empty")}</p>
       </main>
     );
   }
 
-  const { result, index } = subject;
-  const place = t("profile.place", { rank: t(`podium.ranks.${index}`) });
+  const { result } = subject;
+  const place = result ? t("profile.place", { rank: rankLabel(t, result.rank) }) : "";
 
   return (
     <main className={PAGE} aria-labelledby="profile-name">
       <header className={HEAD}>
-        {subject.fromPodium && <HangingButton className="profile-back" href={PODIUM_HREF}>{t("profile.back")}</HangingButton>}
+        {subject.fromPodium && <HangingButton className="profile-back" href={back}>{t("profile.back")}</HangingButton>}
         <div className="ml-auto flex min-w-0 items-center gap-4">
           <div className={TITLE}>
             <h1 id="profile-name" className={NAME}>{subject.name}</h1>
@@ -101,7 +122,7 @@ function PlayerProfile({ session }: { session: SessionState }) {
         </div>
       </header>
 
-      {result && results && <LastRace player={result} summary={results.summary} />}
+      {result && results && <LastRace player={result} summary={results.summary} title={raceId ? t("profile.history.raceTitle") : undefined} />}
 
       <CareerStats state={stats} guest={guest} layout={layout} onLayout={setLayout} />
     </main>

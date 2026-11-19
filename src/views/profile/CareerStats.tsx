@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { formatNumber } from "../../i18n/format";
 import { oneDecimal } from "../podium/results";
 import type { StatsState } from "./hooks/usePlayerStats";
 import type { Layout } from "./keyboard";
@@ -22,11 +23,11 @@ export function CareerStats({ state, guest, layout, onLayout }: Props) {
     body = (
       <>
         <div className={CAREER_CARD}>
-          <StatBlock hero marker={<Swatch series="wpm" />} label={t("profile.bestWpm")} value={stats.bestWpm ?? 0} />
-          <StatBlock hero marker={<Swatch series="wpm" />} label={t("profile.averageWpm")} value={stats.averageWpm ?? 0} />
+          <StatBlock hero marker={<Swatch series="wpm" />} label={t("profile.bestWpm")} value={formatNumber(i18n.language, stats.bestWpm ?? 0)} />
+          <StatBlock hero marker={<Swatch series="wpm" />} label={t("profile.averageWpm")} value={formatNumber(i18n.language, stats.averageWpm ?? 0)} />
           <StatBlock label={t("profile.averageAccuracy")} value={<>{oneDecimal(i18n.language, stats.averageAccuracy ?? 0)}<Unit>%</Unit></>} />
-          <StatBlock label={t("profile.races")} value={stats.races} />
-          <StatBlock label={t("profile.wins")} value={stats.wins} />
+          <StatBlock label={t("profile.races")} value={formatNumber(i18n.language, stats.races)} />
+          <StatBlock label={t("profile.wins")} value={formatNumber(i18n.language, stats.wins)} />
           <div className="card-chart card-progress"><ProgressChart progress={stats.progress} /></div>
           <div className="card-keys flex flex-col"><KeyboardHeatmap keys={stats.keys} layout={layout} onLayout={onLayout} /></div>
         </div>
