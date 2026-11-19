@@ -4,6 +4,7 @@ import { z } from "zod";
 import type { Me } from "../views/profile/OwnProfile";
 import type { Auth } from "./auth";
 import { playerStats, type PlayerStats } from "./races";
+import { currentUser } from "./session";
 
 type Db = Parameters<typeof playerStats>[0];
 
@@ -26,9 +27,8 @@ export function profileQuery(params: unknown): ProfileQuery {
  * undefined quand le serveur ne sait pas encore qui c'est (?player=N, ou personne).
  */
 export async function profileData(headers: Headers, auth: Auth, db: Db, query: ProfileQuery): Promise<{ me: Me | null; stats?: PlayerStats | null }> {
-  const session = await auth.api.getSession({ headers }).catch(() => null);
-  const user = session?.user as { name: string; displayUsername?: string | null; username?: string | null; image?: string | null } | undefined;
-  const me: Me | null = user ? { name: user.name, displayUsername: user.displayUsername ?? user.username ?? null, image: user.image ?? null } : null;
+  const user = await currentUser(headers, auth);
+  const me: Me | null = user ? { name: user.name, displayUsername: user.displayUsername ?? user.username, image: user.image } : null;
   const own = query.player === null && query.name === null;
   const name = own ? (me ? me.displayUsername || me.name : null) : query.player === null ? query.name : null;
   return name === null ? { me } : { me, stats: await playerStats(db, name) };
