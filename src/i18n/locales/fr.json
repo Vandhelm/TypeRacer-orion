@@ -62,7 +62,31 @@
     "take": "PRENDRE",
     "reserved": "RÉSERVÉ",
     "takeLabel": "Prendre le coupon de la table {{n}} — {{guests}} convives",
-    "empty": "Aucun salon public pour l'instant. Crée le tien, ou entre un code."
+    "empty": "Aucun salon public pour l'instant. Crée le tien, ou entre un code.",
+    "explorer": {
+      "filters": "Filtrer les salons",
+      "language": "Langue du texte",
+      "level": "Complexité",
+      "all": "TOUTES",
+      "allLanguages": "Toutes les langues",
+      "allLevels": "Toutes les complexités",
+      "french": "Français",
+      "english": "Anglais",
+      "levels": {
+        "common": "COURANT",
+        "rich": "RICHE",
+        "expert": "EXPERT"
+      },
+      "host": "Hôte",
+      "state": "État",
+      "status": {
+        "waiting": "EN ATTENTE",
+        "racing": "EN COURSE",
+        "results": "RÉSULTATS",
+        "closed": "FERMÉ"
+      },
+      "noMatch": "Aucun salon public ne correspond à ces filtres. Change-les, ou crée le tien."
+    }
   },
   "nav": {
     "main": "Navigation principale",

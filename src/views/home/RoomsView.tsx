@@ -3,7 +3,9 @@ import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { Ticket, TicketStub } from "../../components/cards/Ticket";
 import { useTicketSway } from "./hooks/useTicketSway";
-import { fetchPublicRooms, WAITING_PAGE, type Room } from "./rooms";
+import type { RoomFilters as Filters } from "../../rooms/explorer";
+import { RoomFilters } from "./RoomFilters";
+import { shortName, WAITING_PAGE, watchPublicRooms, type Room } from "./rooms";
 
 // Ticket sizes scale with --u and --hang (components/cards/ticket.css): 3 columns, 4 on a wide stall, 2 on a narrow one.
 const TICKETS =
@@ -25,18 +27,20 @@ export function RoomsView({ descending, ref }: { descending: boolean; ref?: Ref<
   const [flying, setFlying] = useState<Flying | null>(null);
   const [tables, setRooms] = useState<Room[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [filters, setFilters] = useState<Filters>({});
+  const holding = taken >= 0;
 
+  // JOIN-02 : la liste suit les salons sans rechargement (relecture régulière, voir watchPublicRooms) ;
+  // un nouveau filtre relit aussitôt. Une fois un ticket pris, elle ne bouge plus : l'index pris reste ce salon.
   useEffect(() => {
-    let live = true;
-    fetchPublicRooms().then((list) => {
-      if (!live) return;
+    if (holding) return;
+    return watchPublicRooms(filters, (list) => {
       setRooms(list);
       setLoaded(true);
     });
-    return () => {
-      live = false;
-    };
-  }, []);
+  }, [filters, holding]);
+
+  const filtered = !!(filters.language || filters.level);
 
   const roots = useRef<(HTMLDivElement | null)[]>([]);
   const papers = useRef<(HTMLDivElement | null)[]>([]);
@@ -76,7 +80,8 @@ export function RoomsView({ descending, ref }: { descending: boolean; ref?: Ref<
     <main className="rooms pointer-events-none fixed inset-0 z-10 flex items-start justify-center px-4 narrow:min-h-screen narrow:items-start narrow:px-2 narrow:pt-[110px] narrow:pb-6">
       <h1 className="sr-only">{t("rooms.pageTitle")}</h1>
       <div className="pointer-events-auto relative @container mt-[36vh] w-[min(100%,940px,calc((100vh-36vh-40px)/.42))] animate-[rise_1s_.15s_cubic-bezier(.2,.8,.2,1)_both] motion-reduce:animate-none! narrow:mt-[30vh]">
-        {loaded && !tables.length && <p className="pointer-events-auto mx-[4cqw] rounded-[12px] border border-dashed border-line px-[18px] py-[14px] text-center text-muted" role="status">{t("rooms.empty")}</p>}
+        <RoomFilters value={filters} onChange={setFilters} />
+        {loaded && !tables.length && <p className="pointer-events-auto mx-[4cqw] rounded-[12px] border border-dashed border-line px-[18px] py-[14px] text-center text-muted" role="status">{t(filtered ? "rooms.explorer.noMatch" : "rooms.empty")}</p>}
         <div className={taken >= 0 ? `${TICKETS} [&_.ticket-button]:pointer-events-none` : TICKETS} id="tickets" {...sway.container}>
           {tables.map((room, i) => (
             <Ticket
@@ -89,6 +94,9 @@ export function RoomsView({ descending, ref }: { descending: boolean; ref?: Ref<
               rows={[
                 { label: t("rooms.lang"), value: t(room.lang === "fr" ? "rooms.codeFr" : "rooms.codeEn") },
                 { label: t("rooms.guests"), value: room.guests },
+                { label: t("rooms.explorer.level"), value: t(`rooms.explorer.levels.${room.level}`) },
+                { label: t("rooms.explorer.host"), value: shortName(room.host) },
+                { label: t("rooms.explorer.state"), value: t(`rooms.explorer.status.${room.status}`) },
                 { label: t("rooms.bots"), value: t(room.bots ? "rooms.yes" : "rooms.no"), highlight: room.bots },
               ]}
               stampLabel={t("rooms.reserved")}

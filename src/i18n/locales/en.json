@@ -62,7 +62,31 @@
     "take": "TAKE",
     "reserved": "RESERVED",
     "takeLabel": "Take the coupon for table {{n}} — {{guests}} guests",
-    "empty": "No public room right now. Create yours, or enter a code."
+    "empty": "No public room right now. Create yours, or enter a code.",
+    "explorer": {
+      "filters": "Filter the rooms",
+      "language": "Text language",
+      "level": "Complexity",
+      "all": "ALL",
+      "allLanguages": "All languages",
+      "allLevels": "All complexities",
+      "french": "French",
+      "english": "English",
+      "levels": {
+        "common": "COMMON",
+        "rich": "RICH",
+        "expert": "EXPERT"
+      },
+      "host": "Host",
+      "state": "State",
+      "status": {
+        "waiting": "WAITING",
+        "racing": "RACING",
+        "results": "RESULTS",
+        "closed": "CLOSED"
+      },
+      "noMatch": "No public room matches these filters. Change them, or create yours."
+    }
   },
   "nav": {
     "main": "Main navigation",
