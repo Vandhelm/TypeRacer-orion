@@ -1,6 +1,6 @@
 // Salons, côté serveur (SALLE-01, 02, 03, 09). Indépendant du transport : les routes HTTP (api.ts) et le temps réel
 // (realtime.ts) appellent ces fonctions ; rien ici ne connaît Request, WebSocket ou Next.js.
-import { and, asc, desc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNull, ne, sql } from "drizzle-orm";
 import type { z } from "zod";
 import type { Db } from "../../db/client";
 import { players, raceConfigs, roomBans, roomMembers, rooms } from "../../db/schema";
@@ -99,23 +99,32 @@ export class RoomRefused extends Error {
 /** invite_taken : lien déjà lié à une autre IP ou une autre personne (SALLE-04) ; invite_limit : trop de liens dans ce salon. */
 export type RefusalReason = "not_found" | "not_member" | "not_host" | "full" | "in_race" | "closed" | "already_in_room" | "kicked" | "invalid_target" | "unknown_member" | "invite_taken" | "invite_limit";
 
-/** SALLE-07 : cette personne a été expulsée de ce salon. L'IP ne compte que pour un invité (voir ipBan). */
+/** SALLE-07 : cette personne a été expulsée de ce salon. L'IP compte pour un invité et pour un compte plus récent que le bannissement (voir ipBan). */
 async function isKicked(db: Db, who: Identity, roomId: number, key: string, ip: string | null): Promise<boolean> {
   const keys = [key, nameBan(who.name), ...(who.kind === "guest" && ip ? [ipBan(ip)] : [])];
-  return (await db.$count(roomBans, and(eq(roomBans.roomId, roomId), inArray(roomBans.memberKey, keys)))) > 0;
+  if ((await db.$count(roomBans, and(eq(roomBans.roomId, roomId), inArray(roomBans.memberKey, keys)))) > 0) return true;
+  if (who.kind !== "account" || !ip) return false;
+  const [fresh] = await db
+    .select({ roomId: roomBans.roomId })
+    .from(roomBans)
+    .innerJoin(players, eq(players.id, who.playerId))
+    .where(and(eq(roomBans.roomId, roomId), eq(roomBans.memberKey, ipBan(ip)), gt(players.createdAt, roomBans.createdAt)))
+    .limit(1);
+  return !!fresh;
 }
 
 /**
  * SALLE-07 : un invité expulsé obtient sans peine une nouvelle session (POST /api/guest). Son pseudonyme est donc
  * banni aussi (une ligne « name:<pseudonyme en minuscules> » dans room_bans), ainsi que l'IP d'entrée de la personne
  * expulsée (« ip:<adresse> », voir ipBan) : un compte ne revient pas en invité sous son nom, et personne ne revient
- * en invité depuis la même adresse sous un autre pseudonyme.
+ * en invité ni avec un compte neuf depuis la même adresse sous un autre nom.
  */
 const nameBan = (name: string) => `name:${name.toLowerCase()}`;
 
 /**
- * Choix : le bannissement par IP ne touche que les invités. Un compte n'en dépend pas (il est reconnu par sa clé), et
- * un réseau partagé (école, NAT) ne bloque pas les comptes de ses voisins. IP inconnue : pas de bannissement par IP.
+ * Choix : le bannissement par IP touche les invités et les comptes créés après l'expulsion (un nouveau compte ouvert
+ * pour revenir). Un compte plus ancien n'en dépend pas : un réseau partagé (école, NAT) ne bloque pas les comptes de
+ * ses voisins. IP inconnue : pas de bannissement par IP.
  */
 const ipBan = (ip: string) => `ip:${ip}`;
 

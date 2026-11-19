@@ -65,12 +65,30 @@ describe("SALLE-07 — the host kicks a participant or a spectator, who can no l
     expect((await t.join(t.guest("Dan_IP"), { code: room.code }, "198.51.100.21")).status).toBe(200);
   });
 
-  test("an account is not barred by the IP of a guest kicked before it (shared networks)", async () => {
+  test("an account older than the kick is not barred by the kicked IP (shared networks)", async () => {
+    const friend = await t.signUp("Exp_IP_Ami");
     const { room, host } = await t.open("Exp_IP_Compte");
     const { body } = await t.join(t.guest("Eve_IP"), { code: room.code }, "198.51.100.30");
     await kick(room.code, host.cookie, { member: body.you });
-    const friend = await t.signUp("Exp_IP_Ami");
     expect((await t.join(friend.cookie, { code: room.code }, "198.51.100.30")).status).toBe(200);
+  });
+
+  test("a kicked guest who opens a new account under another name, from the same IP, is refused", async () => {
+    const { room, host } = await t.open("Exp_IP_Neuf");
+    const { body } = await t.join(t.guest("Fred_IP"), { code: room.code }, "198.51.100.40");
+    await kick(room.code, host.cookie, { member: body.you });
+    const fresh = await t.signUp("Exp_IP_Nouveau");
+    expect((await t.join(fresh.cookie, { code: room.code }, "198.51.100.40")).body.error).toBe("kicked");
+    expect((await t.join(fresh.cookie, { code: room.code }, "198.51.100.41")).status).toBe(200);
+  });
+
+  test("a kicked account who opens a second account from the same IP is refused", async () => {
+    const { room, host } = await t.open("Exp_IP_Second");
+    const first = await t.signUp("Exp_IP_Premier");
+    const { body } = await t.join(first.cookie, { code: room.code }, "198.51.100.50");
+    await kick(room.code, host.cookie, { member: body.you });
+    const second = await t.signUp("Exp_IP_Deuxieme");
+    expect((await t.join(second.cookie, { code: room.code }, "198.51.100.50")).body.error).toBe("kicked");
   });
 
   test("a kicked account cannot come back as a guest under its own name", async () => {
