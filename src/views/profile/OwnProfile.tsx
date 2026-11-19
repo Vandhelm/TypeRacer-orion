@@ -11,6 +11,7 @@ import { PhotoSection } from "./account/PhotoSection";
 import { CareerStats } from "./CareerStats";
 import { useKeyboardLayout } from "./hooks/useKeyboardLayout";
 import { usePlayerStats } from "./hooks/usePlayerStats";
+import type { PlayerStats } from "./stats";
 import { LastRace } from "./LastRace";
 import { RaceHistory } from "./RaceHistory";
 import { storedAvatar } from "../../players/avatar";
@@ -34,17 +35,28 @@ function linkNotice(t: TFunction) {
   return failed ? t("account.links.failed", { provider: providerOf(provider ?? failed) }) : t("account.links.done", { provider: providerOf(linked) });
 }
 
-/** Depuis la navbar : son propre profil, sans en-tête, en deux onglets (Compte, puis Stats) que suit le hash. */
-export function OwnProfile({ me }: { me: Me }) {
+/**
+ * Depuis la navbar : son propre profil, sans en-tête, en deux onglets (Compte, puis Stats) que suit le hash.
+ * stats : celles que le serveur a déjà lues (TECH-01). Le hash, le retour de GitHub ou Discord et la course de l'onglet
+ * ne se lisent que dans le navigateur, après le montage : le premier rendu est le même des deux côtés.
+ */
+export function OwnProfile({ me, stats: preloaded }: { me: Me; stats?: PlayerStats | null }) {
   const { t } = useTranslation();
-  const [notice] = useState(() => linkNotice(t));
-  const [tab, setTab] = useState<Tab>(() => tabOf(location.hash));
+  const [notice, setNotice] = useState("");
+  const [tab, setTab] = useState<Tab>("compte");
   const [name, setName] = useState(me.displayUsername || me.name);
   const [image, setImage] = useState(storedAvatar(me.image));
-  const [results] = useState(readResults);
+  const [results, setResults] = useState<ReturnType<typeof readResults>>(null);
   const result = results?.players.find((player) => player.me) ?? null;
-  const stats = usePlayerStats(name);
+  const stats = usePlayerStats(name, preloaded);
   const [layout, setLayout] = useKeyboardLayout();
+
+  useEffect(() => {
+    setNotice(linkNotice(t));
+    setTab(tabOf(location.hash));
+    setResults(readResults());
+    // une seule fois, au montage : linkNotice nettoie l'adresse (t de la première langue suffit)
+  }, []);
 
   useEffect(() => {
     document.title = t("profile.pageTitle", { name });
