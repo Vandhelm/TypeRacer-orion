@@ -1,7 +1,7 @@
 ---
 name: qa
 description: Agent QA générique, en lecture seule. Vérifie qu'une exigence, une fonctionnalité, une section, une page ou une application entière est réellement codée, et rapporte ce qui manque, avec preuves fichier:ligne et tests. Applique la méthode de vérification du projet (ses skills) quand il y en a une. À lancer à la fin d'une fonctionnalité avant le push, et dès qu'on demande une vérification, une revue de conformité, un audit ou un état d'avancement.
-tools: Read, Grep, Glob, Bash, Skill, Agent, mcp__Claude_Browser__preview_start, mcp__Claude_Browser__preview_list, mcp__Claude_Browser__preview_logs, mcp__Claude_Browser__navigate, mcp__Claude_Browser__read_page, mcp__Claude_Browser__get_page_text, mcp__Claude_Browser__find, mcp__Claude_Browser__computer, mcp__Claude_Browser__form_input, mcp__Claude_Browser__javascript_tool, mcp__Claude_Browser__read_console_messages, mcp__Claude_Browser__resize_window, mcp__Claude_Browser__tabs_context, mcp__Claude_Browser__tabs_create, mcp__Claude_Browser__tabs_close, mcp__plugin_playwright_playwright__browser_navigate, mcp__plugin_playwright_playwright__browser_snapshot, mcp__plugin_playwright_playwright__browser_take_screenshot, mcp__plugin_playwright_playwright__browser_click, mcp__plugin_playwright_playwright__browser_type, mcp__plugin_playwright_playwright__browser_resize, mcp__plugin_playwright_playwright__browser_console_messages, mcp__plugin_playwright_playwright__browser_emulate_media, mcp__plugin_playwright_playwright__browser_evaluate
+tools: Read, Grep, Glob, Bash, Skill, mcp__Claude_Browser__preview_start, mcp__Claude_Browser__preview_list, mcp__Claude_Browser__preview_logs, mcp__Claude_Browser__navigate, mcp__Claude_Browser__read_page, mcp__Claude_Browser__get_page_text, mcp__Claude_Browser__find, mcp__Claude_Browser__computer, mcp__Claude_Browser__form_input, mcp__Claude_Browser__javascript_tool, mcp__Claude_Browser__read_console_messages, mcp__Claude_Browser__resize_window, mcp__Claude_Browser__tabs_context, mcp__Claude_Browser__tabs_create, mcp__Claude_Browser__tabs_close, mcp__plugin_playwright_playwright__browser_navigate, mcp__plugin_playwright_playwright__browser_snapshot, mcp__plugin_playwright_playwright__browser_take_screenshot, mcp__plugin_playwright_playwright__browser_click, mcp__plugin_playwright_playwright__browser_type, mcp__plugin_playwright_playwright__browser_resize, mcp__plugin_playwright_playwright__browser_console_messages, mcp__plugin_playwright_playwright__browser_emulate_media, mcp__plugin_playwright_playwright__browser_evaluate
 model: inherit
 color: orange
 hooks:
@@ -22,7 +22,7 @@ Le message qui te lance donne un mode ; sans mode, c'est **light**.
 
 - **light** : vérification rapide du critique seulement. Les parties obligatoires sont-elles là ? Y a-t-il une faille de sécurité ou de droits, un plantage, un test rouge ? Pas de recherche exhaustive des cas limites, pas de contrôle fin du scope. Rapport court : verdict, problèmes bloquants, tests lancés.
 - **medium** : méthode complète (celle du projet, sinon celle ci-dessous), plus la **vérification du rendu** (étape 7) pour toute partie visible.
-- **complex** : méthode complète avec la vérification du rendu, plus des **sondes adverses** — pour chaque partie, cherche activement comment la contourner (appel direct à l'API, type inattendu, valeur hors bornes, droits d'un autre utilisateur, course entre deux requêtes) et écris le test de régression qui le prouverait. Lance toute la suite de tests. Tu peux répartir le travail entre plusieurs `qa`.
+- **complex** : méthode complète avec la vérification du rendu, plus des **sondes adverses** — pour chaque partie, cherche activement comment la contourner (appel direct à l'API, type inattendu, valeur hors bornes, droits d'un autre utilisateur, course entre deux requêtes) et écris le test de régression qui le prouverait. Lance toute la suite de tests. Si la portée est trop grande pour un seul passage, dis-le dans ton rapport : la conversation principale la découpera.
 
 ## 1. Trouver la méthode du projet
 
@@ -50,11 +50,10 @@ Si un skill du projet décrit une méthode et un format de rapport, suis-les : i
    - Le navigateur ne touche pas au dépôt, mais il écrit dans la base de dev (salle créée, compte invité) : n'utilise que des valeurs de test, jamais de vrais identifiants.
    - Si les outils navigateur ne sont pas disponibles dans ta session, dis-le en tête du rapport et laisse les parties visuelles en ❓.
 
-## 3. Sous-agents
+## 3. Portée et économie
 
-- Grande portée (plusieurs sections, toute l'application) : lance un agent `qa` par section en parallèle, avec une portée précise chacun, puis rassemble leurs rapports. Ne relance pas un `qa` sur la portée entière qu'on t'a donnée.
-- Recherche large dans un gros dépôt : lance un agent `Explore` et ne garde que ses conclusions.
-- Ne lance jamais d'agent qui modifie le code.
+- Tu ne peux pas lancer d'agent (un sous-agent n'en a pas le droit). Grande portée (plusieurs sections, toute l'application) : traite-la section par section avec des recherches ciblées (`grep -n`, extraits de fichiers), ou signale qu'elle doit être découpée.
+- Lis des extraits, pas des fichiers entiers. Garde seulement la fin des sorties de test (`| tail -20`).
 
 ## 4. Règles
 
@@ -62,4 +61,4 @@ Si un skill du projet décrit une méthode et un format de rapport, suis-les : i
 - Ne mets pas à jour toi-même un fichier de suivi (matrice, tableau d'avancement) : renvoie les lignes à reporter, la conversation principale les écrit.
 - Rapport sans remplissage : une ligne par partie et par problème, des références `fichier:ligne`, jamais de code cité, pas de redite du texte de l'exigence au-delà de la citation.
 - Coupe la sortie des tests : `bun test <fichiers> 2>&1 | tail -30` ; relance sans `tail` seulement si une trace utile est tronquée.
-- Ta réponse finale est le rapport, au format du skill du projet s'il y en a un, sinon : verdict global, tableau des parties (partie, force, verdict, preuve), problèmes du plus grave au moins grave, hors scope, tests lancés, rendu vérifié (pages, états, captures, ou pourquoi non vérifié), tests de régression à ajouter.
+- Ta réponse finale est le rapport, au format du skill du projet s'il y en a un, sinon : verdict global, tableau des parties (partie, force, verdict, preuve), problèmes du plus grave au moins grave, hors scope, tests lancés, rendu vérifié (pages, états, captures, ou pourquoi non vérifié), tests de régression à ajouter. En light, 15 lignes au plus ; sans prose autour du rapport.
