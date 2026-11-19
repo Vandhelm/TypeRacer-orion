@@ -127,7 +127,7 @@ export function HomePanel({ ref }: { ref?: Ref<HTMLElement> }) {
   function goTo(provider: SocialProvider, action: "signIn" | "link") {
     setBusy(true);
     setAuthError("");
-    void (action === "link" ? linkProvider(provider) : signInWith(provider)).then(({ error }) => {
+    void (action === "link" ? linkProvider(provider) : signInWith(provider, location.search)).then(({ error }) => {
       if (!error) return;
       setBusy(false);
       setAuthError(t(action === "link" ? "home.linkFailed" : "home.socialFailed", { provider: PROVIDER_NAMES[provider] }));
@@ -143,6 +143,7 @@ export function HomePanel({ ref }: { ref?: Ref<HTMLElement> }) {
     if (error) return setAuthError(t("home.signUpFailed"));
     await authClient.getSession({ query: { disableCookieCache: true } });
     showStamp("stampAccount");
+    backToInvite();
   }
 
   // code saisi : on rejoint le salon avec le code déjà inscrit
