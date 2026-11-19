@@ -5,6 +5,7 @@
 //   une erreur, n'est jamais diffusé et ne ferme pas la connexion. Un déluge de messages la ferme (1008).
 // - Progression : diffusée aux autres membres de la salle, au plus 10 fois par seconde par joueur (PERF-02).
 //   Les messages en trop sont fusionnés : la dernière valeur part dès que la limite le permet.
+// - Avec les salons en base (`rooms`), tout join exige d'être membre du salon (SALLE-03, SALLE-09, SALLE-10).
 // - Suivi d'un salon (join avec follow, page salle) : seul un membre le suit (SALLE-03) ; il reçoit l'état du salon
 //   à chaque changement (routes HTTP, via `rooms.changes`) et à chaque échéance (SALLE-08 / SALLE-09). Un membre
 //   retiré (SALLE-07) reçoit not_member et ne suit plus. Quand la dernière page salle d'un membre se ferme et ne
@@ -114,6 +115,18 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
     } finally {
       refreshing = false;
     }
+  }
+
+  /** Avec les salons en base, seul un membre rejoint la présence et la course (SALLE-03, SALLE-09) ; un salon inconnu répond pareil (SALLE-10). */
+  async function joinMember(ws: Socket, room: string) {
+    if (!backend) return join(ws, room);
+    const entry = await backend.enter(ws.data.player, room).catch((error: unknown) => {
+      console.error(error);
+      return null;
+    });
+    if (ws.readyState !== 1) return;
+    if (!entry) return send(ws, { type: "error", code: "not_member" });
+    join(ws, room);
   }
 
   async function followRoom(ws: Socket, room: string) {
@@ -283,7 +296,7 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
         if (!message) return send(ws, { type: "error", code: "invalid_message" });
         switch (message.type) {
           case "join":
-            return message.follow ? void followRoom(ws, message.room) : join(ws, message.room);
+            return void (message.follow ? followRoom(ws, message.room) : joinMember(ws, message.room));
           case "leave":
             return leave(ws);
           case "progress":

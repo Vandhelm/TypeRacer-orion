@@ -283,3 +283,64 @@ describe("SALLE-10 — following tells neither a foreign nor a closed room from 
     expect(await answer(code, hostCookie)).toEqual(await answer(unknown, hostCookie));
   });
 });
+
+/** Une connexion brute comme la page course : ticket, puis join sans follow ; garde tous les messages reçus. */
+async function raw(server: Server<unknown>, auth: Auth, cookie: string) {
+  const grant = await handleRealtimeTicket(new Request("http://localhost/api/realtime/ticket", { method: "POST", headers: { cookie } }), auth, ENV);
+  const { ticket } = (await grant.json()) as { ticket: string };
+  const ws = new WebSocket(`ws://127.0.0.1:${server.port}/?ticket=${encodeURIComponent(ticket)}`);
+  const seen: { type: string; code?: string; players?: { name: string }[]; playerId?: string }[] = [];
+  const welcome = new Promise<void>((resolve) => {
+    ws.onmessage = (event) => {
+      const message = JSON.parse(String(event.data)) as (typeof seen)[number];
+      seen.push(message);
+      if (message.type === "welcome") resolve();
+    };
+  });
+  await welcome;
+  return { ws, seen, send: (message: unknown) => ws.send(JSON.stringify(message)) };
+}
+
+describe("SALLE-03 / SALLE-10 / SALLE-09 — only a member joins a room's presence and race", () => {
+  let h: Awaited<ReturnType<typeof harness>>;
+  let code: string;
+  let member: Awaited<ReturnType<typeof raw>>;
+  const intruder = `${GUEST_COOKIE}=${signGuest("Intrus_Course", SECRET)}`;
+
+  beforeAll(async () => {
+    h = await harness();
+    const host = await h.signUp("Hote_Prive");
+    code = await created(await h.call("POST", "/api/rooms", host, { role: "player", settings: { visibility: "private" } }));
+    member = await raw(h.server, h.auth, host);
+    member.send({ type: "join", room: code });
+    while (!member.seen.some((m) => m.type === "presence")) await Bun.sleep(10);
+  });
+  afterAll(() => {
+    member.ws.close();
+    h.server.stop(true);
+  });
+
+  test("a non-member's join of a private room gets not_member, never its presence", async () => {
+    const tab = await raw(h.server, h.auth, intruder);
+    tab.send({ type: "join", room: code });
+    while (!tab.seen.some((m) => m.type === "error")) await Bun.sleep(10);
+    expect(tab.seen.find((m) => m.type === "error")?.code).toBe("not_member");
+    expect(tab.seen.some((m) => m.type === "presence")).toBe(false);
+    // il n'apparaît pas chez les membres, et sa progression n'est ni acceptée ni diffusée
+    tab.send({ type: "progress", progress: 0.5, wpm: 60 });
+    while (tab.seen.filter((m) => m.type === "error").length < 2) await Bun.sleep(10);
+    expect(tab.seen.filter((m) => m.type === "error")[1]?.code).toBe("not_in_room");
+    await Bun.sleep(50);
+    expect(member.seen.filter((m) => m.type === "presence").every((m) => !m.players?.some((p) => p.name === "Intrus_Course"))).toBe(true);
+    expect(member.seen.some((m) => m.type === "progress")).toBe(false);
+    tab.ws.close();
+  });
+
+  test("an unknown code answers the same as a room one is not in", async () => {
+    const tab = await raw(h.server, h.auth, intruder);
+    tab.send({ type: "join", room: "ZZZZZZ" });
+    while (!tab.seen.some((m) => m.type === "error")) await Bun.sleep(10);
+    expect(tab.seen.find((m) => m.type === "error")?.code).toBe("not_member");
+    tab.ws.close();
+  });
+});
