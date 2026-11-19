@@ -5,7 +5,7 @@ import type { Layout } from "./keyboard";
 import { KeyboardHeatmap } from "./KeyboardHeatmap";
 import { ProgressChart } from "./ProgressChart";
 import { StatBlock, Swatch, Unit } from "./StatBlock";
-import { NOTE, SECTION, SECTION_TITLE } from "./styles";
+import { CAREER_CARD, NOTE, SECTION, SECTION_TITLE } from "./styles";
 
 /** Toutes les courses du joueur (AUTH-06). Pour un invité : celles de sa session seulement (AUTH-03). */
 type Props = { state: StatsState; guest: boolean; layout: Layout; onLayout: (layout: Layout) => void };
@@ -21,7 +21,7 @@ export function CareerStats({ state, guest, layout, onLayout }: Props) {
     const { stats } = state;
     body = (
       <>
-        <div className="profile-card profile-card--career">
+        <div className={CAREER_CARD}>
           <StatBlock hero marker={<Swatch series="wpm" />} label={t("profile.bestWpm")} value={stats.bestWpm ?? 0} />
           <StatBlock hero marker={<Swatch series="wpm" />} label={t("profile.averageWpm")} value={stats.averageWpm ?? 0} />
           <StatBlock label={t("profile.averageAccuracy")} value={<>{oneDecimal(i18n.language, stats.averageAccuracy ?? 0)}<Unit>%</Unit></>} />

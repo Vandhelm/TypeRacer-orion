@@ -31,6 +31,9 @@
 }
 
 /* Breakpoints used by this page (inclusive, like the original max-width queries) */
+/* Declared from widest to narrowest: Tailwind emits them in this order, so a narrower one wins. */
+@custom-variant laptop (@media (max-width: 1100px));
+@custom-variant tablet (@media (max-width: 1000px));
 @custom-variant phone (@media (max-width: 700px));
 @custom-variant narrow (@media (max-width: 760px));
 @custom-variant tiny (@media (max-width: 420px));

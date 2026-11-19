@@ -1,5 +1,5 @@
 // Tailwind classes shared by the profile pages (stats and account).
-// The card grid (.profile-card) and the keyboard heatmap keys stay in styles/pages/profile/profile.css.
+// The keyboard heatmap keys stay in styles/pages/profile/profile.css.
 
 export const PAGE = "fixed inset-0 overflow-y-auto bg-black px-[clamp(16px,4vw,56px)] pt-[30px] pb-8 font-sans text-white";
 export const HEAD = "mb-[clamp(20px,4vh,40px)] flex flex-wrap items-center justify-between gap-x-6 gap-y-3";
@@ -57,3 +57,21 @@ export const ACCOUNT_BUTTON = {
   normal: `${BUTTON} border-line text-white ${HOVER}bg-[#f2f2f2] ${HOVER}text-black`,
   quiet: `${BUTTON} border-line-soft text-muted ${HOVER}border-red-text ${HOVER}bg-transparent ${HOVER}text-red-text`,
 };
+
+/**
+ * A card: the figures and their charts in one frame, separated by rules (the grid background draws them;
+ * padding-box keeps it from passing under the outline). On a phone: no frame, the two key figures first,
+ * right away their chart, then the details.
+ */
+const CARD =
+  "profile-card grid gap-px border border-line-faint bg-line-faint bg-clip-padding [&>*]:min-w-0 [&>*]:bg-face-front-a [&>*]:p-[clamp(14px,2vh,20px)] " +
+  "phone:gap-0 phone:bg-transparent phone:[border:0] phone:[&>*]:order-2 phone:[&>*]:bg-transparent phone:[&>*]:px-0 phone:[&>.stat--hero]:order-0 " +
+  "phone:[&>.card-chart]:order-1 phone:[&>.card-chart]:border-y phone:[&>.card-chart]:border-y-line-faint " +
+  "phone:[&>.card-keys]:order-3 phone:[&>.card-keys]:border-t phone:[&>.card-keys]:border-t-line-faint";
+export const RACE_CARD =
+  `${CARD} grid-cols-[1.2fr_1.2fr_1fr_1fr_1fr_1.5fr] [&>.card-chart]:[grid-column:1/-1] ` +
+  "tablet:grid-cols-[repeat(3,minmax(0,1fr))] phone:grid-cols-[repeat(2,minmax(0,1fr))]";
+export const CAREER_CARD =
+  `${CARD} grid-cols-[repeat(20,minmax(0,1fr))] [&>.stat]:[grid-column:span_4] [&>.card-progress]:[grid-column:span_11] [&>.card-keys]:[grid-column:span_9] ` +
+  "laptop:[&>.card-progress]:[grid-column:1/-1] laptop:[&>.card-keys]:[grid-column:1/-1] " +
+  "tablet:grid-cols-[repeat(6,minmax(0,1fr))] tablet:[&>.stat]:[grid-column:span_2] tablet:[&>.stat.stat--hero]:[grid-column:span_3]";

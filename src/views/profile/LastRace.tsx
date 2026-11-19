@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { oneDecimal, type PlayerResult, type RaceSummary } from "../podium/results";
 import { SpeedChart } from "./SpeedChart";
 import { StatBlock, Swatch, Unit } from "./StatBlock";
-import { CROSS, SECTION, SECTION_TITLE } from "./styles";
+import { CROSS, RACE_CARD, SECTION, SECTION_TITLE } from "./styles";
 
 const IDLE_ALERT = 50;
 const NBSP = " ";
@@ -56,7 +56,7 @@ export function LastRace({ player, summary }: { player: PlayerResult; summary: R
         </span>
       </p>
 
-      <div className="profile-card profile-card--race">
+      <div className={RACE_CARD}>
         <StatBlock hero marker={<Swatch series="wpm" />} label={t("game.wpm")} value={player.wpm} />
         <StatBlock hero label={t("profile.accuracy")} value={<>{player.accuracy}<Unit>%</Unit></>} />
         <StatBlock marker={<Swatch series="raw" />} label={t("profile.raw")} value={player.raw} />
