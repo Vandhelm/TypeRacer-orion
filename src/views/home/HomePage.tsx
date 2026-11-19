@@ -1,4 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+"use client";
+// TECH-01 : rendu côté serveur par app/page.tsx (la coquille, le panneau, les tickets) ; la scène canvas démarre au montage.
+import { useEffect, useRef, useState, type ComponentProps } from "react";
 import { useTranslation } from "react-i18next";
 import { HangingButton } from "../../components/buttons/HangingButton";
 import { UserIcon } from "../../components/icons";
@@ -15,8 +17,8 @@ import type { SceneApi } from "./scene/createScene";
 const HOME_CLASSES =
   "home pointer-events-none fixed inset-0 z-10 flex items-center justify-center px-4 py-[3.5vh] pt-[calc(var(--navbar-height)+3.5vh)] phone:relative phone:min-h-screen phone:px-4 phone:pt-[104px] phone:pb-10";
 
-/** Home page: Home view (play / account) and Rooms view (tickets), switched with the URL hash. */
-export function HomePage() {
+/** Home page: Home view (play / account) and Rooms view (tickets), switched with the URL hash. me : le compte lu par le serveur. */
+export function HomePage({ me = null }: { me?: ComponentProps<typeof HomePanel>["initialMe"] }) {
   const { t } = useTranslation();
   const view = useHashView();
   useEffect(() => {
@@ -59,7 +61,7 @@ export function HomePage() {
       <RoomsView ref={rooms} descending={descending} />
 
       <main className={leaving ? `${HOME_CLASSES} leaving` : HOME_CLASSES}>
-        <HomePanel ref={panel} />
+        <HomePanel ref={panel} initialMe={me} />
       </main>
     </>
   );

@@ -25,13 +25,21 @@ const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").match
 export function useViewTransition(view: View, targets: Targets) {
   const shown = useRef<View>("home");
   const mounted = useRef(false);
+  // TECH-01 : le serveur ne voit pas le hash et rend la vue Accueil. Arriver sur /home#rooms bascule donc juste après
+  // l'hydratation : ce n'est pas un clic, la vue Salons doit apparaître d'un coup. Seul un changement de hash anime.
+  const switched = useRef(false);
+  useLayoutEffect(() => {
+    const onHash = () => { switched.current = true; };
+    addEventListener("hashchange", onHash);
+    return () => removeEventListener("hashchange", onHash);
+  }, []);
   const pending = useRef<number>(undefined);
   const latest = useRef(targets);
   latest.current = targets;
 
   // Layout effect: classes and inline styles change in the same frame, before paint.
   useLayoutEffect(() => {
-    const animate = mounted.current;
+    const animate = mounted.current && switched.current;
     mounted.current = true;
     if (view === shown.current) return;
     shown.current = view;
