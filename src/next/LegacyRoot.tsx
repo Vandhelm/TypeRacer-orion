@@ -4,14 +4,13 @@
 import { lazy, StrictMode, Suspense, type ComponentType } from "react";
 import { setPlayerName } from "../players/nickname";
 
-export type LegacyPageName = "home" | "room" | "game" | "podium";
+export type LegacyPageName = "home" | "room" | "game";
 
 // Une page = un morceau de code chargé à part : /room ne télécharge pas le code de /game.
 const pages: Record<LegacyPageName, ComponentType> = {
   home: lazy(() => import("../views/home/HomePage").then((m) => ({ default: m.HomePage }))),
   room: lazy(() => import("../views/room/RoomPage").then((m) => ({ default: m.RoomPage }))),
   game: lazy(() => import("../views/game/GamePage").then((m) => ({ default: m.GamePage }))),
-  podium: lazy(() => import("../views/podium/PodiumPage").then((m) => ({ default: m.PodiumPage }))),
 };
 
 export default function LegacyRoot({ name, player, guest }: { name: LegacyPageName; player?: string; guest?: boolean }) {
