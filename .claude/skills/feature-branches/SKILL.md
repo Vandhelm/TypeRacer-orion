@@ -27,6 +27,8 @@ Si une branche existante du critère est en majuscules (`feature/profile-stats/A
 
 ## Avant de travailler : choisir la branche
 
+Avant tout, **réserve l'exigence sur le tableau partagé** : `bun scripts/board.ts claim <ID> --branch <branche>` (`worktree-setup.sh` le fait pour toi). Refus → une autre branche la tient ou touche les mêmes fichiers : ne commence pas, dis-le. Libère avec `release <ID>` après le merge dans `dev`. Pour enchaîner les exigences sans toi : skill `autopilot`.
+
 1. `git status --short` et `git branch --show-current`. Note les changements non commités et la branche courante.
 2. Identifie le type, la page et le critère de la tâche.
 3. Si la branche `<type>/<page>/<critère>` existe déjà (locale ou `origin/`), bascule dessus (`git switch`, ou `git switch --track origin/...`).

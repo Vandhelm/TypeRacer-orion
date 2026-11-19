@@ -45,9 +45,9 @@
     "scope": "suivi (light)"
   },
   "TECH-10": {
-    "commit": "2acdffe",
+    "commit": "b1bd5b4",
     "date": "2026-11-19",
-    "scope": "suivi (light)"
+    "scope": "critère TECH-10 (light)"
   },
   "DES-01": {
     "commit": "1fba673",
