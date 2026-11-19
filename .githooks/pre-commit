@@ -1,0 +1,34 @@
+#!/bin/bash
+# Verrou de la matrice : docs/EXIGENCES.md et docs/qa/state.json ne s'écrivent que sur dev,
+# dans un commit qui ne touche qu'eux (skill criteria-check, étape 8).
+# Hors de dev, seul un merge de dev (contenu identique à dev) passe.
+# Activé par : git config core.hooksPath .githooks (aussi appelé par pre-merge-commit)
+set -uo pipefail
+matrix=(docs/EXIGENCES.md docs/qa/state.json)
+git rev-parse -q --verify HEAD >/dev/null || exit 0
+changed=$(git diff --cached --name-only HEAD -- "${matrix[@]}")
+[ -z "$changed" ] && exit 0
+
+branch=$(git symbolic-ref --short -q HEAD || echo "(HEAD détaché)")
+merging=$([ -f "$(git rev-parse --git-path MERGE_HEAD)" ] && echo 1 || echo 0)
+fail() {
+  echo "matrice : $1" >&2
+  echo "  Retire-la du commit : git restore --staged --worktree --source=HEAD -- ${matrix[*]}" >&2
+  echo "  Puis renvoie les lignes à la conversation qui merge dans dev." >&2
+  exit 1
+}
+
+if [ "$branch" = dev ]; then
+  [ "$merging" = 1 ] && exit 0
+  other=$(git diff --cached --name-only HEAD | grep -vxF -e docs/EXIGENCES.md -e docs/qa/state.json)
+  [ -z "$other" ] && exit 0
+  echo "matrice : sur dev, le commit de matrice ne touche que ${matrix[*]} ; fais un commit à part pour :" >&2
+  echo "$other" | sed 's/^/  /' >&2
+  exit 1
+fi
+
+for f in $changed; do
+  [ "$(git rev-parse -q --verify ":$f")" = "$(git rev-parse -q --verify "dev:$f")" ] && continue
+  fail "$f modifié sur $branch ; elle ne s'écrit que sur dev."
+done
+exit 0
