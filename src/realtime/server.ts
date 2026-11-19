@@ -10,16 +10,18 @@
 //   à chaque changement (routes HTTP, via `rooms.changes`) et à chaque échéance (SALLE-08 / SALLE-09). Un membre
 //   retiré (SALLE-07) reçoit not_member et ne suit plus. Quand la dernière page salle d'un membre se ferme et ne
 //   revient pas dans le délai, il quitte le salon, sauf pendant une course (SALLE-09) : la page course ne suit pas.
+// - Le contrôle d'appartenance est asynchrone : un join n'aboutit que s'il est la dernière demande de la socket
+//   (un leave ou un join envoyé entre-temps l'annule), et un salon changé pendant le contrôle est relu avant d'admettre.
 import type { Server, ServerWebSocket } from "bun";
 import { MAX_MESSAGE_BYTES, parseClientMessage, type Player, PROGRESS_INTERVAL_MS, type ServerMessage } from "./protocol";
-import type { RoomBackend } from "./room-backend";
+import type { RoomBackend, RoomState } from "./room-backend";
 import { TICKET_TTL_MS, verifyTicket } from "./ticket";
 
 /** Au-delà, sur une fenêtre d'une seconde, la connexion est fermée : aucun client honnête n'en envoie autant. */
 export const MAX_MESSAGES_PER_SECOND = 60;
 const POLICY_VIOLATION = 1008;
 
-type Connection = { player: Player; room: string | null; windowStart: number; windowCount: number; follow: { room: string; key: string } | null; key: string | null };
+type Connection = { player: Player; room: string | null; windowStart: number; windowCount: number; follow: { room: string; key: string } | null; key: string | null; requests: number };
 type Socket = ServerWebSocket<Connection>;
 type Member = { player: Player; connections: number };
 type Throttle = { lastSent: number; pending: { ws: Socket; text: string } | null; timer: ReturnType<typeof setTimeout> | null };
@@ -104,7 +106,12 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
       console.error(error);
     }
   }
-  backend?.changes((code) => void publishRoom(code));
+  /** Nombre de changements vus par salon : un join dont le salon a changé pendant le contrôle le relit. */
+  const versions = new Map<string, number>();
+  backend?.changes((code) => {
+    versions.set(code, (versions.get(code) ?? 0) + 1);
+    void publishRoom(code);
+  });
 
   let refreshTimer: ReturnType<typeof setInterval> | null = null;
   let refreshing = false;
@@ -128,14 +135,36 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
     }
   }
 
-  /** Avec les salons en base, seul un membre rejoint la présence et la course (SALLE-03, SALLE-09) ; un salon inconnu répond pareil (SALLE-10). */
-  async function joinMember(ws: Socket, room: string) {
-    if (!backend) return join(ws, room);
-    const entry = await backend.enter(ws.data.player, room).catch((error: unknown) => {
+  /**
+   * Avec les salons en base, seul un membre rejoint la présence et la course (SALLE-03, SALLE-09) ; un salon inconnu
+   * répond pareil (SALLE-10). Undefined : la demande est dépassée (socket fermée, leave ou autre join envoyé depuis).
+   */
+  async function admit(ws: Socket, room: string, rooms: RoomBackend): Promise<{ key: string; room: RoomState } | null | undefined> {
+    const request = ++ws.data.requests;
+    const current = () => ws.readyState === 1 && ws.data.requests === request;
+    const failed = (error: unknown) => {
       console.error(error);
       return null;
-    });
-    if (ws.readyState !== 1) return;
+    };
+    let version = versions.get(room) ?? 0;
+    const entry = await rooms.enter(ws.data.player, room).catch(failed);
+    if (!current()) return undefined;
+    if (!entry) return null;
+    // le salon a changé pendant le contrôle (expulsion, départ, fermeture) : on le relit jusqu'à un état stable
+    while ((versions.get(room) ?? 0) !== version) {
+      version = versions.get(room) ?? 0;
+      const latest = await rooms.view(room).catch(failed);
+      if (!current()) return undefined;
+      if (!latest?.members.some((m) => m.key === entry.key)) return null;
+      entry.room = latest;
+    }
+    return entry;
+  }
+
+  async function joinMember(ws: Socket, room: string) {
+    if (!backend) return join(ws, room);
+    const entry = await admit(ws, room, backend);
+    if (entry === undefined) return;
     if (!entry) return send(ws, { type: "error", code: "not_member" });
     join(ws, room);
     ws.data.key = entry.key;
@@ -143,11 +172,8 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
 
   async function followRoom(ws: Socket, room: string) {
     if (!backend) return join(ws, room);
-    const entry = await backend.enter(ws.data.player, room).catch((error: unknown) => {
-      console.error(error);
-      return null;
-    });
-    if (ws.readyState !== 1) return;
+    const entry = await admit(ws, room, backend);
+    if (entry === undefined) return;
     if (!entry) return send(ws, { type: "error", code: "not_member" });
     unfollow(ws);
     join(ws, room);
@@ -300,7 +326,7 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
       if (allowedOrigins.length > 0 && (!origin || !allowedOrigins.includes(origin))) return new Response("forbidden origin", { status: 403 });
       const player = useTicket(url.searchParams.get("ticket"));
       if (!player) return new Response("unauthorized", { status: 401 });
-      if (srv.upgrade(req, { data: { player, room: null, windowStart: Date.now(), windowCount: 0, follow: null, key: null } })) return undefined;
+      if (srv.upgrade(req, { data: { player, room: null, windowStart: Date.now(), windowCount: 0, follow: null, key: null, requests: 0 } })) return undefined;
       return new Response("upgrade failed", { status: 400 });
     },
     websocket: {
@@ -316,6 +342,7 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
           case "join":
             return void (message.follow ? followRoom(ws, message.room) : joinMember(ws, message.room));
           case "leave":
+            ws.data.requests += 1; // un join encore en contrôle n'aboutira pas
             return leave(ws);
           case "progress":
             if (!ws.data.room) return send(ws, { type: "error", code: "not_in_room" });
