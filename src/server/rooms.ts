@@ -49,7 +49,7 @@ export async function withFreshCode<T>(insert: (code: string) => Promise<T>, dra
 export type Identity = { kind: "account"; playerId: number; name: string } | { kind: "guest"; name: string; sessionId: string };
 
 /**
- * La clé d'un membre : la même personne a la même clé dans tous les salons (SALLE-06 pourra la rendre unique).
+ * La clé d'un membre : la même personne a la même clé dans tous les salons (SALLE-06 : unique en base, room_members_member_unique).
  * Un invité est sa session signée (id aléatoire du cookie), jamais son pseudonyme, que n'importe qui peut reprendre.
  */
 export function memberKey(who: Identity | { playerId: number }): string {
