@@ -1,7 +1,8 @@
 // Tests par exigence (TECH-09) : lance `bun test` une seule fois avec le reporter JUnit, rattache chaque
 // test aux ID d'exigence de son nom complet (describe imbriqués + test, comme `bun test -t <ID>`), puis
 // écrit reports/requirement-tests.json et un tableau Markdown (aussi dans $GITHUB_STEP_SUMMARY en CI).
-// Échoue seulement si un test rattaché à une exigence échoue ; une exigence sans test est signalée.
+// Échoue si un test rattaché à une exigence échoue (avec --strict, aussi si la suite échoue) ;
+// une exigence sans test est seulement signalée. Seul l'ID qui ouvre un nom compte, une mention est « citée ».
 
 import { mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -20,15 +21,24 @@ export interface RequirementResult {
   passed: number;
   failed: number;
   skipped: number;
+  /** Tests qui citent l'ID au milieu d'un nom sans en faire leur sujet (non comptés dans total). */
+  cited: number;
+  /** Fichiers des tests comptés, pour croiser avec un diff (QA incrémentale). */
+  files: string[];
   tests: TestResult[];
 }
 
 export interface RequirementReport {
   ok: boolean;
   requirements: RequirementResult[];
+  /** Sans test compté (y compris citedOnly). */
   untested: string[];
+  citedOnly: string[];
+  /** Des tests, mais tous ignorés (skip/todo). */
+  allSkipped: string[];
   unknownIds: { id: string; tests: TestResult[] }[];
   unlinkedTests: number;
+  unlinkedFiles: string[];
 }
 
 const ID = /\b[A-Z]{2,10}-\d{2,3}\b/g;
@@ -44,6 +54,11 @@ export function parseRequirementIds(markdown: string): string[] {
 
 export function idsInName(name: string): string[] {
   return [...new Set(name.match(ID) ?? [])];
+}
+
+/** ID qui ouvrent un segment du nom complet (`describe("AUTH-02 — …")`) : le sujet du test. */
+export function primaryIds(name: string): string[] {
+  return [...new Set([...name.matchAll(/(?:^| > )([A-Z]{2,10}-\d{2,3})\b/g)].map((m) => m[1] ?? ""))];
 }
 
 const ENTITIES: Record<string, string> = { quot: '"', amp: "&", lt: "<", gt: ">", apos: "'" };
@@ -95,47 +110,79 @@ export function parseJunit(xml: string): TestResult[] {
 }
 
 export function buildReport(knownIds: string[], results: TestResult[]): RequirementReport {
-  const byId = new Map<string, TestResult[]>();
-  let unlinkedTests = 0;
+  const owned = new Map<string, TestResult[]>();
+  const cited = new Map<string, number>();
+  const mentioned = new Map<string, TestResult[]>();
+  const unlinked: TestResult[] = [];
+  const push = <T>(map: Map<string, T[]>, id: string, value: T) => map.set(id, [...(map.get(id) ?? []), value]);
 
   for (const test of results) {
-    const ids = idsInName(test.name);
-    if (ids.length === 0) unlinkedTests++;
-    for (const id of ids) byId.set(id, [...(byId.get(id) ?? []), test]);
+    const all = idsInName(test.name);
+    if (all.length === 0) unlinked.push(test);
+    const primary = new Set(primaryIds(test.name));
+    for (const id of all) {
+      push(mentioned, id, test);
+      if (primary.has(id)) push(owned, id, test);
+      else cited.set(id, (cited.get(id) ?? 0) + 1);
+    }
   }
 
   const requirements = knownIds.map((id): RequirementResult => {
-    const tests = byId.get(id) ?? [];
+    const tests = owned.get(id) ?? [];
     const count = (status: TestStatus) => tests.filter((t) => t.status === status).length;
-    return { id, total: tests.length, passed: count("passed"), failed: count("failed"), skipped: count("skipped"), tests };
+    return {
+      id,
+      total: tests.length,
+      passed: count("passed"),
+      failed: count("failed"),
+      skipped: count("skipped"),
+      cited: cited.get(id) ?? 0,
+      files: [...new Set(tests.map((t) => t.file))].sort(),
+      tests,
+    };
   });
 
   const known = new Set(knownIds);
-  const unknownIds = [...byId].filter(([id]) => !known.has(id)).map(([id, tests]) => ({ id, tests }));
-
   return {
     ok: requirements.every((r) => r.failed === 0),
     requirements,
     untested: requirements.filter((r) => r.total === 0).map((r) => r.id),
-    unknownIds,
-    unlinkedTests,
+    citedOnly: requirements.filter((r) => r.total === 0 && r.cited > 0).map((r) => r.id),
+    allSkipped: requirements.filter((r) => r.total > 0 && r.passed === 0 && r.failed === 0).map((r) => r.id),
+    unknownIds: [...mentioned].filter(([id]) => !known.has(id)).map(([id, tests]) => ({ id, tests })),
+    unlinkedTests: unlinked.length,
+    unlinkedFiles: [...new Set(unlinked.map((t) => t.file))].sort(),
   };
 }
 
+/** 1 si un test d'exigence échoue ; avec --strict, aussi si la suite entière a échoué. */
+export function exitCode(report: RequirementReport, suiteExitCode: number, strict: boolean): number {
+  return report.ok && (!strict || suiteExitCode === 0) ? 0 : 1;
+}
+
+function state(r: RequirementResult): string {
+  if (r.failed > 0) return "❌ échec";
+  if (r.total === 0) return "cité seulement";
+  if (r.passed === 0) return "⚠️ ignorés";
+  return "✅";
+}
+
 export function renderTable(report: RequirementReport): string {
-  const tested = report.requirements.filter((r) => r.total > 0).length;
+  const tested = report.requirements.length - report.untested.length;
   const lines = [
     "## Tests par exigence",
     "",
     `${report.ok ? "✅" : "❌"} ${tested}/${report.requirements.length} exigences ont au moins un test` +
       ` · ${report.unlinkedTests} tests sans ID`,
     "",
-    "| ID | Tests | Réussis | Échoués | État |",
-    "| --- | ---: | ---: | ---: | --- |",
+    "| ID | Tests | Réussis | Échoués | Cités | État |",
+    "| --- | ---: | ---: | ---: | ---: | --- |",
   ];
-  for (const r of report.requirements) {
-    const state = r.total === 0 ? "sans test" : r.failed > 0 ? "❌ échec" : r.passed === 0 ? "ignorés" : "✅";
-    lines.push(`| ${r.id} | ${r.total} | ${r.passed} | ${r.failed} | ${state} |`);
+  for (const r of report.requirements.filter((r) => r.total > 0 || r.cited > 0)) {
+    lines.push(`| ${r.id} | ${r.total} | ${r.passed} | ${r.failed} | ${r.cited} | ${state(r)} |`);
+  }
+  if (report.untested.length > 0) {
+    lines.push("", `<details><summary>${report.untested.length} exigences sans test</summary>`, "", report.untested.join(", "), "", "</details>");
   }
   if (report.unknownIds.length > 0) {
     lines.push("", "**ID absents de docs/criteres.md :**");
@@ -151,6 +198,14 @@ export function renderTable(report: RequirementReport): string {
   return `${lines.join("\n")}\n`;
 }
 
+async function gitInfo(root: string): Promise<{ commit: string; branch: string }> {
+  const git = async (...args: string[]) => (await Bun.$`git ${args}`.cwd(root).quiet().nothrow().text()).trim();
+  return {
+    commit: process.env.GITHUB_SHA || (await git("rev-parse", "HEAD")),
+    branch: process.env.GITHUB_HEAD_REF || process.env.GITHUB_REF_NAME || (await git("rev-parse", "--abbrev-ref", "HEAD")),
+  };
+}
+
 async function main(): Promise<number> {
   const root = resolve(import.meta.dir, "..");
   const junitPath = `${root}/reports/junit.xml`;
@@ -159,32 +214,35 @@ async function main(): Promise<number> {
   // On retire un ancien rapport pour ne jamais le relire si bun test n'en écrit pas.
   await mkdir(`${root}/reports`, { recursive: true });
   await Bun.file(junitPath).delete().catch(() => undefined);
-  const run = Bun.spawn(["bun", "test", "--reporter=junit", `--reporter-outfile=${junitPath}`, ...process.argv.slice(2)], {
+  const args = process.argv.slice(2);
+  const strict = args.includes("--strict");
+  const testArgs = args.filter((a) => a !== "--strict");
+  const run = Bun.spawn(["bun", "test", "--reporter=junit", `--reporter-outfile=${junitPath}`, ...testArgs], {
     cwd: root,
     stdout: "ignore",
     stderr: "inherit",
   });
-  const exitCode = await run.exited;
+  const suiteExitCode = await run.exited;
 
   const junit = Bun.file(junitPath);
   if (!(await junit.exists())) {
-    console.error(`requirement-tests : bun test (code ${exitCode}) n'a pas produit ${junitPath}.`);
+    console.error(`requirement-tests : bun test (code ${suiteExitCode}) n'a pas produit ${junitPath}.`);
     return 1;
   }
 
   const ids = parseRequirementIds(await Bun.file(`${root}/docs/criteres.md`).text());
   const report = buildReport(ids, parseJunit(await junit.text()));
-  await Bun.write(jsonPath, `${JSON.stringify({ generatedAt: new Date().toISOString(), ...report }, null, 2)}\n`);
+  await Bun.write(jsonPath, `${JSON.stringify({ generatedAt: new Date().toISOString(), ...(await gitInfo(root)), suiteExitCode, ...report }, null, 2)}\n`);
 
   const table = renderTable(report);
   console.log(`\n${table}\nJSON : reports/requirement-tests.json`);
   const summary = process.env.GITHUB_STEP_SUMMARY;
   if (summary) await Bun.write(summary, `${await Bun.file(summary).text().catch(() => "")}${table}`);
 
-  if (exitCode !== 0 && report.ok) {
-    console.warn(`requirement-tests : bun test a échoué (code ${exitCode}) hors des tests d'exigence.`);
+  if (suiteExitCode !== 0 && report.ok) {
+    console.warn(`requirement-tests : bun test a échoué (code ${suiteExitCode}) hors des tests d'exigence.`);
   }
-  return report.ok ? 0 : 1;
+  return exitCode(report, suiteExitCode, strict);
 }
 
 if (import.meta.main) process.exit(await main());
