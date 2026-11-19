@@ -28,7 +28,7 @@ export const LEGEND =
 export const SWATCH = { wpm: "chart-swatch inline-block h-0.5 w-[18px] bg-red-text", raw: "chart-swatch inline-block h-0.5 w-[18px] bg-chart-raw" };
 export const CROSS = "chart-cross text-white not-italic";
 export const PLOT =
-  "[&_svg]:block [&_svg]:w-full [&_svg]:touch-pan-y [&_svg]:fill-muted [&_svg]:font-mono [&_svg]:text-[11px] [&_svg]:leading-normal [&_svg]:font-normal";
+  "[&_svg]:block [&_svg]:w-full [&_svg]:touch-pan-y [&_svg]:fill-muted [&_svg]:font-mono [&_svg]:text-[11px] [&_svg]:[line-height:normal] [&_svg]:font-normal";
 export const GRID_LINE = (value: number) => (value ? "stroke-[rgba(255,255,255,.1)]" : "stroke-line-soft");
 export const ERROR_MARK = "fill-white text-[14px]";
 export const LINE = {
@@ -66,7 +66,7 @@ export const ACCOUNT_BUTTON = {
  */
 const CARD =
   "profile-card grid gap-px border border-line-faint bg-line-faint bg-clip-padding [&>*]:min-w-0 [&>*]:bg-face-front-a [&>*]:p-[clamp(14px,2vh,20px)] " +
-  "phone:gap-0 phone:bg-transparent phone:[border:0] phone:[&>*]:order-2 phone:[&>*]:bg-transparent phone:[&>*]:px-0 phone:[&>.stat--hero]:order-0 " +
+  "phone:gap-0 phone:bg-transparent phone:bg-clip-border phone:[border:0] phone:[&>*]:order-2 phone:[&>*]:bg-transparent phone:[&>*]:px-0 phone:[&>.stat--hero]:order-0 " +
   "phone:[&>.card-chart]:order-1 phone:[&>.card-chart]:border-y phone:[&>.card-chart]:border-y-line-faint " +
   "phone:[&>.card-keys]:order-3 phone:[&>.card-keys]:border-t phone:[&>.card-keys]:border-t-line-faint";
 export const RACE_CARD =

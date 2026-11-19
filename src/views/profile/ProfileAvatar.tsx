@@ -25,7 +25,7 @@ function GeneratedAvatar({ name }: { name: string }) {
         <ellipse cx="28" cy="32" rx="20" ry="11" />
         <path d="M44 32 L60 21 L56 32 L60 43 Z" />
       </g>
-      <text className="font-sans text-[30px] leading-normal font-light" x="32" y="33" textAnchor="middle" dominantBaseline="central" fill={`hsl(${hue}, 85%, 82%)`}>
+      <text className="font-sans text-[30px] font-light [line-height:normal]" x="32" y="33" textAnchor="middle" dominantBaseline="central" fill={`hsl(${hue}, 85%, 82%)`}>
         {initial}
       </text>
     </svg>
