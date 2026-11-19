@@ -269,7 +269,11 @@
     "go": "GO",
     "poolLabel": "Race: {{count}} fish, one per player. Progress for each player is shown under their lane.",
     "playAgain": "PLAY AGAIN",
-    "backToRoom": "BACK TO THE ROOM"
+    "backToRoom": "BACK TO THE ROOM",
+    "keyboard": {
+      "title": "Grab a physical keyboard",
+      "body": "The race is played on a keyboard. On a phone or a touch tablet, the on-screen keyboard hides the text and skews the score: come back on a computer, or plug in a keyboard."
+    }
   },
   "podium": {
     "pageTitle": "O.R.I.O.N — The podium",

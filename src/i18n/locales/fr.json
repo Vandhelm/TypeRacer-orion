@@ -269,7 +269,11 @@
     "go": "C'EST PARTI",
     "poolLabel": "Course : {{count}} poissons, un par joueur. La progression de chacun est indiquée sous son couloir.",
     "playAgain": "REJOUER",
-    "backToRoom": "RETOUR AU SALON"
+    "backToRoom": "RETOUR AU SALON",
+    "keyboard": {
+      "title": "Sortez un clavier physique",
+      "body": "L'épreuve se joue au clavier. Sur téléphone ou tablette tactile, le clavier à l'écran cache le texte et fausse le score : revenez sur un ordinateur, ou branchez un clavier."
+    }
   },
   "podium": {
     "pageTitle": "O.R.I.O.N — Le podium",
