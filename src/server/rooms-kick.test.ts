@@ -53,7 +53,24 @@ describe("SALLE-07 — the host kicks a participant or a spectator, who can no l
     await kick(room.code, host.cookie, { member: body.you });
     expect((await t.join(t.guest("Recidiviste"), { code: room.code })).body.error).toBe("kicked");
     expect((await t.join(t.guest("recidiviste"), { invite: await t.invite(room.code, host.cookie) })).body.error).toBe("kicked");
-    expect((await t.join(t.guest("Innocent"), { code: room.code })).status).toBe(200);
+    expect((await t.join(t.guest("Innocent"), { code: room.code }, "198.51.100.9")).status).toBe(200);
+  });
+
+  test("a kicked guest cannot come back from the same IP under another nickname; other IPs still can", async () => {
+    const { room, host } = await t.open("Exp_IP");
+    const { body } = await t.join(t.guest("Alice_IP"), { code: room.code }, "198.51.100.20");
+    await kick(room.code, host.cookie, { member: body.you });
+    expect((await t.join(t.guest("Bob_IP"), { code: room.code }, "198.51.100.20")).body.error).toBe("kicked");
+    expect((await t.join(t.guest("Carol_IP"), { invite: await t.invite(room.code, host.cookie) }, "198.51.100.20")).body.error).toBe("kicked");
+    expect((await t.join(t.guest("Dan_IP"), { code: room.code }, "198.51.100.21")).status).toBe(200);
+  });
+
+  test("an account is not barred by the IP of a guest kicked before it (shared networks)", async () => {
+    const { room, host } = await t.open("Exp_IP_Compte");
+    const { body } = await t.join(t.guest("Eve_IP"), { code: room.code }, "198.51.100.30");
+    await kick(room.code, host.cookie, { member: body.you });
+    const friend = await t.signUp("Exp_IP_Ami");
+    expect((await t.join(friend.cookie, { code: room.code }, "198.51.100.30")).status).toBe(200);
   });
 
   test("a kicked account cannot come back as a guest under its own name", async () => {

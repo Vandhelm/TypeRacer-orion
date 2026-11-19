@@ -32,13 +32,14 @@ export async function roomsFixture(changed?: RoomChanged) {
   };
   /** Un invité neuf à chaque appel : sa propre session signée. */
   const guest = (name: string) => `${GUEST_COOKIE}=${signGuest(name, SECRET)}`;
-  const call = (method: string, path: string, cookie?: string, body?: unknown) =>
+  /** ip : l'adresse du client, la même pour tous par défaut (SALLE-07 : bannissement d'un invité par IP). */
+  const call = (method: string, path: string, cookie?: string, body?: unknown, ip = "203.0.113.1") =>
     handleRoomsApi(
       new Request(`http://localhost${path}`, {
         method,
         // SALLE-04 : un lien d'invitation se lie à l'IP du client ; toutes les requêtes viennent de la même, derrière un
         // proxy déclaré (TRUST_PROXY, client-ip.ts)
-        headers: { ...(cookie ? { cookie } : {}), ...(body === undefined ? {} : { "content-type": "application/json" }), "x-forwarded-for": "203.0.113.1" },
+        headers: { ...(cookie ? { cookie } : {}), ...(body === undefined ? {} : { "content-type": "application/json" }), "x-forwarded-for": ip },
         body: body === undefined ? undefined : JSON.stringify(body),
       }),
       db,
@@ -57,8 +58,8 @@ export async function roomsFixture(changed?: RoomChanged) {
     return { room, host: { ...host, key: you } };
   };
   /** POST /api/rooms/join : le statut et le corps de la réponse. */
-  const join = async (cookie: string, body: Record<string, unknown>) => {
-    const res = await call("POST", "/api/rooms/join", cookie, body);
+  const join = async (cookie: string, body: Record<string, unknown>, ip?: string) => {
+    const res = await call("POST", "/api/rooms/join", cookie, body, ip);
     return { status: res.status, body: (await res.json()) as Joined & Refused };
   };
   /** SALLE-04 : un lien d'invitation neuf, généré par l'hôte de ce salon. */

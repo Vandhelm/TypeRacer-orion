@@ -74,6 +74,8 @@ export const roomMembers = pgTable(
     finishedAt: timestamp("finished_at", { withTimezone: true }),
     /** SALLE-08 : dernier signe de vie (lecture du salon, action) ; silencieux trop longtemps, le membre est parti. */
     lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
+    /** SALLE-07 : l'IP d'entrée (client-ip.ts), null si inconnue ; à l'expulsion, elle est bannie pour les invités. */
+    ip: text("ip"),
   },
   (table) => [
     primaryKey({ columns: [table.roomId, table.memberKey] }),

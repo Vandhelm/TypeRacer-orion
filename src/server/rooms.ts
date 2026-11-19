@@ -99,18 +99,25 @@ export class RoomRefused extends Error {
 /** invite_taken : lien déjà lié à une autre IP ou une autre personne (SALLE-04) ; invite_limit : trop de liens dans ce salon. */
 export type RefusalReason = "not_found" | "not_member" | "not_host" | "full" | "in_race" | "closed" | "already_in_room" | "kicked" | "invalid_target" | "unknown_member" | "invite_taken" | "invite_limit";
 
-/** SALLE-07 : cette personne a été expulsée de ce salon. */
-async function isKicked(db: Db, roomId: number, key: string, name?: string): Promise<boolean> {
-  const keys = name ? [key, nameBan(name)] : [key];
+/** SALLE-07 : cette personne a été expulsée de ce salon. L'IP ne compte que pour un invité (voir ipBan). */
+async function isKicked(db: Db, who: Identity, roomId: number, key: string, ip: string | null): Promise<boolean> {
+  const keys = [key, nameBan(who.name), ...(who.kind === "guest" && ip ? [ipBan(ip)] : [])];
   return (await db.$count(roomBans, and(eq(roomBans.roomId, roomId), inArray(roomBans.memberKey, keys)))) > 0;
 }
 
 /**
- * SALLE-07 : un invité expulsé obtient sans peine une nouvelle session (POST /api/guest) ; son pseudonyme, lui, est
- * banni aussi (une ligne « name:<pseudonyme en minuscules> » dans room_bans), et un compte ne revient pas en invité
- * sous son nom. Limite : sous un autre pseudonyme, rien ne le reconnaît (pas de bannissement par IP).
+ * SALLE-07 : un invité expulsé obtient sans peine une nouvelle session (POST /api/guest). Son pseudonyme est donc
+ * banni aussi (une ligne « name:<pseudonyme en minuscules> » dans room_bans), ainsi que l'IP d'entrée de la personne
+ * expulsée (« ip:<adresse> », voir ipBan) : un compte ne revient pas en invité sous son nom, et personne ne revient
+ * en invité depuis la même adresse sous un autre pseudonyme.
  */
 const nameBan = (name: string) => `name:${name.toLowerCase()}`;
+
+/**
+ * Choix : le bannissement par IP ne touche que les invités. Un compte n'en dépend pas (il est reconnu par sa clé), et
+ * un réseau partagé (école, NAT) ne bloque pas les comptes de ses voisins. IP inconnue : pas de bannissement par IP.
+ */
+const ipBan = (ip: string) => `ip:${ip}`;
 
 /** SALLE-06 : le code du salon dont cette personne est membre, s'il y en a un (au plus un, par la contrainte en base). */
 async function currentRoomOf(db: Db, key: string): Promise<string | null> {
@@ -244,7 +251,7 @@ export async function readRoom(db: Db, code: string, who: Identity): Promise<Roo
   });
   if (!member) {
     // SALLE-07 : la page d'un expulsé le lui dit ; il connaissait déjà le salon, rien n'est révélé (SALLE-10)
-    if (room.status !== "closed" && (await isKicked(db, room.id, key, who.name))) throw new RoomRefused("kicked");
+    if (room.status !== "closed" && (await isKicked(db, who, room.id, key, null))) throw new RoomRefused("kicked");
     throw new RoomRefused("not_found"); // SALLE-10 : un non-membre ne sait pas si le salon existe
   }
   return { room: await roomView(db, room.id, key), you: key };
@@ -343,7 +350,7 @@ export async function joinRoom(db: Db, who: Identity, via: JoinVia, ip: string |
     // et il retrouve son salon par son code même si l'hôte l'a rendu privé (SALLE-03)
     const isMember = !!(await membership(tx, id, key));
     // SALLE-07 : un expulsé ne revient pas, ni par code ni par lien, quel que soit le rôle demandé
-    if (!isMember && (await isKicked(tx, id, key, who.name))) throw new RoomRefused("kicked");
+    if (!isMember && (await isKicked(tx, who, id, key, ip))) throw new RoomRefused("kicked");
     // SALLE-04 : le lien doit être libre, ou déjà lié à cette personne et à cette IP ; une entrée refusée plus bas
     // annule la transaction, et le lien reste libre
     if ("invite" in via) await claimInvite(tx, id, via.invite, who, ip, isMember);
@@ -357,7 +364,7 @@ export async function joinRoom(db: Db, who: Identity, via: JoinVia, ip: string |
     const taken = (await tx.select({ seat: roomMembers.seat }).from(roomMembers).where(eq(roomMembers.roomId, id))).map((m) => m.seat);
     const identity = who.kind === "account" ? { playerId: who.playerId } : { guestName: who.name };
     const role = via.role ?? "player";
-    await tx.insert(roomMembers).values({ roomId: id, memberKey: key, ...identity, role, ...placeFor(role, taken, room.guests) });
+    await tx.insert(roomMembers).values({ roomId: id, memberKey: key, ...identity, role, ...placeFor(role, taken, room.guests), ip });
   });
   await entered.catch((error: unknown) => refuseSecondRoom(db, key, error));
   return { room: await roomView(db, id, key), you: key };
@@ -516,11 +523,12 @@ export async function kickMember(db: Db, code: string, who: Identity, target: st
     if (!(await membership(tx, id, key))) throw new RoomRefused("not_found"); // SALLE-10 : un non-membre ne sait pas si le salon existe
     if (key !== memberKey({ playerId: room.hostId })) throw new RoomRefused("not_host");
     if (target === key) throw new RoomRefused("invalid_target");
-    const [removed] = await tx.delete(roomMembers).where(and(eq(roomMembers.roomId, id), eq(roomMembers.memberKey, target))).returning({ playerId: roomMembers.playerId, guestName: roomMembers.guestName });
+    const [removed] = await tx.delete(roomMembers).where(and(eq(roomMembers.roomId, id), eq(roomMembers.memberKey, target))).returning({ playerId: roomMembers.playerId, guestName: roomMembers.guestName, ip: roomMembers.ip });
     if (!removed) throw new RoomRefused("unknown_member");
     const [account] = removed.playerId === null ? [] : await tx.select({ name: players.name }).from(players).where(eq(players.id, removed.playerId));
     const name = removed.guestName ?? account?.name;
-    await tx.insert(roomBans).values([{ roomId: id, memberKey: target }, ...(name ? [{ roomId: id, memberKey: nameBan(name) }] : [])]).onConflictDoNothing();
+    const bans = [target, ...(name ? [nameBan(name)] : []), ...(removed.ip ? [ipBan(removed.ip)] : [])];
+    await tx.insert(roomBans).values(bans.map((memberKey) => ({ roomId: id, memberKey }))).onConflictDoNothing();
     // SALLE-04 : son lien d'invitation personnel est révoqué dans la même transaction. room_bans suffit déjà à le
     // refuser à l'entrée, quel que soit le lien ; la révocation retire le jeton et l'hôte le voit « révoqué ».
     await revokeInvitesOf(tx, id, target);
