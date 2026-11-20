@@ -3,7 +3,8 @@ import type { Player, Room } from "../../room/room";
 import { COUNTDOWN_MS } from "../../../rooms/race-clock";
 import { countdownAt, GO_MS, nextChangeIn } from "../countdown";
 import type { BonusEffect } from "../../../rooms/bonus-effects";
-import { applyBonus, applyRemoteBonus, applyServerText } from "../bonus";
+import type { BotBonus } from "../../../rooms/bot-engine";
+import { applyBonus, applyBotBonus, applyRemoteBonus, applyServerText } from "../bonus";
 import { advanceBots, applyInput, applyRemote, endRace, everyoneDone, startRace, TICK_MS, type Race } from "../race";
 import { keepsSnapshot, loadSnapshot, markSent, mountRace, restoreSnapshot, resumeRace, saveSnapshot, wasSent, type RaceSnapshot, type ServerStanding } from "../resume";
 
@@ -14,6 +15,7 @@ export const AFTER_LAST_ARRIVAL_MS = 3000; // le temps du dernier repas
 export const RESULTS_DELAY_MS = 800;
 
 type RemoteBonus = { lane: number; effect: BonusEffect };
+type LaneBotBonus = { lane: number; bonus: BotBonus };
 
 type Action =
   | { type: "count"; value: number | null }
@@ -23,7 +25,7 @@ type Action =
   | { type: "remote"; updates: { lane: number; progress: number; wpm: number }[]; now: number }
   | { type: "resume"; standing: ServerStanding; startsAt: number; snapshot: RaceSnapshot | null }
   | { type: "restore"; snapshot: RaceSnapshot | null }
-  | { type: "bonus"; effects: BonusEffect[]; remote: RemoteBonus[]; now: number }
+  | { type: "bonus"; effects: BonusEffect[]; remote: RemoteBonus[]; bots: LaneBotBonus[]; now: number }
   | { type: "text"; words: string[] }
   | { type: "finish" };
 
@@ -40,9 +42,13 @@ function reduce(race: Race, action: Action): Race {
     case "remote":
       return race.phase === "racing" ? action.updates.reduce((next, { lane, ...update }) => applyRemote(next, lane, update, action.now), race) : race;
     case "bonus":
-      return action.remote.reduce(
-        (next, { lane, effect }) => (next.phase === "racing" ? applyRemoteBonus(next, lane, effect) : next),
-        action.effects.reduce((next, effect) => applyBonus(next, effect, action.now), race),
+      // BOT-04 : un bonus sur un bot est rejoué par le moteur dans son couloir
+      return action.bots.reduce(
+        (next, { lane, bonus }) => applyBotBonus(next, lane, bonus),
+        action.remote.reduce(
+          (next, { lane, effect }) => (next.phase === "racing" ? applyRemoteBonus(next, lane, effect) : next),
+          action.effects.reduce((next, effect) => applyBonus(next, effect, action.now), race),
+        ),
       );
     case "text":
       return applyServerText(race, action.words);
@@ -66,6 +72,8 @@ export type RaceTiming = {
   endsAt?: number | null;
   /** Heure du serveur − heure du navigateur (src/views/game/countdown.ts). */
   clockOffset?: number;
+  /** BOT-04 : les bonus déjà reçus par les bots de la course (vue du salon), rejoués au montage. */
+  botBonuses?: readonly BotBonus[];
 };
 
 /**
@@ -74,7 +82,7 @@ export type RaceTiming = {
  * (Date.now() + décalage) : tous les membres partent ensemble, et qui arrive en plein décompte voit le bon chiffre.
  * Le minuteur et la fin suivent endsAt (durée = endsAt − startsAt). Toute la course compte en heure du serveur.
  */
-export function useRace(room: Room, players: Player[], { passage = null, seed = null, startsAt = null, endsAt = null, clockOffset = 0 }: RaceTiming = {}) {
+export function useRace(room: Room, players: Player[], { passage = null, seed = null, startsAt = null, endsAt = null, clockOffset = 0, botBonuses = [] }: RaceTiming = {}) {
   const offset = useRef(clockOffset);
   useEffect(() => {
     offset.current = clockOffset;
@@ -84,7 +92,7 @@ export function useRace(room: Room, players: Player[], { passage = null, seed = 
   const [start] = useState(() => startsAt ?? Date.now() + clockOffset + COUNTDOWN_MS);
   // dès le premier affichage : le bon chiffre pour qui arrive ou recharge en plein décompte, la course pour qui arrive après
   // COURSE-08 : bots de la graine de la course, avancés jusqu'à maintenant (src/views/game/resume.ts)
-  const [race, dispatch] = useReducer(reduce, null, () => mountRace(room, players, { passage, seed, startsAt, endsAt, start, now: Date.now() + clockOffset }));
+  const [race, dispatch] = useReducer(reduce, null, () => mountRace(room, players, { passage, seed, startsAt, endsAt, botBonuses, start, now: Date.now() + clockOffset }));
   const [showResults, setShowResults] = useState(false);
   const { phase } = race;
   const allDone = everyoneDone(race);
@@ -130,9 +138,12 @@ export function useRace(room: Room, players: Player[], { passage = null, seed = 
   const onRemote = useMemo(() => (updates: { lane: number; progress: number; wpm: number }[]) => {
     if (updates.length) dispatch({ type: "remote", updates, now: serverNow() });
   }, [serverNow]);
-  /** BONUS-02 : les effets des bonus qui me ciblent ; BONUS-03 : ceux qui changent le texte des autres humains (src/views/game/bonus.ts). */
-  const onBonus = useMemo(() => (effects: BonusEffect[], remote: RemoteBonus[] = []) => {
-    if (effects.length || remote.length) dispatch({ type: "bonus", effects, remote, now: serverNow() });
+  /**
+   * BONUS-02 : les effets des bonus qui me ciblent ; BONUS-03 : ceux qui changent le texte des autres humains ; BOT-04 :
+   * ceux qui visent un bot (src/views/game/bonus.ts).
+   */
+  const onBonus = useMemo(() => (effects: BonusEffect[], remote: RemoteBonus[] = [], bots: LaneBotBonus[] = []) => {
+    if (effects.length || remote.length || bots.length) dispatch({ type: "bonus", effects, remote, bots, now: serverNow() });
   }, [serverNow]);
   /** BONUS-04 : mon texte tel que le serveur le garde, reçu en rejoignant la salle (page reprise sans instantané). */
   const onServerText = useMemo(() => (words: string[]) => dispatch({ type: "text", words }), []);

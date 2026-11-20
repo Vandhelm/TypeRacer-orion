@@ -16,7 +16,7 @@ import { useBonusAnnouncements } from "./hooks/useBonusAnnouncements";
 import { useRace } from "./hooks/useRace";
 import { BonusNotice } from "./BonusNotice";
 import { AbandonRace } from "./AbandonRace";
-import { bonusesFor, remoteBonuses } from "./bonus";
+import { bonusesFor, botBonusesFor, remoteBonuses } from "./bonus";
 import { abandonOver, canAbandon, handOverPlayers, raceExit } from "./abandon";
 import { KeyboardNotice } from "./KeyboardNotice";
 import { useMobileRace } from "./mobileRace";
@@ -82,13 +82,13 @@ export function GameScreen({ state, mobile, onHandOver }: { state: RoomState; mo
 /** One lane per player and the shared text. It hands over to the podium at the end. COURSE-05: a spectator watches, without typing panel. */
 function GameRace({ state, onHandOver }: { state: RoomState; onHandOver?: (sending: boolean) => void }) {
   const { t } = useTranslation();
-  const { room, displayName, finish, leave, passage, seed, startsAt, endsAt, clockOffset } = state;
+  const { room, displayName, finish, leave, passage, seed, startsAt, endsAt, clockOffset, botBonuses } = state;
   const watching = state.role === "spectator";
   // COURSE-05 : les couloirs sont figés au départ ; un membre qui quitte ensuite ne décale ni noms ni progressions
   const [lanes] = useState(() => raceLanes(state.players, state.members ?? []));
   const { players } = lanes;
   const [images, setImages] = useState<RacePoolImages | null>(null);
-  const { race, onInput, onRemote, onBonus, onServerText, onResume, onRestore, onSent, stored, arrivedMidRace, showResults } = useRace(room, players, { passage, seed, startsAt, endsAt, clockOffset });
+  const { race, onInput, onRemote, onBonus, onServerText, onResume, onRestore, onSent, stored, arrivedMidRace, showResults } = useRace(room, players, { passage, seed, startsAt, endsAt, clockOffset, botBonuses });
   // COURSE-07 : abandon enregistré par le serveur ; la progression ne part plus et la page passe au podium
   const [abandoned, setAbandoned] = useState(false);
   // COURSE-08 : remontée après un abandon ou après la fin, la page enregistre ce qu'elle gardait, ou va au podium
@@ -145,7 +145,8 @@ function GameRace({ state, onHandOver }: { state: RoomState; onHandOver?: (sendi
     const effects = watching ? [] : bonusesFor(live?.bonuses, from, you);
     appliedBonuses.current = announced;
     // BONUS-03 : la piste suit aussi le texte changé d'un autre humain (le meneur à +3 mots recule)
-    onBonus(effects, remoteBonuses(live?.bonuses, from, lanes, watching ? null : you));
+    // BOT-04 : pour tous (spectateurs compris), le couloir d'un bot rejoue les bonus qui le visent
+    onBonus(effects, remoteBonuses(live?.bonuses, from, lanes, watching ? null : you), botBonusesFor(live?.bonuses, from, lanes));
   }, [live, watching, onBonus, lanes]);
   // BONUS-03 : chaque bonus est annoncé sur la piste, pour tous, et au joueur qu'il cible
   const announcements = useBonusAnnouncements(live?.bonuses, lanes, watching ? null : (live?.you?.id ?? null));

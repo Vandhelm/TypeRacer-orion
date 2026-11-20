@@ -1,10 +1,25 @@
 // BONUS-02 : la page de course applique l'effet des bonus qui la ciblent, annoncés par le serveur (message `bonus`).
 // Les types et leurs règles : src/rooms/bonus-effects.ts. Le texte changé est le mien seulement (`race.mine`) : les
 // bots et les autres couloirs gardent celui de la course. BONUS-03 (annonce sur la piste) lira la même liste de bonus.
+// BOT-04 : un effet sur un bot (`bot:<nom>`, daté par le serveur) est rejoué par le moteur dans son couloir (replayBot).
 import type { ServerBonus } from "../../realtime/client";
+import type { BotBonus } from "../../rooms/bot-engine";
 import { editWords, wordsDone, type BonusEffect } from "../../rooms/bonus-effects";
-import { createCourse, myCourse, type Race } from "./race";
-import { realtimeMemberKey, type RaceLanes } from "./track";
+import { botNameOf } from "../../rooms/bots";
+import { createCourse, myCourse, replayBot, type Race } from "./race";
+import { laneOfRunner, realtimeMemberKey, type RaceLanes } from "./track";
+
+/** BOT-04 : les effets datés des bonus annoncés après les `applied` premiers qui visent un bot de la piste, avec son couloir. */
+export function botBonusesFor(bonuses: readonly ServerBonus[] | undefined, applied: number, lanes: RaceLanes): { lane: number; bonus: BotBonus }[] {
+  return (bonuses ?? []).slice(applied).flatMap(({ effect, at }) => {
+    if (!effect || at === undefined || botNameOf(effect.target) === null) return [];
+    const lane = laneOfRunner(effect.target, lanes);
+    return lane < 0 ? [] : [{ lane, bonus: { at, effect } }];
+  });
+}
+
+/** BOT-04 : le bot de ce couloir reçoit ce bonus : le moteur rejoue sa course avec lui, comme le serveur. */
+export const applyBotBonus = (race: Race, lane: number, bonus: BotBonus): Race => replayBot(race, lane, bonus);
 
 /** Les effets à appliquer ici : ceux des bonus annoncés après les `applied` premiers, qui ciblent `me`. */
 export function bonusesFor(bonuses: readonly ServerBonus[] | undefined, applied: number, me: string | null): BonusEffect[] {

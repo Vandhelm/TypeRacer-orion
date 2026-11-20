@@ -2,7 +2,8 @@
 // qu'il envoie en temps réel (applyRemote). Progression déclarée par le client : le serveur autoritaire reste à faire (COURSE-06).
 import { countKey, type KeyCounts } from "../../players/keys";
 import { transition, type RaceEvent, type RaceState } from "../../rooms/race-state";
-import { BOT_ACCURACY_FACTOR, BOT_LEVEL_SPECS, BOT_START, BOT_TICK_MS, botArrived, botErrorChance, botJitter, botPosition, botProfile, botSeed, botStep, botText, levelOfSpeed, type BotProfile, type BotState, type BotText } from "../../rooms/bot-engine";
+import { BOT_ACCURACY_FACTOR, BOT_LEVEL_SPECS, BOT_START, BOT_TICK_MS, botArrived, botBonusTick, botErrorChance, botPosition, botProfile, botSeed, botStep, botText, levelOfSpeed, type BotBonus, type BotProfile, type BotState, type BotText } from "../../rooms/bot-engine";
+import { botRunnerId } from "../../rooms/bots";
 import type { BotAccuracy, BotSpeed, MistakeMode, Player } from "../room/room";
 
 export const CHARS_PER_WORD = 5;
@@ -16,7 +17,7 @@ export type Course = { words: string[]; /** Caractères cumulés (espaces compri
  * BOT-01 à BOT-03 : son profil (niveau, vitesse, précision) et l'état du moteur (caractères, fautes, attente,
  * caractères manqués en mode libre, `out` : éliminé en mode fatal) ; words, sa position en mots.
  */
-export type Bot = { lane: number; name: string; seed: number; tick: number; words: number; keys: KeyCounts; finishedAt: number } & BotProfile & BotState;
+export type Bot = { lane: number; name: string; seed: number; tick: number; words: number; keys: KeyCounts; finishedAt: number; /** BOT-04 : son texte, quand un bonus l'a changé, et ses bonus (datés, rejoués par le moteur). */ text?: BotText; bonuses?: BotBonus[] } & BotProfile & BotState;
 /** COURSE-05 : un adversaire humain, tel qu'il se déclare en temps réel (progression de 0 à 1, MPM courant). */
 export type Remote = {
   lane: number;
@@ -243,43 +244,85 @@ export function applyRemote(race: Race, lane: number, update: { progress: number
  * BOT-05 : sans `jitters`, chaque bot rattrape le moteur jusqu'au tick de `now` (temps depuis le départ, borné à la
  * durée), avec les aléas de sa graine : sa position ne dépend que du temps, pas du rythme des ticks du navigateur, et son
  * arrivée est celle du moteur (départ + ticks), celle que calcule aussi le serveur. `jitters` (un tirage par bot) joue
- * un seul pas avec ces tirages : réservé aux tests.
+ * un seul pas avec ces tirages : réservé aux tests. BOT-04 : chaque bot rejoue ses bonus (botBonusTick), sur son texte.
  */
 export function advanceBots(race: Race, now: number, jitters?: number[]): Race {
   if (race.phase !== "racing") return race;
   const { durationMs } = race.course;
-  const text = botText(race.course.words, race.course.mistakes);
+  const shared = botText(race.course.words, race.course.mistakes);
   const arrivals = [...race.arrivals];
+  const settle = settler(shared, arrivals);
   let bots = race.bots;
-  // BOT-03 : un bot éliminé (mode fatal) s'arrête là, sans arrivée ; un bot arrivé prend la place suivante
-  const settle = (moved: Bot, at: number): Bot => {
-    if (moved.out) return { ...moved, finishedAt: at };
-    if (!botArrived(text, moved)) return moved;
-    arrivals.push(moved.lane);
-    return { ...moved, finishedAt: at };
-  };
   if (jitters) {
-    bots = bots.map((bot, i) => (bot.finishedAt ? bot : settle(botTick(race, text, bot, jitters[i] ?? 0.5), now)));
+    bots = bots.map((bot, i) => (bot.finishedAt ? bot : settle(botMove(race, bot, bot.text ?? shared, botStep(bot.text ?? shared, bot, bot, jitters[i] ?? 0.5)), now)));
   } else {
-    // tick par tick, tous les bots à la fois : deux arrivées rattrapées d'un coup restent dans leur ordre
-    const target = Math.floor(capped(race, now - race.startedAt) / TICK_MS);
-    for (let tick = Math.min(...bots.map((bot) => bot.tick)) + 1; tick <= target; tick++) {
-      bots = bots.map((bot) => (bot.finishedAt || bot.tick >= tick ? bot : settle({ ...botTick(race, text, bot, botJitter(bot.seed, tick)), tick }, race.startedAt + tick * TICK_MS)));
-    }
+    bots = catchUp(race, bots, shared, Math.floor(capped(race, now - race.startedAt) / TICK_MS), settle);
   }
   const ticked: Race = { ...race, bots, arrivals, now };
   const moved = durationMs !== null && now - race.startedAt >= durationMs ? endRace(ticked) : ticked;
   return { ...moved, samples: recordSamples(moved) };
 }
 
+/** BOT-03 : un bot éliminé (mode fatal) s'arrête là, sans arrivée ; un bot arrivé prend la place suivante (`arrivals`). */
+function settler(shared: BotText, arrivals: number[]) {
+  return (moved: Bot, at: number): Bot => {
+    if (moved.out) return { ...moved, finishedAt: at };
+    if (!botArrived(moved.text ?? shared, moved)) return moved;
+    arrivals.push(moved.lane);
+    return { ...moved, finishedAt: at };
+  };
+}
+
+/** Tick par tick jusqu'à `target`, tous les bots à la fois : deux arrivées rattrapées d'un coup restent dans leur ordre. */
+function catchUp(race: Race, bots: Bot[], shared: BotText, target: number, settle: (bot: Bot, at: number) => Bot): Bot[] {
+  let moved = bots;
+  for (let tick = Math.min(...moved.map((bot) => bot.tick)) + 1; tick <= target; tick++) {
+    moved = moved.map((bot) => {
+      if (bot.finishedAt || bot.tick >= tick) return bot;
+      const next = botBonusTick(bot.text ?? shared, bot, bot, tick, bot.bonuses ?? []);
+      return settle({ ...botMove(race, bot, next.text, next.state), tick }, race.startedAt + tick * TICK_MS);
+    });
+  }
+  return moved;
+}
+
 /**
  * Un pas du moteur pour ce bot : ses caractères, frappes et fautes viennent du moteur (BOT-03). Ses touches suivent le
  * texte qu'il dépasse, avec des fautes réparties selon sa précision, plus nombreuses sur les touches difficiles.
+ * BOT-04 : `text`, son texte après ce pas ; changé par un bonus, il est gardé sur le bot.
  */
-function botTick(race: Race, text: BotText, bot: Bot, jitter: number): Bot {
-  const state = botStep(text, bot, bot, jitter);
-  const keys = botKeys(race, bot, bot.chars, state.chars - bot.chars);
-  return { ...bot, ...state, words: botPosition(text, state.chars), keys };
+function botMove(race: Race, bot: Bot, text: BotText, state: BotState): Bot {
+  const keys = botKeys(race, bot, text.words, bot.chars, state.chars - bot.chars);
+  return { ...bot, ...state, words: botPosition(text, state.chars), keys, ...(text.words === race.course.words ? {} : { text }) };
+}
+
+/** Par heure, et à heure égale dans l'ordre reçu : l'ordre où le serveur les a décidés. */
+const sortBonuses = (list: readonly BotBonus[]) => [...list].sort((a, b) => a.at - b.at);
+
+/**
+ * BOT-04 : les bonus gardés par le serveur pour les bots (vue du salon), donnés à chaque bot avant de le faire courir :
+ * une page montée en pleine course rejoue ainsi les effets déjà reçus.
+ */
+export function withBotBonuses(race: Race, bonuses: readonly BotBonus[]): Race {
+  if (!bonuses.length) return race;
+  return { ...race, bots: race.bots.map((bot) => ({ ...bot, bonuses: sortBonuses(bonuses.filter((bonus) => bonus.effect.target === botRunnerId(bot.name))) })) };
+}
+
+const sameBonus = (a: BotBonus, b: BotBonus) => a.at === b.at && JSON.stringify(a.effect) === JSON.stringify(b.effect);
+
+/**
+ * BOT-04 : un bonus reçu en direct par le bot de ce couloir. Il est daté d'avant le dernier tick de la page (message en
+ * vol) : le bot repart du départ et rejoue toute sa course avec ses bonus, jusqu'à ce tick. Un bonus déjà connu, ou reçu
+ * hors course, ne change rien.
+ */
+export function replayBot(race: Race, lane: number, bonus: BotBonus): Race {
+  const bot = race.bots.find((candidate) => candidate.lane === lane);
+  if (race.phase !== "racing" || !bot || (bot.bonuses ?? []).some((known) => sameBonus(known, bonus))) return race;
+  const reset: Bot = { ...bot, ...BOT_START, tick: 0, words: 0, keys: {}, finishedAt: 0, text: undefined, bonuses: sortBonuses([...(bot.bonuses ?? []), bonus]) };
+  const shared = botText(race.course.words, race.course.mistakes);
+  const arrivals = race.arrivals.filter((candidate) => candidate !== lane);
+  const [replayed] = catchUp(race, [reset], shared, Math.floor(capped(race, race.now - race.startedAt) / TICK_MS), settler(shared, arrivals));
+  return { ...race, bots: race.bots.map((candidate) => (candidate === bot ? replayed! : candidate)), arrivals };
 }
 
 /**
@@ -287,8 +330,8 @@ function botTick(race: Race, text: BotText, bot: Bot, jitter: number): Bot {
  * du moteur (botErrorChance, plus forte sur les touches difficiles). Le total des fautes des touches suit donc
  * `bot.errors` ; en mode « corriger », la touche est aussi retapée.
  */
-function botKeys(race: Race, bot: Bot, from: number, gained: number): KeyCounts {
-  const text = race.course.words.join(" ") + " ";
+function botKeys(race: Race, bot: Bot, words: readonly string[], from: number, gained: number): KeyCounts {
+  const text = words.join(" ") + " ";
   const { mistakes } = race.course;
   let counts = bot.keys;
   for (let i = Math.floor(from); i < Math.floor(from + gained) && i < text.length; i++) {
@@ -302,8 +345,11 @@ function myValidChars(race: Race) {
   return Math.max(0, myCourse(race).marks[race.wordIndex]! - race.missedChars);
 }
 
-function botChars(race: Race, bot: Pick<Bot, "words">) {
-  const { marks } = race.course;
+/** BOT-04 : les caractères cumulés du texte d'un bot, celui de la course sauf si un bonus l'a changé. */
+const botMarks = (race: Race, bot: Pick<Bot, "text">) => bot.text?.marks ?? race.course.marks;
+
+function botChars(race: Race, bot: Pick<Bot, "words" | "text">) {
+  const marks = botMarks(race, bot);
   const whole = Math.floor(bot.words);
   const start = marks[whole] ?? 0;
   const next = marks[whole + 1];
@@ -393,7 +439,7 @@ export function laneWpm(race: Race, lane: number) {
   const bot = race.bots.find((candidate) => candidate.lane === lane);
   const minutes = laneElapsedMs(race, lane) / 60000;
   // BOT-03 : en mode libre, les mots laissés faux ne comptent pas (annexe A, caractères justes)
-  return bot && minutes > 0.02 ? Math.round(Math.max(0, (race.course.marks[Math.floor(bot.words)] ?? 0) - bot.missed) / CHARS_PER_WORD / minutes) : 0;
+  return bot && minutes > 0.02 ? Math.round(Math.max(0, (botMarks(race, bot)[Math.floor(bot.words)] ?? 0) - bot.missed) / CHARS_PER_WORD / minutes) : 0;
 }
 
 /** Part du texte faite dans ce couloir, de 0 à 1. */
@@ -401,6 +447,6 @@ export function laneProgress(race: Race, lane: number) {
   const remote = race.remotes.find((candidate) => candidate.lane === lane);
   if (remote) return remote.progress;
   if (lane === race.myLane) return progressReport(race).progress;
-  const words = race.bots.find((bot) => bot.lane === lane)?.words ?? 0;
-  return Math.min(1, words / race.course.words.length);
+  const bot = race.bots.find((candidate) => candidate.lane === lane);
+  return Math.min(1, (bot?.words ?? 0) / (bot?.text?.words.length ?? race.course.words.length));
 }

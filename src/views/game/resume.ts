@@ -12,21 +12,23 @@ import { seededRandom } from "../../rooms/text";
 import type { Player, Room } from "../room/room";
 import { countdownAt, raceDurationSeconds } from "./countdown";
 import { buildWords } from "./course";
-import { advanceBots, createCourse, createRace, myCourse, startRace, TICK_MS, type Phase, type Race } from "./race";
+import type { BotBonus } from "../../rooms/bot-engine";
+import { advanceBots, createCourse, createRace, myCourse, startRace, TICK_MS, withBotBonuses, type Phase, type Race } from "./race";
 
 /**
  * La course telle que la page la monte (useRace) : texte de la graine du serveur, bots de la même graine (BOT-05 : le
  * moteur partagé avec le serveur, src/rooms/bot-engine.ts ; une graine locale seulement sans serveur de salons). Arrivée
  * après le départ (rechargement, retour, retard), la course part de `start` et chaque bot est avancé tick par tick
  * jusqu'à `now` (heure serveur) : il est exactement où il aurait été, comme sur les autres pages du salon.
+ * BOT-04 : `botBonuses`, les bonus déjà reçus par les bots (vue du salon), rejoués en chemin.
  */
 export function mountRace(
   room: Room,
   players: Player[],
-  { passage = null, seed = null, startsAt = null, endsAt = null, now, start = startsAt ?? now + COUNTDOWN_MS }: { passage?: string | null; seed?: number | null; startsAt?: number | null; endsAt?: number | null; now: number; start?: number },
+  { passage = null, seed = null, startsAt = null, endsAt = null, botBonuses = [], now, start = startsAt ?? now + COUNTDOWN_MS }: { passage?: string | null; seed?: number | null; startsAt?: number | null; endsAt?: number | null; botBonuses?: readonly BotBonus[]; now: number; start?: number },
 ): Race {
   const words = buildWords(room, seed === null ? Math.random : seededRandom(seed), passage);
-  const fresh = createRace(createCourse(words, raceDurationSeconds(startsAt, endsAt, room.duration), room.mistakes), players, room.botSpeed, room.botAccuracy, seed ?? Math.floor(Math.random() * 2 ** 32) | 0);
+  const fresh = withBotBonuses(createRace(createCourse(words, raceDurationSeconds(startsAt, endsAt, room.duration), room.mistakes), players, room.botSpeed, room.botAccuracy, seed ?? Math.floor(Math.random() * 2 ** 32) | 0), botBonuses);
   const { count, started } = countdownAt(start, now);
   if (!started) return { ...fresh, count };
   let race = startRace(fresh, start);
