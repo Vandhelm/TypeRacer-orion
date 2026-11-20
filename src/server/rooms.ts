@@ -5,6 +5,7 @@ import type { z } from "zod";
 import type { Db } from "../../db/client";
 import { players, raceConfigs, roomBans, roomMembers, rooms } from "../../db/schema";
 import { allows, canJoin, newRoomCode } from "../rooms/access";
+import { launchBlocker } from "../rooms/launch";
 import type { RoomFilters } from "../rooms/explorer";
 import { seatColor } from "../rooms/seats";
 import { claimInvite, revokeInvitesOf, roomOfInvite } from "./room-invites";
@@ -98,7 +99,7 @@ export class RoomRefused extends Error {
   }
 }
 /** invite_taken : lien déjà lié à une autre IP ou une autre personne (SALLE-04) ; invite_limit : trop de liens dans ce salon. */
-export type RefusalReason = "not_found" | "not_member" | "not_host" | "full" | "in_race" | "closed" | "already_in_room" | "kicked" | "invalid_target" | "unknown_member" | "invite_taken" | "invite_limit";
+export type RefusalReason = "not_found" | "not_member" | "not_host" | "full" | "in_race" | "closed" | "already_in_room" | "kicked" | "invalid_target" | "unknown_member" | "invite_taken" | "invite_limit" | "not_enough_players";
 
 /** SALLE-07 : cette personne a été expulsée de ce salon. L'IP compte pour un invité et pour un compte plus récent que le bannissement (voir ipBan). */
 async function isKicked(db: Db, who: Identity, roomId: number, key: string, ip: string | null): Promise<boolean> {
@@ -401,12 +402,14 @@ export async function launchRoom(db: Db, code: string, who: Identity): Promise<R
   const key = memberKey(who);
   await db.transaction(async (tx) => {
     await sweep(tx, id, key);
-    const [room] = await tx.select({ status: rooms.status, hostId: rooms.hostId }).from(rooms).where(eq(rooms.id, id)).for("update");
+    const [room] = await tx.select({ status: rooms.status, hostId: rooms.hostId, guests: rooms.guests, bots: rooms.bots }).from(rooms).where(eq(rooms.id, id)).for("update");
     if (!room) throw new RoomRefused("not_found");
     if (!(await membership(tx, id, key))) throw new RoomRefused("not_found"); // SALLE-10 : un non-membre ne sait pas si le salon existe
     if (key !== memberKey({ playerId: room.hostId })) throw new RoomRefused("not_host");
     if (room.status === "closed") throw new RoomRefused("not_found");
     if (!canJoin(room.status)) throw new RoomRefused("in_race");
+    // COURSE-02 : les membres et les réglages lus sous le verrou, jamais le corps de la requête
+    if (launchBlocker(room, await tx.select({ role: roomMembers.role }).from(roomMembers).where(eq(roomMembers.roomId, id)))) throw new RoomRefused("not_enough_players");
     await tx.update(rooms).set({ status: "racing", launchedAt: sql`now()` }).where(eq(rooms.id, id));
     await tx.update(roomMembers).set({ finishedAt: null }).where(eq(roomMembers.roomId, id));
   });
