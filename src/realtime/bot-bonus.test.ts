@@ -51,11 +51,13 @@ const bonuses = (tab: Tab) => tab.messages.filter((m): m is Bonus => m.type === 
 
 /**
  * Un humain (Alpha) avec un bot, et `others` d'autres humains ; `kept` : les effets que le serveur garde en base pour
- * les bots ; `eliminated` : les coureurs dont la base a noté l'élimination. `restart` : un nouveau serveur, même base.
+ * les bots ; `passed` : les points de contrôle franchis gardés ; `eliminated` : les coureurs dont la base a noté
+ * l'élimination. `restart` : un nouveau serveur, même base.
  */
 async function race(course: Partial<RaceCourse> & { words: string[] }, sinceStartMs: number, others: Player[] = []) {
   const alpha = player("Alpha");
   const kept: { startsAt: number; bonus: BotBonus }[] = [];
+  let passed = 0;
   const eliminated: string[] = [];
   const listeners: ((code: string) => void)[] = [];
   const full: RaceCourse = { startsAt: Date.now() - sinceStartMs, endsAt: null, marks: marksOf(course.words), runners: [alpha.id, ...others.map((o) => o.id)], catchUpBonus: true, mistakes: "fix", ...course };
@@ -68,11 +70,12 @@ async function race(course: Partial<RaceCourse> & { words: string[] }, sinceStar
       listeners.push(listener);
       return () => undefined;
     },
-    // relue comme en base : une copie à chaque lecture
-    course: async () => ({ ...full }),
+    // relue comme en base : une copie à chaque lecture, avec les effets gardés pour les bots
+    course: async () => ({ ...full, ...(passed ? { checkpoints: passed } : {}), botBonuses: [...(full.botBonuses ?? []), ...kept.map((k) => k.bonus)] }),
     progress: async () => false,
     botBonus: async (_code, startsAt, bonus) => void kept.push({ startsAt, bonus }),
     eliminated: async (_code, _startsAt, key) => (eliminated.push(key), true),
+    checkpoints: async (_code, _startsAt, count) => void (passed = Math.max(passed, count)),
   };
   server = createRealtimeServer({ port: 0, hostname: "127.0.0.1", secret: SECRET, rooms: backend });
   const enter = async (p: Player) => {
@@ -218,6 +221,36 @@ describe("COURSE-06 — an eliminated human is out of the catch-up bonuses, like
     await Bun.sleep(100);
     expect(bonuses(tab).length).toBeGreaterThan(0);
     expect(bonuses(tab).every((b) => b.playerId !== beta.id && b.effect?.target !== beta.id)).toBe(true);
+  });
+});
+
+describe("BONUS-01 / BOT-04 — a restarted realtime server rebuilds the bonuses of the bots from the database", () => {
+  test("the checkpoints a leading bot already passed give no bonus again", async () => {
+    const { tab, restart, enter } = await race({ words: WORDS, bots: [raceBot("impossible")], seed: 1 }, 30_000);
+    await step(tab, 0.05);
+    await tab.until(() => bonuses(tab).length >= 2);
+    expect(bonuses(tab).map((b) => b.checkpoint)).toEqual([1, 2]);
+    // en pleine course : la progression d'Alpha n'est pas encore en base, le bot meneur est rejoué par le moteur
+    await restart();
+    const again = await enter(player("Alpha"));
+    await step(again, 0.06);
+    await Bun.sleep(100);
+    expect(bonuses(again)).toEqual([]);
+  });
+
+  test("a bot never gets a 4th bonus: its count is read back from the kept bonuses", async () => {
+    const words = Array.from({ length: 20 }, () => "a");
+    const { tab, kept, restart, enter } = await race({ words, bots: [raceBot("noob")], seed: 3 }, 3_000);
+    for (const p of [0.3, 0.6]) await step(tab, p);
+    await tab.until(() => bonuses(tab).filter((b) => b.playerId === BOT_ID).length >= 2);
+    // graine 3 : au point 2, le bot reçoit « +3 mots » sur Alpha : un bonus du bot gardé, même sans effet sur un bot
+    expect(kept.filter((k) => k.bonus.from === BOT_ID)).toHaveLength(2);
+    await restart();
+    const again = await enter(player("Alpha"));
+    for (const p of [0.3, 0.6, 0.8, 1]) await step(again, p);
+    await Bun.sleep(150);
+    const got = [...bonuses(tab), ...bonuses(again)].filter((b) => b.playerId === BOT_ID);
+    expect(got.map((b) => b.count)).toEqual([1, 2, 3]);
   });
 });
 

@@ -255,9 +255,11 @@ export function botStep(text: BotText, state: BotState, bot: BotProfile & { seed
  * BOT-04 : un effet de bonus reçu par un bot, daté de `at` (ms depuis le départ, heure du serveur temps réel qui l'a
  * décidé). Il s'applique après le tick où tombe `at` (floor(at / BOT_TICK_MS)), sur l'état du bot à cet instant : celui
  * que le serveur a vu en le décidant. `seq` : son rang dans les effets de la course sur les bots (0, 1, 2…), donné par
- * le serveur temps réel ; deux effets au même `at` s'appliquent dans cet ordre partout (orderBotBonuses).
+ * le serveur temps réel ; deux effets au même `at` s'appliquent dans cet ordre partout (orderBotBonuses). `from` : le bot
+ * qui a reçu ce bonus, quand c'en est un (son effet peut viser un autre coureur, même humain) ; un serveur redémarré et le
+ * podium en relisent le compte. Le moteur ne rejoue que les effets dont la cible est le bot (filtrés par l'appelant).
  */
-export type BotBonus = { at: number; seq?: number; effect: BonusEffect };
+export type BotBonus = { at: number; seq?: number; from?: string; effect: BonusEffect };
 
 /** BOT-04 : les effets dans l'ordre où le serveur les a décidés, (at, seq) ; sans seq (gardés avant lui), l'ordre reçu. */
 export const orderBotBonuses = <T extends BotBonus>(list: readonly T[]): T[] => [...list].sort((a, b) => a.at - b.at || (a.seq ?? 0) - (b.seq ?? 0));

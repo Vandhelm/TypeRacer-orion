@@ -76,10 +76,16 @@ export const rooms = pgTable(
     abandons: jsonb("abandons").$type<RoomAbandon[]>().notNull().default([]),
     /** COURSE-10 : les coureurs partis du salon pendant la dernière course sans abandonner (progression validée, arrivée) ; vidé au lancement. */
     departed: jsonb("departed").$type<RoomDeparture[]>().notNull().default([]),
-    /** BOT-04 : les effets de bonus reçus par les bots pendant la dernière course (datés depuis le départ), dans l'ordre ; vidé au lancement. */
+    /**
+     * BOT-04 : les effets de bonus sur les bots et les bonus reçus par les bots (`from`) pendant la dernière course, datés
+     * depuis le départ et rangés par (at, seq) ; vidé au lancement.
+     */
     botBonuses: jsonb("bot_bonuses").$type<BotBonus[]>().notNull().default([]),
+    /** BONUS-01 : les points de contrôle franchis pendant la dernière course (0 à 3), relus par un temps réel redémarré ; remis à 0 au lancement. */
+    bonusCheckpoints: integer("bonus_checkpoints").notNull().default(0),
   },
   (table) => [index("rooms_lobby").on(table.status, table.visibility), check("rooms_guests_range", sql`${table.guests} between 2 and 30`),
+    check("rooms_bonus_checkpoints_range", sql`${table.bonusCheckpoints} between 0 and 3`),
     check("rooms_bot_list_array", sql`jsonb_typeof(${table.botList}) = 'array' and jsonb_array_length(${table.botList}) <= 30`),
     check("rooms_code_format", sql`${table.code} ~ ${sql.raw(`'${CODE_PATTERN}'`)}`),
   ],

@@ -4,11 +4,11 @@
 // production (room-events.ts), un émetteur en mémoire dans les tests.
 import { eq } from "drizzle-orm";
 import type { Db } from "../../db/client";
-import { roomMembers } from "../../db/schema";
+import { roomMembers, rooms } from "../../db/schema";
 import { botProfile, botSeed, type BotBonus } from "../rooms/bot-engine";
 import { botRunnerId, seatedBots } from "../rooms/bots";
 import { courseWords, textFingerprint } from "../rooms/course-words";
-import { eliminateRunner, keepBonusText, keepBotBonus, keepProgress, leaveAfterDisconnect, readRoom, recordProgress, refreshRoom, RoomRefused, roomIdByCode, roomView, type Identity, type RoomView } from "../server/rooms";
+import { eliminateRunner, keepBonusText, keepBotBonus, keepCheckpoints, keepProgress, leaveAfterDisconnect, readRoom, recordProgress, refreshRoom, RoomRefused, roomIdByCode, roomView, type Identity, type RoomView } from "../server/rooms";
 import type { Player } from "./protocol";
 import type { RaceCourse } from "./referee";
 
@@ -46,6 +46,8 @@ export type RoomBackend = {
   eliminated?(code: string, startsAt: number, key: string, progress: number): Promise<boolean>;
   /** BOT-04 : garde un effet de bonus reçu par un bot, pour la course partie à `startsAt` (fin, classement, pages rechargées). */
   botBonus?(code: string, startsAt: number, bonus: BotBonus): Promise<void>;
+  /** BONUS-01 : garde le nombre de points de contrôle franchis de la course partie à `startsAt`, relu à la reprise. */
+  checkpoints?(code: string, startsAt: number, passed: number): Promise<void>;
 };
 
 /**
@@ -152,7 +154,10 @@ export function createRoomBackend(db: Db, changes: Changes): RoomBackend {
         // COURSE-06 : la progression gardée en base, pour reprendre le classement après le départ de toutes les sockets
         // BONUS-04 : avec le texte changé par un bonus, sur lequel cette progression est comptée
         const rows = await db.select({ key: roomMembers.memberKey, progress: roomMembers.progress, finishedAt: roomMembers.finishedAt, words: roomMembers.bonusWords }).from(roomMembers).where(eq(roomMembers.roomId, id));
-        return { ...course, resume: rows.map((r) => ({ key: r.key, progress: r.progress, finishedAt: r.finishedAt?.getTime() ?? null, ...(r.words?.length ? { words: r.words } : {}) })) };
+        // BONUS-01 : les points de contrôle déjà franchis (un meneur bot ou humain dont la progression n'est pas en base)
+        const [room] = await db.select({ checkpoints: rooms.bonusCheckpoints }).from(rooms).where(eq(rooms.id, id));
+        const passed = room?.checkpoints ? { checkpoints: room.checkpoints } : {};
+        return { ...course, ...passed, resume: rows.map((r) => ({ key: r.key, progress: r.progress, finishedAt: r.finishedAt?.getTime() ?? null, ...(r.words?.length ? { words: r.words } : {}) })) };
       } catch (error) {
         return refused(error);
       }
@@ -162,5 +167,6 @@ export function createRoomBackend(db: Db, changes: Changes): RoomBackend {
     bonusText: (code, startsAt, key, words, progress) => keepBonusText(db, code, startsAt, key, words, progress),
     eliminated: (code, startsAt, key, progress) => eliminateRunner(db, code, startsAt, key, progress),
     botBonus: (code, startsAt, bonus) => keepBotBonus(db, code, startsAt, bonus),
+    checkpoints: (code, startsAt, passed) => keepCheckpoints(db, code, startsAt, passed),
   };
 }

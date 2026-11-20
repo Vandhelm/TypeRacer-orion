@@ -9,7 +9,8 @@ import { courseWords } from "../rooms/course-words";
 import { COUNTDOWN_MS } from "../rooms/race-clock";
 import { launchBots, marksOf, netWpm } from "./bot-course";
 import { roomsFixture } from "./rooms.fixture";
-import { keepBotBonus, type RoomView } from "./rooms";
+import { createRoomBackend } from "../realtime/room-backend";
+import { keepBotBonus, keepCheckpoints, type RoomView } from "./rooms";
 
 type Fixture = Awaited<ReturnType<typeof roomsFixture>>;
 const BOT = "Saba_Sensei";
@@ -101,6 +102,18 @@ describe("BOT-04 — the server keeps the bonuses of a bot and replays them for 
     const after = await launchBots(t.db, id, 1);
     const [moved] = await t.db.select({ at: rooms.launchedAt }).from(rooms).where(eq(rooms.id, id));
     expect(after.standings.get(BOT.toLowerCase())!.finishedAt!.getTime()).toBe(moved!.at!.getTime() + COUNTDOWN_MS + decided.arrivedMs!);
+  });
+
+  test("BONUS-01 — the checkpoints passed are kept for a restarted realtime server, never backward, only for this launch", async () => {
+    const { code, view } = await launched("Bot04_Points", 5_000);
+    const backend = createRoomBackend(t.db, { on: () => () => undefined });
+    expect((await backend.course!(code))!.checkpoints).toBeUndefined();
+    await Promise.all([keepCheckpoints(t.db, code, view.startsAt!, 2), keepCheckpoints(t.db, code, view.startsAt!, 1)]);
+    expect((await backend.course!(code))!.checkpoints).toBe(2);
+    await keepCheckpoints(t.db, code, view.startsAt! + 1, 3);
+    expect((await backend.course!(code))!.checkpoints).toBe(2);
+    await expect(keepCheckpoints(t.db, code, view.startsAt!, 4)).resolves.toBeUndefined();
+    expect((await backend.course!(code))!.checkpoints).toBe(3);
   });
 });
 

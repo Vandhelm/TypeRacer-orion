@@ -7,6 +7,7 @@ import type { Db } from "../../db/client";
 import { players, raceConfigs, roomBans, roomMembers, rooms, user } from "../../db/schema";
 import { storedAvatar } from "../players/avatar";
 import { allows, canJoin, isListed, newRoomCode } from "../rooms/access";
+import { CHECKPOINTS } from "../rooms/bonus";
 import type { BotBonus } from "../rooms/bot-engine";
 import { resolveBots } from "../rooms/bots";
 import { launchBlocker } from "../rooms/launch";
@@ -551,7 +552,7 @@ export async function launchRoom(db: Db, code: string, who: Identity): Promise<R
     const passage = config!.textType === "coherent" ? await pickPassage(tx, { language: config!.language, words: wordTarget(config!) }) : null;
     const textSeed = crypto.getRandomValues(new Int32Array(1))[0]!;
     // COURSE-01 : une relance repasse par EN_ATTENTE (results → waiting → countdown)
-    await moveRoom(tx, id, from, from === "results" ? ["reopen", "launch"] : ["launch"], { launchedAt: sql`now()`, textId: passage?.id ?? null, textSeed, abandons: [], departed: [], botBonuses: [] });
+    await moveRoom(tx, id, from, from === "results" ? ["reopen", "launch"] : ["launch"], { launchedAt: sql`now()`, textId: passage?.id ?? null, textSeed, abandons: [], departed: [], botBonuses: [], bonusCheckpoints: 0 });
     await tx.update(roomMembers).set({ finishedAt: null, abandonedAt: null, eliminatedAt: null, progress: 0, raceRecorded: false, bonusWords: null }).where(eq(roomMembers.roomId, id));
     // COURSE-06 : l'empreinte des mots que la page de course va retirer, vérifiée par le serveur temps réel
     const words = courseWords(await roomView(tx, id));
@@ -956,6 +957,22 @@ export async function keepBotBonus(db: Db, code: string, startsAt: number, bonus
       .update(rooms)
       .set({ botBonuses: sql`(select coalesce(jsonb_agg(e order by (e->>'at')::bigint, coalesce((e->>'seq')::bigint, 0), n), '[]'::jsonb) from jsonb_array_elements(${list}) with ordinality as t(e, n))` })
       .where(eq(rooms.id, id));
+  });
+}
+
+/**
+ * BONUS-01 : garde le nombre de points de contrôle franchis (1 à 3) de la course partie à `startsAt` (rooms.bonus_checkpoints),
+ * jamais en recul : deux écritures dans le désordre gardent la plus grande. Relu par un serveur temps réel redémarré, qui
+ * ne redonne pas les bonus de ces points (même franchis par un bot meneur, dont la progression n'est pas en base).
+ */
+export async function keepCheckpoints(db: Db, code: string, startsAt: number, passed: number): Promise<void> {
+  const id = await roomIdByCode(db, code);
+  if (id === null || !Number.isInteger(passed) || passed < 1) return;
+  const value = Math.min(CHECKPOINTS.length, passed);
+  await db.transaction(async (tx) => {
+    const [room] = await tx.select({ launchedAt: rooms.launchedAt, status: rooms.status }).from(rooms).where(eq(rooms.id, id)).for("update");
+    if (!room?.launchedAt || room.status !== "racing" || room.launchedAt.getTime() + COUNTDOWN_MS !== startsAt) return;
+    await tx.update(rooms).set({ bonusCheckpoints: sql`greatest(${rooms.bonusCheckpoints}, ${value})` }).where(eq(rooms.id, id));
   });
 }
 
