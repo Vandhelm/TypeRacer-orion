@@ -7,6 +7,7 @@ import { username } from "better-auth/plugins";
 import type { Db } from "../../db/client";
 import * as schema from "../../db/schema";
 import { isValidUsername, PASSWORD_MIN, USERNAME_MAX, USERNAME_MIN } from "../accounts/username";
+import { isBotName } from "../players/bots";
 
 const https = (host?: string) => (host ? `https://${host}` : undefined);
 const { VERCEL_ENV, VERCEL_URL, VERCEL_BRANCH_URL, VERCEL_PROJECT_PRODUCTION_URL } = process.env;
@@ -115,6 +116,7 @@ export function createAuth(db: Db, env: Env = process.env) {
             const wanted = String(data.displayUsername || data.username || data.name);
             for (let n = 1; n <= (external ? 50 : 1); n++) {
               const name = withSuffix(wanted, n);
+              if (isBotName(name)) continue; // COURSE-06 : les noms des bots sont réservés au serveur
               const [player] = await db.insert(schema.players).values({ name }).onConflictDoNothing().returning({ id: schema.players.id });
               if (!player) continue;
               const chosen = external && { username: name.toLowerCase(), displayUsername: name, needsUsername: n > 1 };

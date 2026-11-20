@@ -92,6 +92,14 @@ describe("AUTH-02 — /api/guest", () => {
     expect((await handleGuest(post({ nickname: "a".repeat(20) }), env)).status).toBe(200);
   });
 
+  test("COURSE-06 — POST refuses a bot name as a guest nickname, in any case", async () => {
+    for (const nickname of ["Ebi_Fry", "ebi_fry", "THON_ROUGE"]) {
+      const res = await handleGuest(post({ nickname }), env);
+      expect(res.status).toBe(400);
+      expect(res.headers.get("set-cookie")).toBeNull();
+    }
+  });
+
   test("POST refuses nicknames out of the rule, without a cookie", async () => {
     for (const nickname of ["", "ab", "a".repeat(21), " Corail_418", "Corail 418", "Corail-418", "Éloïse", "<script>", "abc\n"]) {
       const res = await handleGuest(post({ nickname }), env);
