@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { ServerBonus } from "../../realtime/client";
 import type { BonusEffect } from "../../rooms/bonus-effects";
 import type { Player } from "../room/room";
-import { activeAnnouncements, ANNOUNCE_MS, announceBonus, mergeAnnouncements, newAnnouncements } from "./announce";
+import { activeAnnouncements, ANNOUNCE_MS, announceBonus, EMPTY_FEED, expireAnnouncements, feedBonuses, mergeAnnouncements, newAnnouncements, nextExpiry } from "./announce";
 import type { RaceLanes } from "./track";
 
 const PLAYERS: Player[] = [
@@ -77,6 +77,36 @@ describe("BONUS-03 — only the bonuses not yet announced are announced, once ea
   test("each announcement has its own key, so the same bonus is never shown twice", () => {
     const keys = newAnnouncements(list, 0, LANES, ME, 0).map((a) => a.key);
     expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  test("the feed of the page: one bonus received gives one announcement", () => {
+    const feed = feedBonuses(EMPTY_FEED, list.slice(0, 1), LANES, ME, 1000);
+    expect(feed.list.map((a) => a.kind)).toEqual(["fewer_words"]);
+    expect(feed.seen).toBe(1);
+    expect(feedBonuses(feed, list.slice(0, 1), LANES, ME, 1100)).toBe(feed);
+  });
+
+  test("the feed: a new connection starts from an empty list, and its next bonus is announced", () => {
+    let feed = feedBonuses(EMPTY_FEED, list.slice(0, 1), LANES, ME, 1000);
+    feed = feedBonuses(feed, [], LANES, ME, 1100);
+    expect(feed.seen).toBe(0);
+    feed = feedBonuses(feed, [list[1]!], LANES, ME, 1200);
+    expect(feed.list.map((a) => a.kind)).toEqual(["fewer_words", "fog"]);
+  });
+
+  test("the feed: the same bonus heard again after a new connection is announced once", () => {
+    let feed = feedBonuses(EMPTY_FEED, list.slice(0, 1), LANES, ME, 1000);
+    feed = feedBonuses(feed, [], LANES, ME, 1100);
+    feed = feedBonuses(feed, list.slice(0, 1), LANES, ME, 1200);
+    expect(feed.list).toHaveLength(1);
+  });
+
+  test("the feed: an announcement leaves after ANNOUNCE_MS, and the next expiry is known", () => {
+    const feed = feedBonuses(EMPTY_FEED, list.slice(0, 1), LANES, ME, 1000);
+    expect(nextExpiry(feed.list)).toBe(1000 + ANNOUNCE_MS);
+    expect(expireAnnouncements(feed, 1000 + ANNOUNCE_MS - 1)).toBe(feed);
+    expect(expireAnnouncements(feed, 1000 + ANNOUNCE_MS).list).toEqual([]);
+    expect(nextExpiry([])).toBeNull();
   });
 
   test("the same bonus received twice (new connection) is shown once; finished announcements leave", () => {

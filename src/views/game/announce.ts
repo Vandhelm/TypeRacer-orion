@@ -60,6 +60,27 @@ export function newAnnouncements(bonuses: readonly ServerBonus[] | undefined, se
 /** Les annonces encore affichées à `now`. */
 export const activeAnnouncements = (list: readonly BonusAnnouncement[], now: number) => list.filter((a) => a.until > now);
 
+/** Ce que la page suit (useBonusAnnouncements) : combien de bonus reçus sont déjà lus, et les annonces affichées. */
+export type AnnouncementFeed = { seen: number; list: BonusAnnouncement[] };
+export const EMPTY_FEED: AnnouncementFeed = { seen: 0, list: [] };
+
+/** Le fil après une nouvelle liste de bonus reçus ; une liste plus courte vient d'une connexion neuve : elle est relue du début. */
+export function feedBonuses(feed: AnnouncementFeed, bonuses: readonly ServerBonus[] | undefined, lanes: RaceLanes, you: string | null, now: number): AnnouncementFeed {
+  const count = bonuses?.length ?? 0;
+  if (count === feed.seen) return feed;
+  const from = count < feed.seen ? 0 : feed.seen;
+  return { seen: count, list: mergeAnnouncements(feed.list, newAnnouncements(bonuses, from, lanes, you, now), now) };
+}
+
+/** Le fil sans les annonces finies à `now` (le même s'il n'y en a pas). */
+export function expireAnnouncements(feed: AnnouncementFeed, now: number): AnnouncementFeed {
+  const list = activeAnnouncements(feed.list, now);
+  return list.length === feed.list.length ? feed : { ...feed, list };
+}
+
+/** L'heure où la prochaine annonce finit, ou null. */
+export const nextExpiry = (list: readonly BonusAnnouncement[]) => (list.length ? Math.min(...list.map((a) => a.until)) : null);
+
 /** Les annonces encore affichées, puis les nouvelles ; un bonus déjà annoncé (même clé) ne l'est pas deux fois. */
 export function mergeAnnouncements(previous: readonly BonusAnnouncement[], fresh: readonly BonusAnnouncement[], now: number): BonusAnnouncement[] {
   const shown = new Set(previous.map((a) => a.key));
