@@ -202,7 +202,7 @@ describe("COURSE-03 — a room page admitted while the room changes never receiv
     rooms.touch(ROOM_A); // l'hôte change un réglage pendant le contrôle : le serveur relit la vue complète
     check.resolve();
     while (!tab.messages.some((m) => m.type === "room")) await Bun.sleep(5);
-    const first = tab.messages.find((m) => m.type === "room") as { room: { settings: { text: string } } };
+    const first = tab.messages.find((m) => m.type === "room") as unknown as { room: { settings: { text: string } } };
     expect(first.room.settings.text).toBe("");
     expect(JSON.stringify(tab.messages)).not.toContain("nori");
   });
