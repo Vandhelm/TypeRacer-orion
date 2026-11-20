@@ -84,6 +84,7 @@ Client vers serveur (validés par `ClientMessage`, champs en trop refusés) :
 | `join` | `room` : code SALLE-02 | Quitte la salle précédente, rejoint celle-ci, diffuse la présence |
 | `leave` | — | Quitte la salle, diffuse la présence |
 | `progress` | `progress` : 0 à 1 (annexe A), `wpm` : 0 à 300 (MPM humain maximal, COURSE-06), `words` (facultatif, BONUS-04) : nombre de mots du texte sur lequel compte la progression, entier de 1 à 10 000 | Diffusé aux autres membres de la salle, limité à 10 par seconde par joueur ; avec `words`, recomptée sur le texte du coureur (voir « Progression et MPM avec les bonus ») |
+| `eliminated` | aucun | COURSE-06, mode fatal : mon coureur est éliminé ; le serveur date l'élimination et gèle sa progression (`room_members.eliminated_at`) |
 
 Serveur vers client (validés par `ServerMessage` côté client) :
 
@@ -94,7 +95,7 @@ Serveur vers client (validés par `ServerMessage` côté client) :
 | `progress` | `playerId`, `progress`, `wpm` | Progression acceptée d'un autre joueur |
 | `standings` | `room`, `startsAt`, `endsAt` (ms epoch, null sans limite), `players` : `{ playerId, rank, progress, wpm, finishedMs, bonuses? }` (`bonuses` : bonus reçus, seulement quand les bonus sont activés, BONUS-01) | COURSE-06 : à l'entrée dans une salle en course, puis au plus 10 fois par seconde, à toute la salle |
 | `bonus` | `room`, `playerId`, `checkpoint` (1 à 3), `count` (ses bonus dans la course, celui-ci compris, 3 au plus) | BONUS-01 : un bonus de remontée attribué par le serveur, à toute la salle |
-| `error` | `code` : `invalid_message`, `not_in_room`, `not_member`, `not_a_runner`, `race_not_started`, `race_over`, `progress_backward`, `progress_jump`, `progress_too_fast` | Message rejeté ; rien n'est diffusé |
+| `error` | `code` : `invalid_message`, `not_in_room`, `not_member`, `not_a_runner`, `race_not_started`, `race_over`, `progress_backward`, `progress_jump`, `progress_too_fast`, `abandoned`, `eliminated` (COURSE-06 : coureur éliminé, progression gelée) | Message rejeté ; rien n'est diffusé |
 
 ### Règles du serveur
 
@@ -153,8 +154,9 @@ Un coureur légitime refusé (paquets groupés) n'est pas bloqué : la marge aut
 - **Qui est un bot** : le serveur le décide, jamais le drapeau `bot` du corps. Le compte qui envoie et tout membre humain du salon sont humains ; seuls les bots du salon sont des bots : ses membres bots, puis les places libres remplies par la liste fermée `BOT_NAMES` si le salon a les bots activés (comme `seatsOf`). Les noms de `BOT_NAMES` sont réservés : inscription, changement de nom, compte GitHub ou Discord (nom suffixé) et pseudo d'invité les refusent.
 - **Règle du rang** : celle du classement final (COURSE-10, ci-dessous), appliquée par `rankByServer`.
 - **Temps et MPM de chaque coureur** (`serverMeasures`) : choix retenu, **corriger** plutôt que refuser (une page un peu en retard ne perd pas sa course).
-  - Temps (`race_results.seconds`, `races.others`) : arrivée vue par le serveur (`room_members.finished_at`) − départ ; sinon abandon − départ ; sinon temps écoulé côté serveur (au plus la fin de la course). Seule exception : une élimination, que le serveur ne voit pas, garde le temps du corps, et seulement en mode fatal.
-  - MPM net : celui du corps tant qu'il ne dépasse pas ce que permettent les caractères validés par le serveur sur le texte du coureur (BONUS-04 : `bonus_words`, sinon le texte tiré), soit (caractères + 40) ÷ 5 ÷ (temps serveur − 1 s) : marge `SERVER_WPM_SLACK_CHARS` (= `SLACK_CHARS` de l'arbitre : mot en cours, paquets en vol, texte changé d'un coureur parti) et horloge `CLOCK_TOLERANCE_MS` (la page a fini avant que l'arrivée n'arrive au serveur). Au-delà, le MPM du serveur : caractères validés ÷ 5 ÷ minutes. Un MPM plus bas est gardé (fautes laissées en mode libre).
+  - Temps (`race_results.seconds`, `races.others`) : arrivée vue par le serveur (`room_members.finished_at`) − départ ; sinon abandon − départ ; sinon élimination datée par le serveur (`room_members.eliminated_at`, mode fatal) − départ ; sinon temps écoulé côté serveur (au plus la fin de la course). Le temps du corps n'est jamais repris : une élimination que le serveur n'a pas vue est une course encore en cours.
+  - MPM net : celui du corps tant qu'il ne dépasse pas ce que permettent les caractères validés par le serveur sur le texte du coureur (BONUS-04 : `bonus_words`, sinon le texte tiré), une tolérance à la fois. Arrivé : les caractères exacts du texte ÷ 5 ÷ (temps serveur − 1 s, `CLOCK_TOLERANCE_MS` : la page a fini avant que l'arrivée n'arrive au serveur). Pas arrivé (en course, abandon, élimination) : (caractères validés + 40) ÷ 5 ÷ temps serveur (`SERVER_WPM_SLACK_CHARS` = `SLACK_CHARS` de l'arbitre : mot en cours, paquets en vol, texte changé d'un coureur parti). Au-delà, le MPM du serveur : caractères validés ÷ 5 ÷ minutes. Un MPM plus bas est gardé (fautes laissées en mode libre).
+  - Élimination (mode fatal) : la page envoie `eliminated` au temps réel après sa dernière progression ; le serveur la date à l'heure de la base avec la progression validée à ce moment (`eliminateRunner`, une fois, en course, ni arrivé ni en abandon, refusée hors mode fatal), puis refuse ses progressions suivantes (`eliminated`) et n'en garde plus en base.
   - Bots calculés par le serveur (BOT-05) : temps et MPM de leur course calculée (`launchBots`), jamais ceux du corps.
   - Précision et MPM brut : le serveur ne voit pas les frappes ; ceux du corps restent, bornés (précision 0 à 100, sinon 400) et cohérents (MPM brut relevé au MPM net s'il est plus bas).
   - Un humain inconnu du serveur garde les mesures du corps ; sans graine (salon d'avant CONF-03), seul le temps est corrigé.

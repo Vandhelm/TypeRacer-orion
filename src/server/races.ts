@@ -195,41 +195,43 @@ const sameName = (a: string, b: string | null | undefined) => !!b && a.toLowerCa
 export type ServerRace = { startedAt: Date; finished: boolean; abandoned?: boolean; standings?: Map<string, ServerStanding>; bots?: Set<string>; roomId?: number; departed?: { name: string; progress: number }[]; content?: string; course?: LaunchCourse | null };
 
 /**
- * COURSE-06 : marge sur les caractères validés vus par le serveur, avant de remplacer le MPM envoyé : celle de l'arbitre
- * temps réel (SLACK_CHARS, deux mots validés dans le même paquet), qui couvre aussi le mot en cours et un texte changé
- * par un bonus que le serveur n'a plus (coureur parti). Avec CLOCK_TOLERANCE_MS (la page a fini jusqu'à 1 s avant que
- * le serveur ne reçoive l'arrivée), c'est la tolérance du MPM.
+ * COURSE-06 : tolérance du MPM envoyé, une seule à la fois. Coureur arrivé : les caractères exacts de son texte, avec
+ * CLOCK_TOLERANCE_MS (sa page a fini jusqu'à 1 s avant que le serveur ne reçoive l'arrivée). Coureur pas arrivé : le
+ * serveur ne connaît que ses mots validés ; marge de l'arbitre temps réel (SLACK_CHARS : mot en cours, paquets en vol,
+ * texte changé d'un coureur parti), sans marge d'horloge.
  */
 export const SERVER_WPM_SLACK_CHARS = SLACK_CHARS;
 
 /**
  * COURSE-06 : le temps et le MPM d'un coureur, tels que le serveur les connaît.
  * - Bot dont le serveur a calculé la course : son temps et son MPM calculés, jamais ceux du corps.
- * - Humain connu du serveur : temps = arrivée vue par le serveur − départ ; sinon abandon − départ ; sinon temps écoulé
- *   côté serveur (au plus la fin de la course). Seule exception : une élimination, en mode fatal seulement, que le serveur ne voit
- *   pas : le temps du corps, déjà borné par le temps écoulé (claimServerRace).
+ * - Humain connu du serveur : temps = arrivée vue par le serveur − départ ; sinon abandon − départ ; sinon élimination
+ *   datée par le serveur (mode fatal, room_members.eliminated_at) − départ ; sinon temps écoulé côté serveur (au plus la
+ *   fin de la course). Le temps du corps n'est jamais repris : une élimination que le serveur n'a pas vue est une course
+ *   encore en cours.
  *   MPM : celui du corps tant qu'il ne dépasse pas ce que permettent les caractères validés par le serveur sur le texte
- *   du coureur (BONUS-04 : son texte changé, sinon celui de la course), marge et horloge comprises ; au-delà, le MPM du
- *   serveur (caractères validés ÷ 5 ÷ minutes). Un MPM plus bas que celui du serveur est gardé : les fautes laissées
+ *   du coureur (BONUS-04 : son texte changé, sinon celui de la course), à la tolérance près (SERVER_WPM_SLACK_CHARS) ;
+ *   au-delà, le MPM du serveur (caractères validés ÷ 5 ÷ minutes). Un MPM plus bas est gardé : les fautes laissées
  *   (mode libre) et les lettres justes que seule la page voit le baissent honnêtement.
  * - Précision et MPM brut : le serveur ne voit pas les frappes ; ceux du corps restent, bornés par le schéma (précision
  *   de 0 à 100) et rendus cohérents (MPM brut jamais sous le MPM net).
  * Un coureur inconnu du serveur garde les mesures du corps ; sans texte (salon lancé avant CONF-03), seul le temps change.
  */
-export function serverMeasures<T extends { name: string; bot: boolean; wpm: number; raw: number; seconds: number; eliminated: boolean }>(result: T, standing: ServerStanding | undefined, course: LaunchCourse | null | undefined): T {
+export function serverMeasures<T extends { name: string; bot: boolean; wpm: number; raw: number; seconds: number }>(result: T, standing: ServerStanding | undefined, course: LaunchCourse | null | undefined): T {
   const consistent = (r: T): T => ({ ...r, raw: Math.max(r.raw, r.wpm) });
   if (!standing || !course) return consistent(result);
   if (result.bot) return standing.wpm === undefined || standing.seconds === undefined ? consistent(result) : consistent({ ...result, seconds: standing.seconds, wpm: standing.wpm });
   const { startsAt, endsAt, now } = course;
   const elapsed = Math.max(0, Math.min(now, endsAt ?? Infinity) - startsAt) / 1000;
   const since = (at: Date) => Math.min(elapsed, Math.max(0, (at.getTime() - startsAt) / 1000));
-  const abandoned = standing.abandonedAt && standing.abandonedAt.getTime() >= startsAt ? standing.abandonedAt : null;
-  const seconds = standing.finishedAt ? since(standing.finishedAt) : abandoned ? since(abandoned) : result.eliminated && course.mistakes === "fatal" ? Math.min(result.seconds, elapsed) : elapsed;
+  const real = (at: Date | null | undefined) => (at && at.getTime() >= startsAt ? at : null);
+  const stoppedAt = standing.finishedAt ?? real(standing.abandonedAt) ?? real(standing.eliminatedAt);
+  const seconds = stoppedAt ? since(stoppedAt) : elapsed;
   const words = standing.words?.length ? standing.words : course.words;
   if (!words.length) return consistent({ ...result, seconds });
   const marks = marksOf(words);
   const chars = standing.finishedAt ? marks.at(-1)! : charsAt(marks, standing.progress);
-  const allowed = netWpm(chars + SERVER_WPM_SLACK_CHARS, Math.max(seconds - CLOCK_TOLERANCE_MS / 1000, 1.3));
+  const allowed = standing.finishedAt ? netWpm(chars, Math.max(seconds - CLOCK_TOLERANCE_MS / 1000, 1.3)) : netWpm(chars + SERVER_WPM_SLACK_CHARS, seconds);
   return consistent({ ...result, seconds, wpm: result.wpm > allowed ? netWpm(chars, seconds) : result.wpm });
 }
 

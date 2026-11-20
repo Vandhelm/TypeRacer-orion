@@ -10,8 +10,8 @@ import { launchBots } from "./bot-course";
 /** COURSE-06 : la place d'un membre participant au classement du serveur (temps réel, room_members). */
 /** COURSE-07 : abandonedAt, l'abandon de ce membre ; progress est alors celle validée au moment de l'abandon. */
 /** COURSE-10 : seat, sa place dans le salon, qui départage deux humains à égalité. */
-/** COURSE-06 : words, le texte de ce membre changé par un bonus (room_members.bonus_words) ; seconds et wpm, ceux de la course calculée d'un bot. */
-export type ServerStanding = { finishedAt: Date | null; progress: number; abandonedAt?: Date | null; seat?: number | null; words?: string[] | null; seconds?: number; wpm?: number };
+/** COURSE-06 : words, le texte de ce membre changé par un bonus (room_members.bonus_words) ; eliminatedAt, son élimination datée par le serveur (mode fatal) ; seconds et wpm, ceux de la course calculée d'un bot. */
+export type ServerStanding = { finishedAt: Date | null; progress: number; abandonedAt?: Date | null; seat?: number | null; words?: string[] | null; eliminatedAt?: Date | null; seconds?: number; wpm?: number };
 
 /**
  * COURSE-10 : le classement final, refait d'après le serveur (COURSE-06). `bots` : les bots du salon, décidés par le
@@ -62,14 +62,14 @@ export function rankByServer<T extends { name: string; rank: number; finished?: 
  */
 export async function launchStandings(db: Db, roomId: number, withText = false) {
   const runners = await db
-    .select({ name: sql<string>`coalesce(${players.name}, ${roomMembers.guestName})`, isBot: sql<boolean>`coalesce(${players.isBot}, false)`, finishedAt: roomMembers.finishedAt, progress: roomMembers.progress, abandonedAt: roomMembers.abandonedAt, seat: roomMembers.seat, words: roomMembers.bonusWords })
+    .select({ name: sql<string>`coalesce(${players.name}, ${roomMembers.guestName})`, isBot: sql<boolean>`coalesce(${players.isBot}, false)`, finishedAt: roomMembers.finishedAt, progress: roomMembers.progress, abandonedAt: roomMembers.abandonedAt, seat: roomMembers.seat, words: roomMembers.bonusWords, eliminatedAt: roomMembers.eliminatedAt })
     .from(roomMembers)
     .leftJoin(players, eq(players.id, roomMembers.playerId))
     .where(and(eq(roomMembers.roomId, roomId), eq(roomMembers.role, "player")));
   const [room] = await db.select({ abandons: rooms.abandons, departed: rooms.departed }).from(rooms).where(eq(rooms.id, roomId));
   const humans = runners.filter((r) => !r.isBot);
   const humanNames = new Set(humans.map((r) => r.name.toLowerCase()));
-  const standings = new Map<string, ServerStanding>(humans.map((r) => [r.name.toLowerCase(), { finishedAt: r.finishedAt, progress: r.progress, abandonedAt: r.abandonedAt, seat: r.seat, words: r.words }]));
+  const standings = new Map<string, ServerStanding>(humans.map((r) => [r.name.toLowerCase(), { finishedAt: r.finishedAt, progress: r.progress, abandonedAt: r.abandonedAt, seat: r.seat, words: r.words, eliminatedAt: r.eliminatedAt }]));
   const absent: { name: string; progress: number }[] = [];
   const gone = [
     ...(room?.abandons ?? []).map((a) => ({ ...a, standing: { finishedAt: null, progress: a.progress, abandonedAt: new Date(0), seat: a.seat } })),

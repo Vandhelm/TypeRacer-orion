@@ -9,7 +9,6 @@ import { botProfile, botSeed, simulateBot } from "../rooms/bot-engine";
 import { seatedBots } from "../rooms/bots";
 import { courseWords } from "../rooms/course-words";
 import { raceClock } from "../rooms/race-clock";
-import type { RoomSettings } from "../rooms/settings";
 import { wordTarget } from "../rooms/text";
 import { composePassage } from "./corpus";
 
@@ -21,7 +20,7 @@ import { composePassage } from "./corpus";
 export type BotStanding = { finishedAt: Date | null; progress: number; seat: null; seconds: number; wpm: number };
 
 /** COURSE-06 : le texte de la course tiré par le serveur (vide sans graine), son départ, sa fin et l'heure de la base, en ms. */
-export type LaunchCourse = { words: string[]; startsAt: number; endsAt: number | null; now: number; mistakes: RoomSettings["mistakes"] };
+export type LaunchCourse = { words: string[]; startsAt: number; endsAt: number | null; now: number };
 
 /** Caractères cumulés (espaces comprises) après chaque mot, comme la page (createCourse) et l'arbitre (raceCourseOf). */
 export function marksOf(words: readonly string[]): number[] {
@@ -49,7 +48,7 @@ export async function launchBots(db: Db, roomId: number, humans: number, withTex
   const { startsAt, endsAt } = raceClock(row?.rooms.launchedAt ?? null, row?.config.duration ?? null);
   if (!row || startsAt === null) return { standings, running: false, course: null };
   const bots = row.rooms.textSeed === null ? [] : seatedBots(row.rooms, humans);
-  const none = { standings, running: false, course: { words: [], startsAt, endsAt, now: row.now, mistakes: row.config.mistakes } };
+  const none = { standings, running: false, course: { words: [], startsAt, endsAt, now: row.now } };
   if (!bots.length && (!withText || row.rooms.textSeed === null)) return none;
   const { config } = row;
   const passage = row.rooms.textId === null ? null : await composePassage(db, { language: config.language, words: wordTarget(config), startId: row.rooms.textId });
@@ -69,5 +68,5 @@ export async function launchBots(db: Db, roomId: number, humans: number, withTex
     const wpm = netWpm((marks[run.position] ?? marks.at(-1)!) - run.missed, seconds);
     standings.set(bot.name.toLowerCase(), { finishedAt: run.arrivedMs === null ? null : new Date(startsAt + run.arrivedMs), progress: run.progress, seat: null, seconds, wpm });
   }
-  return { standings, running: running && (endsAt === null || row.now < endsAt), course: { words, startsAt, endsAt, now: row.now, mistakes: config.mistakes } };
+  return { standings, running: running && (endsAt === null || row.now < endsAt), course: { words, startsAt, endsAt, now: row.now } };
 }
