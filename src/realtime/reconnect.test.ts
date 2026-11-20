@@ -20,7 +20,7 @@ function fakeRoom(course: RaceCourse) {
   const listeners: ((code: string) => void)[] = [];
   const recorded: { key: string; progress: number }[] = [];
   const refreshed: string[] = [];
-  const state = { course, abandonOnRefresh: null as string | null };
+  const state = { course, abandonOnRefresh: null as string | null, over: false };
   const backend: RoomBackend = {
     enter: async (p, code) => ({ key: p.id, room: { code, members: course.runners.map((key) => ({ key })) } }),
     view: async (code) => ({ code, members: course.runners.map((key) => ({ key })) }),
@@ -37,7 +37,7 @@ function fakeRoom(course: RaceCourse) {
       listeners.push(listener);
       return () => undefined;
     },
-    course: async () => ({ ...state.course, resume: [...new Map(recorded.map((r) => [r.key, { key: r.key, progress: r.progress, finishedAt: null }])).values()] }),
+    course: async () => state.over ? null : ({ ...state.course, resume: [...new Map(recorded.map((r) => [r.key, { key: r.key, progress: r.progress, finishedAt: null }])).values()] }),
     progress: async (key, _code, progress) => {
       recorded.push({ key, progress });
       return false;
@@ -175,5 +175,20 @@ describe("COURSE-08 — the realtime sweeps racing rooms to learn an abandon by 
     for (let i = 0; i < 200 && !states.at(-1)?.abandoned; i++) await Bun.sleep(10);
     expect(states.at(-1)?.abandoned).toBe(true);
     live.close();
+  });
+
+  test("a racing room without any socket is still swept, until its race is over", async () => {
+    const fake = start(10_000, 20);
+    const alpha = await connect(ALPHA);
+    alpha.ws.close();
+    await Bun.sleep(60);
+    const before = fake.refreshed.length;
+    await Bun.sleep(100);
+    expect(fake.refreshed.length).toBeGreaterThan(before); // plus de socket, la salle est encore balayée
+    fake.state.over = true;
+    await Bun.sleep(100);
+    const after = fake.refreshed.length;
+    await Bun.sleep(100);
+    expect(fake.refreshed.length).toBe(after); // course finie : elle sort du balayage
   });
 });

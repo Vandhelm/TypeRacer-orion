@@ -105,4 +105,16 @@ describe("COURSE-08 — an accepted progress is a sign of life", () => {
     expect(page.messages.filter((m) => m.type === "error").map((m) => (m as { code: string }).code)).toContain("abandoned");
     page.ws.close();
   });
+
+  test("the only socket of the room closed, no HTTP read: the realtime still sweeps the racing room and notes the abandon", async () => {
+    const { code, guest, key } = await launched("Seul_Ferme");
+    const page = await racePage(code, guest);
+    page.send({ type: "progress", progress: 0.05, wpm: 40 });
+    await Bun.sleep(REFRESH_MS * 2);
+    page.ws.close(); // plus aucune socket dans la salle
+    await Bun.sleep(REFRESH_MS * 2);
+    await silentFor(key, ABANDON_AFTER_MS + 6_000);
+    for (let i = 0; i < 100 && !(await member(code, key)).abandonedAt; i++) await Bun.sleep(10);
+    expect((await member(code, key)).abandonedAt).not.toBeNull();
+  });
 });

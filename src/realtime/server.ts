@@ -84,6 +84,8 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
 
   /** Toutes les sockets entrées dans chaque salon (présence et course), suivies ou non. */
   const joined = new Map<string, Set<Socket>>();
+  /** COURSE-08 : les salles dont la course est en cours (vue par syncRace), gardées au balayage même sans socket. */
+  const racing = new Set<string>();
 
   /**
    * Pousse l'état du salon à ses seuls membres qui le suivent ; un membre retiré apprend qu'il ne l'est plus.
@@ -132,22 +134,25 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
   let refreshing = false;
   async function refreshAll() {
     if (!backend || refreshing) return;
-    if (!followers.size && !joined.size) {
+    if (!followers.size && !joined.size && !racing.size) {
       if (refreshTimer) clearInterval(refreshTimer);
       refreshTimer = null;
       return;
     }
     refreshing = true;
     try {
-      // COURSE-08 : aussi les salles sans page salle ouverte (la page course ne suit pas) : le balayage y note les coureurs
-      // silencieux depuis 30 s comme ayant abandonné, et la course l'apprend (syncRace). Seules les pages salle donnent
-      // signe de vie ici (SALLE-08 inchangé) ; la page course le donne en relisant le salon (RACE_PRESENCE_MS).
-      for (const code of new Set([...followers.keys(), ...joined.keys()])) {
+      // COURSE-08 : aussi les salles sans page salle ouverte (la page course ne suit pas), et les salles en course dont
+      // toutes les sockets sont fermées (un coureur seul coupé) : le balayage y note les coureurs silencieux depuis le délai
+      // comme ayant abandonné, et la course l'apprend (syncRace). Seules les pages salle et les progressions acceptées donnent
+      // signe de vie ici (SALLE-08 inchangé) ; la page course le donne aussi en relisant le salon (RACE_PRESENCE_MS).
+      for (const code of new Set([...followers.keys(), ...joined.keys(), ...racing])) {
         // COURSE-08 : un coureur dont l'arbitre a accepté une progression depuis le dernier balayage donne signe de vie
         const race = races.get(code);
         const present = [...new Set([...[...(followers.get(code) ?? [])].map((ws) => ws.data.follow!.key), ...(race?.alive ?? [])])];
         race?.alive.clear();
         if (await backend.refresh(code, present)) await publishRoom(code);
+        // sans socket, personne ne relit la course : la salle sort du balayage quand sa course est finie
+        if (!joined.has(code) && racing.has(code) && !(await backend.course?.(code))) racing.delete(code);
       }
     } catch (error) {
       console.error(error);
@@ -204,6 +209,8 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
       return console.error(error);
     }
     const state = races.get(code);
+    if (course) racing.add(code);
+    else racing.delete(code);
     if (!course) {
       // COURSE-07 : la course vient de finir (le dernier a peut-être abandonné) : sa progression validée reste en base
       if (state?.course && !state.over) keepValidated(code, state, null);
