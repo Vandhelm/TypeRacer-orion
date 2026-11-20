@@ -66,15 +66,18 @@ export type RealtimeOptions = {
   leaveAfterMs?: number;
   /** SALLE-08 / SALLE-09 : rythme de mise à jour des salons suivis (échéances, membres silencieux, hôte). */
   refreshMs?: number;
+  /** BONUS-01 / BOT-04 : rythme où le serveur relit les points de contrôle franchis par les bots, sans progression humaine. */
+  bonusTickMs?: number;
 };
 
 const LEAVE_AFTER_MS = 15_000;
 const REFRESH_MS = 5_000;
+const BONUS_TICK_MS = 1_000;
 
 const topic = (room: string) => `room:${room}`;
 const encode = (message: ServerMessage) => JSON.stringify(message);
 
-export function createRealtimeServer({ port = 3001, hostname, secret, allowedOrigins = [], rooms: backend, leaveAfterMs = LEAVE_AFTER_MS, refreshMs = REFRESH_MS }: RealtimeOptions): Server<Connection> {
+export function createRealtimeServer({ port = 3001, hostname, secret, allowedOrigins = [], rooms: backend, leaveAfterMs = LEAVE_AFTER_MS, refreshMs = REFRESH_MS, bonusTickMs = BONUS_TICK_MS }: RealtimeOptions): Server<Connection> {
   /** Salles en mémoire : code → joueurs présents, dans l'ordre d'arrivée. */
   const rooms = new Map<string, Map<string, Member>>();
   /** Limite de fréquence par salle et par joueur, partagée par ses onglets. */
@@ -241,6 +244,8 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
     const state = races.get(code);
     if (course) racing.add(code);
     else racing.delete(code);
+    // BONUS-01 / BOT-04 : une course avec bonus et bots se relit au tick, même sans progression humaine
+    if (course?.catchUpBonus && course.bots?.length) bonusTimer ??= setInterval(bonusTick, bonusTickMs);
     if (course) botRaceOf(code, course); // BOT-04 : les bots figés à la première lecture de cette course
     if (!course) {
       // COURSE-07 : la course vient de finir (le dernier a peut-être abandonné) : sa progression validée reste en base
@@ -342,8 +347,8 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
    * aussi, à leur progression calculée par le moteur à cet instant (un bot éliminé, comme un abandon, ne compte pas) ; un
    * effet sur un bot, ou reçu par un bot, part daté et rangé (`at`, ms depuis le départ ; `seq`).
    */
-  function awardCatchUp(code: string, state: RaceState & { course: RaceCourse }) {
-    if (!state.course.catchUpBonus) return;
+  function awardCatchUp(code: string, state: RaceState & { course: RaceCourse }): number {
+    if (!state.course.catchUpBonus) return 0;
     const out = new Set([...(state.course.abandoned ?? []), ...state.eliminated]);
     const keys = new Map(state.owners);
     for (const ws of joined.get(code) ?? []) if (ws.data.key) keys.set(ws.data.player.id, ws.data.key);
@@ -368,6 +373,31 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
       const kept = effect && (botWords.has(effect.target) || botWords.has(award.playerId)) ? botRace.list.at(-1) : undefined;
       const at = kept ? { at: kept.at, ...(kept.seq === undefined ? {} : { seq: kept.seq }) } : {};
       server.publish(topic(code), encode({ type: "bonus", room: code, ...award, ...(effect ? { effect } : {}), ...at }));
+    }
+    return awards.length;
+  }
+
+  /**
+   * BONUS-01 / BOT-04 : un bot avance sans envoyer de progression. Une fois par `bonusTickMs`, chaque course en cours
+   * (partie, pas finie, avec bonus et bots) recalcule ses bots par le moteur et attribue les bonus des points franchis,
+   * même si aucun humain ne tape ; le classement suit s'il y en a. Plus aucune course de ce genre : le tick s'arrête.
+   */
+  let bonusTimer: ReturnType<typeof setInterval> | null = null;
+  function bonusTick() {
+    const now = Date.now();
+    let live = false;
+    for (const code of racing) {
+      const state = races.get(code);
+      const course = state?.course;
+      if (!state || !course || state.over || !course.catchUpBonus || !course.bots?.length) continue;
+      if (course.endsAt !== null && now >= course.endsAt) continue;
+      live = true;
+      if (now < course.startsAt) continue;
+      if (awardCatchUp(code, state as RaceState & { course: RaceCourse })) publishStandings(code);
+    }
+    if (!live && bonusTimer) {
+      clearInterval(bonusTimer);
+      bonusTimer = null;
     }
   }
 

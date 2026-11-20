@@ -54,7 +54,8 @@ const bonuses = (tab: Tab) => tab.messages.filter((m): m is Bonus => m.type === 
  * les bots ; `passed` : les points de contrôle franchis gardés ; `eliminated` : les coureurs dont la base a noté
  * l'élimination. `restart` : un nouveau serveur, même base.
  */
-async function race(course: Partial<RaceCourse> & { words: string[] }, sinceStartMs: number, others: Player[] = []) {
+async function race(course: Partial<RaceCourse> & { words: string[] }, sinceStartMs: number, others: Player[] = [], bonusTickMs?: number) {
+  let ended = false;
   const alpha = player("Alpha");
   const kept: { startsAt: number; bonus: BotBonus }[] = [];
   let passed = 0;
@@ -71,13 +72,13 @@ async function race(course: Partial<RaceCourse> & { words: string[] }, sinceStar
       return () => undefined;
     },
     // relue comme en base : une copie à chaque lecture, avec les effets gardés pour les bots
-    course: async () => ({ ...full, ...(passed ? { checkpoints: passed } : {}), botBonuses: [...(full.botBonuses ?? []), ...kept.map((k) => k.bonus)] }),
+    course: async () => ended ? null : ({ ...full, ...(passed ? { checkpoints: passed } : {}), botBonuses: [...(full.botBonuses ?? []), ...kept.map((k) => k.bonus)] }),
     progress: async () => false,
     botBonus: async (_code, startsAt, bonus) => void kept.push({ startsAt, bonus }),
     eliminated: async (_code, _startsAt, key) => (eliminated.push(key), true),
     checkpoints: async (_code, _startsAt, count) => void (passed = Math.max(passed, count)),
   };
-  server = createRealtimeServer({ port: 0, hostname: "127.0.0.1", secret: SECRET, rooms: backend });
+  server = createRealtimeServer({ port: 0, hostname: "127.0.0.1", secret: SECRET, rooms: backend, bonusTickMs });
   const enter = async (p: Player) => {
     const tab = await connect(p);
     tab.send({ type: "join", room: ROOM });
@@ -89,7 +90,10 @@ async function race(course: Partial<RaceCourse> & { words: string[] }, sinceStar
     server?.stop(true);
     server = createRealtimeServer({ port: 0, hostname: "127.0.0.1", secret: SECRET, rooms: backend });
   };
-  return { tab, kept, eliminated, course: full, enter, restart, changed: () => listeners.forEach((listener) => listener(ROOM)) };
+  const changed = () => listeners.forEach((listener) => listener(ROOM));
+  /** La course finit (la base n'en a plus), et la salle l'apprend. */
+  const end = () => ((ended = true), changed());
+  return { tab, kept, eliminated, course: full, enter, restart, changed, end };
 }
 
 async function step(tab: Tab, progress: number) {
@@ -254,3 +258,38 @@ describe("BONUS-01 / BOT-04 — a restarted realtime server rebuilds the bonuses
   });
 });
 
+
+describe("BONUS-01 / BOT-04 — the checkpoints passed by bots are checked on a server tick, without any human progress", () => {
+  // un bot « impossible » est à 23,6 % 12 s après le départ : il passe le premier point (25 %) moins d'une seconde après
+  const wait = async (found: () => boolean, ms: number) => {
+    for (let waited = 0; waited < ms && !found(); waited += 20) await Bun.sleep(20);
+  };
+
+  test("a human who does not type and a bot passing 25 %: the human gets a bonus, with no progress message", async () => {
+    const { tab } = await race({ words: WORDS, bots: [raceBot("impossible")], seed: 3 }, 12_000, [], 100);
+    expect(bonuses(tab)).toEqual([]);
+    await wait(() => bonuses(tab).length > 0, 3_000);
+    expect(bonuses(tab).map(({ playerId, checkpoint }) => ({ playerId, checkpoint }))).toEqual([{ playerId: "g:alpha", checkpoint: 1 }]);
+  });
+
+  test("the standings sent after a tick count the bonus received", async () => {
+    const { tab } = await race({ words: WORDS, bots: [raceBot("impossible")], seed: 3 }, 12_000, [], 100);
+    const counted = () => tab.messages.some((m) => m.type === "standings" && m.players.some((p) => p.playerId === "g:alpha" && p.bonuses === 1));
+    await wait(counted, 3_000);
+    expect(counted()).toBe(true);
+  });
+
+  test("the tick stops when the race is over: a bot passing a checkpoint afterwards gives nothing", async () => {
+    const { tab, end } = await race({ words: WORDS, bots: [raceBot("impossible")], seed: 3 }, 12_000, [], 100);
+    end();
+    await Bun.sleep(2_000);
+    expect(bonuses(tab)).toEqual([]);
+  });
+
+  test("the tick and human progress messages together never give the same checkpoint twice", async () => {
+    const { tab } = await race({ words: WORDS, bots: [raceBot("impossible")], seed: 3 }, 12_000, [], 20);
+    for (const progress of [0.01, 0.02, 0.03, 0.04]) await step(tab, progress);
+    await Bun.sleep(300);
+    expect(bonuses(tab).map((b) => b.checkpoint)).toEqual([1]);
+  });
+});
