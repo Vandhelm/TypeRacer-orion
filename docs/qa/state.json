@@ -200,9 +200,9 @@
     "scope": "critère feature/game/conf-05 (medium)"
   },
   "CONF-06": {
-    "commit": "2acdffe",
+    "commit": "71c2fe9",
     "date": "2026-11-19",
-    "scope": "suivi (light)"
+    "scope": "critère (2e passage, medium)"
   },
   "CONF-07": {
     "commit": "bb500b5",
