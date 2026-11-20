@@ -3,12 +3,17 @@ import type { Room } from "../room/room";
 import { excludedApplies, wordTarget } from "../../rooms/text";
 import { LEXICON, QUOTES } from "./lexicon";
 
-export type CourseSettings = Pick<Room, "language" | "textType" | "length" | "wordCount" | "level" | "punctuation" | "numbers" | "specials" | "accents" | "excluded" | "text">;
+export type CourseSettings = Pick<Room, "language" | "textType" | "length" | "wordCount" | "level" | "punctuation" | "numbers" | "specials" | "capitals" | "accents" | "excluded" | "text">;
 
 const SPECIALS = ["@", "#", "&", "%", "*", "+"] as const;
 
 function withoutAccents(word: string) {
   return word.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/œ/g, "oe").replace(/Œ/g, "Oe").replace(/æ/g, "ae").replace(/Æ/g, "Ae");
+}
+
+/** La première lettre du mot en capitale (un mot précédé d'un caractère spécial, « @mot », devient « @Mot »). */
+function capitalize(word: string) {
+  return word.replace(/\p{L}/u, (letter) => letter.toLocaleUpperCase());
 }
 
 /**
@@ -67,7 +72,12 @@ export function buildWords(settings: CourseSettings, random: () => number = Math
       return word;
     });
   }
-  if (!settings.accents) words = words.map(withoutAccents);
+  // CONF-06 : sans majuscules, tout le texte passe en minuscules ; avec, les phrases tirées au hasard prennent une capitale
+  // au début du texte et après une fin de phrase seulement (pas de capitale quand la fin de phrase est exclue, CONF-07)
+  if (!settings.capitals) words = words.map((word) => word.toLocaleLowerCase(settings.language));
+  else if (settings.textType === "words" && settings.punctuation) words = words.map((word, i) => (i === 0 || /[.!?]$/.test(words[i - 1]!) ? capitalize(word) : word));
+  // CONF-06 : l'option accents est celle du français ; un texte anglais reste tel quel
+  if (!settings.accents && settings.language === "fr") words = words.map(withoutAccents);
   return words;
 }
 
@@ -101,7 +111,6 @@ function randomWords(
     let word: string;
     do { word = pick(source); } while (word === words[i - 1] && source.length > 1);
     if (settings.punctuation) {
-      if (inSentence === 0) word = word.charAt(0).toUpperCase() + word.slice(1);
       inSentence += 1;
       if (i === target - 1 || inSentence >= length) {
         if (ends.length) word += pick(ends);

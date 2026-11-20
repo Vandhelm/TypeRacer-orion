@@ -199,3 +199,100 @@ describe("CONF-04 — quote: one whole quote, the closest to the requested lengt
     expect(draw()).toBe(draw());
   });
 });
+
+describe("CONF-06 — punctuation, numbers, capitals and accents (French) on or off", () => {
+  const UPPER = /\p{Lu}/u;
+  const ENDS = /[.!?]$/;
+  const random = (patch: Partial<CourseSettings>, seed = 6) => buildWords(settings({ textType: "words", length: "long", ...patch }), seededRandom(seed));
+
+  test("punctuation on: random words end sentences and add pauses", () => {
+    const words = random({ punctuation: true });
+    expect(words.some((word) => ENDS.test(word))).toBe(true);
+    expect(words.some((word) => /[,;:]$/.test(word))).toBe(true);
+  });
+
+  test("punctuation off: no punctuation mark in random words", () => {
+    for (let seed = 0; seed < 20; seed++) expect(random({ punctuation: false }, seed).some((word) => /[.,!?;:]/.test(word))).toBe(false);
+  });
+
+  test("numbers on: some words are numbers; off: none", () => {
+    expect(random({ numbers: true }).some((word) => /^\d+$/.test(word))).toBe(true);
+    for (let seed = 0; seed < 20; seed++) expect(random({ numbers: false }, seed).some((word) => /\d/.test(word))).toBe(false);
+  });
+
+  test("capitals off: no word carries a capital, in random, coherent and quote texts", () => {
+    for (let seed = 0; seed < 20; seed++) {
+      expect(random({ punctuation: true, capitals: false }, seed).some((word) => UPPER.test(word))).toBe(false);
+      expect(buildWords(settings({ textType: "coherent", length: "long", capitals: false }), seededRandom(seed), PASSAGE).some((word) => UPPER.test(word))).toBe(false);
+      for (const language of ["fr", "en"] as const) {
+        expect(buildWords(settings({ textType: "quote", language, capitals: false }), seededRandom(seed)).some((word) => UPPER.test(word))).toBe(false);
+      }
+    }
+  });
+
+  test("capitals off keeps accented letters lowercase too (É becomes é)", () => {
+    expect(buildWords(settings({ textType: "coherent", length: "other", wordCount: 3, capitals: false }), Math.random, "Été Œuvre À")).toEqual(["été", "œuvre", "à"]);
+  });
+
+  test("capitals on: a coherent passage keeps its sentence starts and proper nouns", () => {
+    const words = buildWords(settings({ textType: "coherent", length: "long", capitals: true }), Math.random, "Alice met Bob. Then she left with Paris in mind.");
+    expect(words.join(" ")).toBe("Alice met Bob. Then she left with Paris in mind.");
+  });
+
+  test("capitals on: random sentences start with a capital, at the beginning and after a full stop, and nowhere else", () => {
+    for (let seed = 0; seed < 20; seed++) {
+      const words = random({ punctuation: true, capitals: true }, seed);
+      words.forEach((word, i) => {
+        const starts = i === 0 || ENDS.test(words[i - 1]!);
+        expect(UPPER.test(word.charAt(0))).toBe(starts);
+      });
+    }
+  });
+
+  test("capitals on, sentence ends excluded: only the first word has a capital (no capital without a full stop before it)", () => {
+    for (let seed = 0; seed < 20; seed++) {
+      const words = random({ punctuation: true, capitals: true, excluded: ".!?" }, seed);
+      expect(UPPER.test(words[0]!.charAt(0))).toBe(true);
+      expect(words.slice(1).some((word) => UPPER.test(word))).toBe(false);
+    }
+  });
+
+  test("accents on in French: accented words are kept", () => {
+    expect(random({ language: "fr", level: "rich", accents: true }).some((word) => /[à-ÿœ]/i.test(word))).toBe(true);
+  });
+
+  test("accents off in French: no accented letter is left", () => {
+    for (let seed = 0; seed < 20; seed++) {
+      expect(random({ language: "fr", level: "rich", accents: false }, seed).some((word) => /[à-ÿœæ]/i.test(word))).toBe(false);
+    }
+  });
+
+  test("the accents option is for French only: an English text is left as it is", () => {
+    const words = buildWords(settings({ textType: "coherent", language: "en", length: "other", wordCount: 3, accents: false }), Math.random, "a naïve café");
+    expect(words).toEqual(["a", "naïve", "café"]);
+  });
+
+  test("a custom text is typed as written, whatever the capitals option", () => {
+    expect(buildWords(settings({ textType: "custom", text: "Bonjour Paris", capitals: false }))).toEqual(["Bonjour", "Paris"]);
+  });
+
+  const combos: Partial<CourseSettings>[] = [
+    { textType: "words", punctuation: true, numbers: true, capitals: false, accents: false },
+    { textType: "words", punctuation: true, capitals: true, excluded: ".!?" },
+    { textType: "coherent", numbers: true, capitals: false },
+    { textType: "quote", capitals: false, accents: false },
+  ];
+  for (const patch of combos) {
+    test(`the same seed gives the same text to two members (${JSON.stringify(patch)})`, () => {
+      const draw = () => buildWords(settings({ length: "long", ...patch }), seededRandom(2026), LONG_PASSAGE).join(" ");
+      expect(draw()).toBe(draw());
+    });
+  }
+
+  for (const [length, expected] of LENGTH_CASES) {
+    test(`${length.length} (${expected}): the length stays exact with capitals and accents off`, () => {
+      expect(random({ ...length, punctuation: true, numbers: true, capitals: false, accents: false }, expected)).toHaveLength(expected);
+      expect(buildWords(settings({ textType: "coherent", ...length, capitals: false, accents: false }), seededRandom(expected), LONG_PASSAGE)).toHaveLength(expected);
+    });
+  }
+});
