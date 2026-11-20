@@ -206,7 +206,8 @@ export function RoomSettings({ state, onEditText, action }: RoomSettingsProps) {
           <span className={PLAIN_VALUE} hidden={host || shown.length > 0}>{t("room.noOption")}</span>
         </Row>
         <Row id="label-text" label={t("room.text")} role="group">
-          <span className={PLAIN_VALUE}>{countWords(room.text) ? words : t("room.noText")}</span>
+          {/* COURSE-03 : avant le lancement, le serveur ne donne le texte personnalisé qu'à l'hôte */}
+          <span className={PLAIN_VALUE}>{countWords(room.text) ? words : t(!host && isCustom ? "room.textAtLaunch" : "room.noText")}</span>
           {host && <SmallButton onClick={onEditText}>{t("room.edit")}</SmallButton>}
         </Row>
       </div>

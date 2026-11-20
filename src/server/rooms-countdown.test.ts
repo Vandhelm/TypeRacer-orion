@@ -72,3 +72,36 @@ describe("COURSE-03 — the room view gives the server clock", () => {
     expect(left).toBeLessThanOrEqual(3000);
   });
 });
+
+describe("COURSE-03 — the custom text stays with the host until the launch", () => {
+  let t: Fixture;
+  beforeAll(async () => {
+    t = await roomsFixture();
+  });
+  const CUSTOM = { textType: "custom", text: "le riz attend le nori" };
+  const textOf = async (cookie: string, code: string) => ((await t.read(cookie, code)).body.room as unknown as { settings: { text: string } }).settings.text;
+
+  test("waiting: the host reads the text, a member (account or guest) reads an empty one", async () => {
+    const { room, host } = await t.open("Perso_Wait", CUSTOM);
+    expect(JSON.stringify(room)).toContain("nori"); // la réponse de création, pour l'hôte
+    const mate = await t.signUp("Perso_Mate");
+    const guest = t.guest("Perso_Guest");
+    expect((await t.join(mate.cookie, { code: room.code })).status).toBe(200);
+    expect((await t.join(guest, { code: room.code })).status).toBe(200);
+    expect(await textOf(host.cookie, room.code)).toBe(CUSTOM.text);
+    expect(await textOf(mate.cookie, room.code)).toBe("");
+    expect(await textOf(guest, room.code)).toBe("");
+    // la réponse d'arrivée non plus
+    const joined = await t.join(t.guest("Perso_Late"), { code: room.code });
+    expect(joined.status).toBe(200);
+    expect(JSON.stringify(joined.body)).not.toContain("nori");
+  });
+
+  test("launched: every member reads the text", async () => {
+    const { room, host } = await t.open("Perso_Go", CUSTOM);
+    const mate = await t.signUp("Perso_GoMate");
+    expect((await t.join(mate.cookie, { code: room.code })).status).toBe(200);
+    expect((await t.call("POST", `/api/rooms/${room.code}/launch`, host.cookie)).status).toBe(200);
+    expect(await textOf(mate.cookie, room.code)).toBe(CUSTOM.text);
+  });
+});

@@ -431,3 +431,32 @@ describe("COURSE-06 — with the rooms database, the realtime server referees th
     runner.ws.close();
   });
 });
+
+describe("COURSE-03 — the custom text is pushed only to the host before the launch", () => {
+  let h: Awaited<ReturnType<typeof harness>>;
+  beforeAll(async () => {
+    h = await harness();
+  });
+  afterAll(() => h.server.stop(true));
+
+  test("waiting: the host's page receives the text, a member's page an empty one; launched: everyone", async () => {
+    const hostCookie = await h.signUp("Hote_Secret");
+    const mateCookie = await h.signUp("Mate_Secret");
+    const settings = { visibility: "public", textType: "custom", text: "le riz attend le nori" };
+    const code = await created(await h.call("POST", "/api/rooms", hostCookie, { role: "player", settings }));
+    expect((await h.call("POST", "/api/rooms/join", mateCookie, { code })).status).toBe(200);
+    const text = (seen: Seen) => (seen.room as unknown as { settings: { text: string } }).settings.text;
+    const hostTab = (await h.follow(code, hostCookie))!;
+    const mateTab = (await h.follow(code, mateCookie))!;
+    expect(text(await hostTab.next())).toBe(settings.text);
+    expect(text(await mateTab.next())).toBe("");
+    // un changement diffusé à tous les suiveurs : toujours rien pour le membre
+    await h.call("PATCH", `/api/rooms/${code}`, hostCookie, { settings: { name: "Bol secret" } });
+    expect(text(await hostTab.next())).toBe(settings.text);
+    expect(text(await mateTab.next())).toBe("");
+    expect((await h.call("POST", `/api/rooms/${code}/launch`, hostCookie)).status).toBe(200);
+    expect(text(await mateTab.next())).toBe(settings.text);
+    await hostTab.close();
+    await mateTab.close();
+  });
+});

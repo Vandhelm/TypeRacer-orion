@@ -9,6 +9,7 @@ import { storedAvatar } from "../players/avatar";
 import { allows, canJoin, isListed, newRoomCode } from "../rooms/access";
 import { launchBlocker } from "../rooms/launch";
 import { follow, raceState, storedStatus, type RaceEvent, type RaceState } from "../rooms/race-state";
+import { concealText, textRevealed } from "../rooms/conceal";
 import { raceClock } from "../rooms/race-clock";
 import { courseWords, textFingerprint } from "../rooms/course-words";
 import type { RoomFilters } from "../rooms/explorer";
@@ -213,17 +214,31 @@ const configOf = (s: RoomSettings) => ({
 
 const roomColumnsOf = (s: RoomSettings) => ({ name: s.autoName ? "" : s.name, autoName: s.autoName || !s.name, visibility: s.visibility, guests: s.guests, bots: s.bots });
 
-/** L'état d'un salon tel que le voit `viewer`. Sans lien d'invitation : l'hôte les lit à part (room-invites.ts, SALLE-04). */
-export async function roomView(db: Db, roomId: number, _viewer?: string): Promise<RoomView> {
+/** COURSE-03 : pour chaque vue, l'écart entre l'horloge de la base et celle de ce processus, mesuré à sa lecture. */
+const dbClockSkew = new WeakMap<RoomView, number>();
+
+/** COURSE-03 : l'heure de la base (ms epoch) à l'heure `appTime` de ce processus, d'après la lecture de `view` ; null si inconnue. */
+export function dbClockAt(view: RoomView, appTime: number): number | null {
+  const skew = dbClockSkew.get(view);
+  return skew === undefined ? null : appTime + skew;
+}
+
+/**
+ * L'état d'un salon tel que le voit `viewer`. Sans lien d'invitation : l'hôte les lit à part (room-invites.ts, SALLE-04).
+ * COURSE-03 : sans `viewer`, la vue complète, pour le serveur seulement (tirage au lancement, temps réel, qui la filtre
+ * pour chaque suiveur avec concealText) ; avec, le texte personnalisé n'est donné qu'à l'hôte avant le lancement.
+ */
+export async function roomView(db: Db, roomId: number, viewer?: string): Promise<RoomView> {
   const [row] = await db
     // COURSE-03 : clock_timestamp() et non now(), figé au début de la transaction
     .select({ rooms, race_configs: raceConfigs, serverNow: sql<number>`extract(epoch from clock_timestamp()) * 1000`.mapWith(Number) })
     .from(rooms)
     .innerJoin(raceConfigs, eq(raceConfigs.id, rooms.configId))
     .where(eq(rooms.id, roomId));
+  const readAt = Date.now();
   if (!row) throw new RoomRefused("not_found");
   // COURSE-03 : le texte (passage, graine, empreinte) n'est révélé qu'au début du décompte, donc une fois le salon lancé
-  const revealed = row.rooms.status === "racing" || row.rooms.status === "results";
+  const revealed = textRevealed(row.rooms.status);
   const members = await db
     .select({ key: roomMembers.memberKey, playerId: roomMembers.playerId, guestName: roomMembers.guestName, playerName: players.name, role: roomMembers.role, seat: roomMembers.seat, color: roomMembers.color, finishedAt: roomMembers.finishedAt, image: user.image })
     .from(roomMembers)
@@ -234,7 +249,7 @@ export async function roomView(db: Db, roomId: number, _viewer?: string): Promis
   const host = memberKey({ playerId: row.rooms.hostId });
   const textId = revealed ? row.rooms.textId : null;
   const passage = textId === null ? null : await composePassage(db, { language: row.race_configs.language, words: wordTarget(row.race_configs), startId: textId });
-  return {
+  const full: RoomView = {
     code: row.rooms.code,
     status: row.rooms.status,
     host,
@@ -246,6 +261,9 @@ export async function roomView(db: Db, roomId: number, _viewer?: string): Promis
     textHash: revealed ? row.rooms.textHash : null,
     serverNow: Math.round(row.serverNow),
   };
+  const view = viewer === undefined ? full : concealText(full, viewer);
+  dbClockSkew.set(view, row.serverNow - readAt);
+  return view;
 }
 
 /** Le salon de ce code, ou un refus « not_found ». */

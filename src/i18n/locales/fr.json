@@ -238,6 +238,7 @@
     "excludedExample": "ex. xyz",
     "text": "Texte",
     "noText": "Aucun",
+    "textAtLaunch": "Révélé au lancement",
     "edit": "Modifier",
     "import": "Importer",
     "test": "Épreuve",

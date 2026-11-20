@@ -238,6 +238,7 @@
     "excludedExample": "e.g. xyz",
     "text": "Text",
     "noText": "None",
+    "textAtLaunch": "Revealed at launch",
     "edit": "Edit",
     "import": "Import",
     "test": "Test",
