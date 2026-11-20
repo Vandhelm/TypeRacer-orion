@@ -45,7 +45,7 @@
     "test": "bun test",
     "test:smoke": "bun test ./tests/smoke/app.smoke.ts",
     "test:e2e": "playwright test",
-    "test:a11y": "playwright test contrast",
+    "test:a11y": "playwright test contrast a11y",
     "test:perf": "PERF=1 playwright test",
     "test:requirements": "bun scripts/requirement-tests.ts",
     "lighthouse": "bun scripts/lighthouse.ts",

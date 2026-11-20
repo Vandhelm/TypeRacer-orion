@@ -3,23 +3,29 @@ import { generatedAvatar } from "../../players/avatar";
 /**
  * La photo du joueur dans un rond. Sans photo (un invité n'en a jamais, AUTH-03 ; un compte qui n'en a pas choisi,
  * AUTH-04), un avatar généré à partir du nom : un poisson à sa teinte, penché à son angle, et son initiale.
- * Décorative : le nom est déjà écrit à côté.
+ * A11Y-03 : décorative quand le nom est déjà écrit à côté (sans `label`) ; seule, `label` (le nom) la nomme.
  */
-export function ProfileAvatar({ name, src }: { name: string; src?: string | null }) {
+export function ProfileAvatar({ name, src, label }: { name: string; src?: string | null; label?: string }) {
   return (
     <span
       className="profile-avatar grid aspect-square w-[clamp(48px,7vh,64px)] flex-none place-items-center overflow-hidden rounded-[50%] border border-line bg-face-front-b font-sans text-[clamp(20px,3.2vh,28px)] leading-none font-light text-muted [box-shadow:inset_0_0_0_3px_#000,inset_0_0_0_4px_var(--color-line-faint)]"
-      aria-hidden="true"
+      aria-hidden={label ? undefined : "true"}
     >
-      {src ? <img className="size-full object-cover" src={src} alt="" /> : <GeneratedAvatar name={name} />}
+      {src ? <img className="size-full object-cover" src={src} alt={label ?? ""} /> : <GeneratedAvatar name={name} label={label} />}
     </span>
   );
 }
 
-export function GeneratedAvatar({ name }: { name: string }) {
+/** L'avatar généré : masqué aux lecteurs d'écran sans `label`, image nommée par `label` sinon (A11Y-03). */
+export function GeneratedAvatar({ name, label }: { name: string; label?: string }) {
   const { initial, hue, angle } = generatedAvatar(name);
   return (
-    <svg className="block size-full" viewBox="0 0 64 64" focusable="false">
+    <svg
+      className="block size-full"
+      viewBox="0 0 64 64"
+      focusable="false"
+      {...(label ? { role: "img", "aria-label": label } : { "aria-hidden": true })}
+    >
       <rect width="64" height="64" fill={`hsl(${hue}, 45%, 16%)`} />
       <g transform={`rotate(${angle} 32 32)`} fill={`hsl(${hue}, 70%, 58%)`} opacity="0.45">
         <ellipse cx="28" cy="32" rx="20" ry="11" />
