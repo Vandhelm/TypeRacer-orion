@@ -3,20 +3,19 @@
 // mais le dit (avertissement au démarrage de Next.js, instrumentation.ts) et l'affiche dans GET /api/health.
 // En local, le serveur tourne sur ws://localhost:3001 (`bun run dev`) : rien à configurer, aucun avertissement.
 
-import { realtimeSecret } from "../realtime/ticket";
-
 type Env = Record<string, string | undefined>;
 
 export type RealtimeReadiness = { required: boolean; configured: boolean; missing: string[] };
 
-/** Le secret des tickets, avec le même repli que leur signature (REALTIME_SECRET, sinon BETTER_AUTH_SECRET, src/realtime/ticket.ts). */
+/** Longueur minimale du secret des tickets, comme realtimeSecret (src/realtime/ticket.ts). */
+const TICKET_SECRET_MIN = 32;
+
+/**
+ * Le secret des tickets, avec le même repli que leur signature : REALTIME_SECRET, sinon BETTER_AUTH_SECRET.
+ * Sans importer ticket.ts (node:crypto) : ce module est lu au démarrage de Next.js, dans tous ses runtimes.
+ */
 function hasTicketSecret(env: Env) {
-  try {
-    realtimeSecret(env);
-    return true;
-  } catch {
-    return false;
-  }
+  return (env.REALTIME_SECRET || env.BETTER_AUTH_SECRET || "").length >= TICKET_SECRET_MIN;
 }
 
 export function realtimeReadiness(env: Env = process.env): RealtimeReadiness {
