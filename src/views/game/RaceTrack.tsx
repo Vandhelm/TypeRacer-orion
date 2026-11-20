@@ -4,7 +4,9 @@ import { GeneratedAvatar } from "../profile/ProfileAvatar";
 import { easeToward, type TrackLane } from "./track";
 
 // Tout tient dans son couloir, de 2 à 8 couloirs : le nom passe à la ligne (deux lignes au plus), rang et MPM aussi.
-const NAME_LINE = "flex max-w-full items-center justify-center gap-[.6vh] py-[2px] font-mono text-[max(10px,1.2vh)] leading-[1.2] tracking-[.1em]";
+// L'avatar ne disparaît jamais : sous 96 px de couloir, il rapetisse (16 px) et passe au-dessus du nom.
+const NAME_LINE =
+  "flex max-w-full items-center justify-center gap-[.6vh] p-[2px] font-mono text-[max(10px,1.2vh)] leading-[1.2] tracking-[.1em] [@container(max-width:96px)]:flex-col [@container(max-width:96px)]:gap-[3px]";
 // sous 72 px, le nom serre ses lettres et prend jusqu'à trois lignes plutôt que d'être coupé
 const NAME_LABEL = "line-clamp-2 min-w-0 [overflow-wrap:anywhere] [@container(max-width:72px)]:line-clamp-3 [@container(max-width:72px)]:tracking-normal";
 const STATS_LINE = "flex max-w-full flex-wrap items-center justify-center gap-x-[.8ch] gap-y-[.4vh] font-mono text-[max(10px,1.1vh)] leading-none tracking-[.12em] tabular-nums";
@@ -54,7 +56,7 @@ export function RaceTrack({ lanes }: { lanes: TrackLane[] }) {
           <p data-part="name" className={`${NAME_LINE} ${lane.me ? "font-medium" : "font-normal"}`}>
             <span
               data-part="avatar"
-              className={`block size-[max(18px,2.4vh)] flex-none overflow-hidden rounded-[50%] border [@container(max-width:96px)]:hidden ${lane.me ? "border-red-text [box-shadow:0_0_0_2px_var(--color-red-solid)]" : "border-line"}`}
+              className={`block size-[max(18px,2.4vh)] flex-none overflow-hidden rounded-[50%] border [@container(max-width:96px)]:size-[16px] ${lane.me ? "border-red-text [box-shadow:0_0_0_2px_var(--color-red-solid)]" : "border-line"}`}
               aria-hidden="true"
             >
               {lane.photo ? <img className="block size-full object-cover" src={lane.photo} alt="" /> : <GeneratedAvatar name={lane.name} />}

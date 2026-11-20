@@ -73,10 +73,27 @@ describe("COURSE-05 — everything stays inside its lane, from 2 to 8 lanes", ()
     expect(part(rows[1]!, "wpm")).toContain("whitespace-nowrap");
   });
 
-  test("narrow lanes drop the WPM and the avatar first; the rank is never hidden", () => {
+  test("narrow lanes drop the WPM first; the rank is never hidden", () => {
     expect(part(rows[1]!, "wpm")).toMatch(/\[@container\(max-width:\d+px\)\]:hidden/);
-    expect(part(rows[1]!, "avatar")).toMatch(/\[@container\(max-width:\d+px\)\]:hidden/);
     expect(part(rows[1]!, "rank")).not.toContain(":hidden");
+  });
+
+  test("every lane keeps its avatar at every width: no hiding variant, it shrinks and moves above the name instead", () => {
+    rows.forEach((row) => {
+      const avatar = part(row, "avatar");
+      expect(avatar).not.toBe("");
+      expect(avatar).not.toMatch(/(^|\s)(hidden|[^\s"]*:hidden)(\s|")/);
+      expect(avatar).toMatch(/\[@container\(max-width:\d+px\)\]:size-\[1[4-6]px\]/);
+    });
+    expect(part(rows[1]!, "name")).toMatch(/\[@container\(max-width:\d+px\)\]:flex-col/);
+  });
+
+  test("with 8 players, an account's photo is shown in its lane", () => {
+    const photo = "data:image/webp;base64,UklGRg==";
+    const withPhoto = lanes(render(state("player", eight.map((p, i) => (i === 5 ? { ...p, bot: undefined, image: photo } : p))), "en"));
+    expect(withPhoto).toHaveLength(8);
+    expect(withPhoto[5]).toContain(`src="${photo}"`);
+    expect(part(withPhoto[5]!, "avatar")).not.toMatch(/:hidden/);
   });
 
   test("the local name wraps instead of being covered: the YOU badge sits outside the name line", () => {

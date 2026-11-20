@@ -2,7 +2,7 @@ import { useEffect, useMemo, useReducer, useState } from "react";
 import type { Player, Room } from "../../room/room";
 import { seededRandom } from "../../../rooms/text";
 import { buildWords } from "../course";
-import { advanceBots, applyInput, applyRemote,createCourse, createRace, everyoneDone, TICK_MS, type Race } from "../race";
+import { advanceBots, applyInput, applyRemote, createCourse, createRace, everyoneDone, TICK_MS, type Race } from "../race";
 
 export const COUNT_STEP_MS = 800;
 export const GO_MS = 500;
