@@ -189,3 +189,36 @@ describe("COURSE-01 — the client phases follow the server state machine", () =
     expect(advanceBots(startRace(fresh(), 1000), 1000 + 60_000, [0]).phase).toBe("done");
   });
 });
+
+describe("COURSE-04 — WPM and accuracy move live, as the player types", () => {
+  // 1 minute écoulée : MPM = caractères justes ÷ 5
+  const at = (race: Race) => ({ ...race, now: 61000 });
+  const start = () => racing("fix", [ME, BOT], ["sushi", "maki"]);
+
+  test("WPM counts the right letters of the word being typed, not only finished words", () => {
+    expect(myWpm(at(type(start(), "s", "su", "sus", "sush")))).toBe(1); // 4 lettres justes
+    expect(myWpm(at(type(start(), "s", "su", "sus", "sush", "sushi", "sushi ", "m", "ma", "mak")))).toBe(2); // 6 (espace comprise) + 3
+  });
+
+  test("wrong letters of the word being typed do not count in WPM", () => {
+    expect(myWpm(at(type(start(), "s", "sx", "sxs", "sxsh", "sxshi")))).toBe(0); // 1 seule lettre juste avant la faute
+  });
+
+  test("WPM changes with time even between keystrokes", () => {
+    const race = type(start(), "s", "su", "sus", "sush", "sushi", "sushi ");
+    expect(myWpm({ ...race, now: 31000 })).toBe(2); // 6 caractères en 30 s
+    expect(myWpm({ ...race, now: 61000 })).toBe(1);
+  });
+
+  test("accuracy drops on a wrong letter and comes back up with right ones", () => {
+    expect(myAccuracy(type(start(), "s"))).toBe(100);
+    expect(myAccuracy(type(start(), "s", "sx"))).toBe(50);
+    expect(myAccuracy(type(start(), "s", "sx", "s", "su", "sus", "sush"))).toBe(80); // 5 frappes, 1 fausse
+  });
+
+  test("the final WPM of a finished race only counts validated words", () => {
+    const race = type(start(), "s", "su", "sus", "sush", "sushi", "sushi ", "m", "ma", "mak", "maki");
+    expect(race.finishedAt).toBe(2000);
+    expect(myWpm({ ...race, finishedAt: 61000 })).toBe(2); // 11 caractères : « sushi maki » et l'espace finale
+  });
+});

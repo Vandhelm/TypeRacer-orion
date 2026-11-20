@@ -288,10 +288,18 @@ export function secondsLeft(race: Race) {
   return Math.ceil(Math.max(0, race.course.durationMs - (race.startedAt ? race.now - race.startedAt : 0)) / 1000);
 }
 
-/** Vitesse en mots par minute : seuls comptent les caractères des mots réussis. */
+/** COURSE-04 : les lettres justes du mot en cours, jusqu'à la première faute. */
+function currentRightChars(race: Race) {
+  const target = race.course.words[race.wordIndex] ?? "";
+  let k = 0;
+  while (k < race.typed.length && race.typed[k] === target[k]) k++;
+  return k;
+}
+
+/** Vitesse en mots par minute (annexe A) : les caractères des mots réussis, plus les lettres justes du mot en cours. */
 export function myWpm(race: Race) {
   const minutes = elapsedMs(race) / 60000;
-  return minutes > 0.02 ? Math.round(myValidChars(race) / CHARS_PER_WORD / minutes) : 0;
+  return minutes > 0.02 ? Math.round((myValidChars(race) + currentRightChars(race)) / CHARS_PER_WORD / minutes) : 0;
 }
 
 export function myAccuracy(race: Race) {
