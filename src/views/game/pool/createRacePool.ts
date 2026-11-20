@@ -6,6 +6,7 @@ import M from 'matter-js';
 import fishHalfOpenImage from '../../../assets/game/fish-half-open.png';
 import fishOpenImage from '../../../assets/game/fish-open.png';
 import pipeImage from '../../../assets/game/pipe.png';
+import { measureOnce, type Measure } from './measure';
 
 // Bun donne l'URL de l'image (chaîne) ; Next.js donne un objet { src, width, height }.
 const assetUrl = (image: string | { src: string }): string => (typeof image === 'string' ? image : image.src);
@@ -46,6 +47,8 @@ type Lane = {
   engine?: M.Engine; key?: string; statics?: M.Body[]; anchor?: Pt;
   queued?: number; pushing?: boolean; timer?: ReturnType<typeof setTimeout>; stack?: Set<Scoop> | null;
   rise?: number; meal?: Meal | null; mealDone?: boolean; sinceFinish?: number; ready?: number;
+  /** PERF-03 : la géométrie mesurée, gardée jusqu'au prochain changement de taille du couloir */
+  geo: Measure<Geometry>; neck?: string;
 };
 type Geometry = {
   W: number; H: number; fw: number; k: number; fx: number; fy: number; exit: number; R: number; top: number; head: Pt[]; mouth: Pt;
@@ -183,7 +186,9 @@ export function createRacePool(root: HTMLElement, { players, images }: { players
   let rafId: number | null = null, lastTime = 0, leftover = 0;
   const halftones: Record<string, CanvasPattern> = {};
 
-  function geometry(lane: Lane): Geometry | null {
+  // PERF-03 : mesurer force styles et mise en page ; on ne le fait qu'au premier dessin et quand le couloir change de taille
+  const geometry = (lane: Lane): Geometry | null => lane.geo.get();
+  function measureGeometry(lane: Lane): Geometry | null {
     const el = lane.el, fish = lane.fish, pipe = lane.pipe;
     const W = el.clientWidth, H = el.clientHeight, fw = fish.offsetWidth;
     if (!fw || !H) return null;
@@ -274,7 +279,9 @@ export function createRacePool(root: HTMLElement, { players, images }: { players
     else d = 100;
     const src = images.fish[MOUTH_FRAMES[lane.step]![0]]!;
     if (lane.fish.getAttribute('src') !== src) lane.fish.setAttribute('src', src);
-    lane.el.style.setProperty('--neck', 'var(--neck' + MOUTH_FRAMES[lane.step]![0] + ')');
+    // PERF-03 : 30 couloirs, 10 fois par seconde : on n'écrit le style que s'il change
+    const neck = 'var(--neck' + MOUTH_FRAMES[lane.step]![0] + ')';
+    if (lane.neck !== neck) { lane.neck = neck; lane.el.style.setProperty('--neck', neck); }
     lane.timer = setTimeout(() => mouth(lane), d);
   }
   function cyclePipe(lane: Lane) {
@@ -845,13 +852,19 @@ export function createRacePool(root: HTMLElement, { players, images }: { players
     rafId = active ? requestAnimationFrame(scoopLoop) : null;
   }
 
-  function keepNeckOnResize() {
-    lanes.forEach((lane) => {
+  function keepNeckOnResize(changed: Lane[]) {
+    changed.forEach((lane) => {
+      lane.geo.invalidate();
       const g = lane.mealDone && geometry(lane);
       if (g) lane.el.style.setProperty('--neck-rise', finalRise(g).toFixed(1) + 'px');
     });
   }
-  window.addEventListener('resize', keepNeckOnResize);
+  // un couloir (ou sa tête) change de taille : sa géométrie est remesurée ; sans ResizeObserver, au redimensionnement
+  const resized = typeof ResizeObserver === 'function'
+    ? new ResizeObserver((entries) => keepNeckOnResize(lanes.filter((lane) => entries.some((entry) => entry.target === lane.el || entry.target === lane.fish))))
+    : null;
+  const onWindowResize = () => keepNeckOnResize(lanes);
+  if (!resized) window.addEventListener('resize', onWindowResize);
 
   lanes = players.map((player, id): Lane => {
     const el = document.createElement('div');
@@ -872,7 +885,11 @@ export function createRacePool(root: HTMLElement, { players, images }: { players
     canvas.setAttribute('aria-hidden', 'true');
     el.append(pipe, neck, fish, canvas);
     root.appendChild(el);
-    return { id, el, fish, pipe, canvas, ctx: context2d(canvas), scoops: [], drops: [], launched: 0, step: 0, stamp: null, finished: false, glued: [] };
+    const lane: Lane = { id, el, fish, pipe, canvas, ctx: context2d(canvas), scoops: [], drops: [], launched: 0, step: 0, stamp: null, finished: false, glued: [],
+      geo: measureOnce(() => measureGeometry(lane)) };
+    resized?.observe(el);
+    resized?.observe(fish);
+    return lane;
   });
   lanes.forEach(mouth);
 
@@ -892,7 +909,8 @@ export function createRacePool(root: HTMLElement, { players, images }: { players
       if (!rafId) { lastTime = performance.now(); rafId = requestAnimationFrame(scoopLoop); }
     },
     destroy() {
-      window.removeEventListener('resize', keepNeckOnResize);
+      window.removeEventListener('resize', onWindowResize);
+      resized?.disconnect();
       if (rafId) cancelAnimationFrame(rafId);
       rafId = null;
       const closing = lanes;
