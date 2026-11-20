@@ -3,6 +3,7 @@
 // L'identité n'est jamais dans un message : le serveur la tient du ticket présenté à la connexion.
 import { z } from "zod";
 import { CODE_PATTERN } from "../rooms/access";
+import { CHECKPOINTS, MAX_BONUSES } from "../rooms/bonus";
 import { MAX_HUMAN_WPM } from "./referee";
 
 /** Un message plus long est refusé par le serveur avant même d'être lu. */
@@ -43,8 +44,8 @@ export const ERROR_CODES = [
   "abandoned",
 ] as const;
 
-/** COURSE-06 : la place d'un coureur au classement du serveur ; `finishedMs` : temps d'arrivée depuis le départ serveur. */
-export const Standing = z.object({ playerId: z.string(), rank: z.number().int().min(1), progress: z.number().min(0).max(1), wpm: z.number().min(0).max(WPM_MAX), finishedMs: z.number().nullable() });
+/** COURSE-06 : la place d'un coureur au classement du serveur ; `finishedMs` : temps d'arrivée depuis le départ serveur ; `bonuses` (BONUS-01) : bonus reçus, seulement quand les bonus sont activés. */
+export const Standing = z.object({ playerId: z.string(), rank: z.number().int().min(1), progress: z.number().min(0).max(1), wpm: z.number().min(0).max(WPM_MAX), finishedMs: z.number().nullable(), bonuses: z.number().int().min(0).max(MAX_BONUSES).optional() });
 
 export const ServerMessage = z.discriminatedUnion("type", [
   z.object({ type: z.literal("welcome"), you: Player }),
@@ -56,6 +57,9 @@ export const ServerMessage = z.discriminatedUnion("type", [
   z.object({ type: z.literal("closed"), room: RoomCode }),
   // COURSE-06 : le départ et la fin décidés par le serveur (ms epoch), et son classement des coureurs
   z.object({ type: z.literal("standings"), room: RoomCode, startsAt: z.number(), endsAt: z.number().nullable(), players: z.array(Standing) }),
+  // BONUS-01 : un bonus de remontée attribué par le serveur à `playerId`, au point de contrôle `checkpoint` (1 à 3) ;
+  // `count` : ses bonus dans la course, celui-ci compris. L'effet (BONUS-02) et l'annonce (BONUS-03) s'y branchent.
+  z.object({ type: z.literal("bonus"), room: RoomCode, playerId: z.string(), checkpoint: z.number().int().min(1).max(CHECKPOINTS.length), count: z.number().int().min(1).max(MAX_BONUSES) }),
 ]);
 export type ServerMessage = z.infer<typeof ServerMessage>;
 
