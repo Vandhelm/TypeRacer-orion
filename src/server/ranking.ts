@@ -96,7 +96,8 @@ const RANK_SHIFT = 1_000_000;
  * COURSE-10 : reclasse les courses déjà enregistrées pour le lancement en cours de ce salon (races.room_id et départ
  * serveur) avec ce que le serveur sait maintenant : une course envoyée à l'abandon a été classée avant la fin des
  * autres. Appelée à chaque enregistrement et au passage aux résultats. Les lignes gardées (race_results) et les autres
- * (races.others) reçoivent leur nouveau rang ; un humain connu du serveur, son arrivée et son abandon. Les bots sont
+ * (races.others) reçoivent leur nouveau rang ; un humain connu du serveur, son arrivée et son abandon ; HIST-02 : un
+ * coureur éliminé (mode fatal), son élimination. Les bots sont
  * ceux qui ont une ligne de bot, à la progression envoyée par le navigateur (race_results.progress).
  */
 export async function rerankLaunch(db: Db, roomId: number): Promise<void> {
@@ -123,10 +124,13 @@ export async function rerankLaunch(db: Db, roomId: number): Promise<void> {
     ].sort((a, b) => a.rank - b.rank);
     const ranked = rankByServer(entries, standings, bots);
     // BOT-05 : un bot calculé par le serveur prend aussi son arrivée
+    // HIST-02 : et son élimination (mode fatal), écrite après l'enregistrement : room_members.eliminated_at pour un
+    // humain, le moteur pour un bot ; jamais en recul (un coureur parti n'a plus son eliminated_at)
     const statusOf = (name: string) => {
       const s = standings.get(name.toLowerCase());
       if (!s) return {};
-      return bots.has(name.toLowerCase()) ? { finished: !!s.finishedAt } : { abandoned: !!s.abandonedAt, finished: !!s.finishedAt && !s.abandonedAt };
+      const eliminated = s.eliminatedAt ? { eliminated: true } : {};
+      return bots.has(name.toLowerCase()) ? { finished: !!s.finishedAt, ...eliminated } : { abandoned: !!s.abandonedAt, finished: !!s.finishedAt && !s.abandonedAt, ...eliminated };
     };
     // HIST-02 : les bonus reçus depuis l'enregistrement (un coureur encore en course) ; jamais pour une course
     // enregistrée sans bonus (désactivés), jamais en recul (un coureur parti n'a plus ses bonus dans room_members)

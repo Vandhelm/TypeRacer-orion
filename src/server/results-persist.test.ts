@@ -10,7 +10,8 @@ import { createAuth } from "./auth";
 import { launchBots } from "./bot-course";
 import { handleRace, MAX_RAW_WPM } from "./races";
 import { launchedRoomFor, withoutBotCourse } from "./races.fixture";
-import { abandonRace, keepReceivedBonus, memberKey, recordProgress } from "./rooms";
+import { abandonRace, eliminateRunner, keepReceivedBonus, memberKey, recordProgress } from "./rooms";
+import { rerankLaunch } from "./ranking";
 import { raceDetail } from "./history";
 import { botRunnerId } from "../rooms/bots";
 import { COUNTDOWN_MS } from "../rooms/race-clock";
@@ -227,5 +228,72 @@ describe("HIST-02 — the bonuses each runner received are recorded and shown ag
     expect(rival!.received).toEqual(["fog", "fog", "fog"]);
     const [mine] = await db.select({ received: roomMembers.receivedBonuses }).from(roomMembers).where(and(eq(roomMembers.roomId, t.roomId), eq(roomMembers.memberKey, memberKey(t.who))));
     expect(mine!.received).toEqual([]);
+  });
+});
+
+describe("HIST-02 — an elimination written after a race was recorded reaches that race when it is re-ranked", () => {
+  /** Un salon lancé en mode fatal avec ce rival (un compte), sans course de bots calculée ; renvoie son id et son départ. */
+  const fatal = async (prefix: string) => {
+    const me = await signUp(`${prefix}_Moi`);
+    const rival = await signUp(`${prefix}_Autre`);
+    const rivalWho = { kind: "account" as const, playerId: rival.playerId, name: `${prefix}_Autre` };
+    const { code, who } = await launchedRoomFor(db, auth, me.cookie, GUEST_SECRET, 10_000, [rivalWho]);
+    await withoutBotCourse(db, code);
+    const [room] = await db.select({ id: rooms.id, configId: rooms.configId, launchedAt: rooms.launchedAt }).from(rooms).where(eq(rooms.code, code));
+    await db.update(raceConfigs).set({ mistakes: "fatal" }).where(eq(raceConfigs.id, room!.configId));
+    return { me, who, rival, rivalWho, code, roomId: room!.id, startsAt: room!.launchedAt!.getTime() + COUNTDOWN_MS };
+  };
+  const fatalSummary = { ...SUMMARY, mistakes: "fatal" };
+
+  test("A posts after arriving, B is eliminated later: in A's race, others[B].eliminated is true", async () => {
+    const t = await fatal("Elim_Tard");
+    await recordProgress(db, t.code, memberKey(t.who), 1);
+    const res = await post({ room: t.code, summary: fatalSummary, players: [result(t.who.name, { finished: true }), result(t.rivalWho.name)] }, t.me.cookie);
+    expect(res.status).toBe(201);
+    const raceId = await raceIdOf(res);
+    const before = (await db.select({ others: races.others }).from(races).where(eq(races.id, raceId)))[0]!.others;
+    expect(before.find((o) => o.name === t.rivalWho.name)!.eliminated).toBe(false);
+    expect(await eliminateRunner(db, t.code, t.startsAt, memberKey(t.rivalWho), 0.4)).toBe(true);
+    await rerankLaunch(db, t.roomId);
+    const [race] = await db.select({ others: races.others }).from(races).where(eq(races.id, raceId));
+    const other = race!.others.find((o) => o.name === t.rivalWho.name)!;
+    expect(other.eliminated).toBe(true);
+    expect(other.finished).toBe(false);
+  });
+
+  test("the eliminated runner's own race, posted before the elimination was written, is recorded eliminated", async () => {
+    const t = await fatal("Elim_Soi");
+    await recordProgress(db, t.code, memberKey(t.rivalWho), 0.3);
+    const res = await post({ room: t.code, summary: fatalSummary, players: [result(t.rivalWho.name), result(t.who.name)] }, t.rival.cookie);
+    expect(res.status).toBe(201);
+    const raceId = await raceIdOf(res);
+    expect((await rowOf(raceId, t.rivalWho.name)).eliminated).toBe(false);
+    expect(await eliminateRunner(db, t.code, t.startsAt, memberKey(t.rivalWho), 0.4)).toBe(true);
+    await rerankLaunch(db, t.roomId);
+    expect((await rowOf(raceId, t.rivalWho.name)).eliminated).toBe(true);
+  });
+
+  test("a bot the engine eliminates after the race was recorded is shown eliminated in that race", async () => {
+    const me = await signUp("Elim_Bot_Tard");
+    // la course vient de partir : aucun bot n'a encore tapé, aucun n'est éliminé
+    const { code } = await launchedRoomFor(db, auth, me.cookie, GUEST_SECRET, COUNTDOWN_MS);
+    const [room] = await db.select({ id: rooms.id, configId: rooms.configId }).from(rooms).where(eq(rooms.code, code));
+    await db.update(raceConfigs).set({ mistakes: "fatal", botAccuracy: "shaky" }).where(eq(raceConfigs.id, room!.configId));
+    const early = (await launchBots(db, room!.id, 1)).standings;
+    expect([...early.values()].every((s) => !s.eliminatedAt)).toBe(true);
+    const bots = [...early.keys()];
+    const res = await post({ room: code, summary: { ...fatalSummary, botAccuracy: "shaky" }, players: [result("Elim_Bot_Tard", { seconds: 0 }), ...bots.map((name) => ({ ...result(name, { seconds: 0 }), bot: true }))] }, me.cookie);
+    expect(res.status).toBe(201);
+    const raceId = await raceIdOf(res);
+    // 70 s plus tard : le moteur en a éliminé (la course enregistrée suit le départ reculé)
+    await db.update(rooms).set({ launchedAt: sql`now() - ${70_000} * interval '1 millisecond'` }).where(eq(rooms.id, room!.id));
+    const [moved] = await db.select({ launchedAt: rooms.launchedAt }).from(rooms).where(eq(rooms.id, room!.id));
+    await db.update(races).set({ startedAt: new Date(moved!.launchedAt!.getTime() + COUNTDOWN_MS) }).where(eq(races.id, raceId));
+    const late = (await launchBots(db, room!.id, 1)).standings;
+    const out = bots.filter((name) => late.get(name)!.eliminatedAt);
+    expect(out.length).toBeGreaterThan(0);
+    await rerankLaunch(db, room!.id);
+    const recorded = await db.select({ name: players.name, eliminated: raceResults.eliminated }).from(raceResults).innerJoin(players, eq(players.id, raceResults.playerId)).where(and(eq(raceResults.raceId, raceId), eq(players.isBot, true)));
+    expect(recorded.filter((r) => r.eliminated).map((r) => r.name.toLowerCase()).sort()).toEqual(out.sort());
   });
 });
