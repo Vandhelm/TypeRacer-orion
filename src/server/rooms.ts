@@ -637,6 +637,26 @@ export async function kickMember(db: Db, code: string, who: Identity, target: st
 }
 
 /**
+ * COURSE-11 : sur l'écran des résultats, l'hôte ferme la salle. Sous le verrou du salon : il passe à « closed » et tous
+ * ses membres en sortent (libres d'entrer ailleurs, SALLE-06). Seul l'hôte ferme ; pendant une course, c'est refusé.
+ */
+export async function closeRoom(db: Db, code: string, who: Identity): Promise<{ closed: true }> {
+  const { id } = await roomByCode(db, code);
+  const key = memberKey(who);
+  await db.transaction(async (tx) => {
+    await sweep(tx, id, key);
+    const [room] = await tx.select({ status: rooms.status, hostId: rooms.hostId }).from(rooms).where(eq(rooms.id, id)).for("update");
+    if (!room || room.status === "closed") throw new RoomRefused("not_found");
+    if (!(await membership(tx, id, key))) throw new RoomRefused("not_found"); // SALLE-10 : un non-membre ne sait pas si le salon existe
+    if (key !== memberKey({ playerId: room.hostId })) throw new RoomRefused("not_host");
+    if (room.status === "racing") throw new RoomRefused("in_race");
+    await tx.delete(roomMembers).where(eq(roomMembers.roomId, id));
+    await tx.update(rooms).set({ status: "closed" }).where(eq(rooms.id, id));
+  });
+  return { closed: true };
+}
+
+/**
  * Quitter un salon. SALLE-08 : si l'hôte part, le rôle passe à la personne humaine connectée la plus ancienne ;
  * sans personne pour le reprendre, le salon est fermé (afterDeparture).
  */
