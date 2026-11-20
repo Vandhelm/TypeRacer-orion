@@ -1,7 +1,7 @@
 // COURSE-10 : le classement final d'une course de salon, fait par le serveur. Les règles (rankByServer), ce que le
 // serveur sait des coureurs d'un lancement, même partis (launchStandings), et le reclassement des courses déjà
 // enregistrées pour ce lancement (rerankLaunch). Sans dépendance vers rooms.ts ni races.ts, qui l'utilisent tous les deux.
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import type { Db } from "../../db/client";
 import { players, raceConfigs, raceResults, races, roomMembers, rooms } from "../../db/schema";
 import { raceClock } from "../rooms/race-clock";
@@ -87,6 +87,9 @@ export async function launchStandings(db: Db, roomId: number, withText = false) 
   return { runners, humanNames, standings, absent, botsRunning: bots.running, course: bots.course };
 }
 
+/** COURSE-10 : décalage temporaire des rangs reclassés (bien au-delà des 30 places d'un salon). */
+const RANK_SHIFT = 1_000_000;
+
 /**
  * COURSE-10 : reclasse les courses déjà enregistrées pour le lancement en cours de ce salon (races.room_id et départ
  * serveur) avec ce que le serveur sait maintenant : une course envoyée à l'abandon a été classée avant la fin des
@@ -123,6 +126,10 @@ export async function rerankLaunch(db: Db, roomId: number): Promise<void> {
       if (!s) return {};
       return bots.has(name.toLowerCase()) ? { finished: !!s.finishedAt } : { abandoned: !!s.abandonedAt, finished: !!s.finishedAt && !s.abandonedAt };
     };
+    // deux lignes qui échangent leur rang violeraient race_results_race_rank_unique (vérifiée ligne par ligne) : les
+    // rangs passent d'abord hors de portée (au-dessus de RANK_SHIFT, la contrainte rank >= 1 interdit les négatifs)
+    const moved = ranked.filter((e) => e.row >= 0 && e.rank !== rows.find((r) => r.id === e.row)!.rank).map((e) => e.row);
+    if (moved.length) await db.update(raceResults).set({ rank: sql`${raceResults.rank} + ${RANK_SHIFT}` }).where(and(eq(raceResults.raceId, race.id), inArray(raceResults.playerId, moved)));
     for (const entry of ranked) {
       if (entry.row >= 0) await db.update(raceResults).set({ rank: entry.rank, ...statusOf(entry.name) }).where(and(eq(raceResults.raceId, race.id), eq(raceResults.playerId, entry.row)));
     }
