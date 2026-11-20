@@ -87,6 +87,8 @@ export type RoomView = {
   endsAt: number | null;
   /** COURSE-06 : l'empreinte des mots tirés au lancement (src/rooms/course-words.ts) ; null avant. */
   textHash: string | null;
+  /** COURSE-03 : l'heure de la base (même horloge que startsAt) au moment de la lecture, en ms epoch : le client en déduit son décalage. */
+  serverNow: number;
 };
 export type RoomStatus = (typeof rooms.$inferSelect)["status"];
 /** Ce que renvoie une action réussie : l'état du salon, et la clé de celui qui l'a demandée. */
@@ -214,11 +216,14 @@ const roomColumnsOf = (s: RoomSettings) => ({ name: s.autoName ? "" : s.name, au
 /** L'état d'un salon tel que le voit `viewer`. Sans lien d'invitation : l'hôte les lit à part (room-invites.ts, SALLE-04). */
 export async function roomView(db: Db, roomId: number, _viewer?: string): Promise<RoomView> {
   const [row] = await db
-    .select()
+    // COURSE-03 : clock_timestamp() et non now(), figé au début de la transaction
+    .select({ rooms, race_configs: raceConfigs, serverNow: sql<number>`extract(epoch from clock_timestamp()) * 1000`.mapWith(Number) })
     .from(rooms)
     .innerJoin(raceConfigs, eq(raceConfigs.id, rooms.configId))
     .where(eq(rooms.id, roomId));
   if (!row) throw new RoomRefused("not_found");
+  // COURSE-03 : le texte (passage, graine, empreinte) n'est révélé qu'au début du décompte, donc une fois le salon lancé
+  const revealed = row.rooms.status === "racing" || row.rooms.status === "results";
   const members = await db
     .select({ key: roomMembers.memberKey, playerId: roomMembers.playerId, guestName: roomMembers.guestName, playerName: players.name, role: roomMembers.role, seat: roomMembers.seat, color: roomMembers.color, finishedAt: roomMembers.finishedAt, image: user.image })
     .from(roomMembers)
@@ -227,7 +232,7 @@ export async function roomView(db: Db, roomId: number, _viewer?: string): Promis
     .where(eq(roomMembers.roomId, roomId))
     .orderBy(asc(roomMembers.joinedAt), asc(roomMembers.memberKey));
   const host = memberKey({ playerId: row.rooms.hostId });
-  const { textId } = row.rooms;
+  const textId = revealed ? row.rooms.textId : null;
   const passage = textId === null ? null : await composePassage(db, { language: row.race_configs.language, words: wordTarget(row.race_configs), startId: textId });
   return {
     code: row.rooms.code,
@@ -236,9 +241,10 @@ export async function roomView(db: Db, roomId: number, _viewer?: string): Promis
     settings: settingsOf(row.rooms, row.race_configs),
     members: members.map((m) => ({ key: m.key, name: m.playerName ?? m.guestName ?? "", guest: m.playerId === null, host: m.key === host, role: m.role, seat: m.seat, color: m.color, finished: m.finishedAt !== null, image: storedAvatar(m.image) })),
     passage: passage && { body: passage.body, source: passage.source },
-    seed: row.rooms.textSeed,
+    seed: revealed ? row.rooms.textSeed : null,
     ...raceClock(row.rooms.launchedAt, row.race_configs.duration),
-    textHash: row.rooms.textHash,
+    textHash: revealed ? row.rooms.textHash : null,
+    serverNow: Math.round(row.serverNow),
   };
 }
 

@@ -8,7 +8,7 @@ const view = (status: RoomView["status"], finished: boolean, host = "player:1"):
   result: {
     you: "player:2",
     room: {
-      code: "ABC234", status, host, passage: null, seed: null, startsAt: null, endsAt: null, textHash: null, settings: {} as RoomView["settings"],
+      code: "ABC234", status, host, passage: null, seed: null, startsAt: null, endsAt: null, textHash: null, serverNow: 0, settings: {} as RoomView["settings"],
       members: [
         { key: "player:1", name: "Hote", guest: false, host: host === "player:1", role: "player", seat: 0, color: null, finished },
         { key: "player:2", name: "Moi", guest: false, host: host === "player:2", role: "player", seat: 1, color: null, finished },
