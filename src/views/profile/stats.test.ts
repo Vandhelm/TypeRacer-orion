@@ -19,16 +19,6 @@ describe("guest session stats", () => {
   });
 });
 
-describe("COURSE-10 — a guest's abandon never counts as a win", () => {
-  beforeEach(() => store.clear());
-
-  test("an abandon ranked first (alone in the room) is a race, not a win", () => {
-    rememberGuestRace({ at: "2026-11-11T10:00:00Z", wpm: 40, accuracy: 90, rank: 1, abandoned: true });
-    rememberGuestRace({ at: "2026-11-11T10:05:00Z", wpm: 60, accuracy: 95, rank: 1 });
-    expect(guestStats("Invite")).toMatchObject({ races: 2, wins: 1 });
-  });
-});
-
 describe("AUTH-06 — where a profile's stats come from", () => {
   const me = { me: true };
   test("signed in, my own result from the podium: the server history", () => {

@@ -30,8 +30,7 @@ export async function fetchStats(name: string, signal?: AbortSignal): Promise<Pl
 
 const GUEST_KEY = "orion-guest-races";
 const MAX_GUEST_RACES = 200;
-/** abandoned (COURSE-10) : une course abandonnée n'est jamais une victoire, même classée première. */
-type GuestRace = { at: string; wpm: number; accuracy: number; rank: number; keys?: KeyCounts; abandoned?: boolean };
+type GuestRace = { at: string; wpm: number; accuracy: number; rank: number; keys?: KeyCounts };
 
 /** Les courses d'un invité, gardées le temps de sa session (cet onglet) : rien n'est enregistré sur le serveur (AUTH-03). */
 export function rememberGuestRace(race: GuestRace) {
@@ -60,7 +59,7 @@ export function guestStats(name: string): PlayerStats {
     name,
     bot: false,
     races: races.length,
-    wins: races.filter((race) => race.rank === 1 && !race.abandoned).length,
+    wins: races.filter((race) => race.rank === 1).length,
     bestWpm: races.length ? Math.max(...wpms) : null,
     averageWpm: races.length ? Math.round(average(wpms)!) : null,
     averageAccuracy: accuracy === null ? null : Math.round(accuracy * 10) / 10,
