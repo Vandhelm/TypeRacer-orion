@@ -175,9 +175,9 @@
     "scope": "site (light)"
   },
   "CONF-01": {
-    "commit": "2acdffe",
+    "commit": "455ae18",
     "date": "2026-11-19",
-    "scope": "suivi (light)"
+    "scope": "critère (medium)"
   },
   "CONF-02": {
     "commit": "2acdffe",
