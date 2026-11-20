@@ -11,6 +11,7 @@ import { launchBlocker } from "../rooms/launch";
 import { follow, raceState, storedStatus, type RaceEvent, type RaceState } from "../rooms/race-state";
 import { concealText, textRevealed } from "../rooms/conceal";
 import { COUNTDOWN_MS, raceClock } from "../rooms/race-clock";
+import { ABANDON_AFTER_MS } from "../rooms/reconnect";
 import { courseWords, textFingerprint } from "../rooms/course-words";
 import type { RoomFilters } from "../rooms/explorer";
 import { seatColor } from "../rooms/seats";
@@ -549,12 +550,13 @@ export const raceDeadlineMs = (durationSeconds: number) => durationSeconds * 100
  */
 export const MEMBER_AWAY_MS = 90_000;
 /**
- * COURSE-08 : pendant la course, un coureur sans signe de vie depuis ce délai (rechargement ou coupure qui dure) a
- * abandonné. Mesuré par l'heure de la base, depuis room_members.last_seen_at (lecture du salon : /game la relit toutes
- * les RACE_PRESENCE_MS, src/views/room/presence.ts), au plus tôt depuis le départ ; appliqué à chaque balayage du salon
- * (sweep : lecture ou action d'un membre, balayage du temps réel toutes les 5 s). Voir docs/ARCHITECTURE.md.
+ * COURSE-08 : pendant la course, un coureur sans signe de vie depuis ABANDON_AFTER_MS (RECONNECT_MS = 30 s depuis sa
+ * coupure, plus RACE_PRESENCE_MS, l'écart au pire entre son dernier signe de vie et la coupure) a abandonné. Mesuré par
+ * l'heure de la base, depuis room_members.last_seen_at (lecture du salon : /game la relit toutes les RACE_PRESENCE_MS ;
+ * progression acceptée par le temps réel), au plus tôt depuis le départ ; appliqué à chaque balayage du salon (sweep :
+ * lecture ou action d'un membre, balayage du temps réel toutes les 5 s). Voir docs/ARCHITECTURE.md.
  */
-export const RECONNECT_MS = 30_000;
+export { ABANDON_AFTER_MS, RECONNECT_MS } from "../rooms/reconnect";
 
 /**
  * Le salon à jour, sous son verrou (pris ici) : l'heure de la base décide, sans minuterie de processus (Next.js, Vercel).
@@ -580,7 +582,7 @@ async function sweep(tx: Db, roomId: number, actor?: string | string[]): Promise
 }
 
 /**
- * COURSE-08 : les coureurs (participants ni arrivés ni ayant abandonné) silencieux depuis RECONNECT_MS, comptés au plus
+ * COURSE-08 : les coureurs (participants ni arrivés ni ayant abandonné) silencieux depuis ABANDON_AFTER_MS, comptés au plus
  * tôt depuis le départ, ont abandonné : même effet que abandonRace (abandoned_at, progression validée gardée, une fin
  * pour COURSE-09). Seulement en course, temps non écoulé : après, chacun est classé par sa progression. Sous le verrou.
  */
@@ -597,7 +599,7 @@ async function abandonSilentRunners(tx: Db, roomId: number): Promise<boolean> {
         eq(roomMembers.role, "player"),
         isNull(roomMembers.finishedAt),
         isNull(roomMembers.abandonedAt),
-        sql`greatest(${roomMembers.lastSeenAt}, ${startsAt}) < now() - ${RECONNECT_MS} * interval '1 millisecond'`,
+        sql`greatest(${roomMembers.lastSeenAt}, ${startsAt}) < now() - ${ABANDON_AFTER_MS} * interval '1 millisecond'`,
         sql`${running}`,
       ),
     )

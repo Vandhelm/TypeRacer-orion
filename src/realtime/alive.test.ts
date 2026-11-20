@@ -11,6 +11,7 @@ import { handleRealtimeTicket } from "../server/realtime-ticket";
 import { memoryRoomEvents } from "../server/room-events";
 import { handleRoomsApi } from "../server/rooms-api";
 import type { ServerMessage } from "./protocol";
+import { ABANDON_AFTER_MS } from "../server/rooms";
 import { createRoomBackend } from "./room-backend";
 import { createRealtimeServer } from "./server";
 
@@ -92,10 +93,10 @@ describe("COURSE-08 — an accepted progress is a sign of life", () => {
     page.ws.close();
   });
 
-  test("31 s without HTTP read and without progress: abandoned by the realtime sweep, the page is told", async () => {
+  test("past the delay without HTTP read and without progress: abandoned by the realtime sweep, the page is told", async () => {
     const { code, guest, key } = await launched("Muet_Onglet");
     const page = await racePage(code, guest);
-    await silentFor(key, 31_000);
+    await silentFor(key, ABANDON_AFTER_MS + 1_000);
     for (let i = 0; i < 100 && !(await member(code, key)).abandonedAt; i++) await Bun.sleep(10);
     expect((await member(code, key)).abandonedAt).not.toBeNull();
     await Bun.sleep(REFRESH_MS * 3);
