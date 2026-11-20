@@ -8,6 +8,8 @@ export type RealtimeStatus = "connecting" | "open" | "reconnecting" | "unauthori
 export type PlayerProgress = { progress: number; wpm: number };
 /** COURSE-06 : la course vue par le serveur : départ et fin (ms epoch, horloge serveur) et son classement des coureurs. */
 export type ServerRace = { startsAt: number; endsAt: number | null; standings: Extract<ServerMessage, { type: "standings" }>["players"] };
+/** BONUS-01 / BONUS-02 : un bonus annoncé par le serveur, et son effet. */
+export type ServerBonus = Extract<ServerMessage, { type: "bonus" }>;
 export type RealtimeState = {
   status: RealtimeStatus;
   you: Player | null;
@@ -22,6 +24,8 @@ export type RealtimeState = {
   race?: ServerRace | null;
   /** COURSE-07 / COURSE-08 : le serveur tient ce coureur pour ayant abandonné (bouton, ou plus de 30 s sans signe de vie). */
   abandoned?: boolean;
+  /** BONUS-02 : les bonus annoncés dans la salle, dans l'ordre ; la page de course applique ceux qui la ciblent (BONUS-03 : l'annonce). */
+  bonuses?: ServerBonus[];
 };
 export type TicketGrant = { ticket: string; url: string };
 /** Ce que reçoit une page qui suit son salon (follow) : son état, sa fermeture, ou le refus du serveur (pas ou plus membre). */
@@ -129,6 +133,8 @@ export function connectRealtime({ room, onChange, getTicket = fetchTicket, WebSo
           return update({ progress: { ...state.progress, [message.playerId]: { progress: message.progress, wpm: message.wpm } } });
         case "standings":
           return update({ race: { startsAt: message.startsAt, endsAt: message.endsAt, standings: message.players } });
+        case "bonus":
+          return update({ bonuses: [...(state.bonuses ?? []), message] });
         case "room":
           return onRoom?.({ type: "room", room: message.room });
         case "closed":
