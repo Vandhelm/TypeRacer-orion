@@ -45,3 +45,17 @@ describe("COURSE-04 — every letter is marked as it is typed, with the cursor r
     expect(render("", 0, [], false)).not.toContain("game-cursor");
   });
 });
+
+describe("BONUS-02 — fog blurs the next words, not the word being typed nor the words done", () => {
+  const fogged = (fog: boolean) => renderToStaticMarkup(createElement(TypingText, { words: ["le", "riz", "bol"], wordIndex: 1, typed: "", missed: new Set<number>(), active: true, lang: "fr", fog }));
+  test("with fog, only the words after the current one are blurred", () => {
+    const html = fogged(true);
+    expect(html).toContain('whitespace-pre text-white">le</span>');
+    expect(html).not.toMatch(/blur[^"]*is-current/);
+    expect(html).toMatch(/<span class="[^"]*blur-[^"]*">bol<\/span>/);
+  });
+
+  test("without fog, nothing is blurred", () => {
+    expect(fogged(false)).not.toContain("blur-");
+  });
+});

@@ -13,6 +13,7 @@ import { LiveList } from "../room/LiveList";
 import { READY } from "./countdown";
 import { useRace } from "./hooks/useRace";
 import { AbandonRace } from "./AbandonRace";
+import { bonusesFor } from "./bonus";
 import { abandonOver, canAbandon, handOverPlayers, raceExit } from "./abandon";
 import { KeyboardNotice } from "./KeyboardNotice";
 import { useMobileRace } from "./mobileRace";
@@ -84,7 +85,7 @@ function GameRace({ state, onHandOver }: { state: RoomState; onHandOver?: (sendi
   const [lanes] = useState(() => raceLanes(state.players, state.members ?? []));
   const { players } = lanes;
   const [images, setImages] = useState<RacePoolImages | null>(null);
-  const { race, onInput, onRemote, onResume, onRestore, onSent, stored, arrivedMidRace, showResults } = useRace(room, players, { passage, seed, startsAt, endsAt, clockOffset });
+  const { race, onInput, onRemote, onBonus, onResume, onRestore, onSent, stored, arrivedMidRace, showResults } = useRace(room, players, { passage, seed, startsAt, endsAt, clockOffset });
   // COURSE-07 : abandon enregistré par le serveur ; la progression ne part plus et la page passe au podium
   const [abandoned, setAbandoned] = useState(false);
   // COURSE-08 : remontée après un abandon ou après la fin, la page enregistre ce qu'elle gardait, ou va au podium
@@ -122,6 +123,17 @@ function GameRace({ state, onHandOver }: { state: RoomState; onHandOver?: (sendi
   useEffect(() => {
     if (race.phase === "racing") onRemote(remoteUpdates(live, lanes));
   }, [race.phase, live, lanes, onRemote]);
+
+  // BONUS-02 : chaque bonus annoncé qui me cible change mon texte ou brouille mes prochains mots, une fois
+  const appliedBonuses = useRef(0);
+  useEffect(() => {
+    const announced = live?.bonuses?.length ?? 0;
+    // une connexion neuve repart d'une liste vide
+    const from = announced < appliedBonuses.current ? 0 : appliedBonuses.current;
+    const effects = watching ? [] : bonusesFor(live?.bonuses, from, live?.you?.id ?? null);
+    appliedBonuses.current = announced;
+    onBonus(effects);
+  }, [live, watching, onBonus]);
 
   useEffect(markSessionStart, []);
 

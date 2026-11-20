@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { formatNumber } from "../../i18n/format";
 import { READY } from "./countdown";
-import { elapsedMs, myAccuracy, myWpm, secondsLeft, type Race } from "./race";
+import { fogged } from "./bonus";
+import { elapsedMs, myAccuracy, myCourse, myWpm, secondsLeft, type Race } from "./race";
 import { TypingText } from "./TypingText";
 import { guardTypingField, typingStep, type TypingDraft, type TypingEvent } from "./typingGuard";
 
@@ -28,7 +29,7 @@ export function TypingPanel({ race, onInput, lang }: { race: Race; onInput: (val
   const left = secondsLeft(race);
   const unlimited = left === null;
   const seconds = left ?? Math.floor(elapsedMs(race) / 1000);
-  const target = race.course.words[race.wordIndex] ?? "";
+  const target = myCourse(race).words[race.wordIndex] ?? "";
   const wrong = race.typed.length > 0 && !target.startsWith(race.typed);
   const timerPrefix = race.eliminated ? `${t("game.out")} · ` : race.finishedAt ? `${t("game.done")} · ` : "";
 
@@ -65,7 +66,7 @@ export function TypingPanel({ race, onInput, lang }: { race: Race; onInput: (val
       </div>
       <p className="col-start-1 row-start-1 font-mono text-[max(18px,2.6vh)] leading-none font-normal text-red-text tabular-nums" role="timer" aria-label={`${t(unlimited ? "game.elapsed" : "game.time")} ${seconds} s`}>{timerPrefix}{seconds}</p>
       {/* COURSE-03 : le texte n'est révélé qu'au début du décompte (3, 2, 1) : rien dans la page pendant « Prêts ? » */}
-      <TypingText words={race.count === READY ? [] : race.course.words} wordIndex={race.wordIndex} typed={race.typed} missed={race.missedWords} active={racing} lang={lang} />
+      <TypingText words={race.count === READY ? [] : myCourse(race).words} wordIndex={race.wordIndex} typed={race.typed} missed={race.missedWords} active={racing} lang={lang} fog={fogged(race)} />
       <div className="absolute inset-0 z-2">
         <label htmlFor="game-input" className="sr-only">{t("game.typeHere")}</label>
         <input

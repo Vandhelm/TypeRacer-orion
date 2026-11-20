@@ -43,7 +43,14 @@ export type Race = {
   arrivals: number[];
   /** Une mesure par seconde et par couloir. */
   samples: Sample[][];
+  /** BONUS-02 : mon texte, quand un bonus l'a changé (+3 / -3 mots) ; les bots gardent `course` (src/views/game/bonus.ts). */
+  mine?: Course;
+  /** BONUS-02 : le brouillard sur mes prochains mots, jusqu'à cette heure (serveur, ms epoch). */
+  fogUntil?: number;
 };
+
+/** BONUS-02 : le texte que je tape, celui de la course sauf si un bonus l'a changé. */
+export const myCourse = (race: Race): Course => race.mine ?? race.course;
 
 /** COURSE-01 : chaque phase de la page est un état du salon (src/rooms/race-state.ts). */
 export const PHASE_STATE: Record<Phase, RaceState> = { countdown: "countdown", racing: "racing", done: "results" };
@@ -121,7 +128,7 @@ function miss(race: Race, wordLength: number): Pick<Race, "missedWords" | "misse
 /** Applique le nouveau contenu du champ de saisie : corriger, continuer ou fatale, selon le salon. */
 export function applyInput(race: Race, value: string, now: number): Race {
   if (race.phase !== "racing" || race.finishedAt) return race;
-  const { words, mistakes } = race.course;
+  const { words, mistakes } = myCourse(race);
   const target = words[race.wordIndex] ?? "";
   const added = value.length > race.typed.length;
   const spaced = value.endsWith(" ");
@@ -233,7 +240,7 @@ function botKeys(race: Race, keys: KeyCounts, from: number, gained: number, rate
 const difficulty = (char: string) => (/[a-z ]/.test(char) ? 1 : 2);
 
 function myValidChars(race: Race) {
-  return Math.max(0, race.course.marks[race.wordIndex]! - race.missedChars);
+  return Math.max(0, myCourse(race).marks[race.wordIndex]! - race.missedChars);
 }
 
 function botChars(race: Race, bot: Pick<Bot, "words">) {
@@ -291,7 +298,7 @@ export function secondsLeft(race: Race) {
 
 /** COURSE-04 : les lettres justes du mot en cours, jusqu'à la première faute. */
 function currentRightChars(race: Race) {
-  const target = race.course.words[race.wordIndex] ?? "";
+  const target = myCourse(race).words[race.wordIndex] ?? "";
   let k = 0;
   while (k < race.typed.length && race.typed[k] === target[k]) k++;
   return k;
@@ -331,6 +338,7 @@ export function laneWpm(race: Race, lane: number) {
 export function laneProgress(race: Race, lane: number) {
   const remote = race.remotes.find((candidate) => candidate.lane === lane);
   if (remote) return remote.progress;
-  const words = lane === race.myLane ? race.wordIndex : (race.bots.find((bot) => bot.lane === lane)?.words ?? 0);
+  if (lane === race.myLane) return Math.min(1, race.wordIndex / myCourse(race).words.length);
+  const words = race.bots.find((bot) => bot.lane === lane)?.words ?? 0;
   return Math.min(1, words / race.course.words.length);
 }
