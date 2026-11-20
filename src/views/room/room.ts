@@ -4,6 +4,7 @@ import { MAX_GUESTS, MIN_GUESTS, MAX_TEXT_LENGTH, type Role, type RoomSettings }
 import type { MemberView, RoomView } from "../../server/rooms";
 import { BOT_NAMES } from "../../players/bots";
 import { seatColor } from "../../rooms/seats";
+import { launchBlocker } from "../../rooms/launch";
 
 const TEXTS_KEY = "orion-texts";
 
@@ -126,6 +127,15 @@ export function seatsOf(room: Pick<Room, "guests" | "bots">, members: MemberView
     seats.push(name ? { name, color: seatColor(seats.length), bot: true } : { free: true });
   }
   return seats;
+}
+
+/**
+ * COURSE-02 : pourquoi le bouton Lancer est grisé (clé de traduction), d'après la règle que le serveur applique au
+ * lancement ; null : la course peut partir.
+ */
+export function launchHint(room: Pick<Room, "guests" | "bots">, members: Pick<MemberView, "role">[]): "room.notEnough" | "room.noHuman" | null {
+  const blocker = launchBlocker(room, members);
+  return blocker === "no_human" ? "room.noHuman" : blocker === "too_few" ? "room.notEnough" : null;
 }
 
 export function isPlayer(seat: Seat): seat is Player {
