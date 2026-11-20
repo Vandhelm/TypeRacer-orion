@@ -10,7 +10,7 @@ import { GUEST_COOKIE, signGuest } from "./guest";
 import { handleRace } from "./races";
 import { launchedRoomFor } from "./races.fixture";
 import { handleRoomsApi } from "./rooms-api";
-import { abandonRace, launchRoom, memberKey, recordProgress } from "./rooms";
+import { abandonRace, launchRoom, memberKey, recordProgress, type Identity } from "./rooms";
 
 process.env.BETTER_AUTH_SECRET ??= "test-secret-test-secret-test-secret";
 process.env.BETTER_AUTH_URL ??= "http://localhost:3000";
@@ -166,5 +166,33 @@ describe("RES-02 — the room results show what each human submitted himself (ra
     const { host, code, guestCookie, hostName, guestName } = await room("Mes_Hote");
     expect((await post({ room: code, summary: SUMMARY, players: [result(hostName, { raw: 70 }), bot, result(guestName, { raw: 3, accuracy: 5, chars: [1, 50, 0, 0] })] }, host)).status).toBe(201);
     expect((await read(code, guestCookie))(guestName)).toMatchObject({ raw: 0, chars: [0, 0, 0, 0] });
+  });
+
+  /** Deux invités membres d'un même salon (son hôte, un compte, ne court pas) ; `bots` : des bots complètent ou non. */
+  const guests = async (prefix: string, bots: boolean) => {
+    const [a, b] = [`${prefix}_A`, `${prefix}_B`].map((name) => ({ kind: "guest" as const, name, sessionId: crypto.randomUUID() })) as [Identity, Identity];
+    const cookieOf = (g: Identity) => `${GUEST_COOKIE}=${signGuest(g.name, GUEST_SECRET, Date.now(), g.kind === "guest" ? g.sessionId : undefined)}`;
+    const { code } = await launchedRoomFor(db, auth, cookieOf(a), GUEST_SECRET, 10_000, [b]);
+    if (!bots) await db.update(rooms).set({ bots: false }).where(eq(rooms.code, code));
+    return { code, a: { name: a.name, cookie: cookieOf(a) }, b: { name: b.name, cookie: cookieOf(b) } };
+  };
+
+  test("a guest's race in a room without bots is recorded, and the other guest reads his measures", async () => {
+    const { code, a, b } = await guests("Mes_SansBot", false);
+    expect((await post({ room: code, summary: SUMMARY, players: [blank(a.name), result(b.name, { raw: 55, accuracy: 91, chars: [90, 6, 2, 1] })] }, b.cookie)).status).toBe(201);
+    const res = await handleRoomsApi(new Request(`http://localhost/api/rooms/${code}/results`, { headers: { cookie: a.cookie } }), db, auth, GUEST_SECRET);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { players: Line[] };
+    expect(body.players.find((p) => p.name === b.name)).toMatchObject({ raw: 55, accuracy: 91, chars: [90, 6, 2, 1] });
+  });
+
+  test("a guest cannot fill in another guest's measures: only the line sent by that guest counts", async () => {
+    const { code, a, b } = await guests("Mes_InvInv", true);
+    expect((await post({ room: code, summary: SUMMARY, players: [result(a.name, { raw: 60 }), bot, result(b.name, { raw: 3, accuracy: 5, chars: [1, 50, 0, 0] })] }, a.cookie)).status).toBe(201);
+    expect((await read(code, a.cookie))(b.name)).toMatchObject({ raw: 0, chars: [0, 0, 0, 0] });
+    expect((await post({ room: code, summary: SUMMARY, players: [blank(a.name), bot, result(b.name, { raw: 55, accuracy: 91, chars: [90, 6, 2, 1] })] }, b.cookie)).status).toBe(201);
+    const line = await read(code, a.cookie);
+    expect(line(b.name)).toMatchObject({ raw: 55, accuracy: 91, chars: [90, 6, 2, 1] });
+    expect(line(a.name)).toMatchObject({ raw: 60 });
   });
 });
