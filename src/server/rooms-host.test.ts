@@ -1,4 +1,4 @@
-import { finishAsServer } from "./finish.fixture";
+import { botsDone, finishAsServer } from "./finish.fixture";
 import { beforeAll, describe, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 import { players, raceConfigs, roomMembers, rooms } from "../../db/schema";
@@ -113,6 +113,7 @@ describe("SALLE-08 / SALLE-09 — presence is per member, without sockets; a rac
     const cookie = t.guest("Fantome_Course");
     const { body } = await t.join(cookie, { code: room.code });
     expect((await t.call("POST", `/api/rooms/${room.code}/launch`, host.cookie)).status).toBe(200);
+    await botsDone(t.db, room.code); // BOT-05 : ses bots, que le serveur attend, ont fini leur course
     await finishAsServer(t.db, t.call, room.code, host.cookie);
     // il ferme l'onglet : ni socket, ni requête
     await silentFor(t, body.you, MEMBER_AWAY_MS + 1_000);
@@ -120,6 +121,7 @@ describe("SALLE-08 / SALLE-09 — presence is per member, without sockets; a rac
     expect(view.body.room.members.map((m) => m.key)).not.toContain(body.you);
     expect(view.body.room.status).toBe("results");
     expect((await t.call("POST", `/api/rooms/${room.code}/launch`, host.cookie)).status).toBe(200);
+    await botsDone(t.db, room.code);
     await finishAsServer(t.db, t.call, room.code, host.cookie);
     expect((await roomRow(t, room.code)).status).toBe("results");
   });

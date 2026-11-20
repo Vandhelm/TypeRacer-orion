@@ -1,4 +1,4 @@
-import { finishAsServer } from "./finish.fixture";
+import { botsDone, finishAsServer } from "./finish.fixture";
 import { beforeAll, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { corpusTexts, rooms } from "../../db/schema";
@@ -88,11 +88,13 @@ describe("CONF-03 — the server picks the race text from the corpus when the ro
 
   test("the next race draws again, with the settings changed in between (language, then random mode)", async () => {
     const { code, host } = await launch("Text_Again", { textType: "coherent", language: "fr" });
+    await botsDone(t.db, code); // BOT-05 : ses bots, que le serveur attend, ont fini leur course
     expect((await finishAsServer(t.db, t.call, code, host.cookie)).status).toBe(200);
     expect((await t.call("PATCH", `/api/rooms/${code}`, host.cookie, { settings: { language: "en" } })).status).toBe(200);
     const second = (await (await t.call("POST", `/api/rooms/${code}/launch`, host.cookie)).json()) as WithPassage;
     const [en] = await t.db.select({ language: corpusTexts.language }).from(corpusTexts).where(eq(corpusTexts.body, second.room.passage!.body));
     expect(en!.language).toBe("en");
+    await botsDone(t.db, code);
     expect((await finishAsServer(t.db, t.call, code, host.cookie)).status).toBe(200);
     expect((await t.call("PATCH", `/api/rooms/${code}`, host.cookie, { settings: { textType: "words" } })).status).toBe(200);
     const third = (await (await t.call("POST", `/api/rooms/${code}/launch`, host.cookie)).json()) as WithPassage;

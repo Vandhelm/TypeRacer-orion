@@ -4,8 +4,9 @@ import { beforeAll, describe, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 import { roomMembers, rooms } from "../../db/schema";
 import { COUNTDOWN_MS } from "../rooms/race-clock";
+import { botsDone } from "./finish.fixture";
 import { roomsFixture, type Joined, type Refused } from "./rooms.fixture";
-import { recordProgress } from "./rooms";
+import { recordProgress, refreshRoom } from "./rooms";
 
 type Fixture = Awaited<ReturnType<typeof roomsFixture>>;
 type Member = { key: string; abandoned?: boolean };
@@ -89,11 +90,15 @@ describe("COURSE-07 — a runner abandons the race, recorded by the server", () 
     expect(res.body.room.status).toBe("results");
   });
 
-  test("a lone human with bots who abandons ends the race", async () => {
+  // BOT-05 : la fin « tous arrivés ou abandonnés » attend aussi les bots, dont le serveur calcule la course
+  test("a lone human with bots who abandons ends the race once the bots are done", async () => {
     const { room, host } = await t.open("Abandon_Seul", { bots: true, guests: 3 });
     await launch(room.code, host.cookie);
     await started(room.code);
-    expect((await abandon(room.code, host.cookie)).body.room.status).toBe("results");
+    expect((await abandon(room.code, host.cookie)).body.room.status).toBe("racing");
+    await botsDone(t.db, room.code);
+    expect(await refreshRoom(t.db, room.code)).toBe(true);
+    expect((await t.read(host.cookie, room.code)).body.room.status).toBe("results");
   });
 
   test("one runner abandoning does not end the race of the others", async () => {

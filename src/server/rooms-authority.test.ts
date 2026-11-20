@@ -3,6 +3,7 @@ import { beforeAll, describe, expect, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
 import { roomMembers, rooms } from "../../db/schema";
 import { COUNTDOWN_MS } from "../rooms/race-clock";
+import { botsDone } from "./finish.fixture";
 import { roomsFixture } from "./rooms.fixture";
 import { recordProgress } from "./rooms";
 import { courseWords, textFingerprint } from "../rooms/course-words";
@@ -87,6 +88,7 @@ describe("COURSE-06 — the server finish: progress validated by the realtime se
   test("a new launch resets the server progress", async () => {
     const { room, host } = await t.open("Fin_Relance", { bots: true, guests: 2 });
     await launch(t, room.code, host.cookie);
+    await botsDone(t.db, room.code); // BOT-05 : son bot, que le serveur attend, a fini sa course
     await recordProgress(t.db, room.code, host.key, 1);
     expect((await t.read(host.cookie, room.code)).body.room.status).toBe("results");
     await launch(t, room.code, host.cookie);
@@ -137,6 +139,7 @@ describe("COURSE-06 — a client cannot declare itself finished", () => {
   test("once the server validated 100 %, finish is accepted (no-op, already finished)", async () => {
     const { room, host } = await t.open("Fin_Validee", { bots: true, guests: 2 });
     await launch(t, room.code, host.cookie);
+    await botsDone(t.db, room.code); // BOT-05 : son bot, que le serveur attend, a fini sa course
     await recordProgress(t.db, room.code, host.key, 1);
     await t.call("POST", `/api/rooms/${room.code}/finish`, host.cookie);
     expect((await member(t, room.code, host.key)).finishedAt).not.toBeNull();
