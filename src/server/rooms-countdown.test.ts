@@ -119,4 +119,18 @@ describe("COURSE-03 — the custom text stays with the host until the launch", (
     expect((await t.call("POST", `/api/rooms/${room.code}/launch`, host.cookie)).status).toBe(200);
     expect(await textOf(mate.cookie, room.code)).toBe(CUSTOM.text);
   });
+
+  test("results: the host's new text for the next race stays with the host until that race is launched", async () => {
+    const { room, host } = await t.open("Perso_Next", CUSTOM);
+    const mate = await t.signUp("Perso_NextMate");
+    expect((await t.join(mate.cookie, { code: room.code })).status).toBe(200);
+    expect((await t.call("POST", `/api/rooms/${room.code}/launch`, host.cookie)).status).toBe(200);
+    await t.db.update(rooms).set({ status: "results" }).where(eq(rooms.code, room.code));
+    const patched = await t.call("PATCH", `/api/rooms/${room.code}`, host.cookie, { settings: { text: "prochain texte secret" } });
+    expect(patched.status).toBe(200);
+    expect(await textOf(host.cookie, room.code)).toBe("prochain texte secret");
+    const seen = (await t.read(mate.cookie, room.code)).body;
+    expect(JSON.stringify(seen)).not.toContain("secret");
+    expect((seen.room as unknown as { settings: { text: string } }).settings.text).toBe("");
+  });
 });

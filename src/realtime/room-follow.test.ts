@@ -460,4 +460,21 @@ describe("COURSE-03 — the custom text is pushed only to the host before the la
     await hostTab.close();
     await mateTab.close();
   });
+
+  test("results: the new text the host writes for the next race is not pushed to a member", async () => {
+    const hostCookie = await h.signUp("Hote_Suite");
+    const mateCookie = await h.signUp("Mate_Suite");
+    const code = await created(await h.call("POST", "/api/rooms", hostCookie, { role: "player", settings: { visibility: "public", textType: "custom", text: "le riz attend" } }));
+    expect((await h.call("POST", "/api/rooms/join", mateCookie, { code })).status).toBe(200);
+    expect((await h.call("POST", `/api/rooms/${code}/launch`, hostCookie)).status).toBe(200);
+    await h.db.update(rooms).set({ status: "results" }).where(eq(rooms.code, code));
+    const text = (seen: Seen) => (seen.room as unknown as { settings: { text: string } }).settings.text;
+    const mateTab = (await h.follow(code, mateCookie))!;
+    await mateTab.next();
+    expect((await h.call("PATCH", `/api/rooms/${code}`, hostCookie, { settings: { text: "prochain texte secret" } })).status).toBe(200);
+    const pushed = await mateTab.next();
+    expect(pushed.type).toBe("room");
+    expect(text(pushed)).not.toContain("secret");
+    await mateTab.close();
+  });
 });
