@@ -5,6 +5,11 @@
 //   une erreur, n'est jamais diffusé et ne ferme pas la connexion. Un déluge de messages la ferme (1008).
 // - Progression : diffusée aux autres membres de la salle, au plus 10 fois par seconde par joueur (PERF-02).
 //   Les messages en trop sont fusionnés : la dernière valeur part dès que la limite le permet.
+// - COURSE-06 : avec les salons en base, le serveur arbitre la course (referee.ts). Il lit la course du salon
+//   (départ et fin serveur, texte, coureurs), garde la dernière progression acceptée de chaque coureur, refuse
+//   (erreur à l'expéditeur, rien de diffusé) une progression hors course, en recul, en saut ou trop rapide, et
+//   diffuse son classement (standings) à toute la salle, au plus 10 fois par seconde. À 100 %, il note l'arrivée
+//   en base (finished_at) ; le dernier arrivé termine la course (SALLE-09).
 // - Avec les salons en base (`rooms`), tout join exige d'être membre du salon (SALLE-03, SALLE-09, SALLE-10).
 // - Suivi d'un salon (join avec follow, page salle) : seul un membre le suit (SALLE-03) ; il reçoit l'état du salon
 //   à chaque changement (routes HTTP, via `rooms.changes`) et à chaque échéance (SALLE-08 / SALLE-09). Un membre
@@ -14,6 +19,7 @@
 //   (un leave ou un join envoyé entre-temps l'annule), et un salon changé pendant le contrôle est relu avant d'admettre.
 import type { Server, ServerWebSocket } from "bun";
 import { MAX_MESSAGE_BYTES, parseClientMessage, type Player, PROGRESS_INTERVAL_MS, type ServerMessage } from "./protocol";
+import { judge, standings, type Accepted, type RaceCourse } from "./referee";
 import type { RoomBackend, RoomState } from "./room-backend";
 import { TICKET_TTL_MS, verifyTicket } from "./ticket";
 
@@ -24,6 +30,8 @@ const POLICY_VIOLATION = 1008;
 type Connection = { player: Player; room: string | null; windowStart: number; windowCount: number; follow: { room: string; key: string } | null; key: string | null; requests: number };
 type Socket = ServerWebSocket<Connection>;
 type Member = { player: Player; connections: number };
+/** COURSE-06 : la course arbitrée d'une salle. `course` : la dernière connue ; `over` : le salon a quitté la course. */
+type RaceState = { course: RaceCourse | null; over: boolean; entries: Map<string, Accepted>; lastSent: number; timer: ReturnType<typeof setTimeout> | null };
 type Throttle = { lastSent: number; pending: { ws: Socket; text: string } | null; timer: ReturnType<typeof setTimeout> | null };
 
 export type RealtimeOptions = {
@@ -57,6 +65,8 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
   const startedAt = Date.now();
 
   const throttleKey = (room: string, playerId: string) => `${room}\n${playerId}`;
+  /** COURSE-06 : courses arbitrées, par salle. */
+  const races = new Map<string, RaceState>();
 
   function presence(room: string) {
     const members = rooms.get(room);
@@ -79,6 +89,7 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
   async function publishRoom(code: string) {
     if (!backend || !joined.has(code)) return;
     try {
+      await syncRace(code);
       const room = await backend.view(code);
       const members = new Set(room?.members.map((m) => m.key) ?? []);
       for (const ws of [...(joined.get(code) ?? [])]) {
@@ -168,6 +179,98 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
     if (!entry) return send(ws, { type: "error", code: "not_member" });
     join(ws, room);
     ws.data.key = entry.key;
+    await syncRace(room);
+  }
+
+  /** COURSE-06 : relit la course du salon ; un nouveau départ repart d'un classement vide. Puis diffuse le classement. */
+  async function syncRace(code: string) {
+    if (!backend?.course) return;
+    let course: RaceCourse | null;
+    try {
+      course = await backend.course(code);
+    } catch (error) {
+      return console.error(error);
+    }
+    const state = races.get(code);
+    if (!course) {
+      if (state?.course) state.over = true;
+      else if (!state) races.set(code, { course: null, over: false, entries: new Map(), lastSent: -Infinity, timer: null });
+      return;
+    }
+    if (!state || !state.course || state.course.startsAt !== course.startsAt) {
+      if (state?.timer) clearTimeout(state.timer);
+      races.set(code, { course, over: false, entries: new Map(), lastSent: -Infinity, timer: null });
+    } else {
+      state.course = course;
+      state.over = false;
+    }
+    publishStandings(code, true);
+  }
+
+  /** Le classement du serveur : progressions acceptées, et 0 pour les coureurs présents qui n'ont encore rien envoyé. */
+  function standingsMessage(code: string, state: RaceState & { course: RaceCourse }): ServerMessage {
+    const entries = new Map(state.entries);
+    const runners = new Set(state.course.runners);
+    for (const ws of joined.get(code) ?? []) {
+      if (ws.data.key && runners.has(ws.data.key) && !entries.has(ws.data.player.id)) {
+        entries.set(ws.data.player.id, { progress: 0, chars: 0, wpm: 0, at: state.course.startsAt, finishedAt: null });
+      }
+    }
+    const { startsAt, endsAt } = state.course;
+    return { type: "standings", room: code, startsAt, endsAt, players: standings(entries, startsAt) };
+  }
+
+  /** Diffuse le classement à toute la salle, au plus une fois par PROGRESS_INTERVAL_MS (PERF-02) ; `now` : sans attendre. */
+  function publishStandings(code: string, now = false) {
+    const state = races.get(code);
+    if (!state?.course) return;
+    const flush = () => {
+      state.timer = null;
+      const current = races.get(code);
+      if (current !== state || !state.course) return;
+      state.lastSent = performance.now();
+      server.publish(topic(code), encode(standingsMessage(code, state as RaceState & { course: RaceCourse })));
+    };
+    if (now) {
+      if (state.timer) clearTimeout(state.timer);
+      return flush();
+    }
+    if (state.timer) return;
+    state.timer = setTimeout(flush, Math.max(0, state.lastSent + PROGRESS_INTERVAL_MS - performance.now()));
+  }
+
+  /**
+   * COURSE-06 : juge la progression d'un coureur. Refusée : erreur à l'expéditeur seulement. Acceptée : gardée,
+   * relayée (progress) et reprise dans le classement ; à 100 %, l'arrivée est notée en base.
+   * Vrai si la progression peut être relayée ; sans arbitre (pas de salons en base), toujours vrai.
+   */
+  function referee(ws: Socket, room: string, value: number, wpm: number): boolean {
+    if (!backend?.course) return true;
+    const state = races.get(room);
+    if (!state?.course || state.over) {
+      send(ws, { type: "error", code: state?.over ? "race_over" : "race_not_started" });
+      return false;
+    }
+    const key = ws.data.key;
+    if (!key || !state.course.runners.includes(key)) {
+      send(ws, { type: "error", code: "not_a_runner" });
+      return false;
+    }
+    const previous = state.entries.get(ws.data.player.id);
+    const verdict = judge(state.course, previous, value, wpm, Date.now());
+    if (!verdict.ok) {
+      send(ws, { type: "error", code: verdict.reason });
+      return false;
+    }
+    state.entries.set(ws.data.player.id, verdict.entry);
+    publishStandings(room);
+    if (verdict.entry.finishedAt !== null && !previous?.finishedAt && backend.progress) {
+      backend.progress(key, room, 1).then(
+        (changed) => void (changed && publishRoom(room)),
+        (error: unknown) => console.error(error),
+      );
+    }
+    return true;
   }
 
   async function followRoom(ws: Socket, room: string) {
@@ -224,6 +327,7 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
     unfollow(ws);
     const room = ws.data.room;
     if (!room) return;
+    const memberKey = ws.data.key;
     ws.data.room = null;
     ws.data.key = null;
     const inRoom = joined.get(room);
@@ -236,12 +340,20 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
       member.connections -= 1;
       if (member.connections <= 0) {
         members.delete(ws.data.player.id);
+        // COURSE-06 : la dernière progression validée d'un coureur qui s'en va reste en base
+        const entry = races.get(room)?.entries.get(ws.data.player.id);
+        if (entry && memberKey && backend?.progress && entry.finishedAt === null) backend.progress(memberKey, room, entry.progress).catch((error: unknown) => console.error(error));
         const key = throttleKey(room, ws.data.player.id);
         const throttle = throttles.get(key);
         if (throttle?.timer) clearTimeout(throttle.timer);
         throttles.delete(key);
       }
-      if (members.size === 0) rooms.delete(room);
+      if (members.size === 0) {
+        rooms.delete(room);
+        const race = races.get(room);
+        if (race?.timer) clearTimeout(race.timer);
+        races.delete(room);
+      }
     }
     presence(room);
   }
@@ -346,6 +458,7 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
             return leave(ws);
           case "progress":
             if (!ws.data.room) return send(ws, { type: "error", code: "not_in_room" });
+            if (!referee(ws, ws.data.room, message.progress, message.wpm)) return;
             return progress(ws, ws.data.room, message.progress, message.wpm);
         }
       },

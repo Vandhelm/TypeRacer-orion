@@ -3,8 +3,11 @@
 // Les changements faits par les routes HTTP (Next.js, Vercel) arrivent par `changes` : NOTIFY de Postgres en
 // production (room-events.ts), un émetteur en mémoire dans les tests.
 import type { Db } from "../../db/client";
-import { leaveAfterDisconnect, readRoom, refreshRoom, RoomRefused, roomIdByCode, roomView, type Identity } from "../server/rooms";
+import { seededRandom } from "../rooms/text";
+import { leaveAfterDisconnect, readRoom, recordProgress, refreshRoom, RoomRefused, roomIdByCode, roomView, type Identity, type RoomView } from "../server/rooms";
+import { buildWords } from "../views/game/course";
 import type { Player } from "./protocol";
+import type { RaceCourse } from "./referee";
 
 export type RoomState = Record<string, unknown> & { code: string; members: { key: string }[] };
 
@@ -19,7 +22,28 @@ export type RoomBackend = {
   leave(player: Player, code: string, awayMs: number): Promise<boolean>;
   /** S'abonne aux salons changés par les routes HTTP ; renvoie la fonction qui désabonne. */
   changes(listener: (code: string) => void): () => void;
+  /**
+   * COURSE-06 : la course en cours, que le serveur arbitre ; null hors course. Absent (doubles de test, outils) :
+   * la progression est relayée sans arbitrage.
+   */
+  course?(code: string): Promise<RaceCourse | null>;
+  /** COURSE-06 : garde la progression validée d'un membre ; vrai si le salon a changé (arrivée, fin de course). */
+  progress?(key: string, code: string, progress: number): Promise<boolean>;
 };
+
+/**
+ * COURSE-06 : la course d'un salon lancé, vue par l'arbitre. Le texte est retiré comme le fait la page de course
+ * (mêmes réglages, même graine, même passage : CONF-03), pour compter les caractères validés à chaque progression.
+ */
+export function raceCourseOf(view: RoomView): RaceCourse | null {
+  if (view.status !== "racing" || view.startsAt === null) return null;
+  let marks: number[] | null = null;
+  if (view.seed !== null) {
+    marks = [0];
+    for (const word of buildWords(view.settings, seededRandom(view.seed), view.passage?.body ?? null)) marks.push(marks.at(-1)! + word.length + 1);
+  }
+  return { startsAt: view.startsAt, endsAt: view.endsAt, marks, runners: view.members.filter((m) => m.role === "player").map((m) => m.key) };
+}
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -70,5 +94,15 @@ export function createRoomBackend(db: Db, changes: Changes): RoomBackend {
       }
     },
     changes: (listener) => changes.on(listener),
+    async course(code) {
+      const id = await roomIdByCode(db, code);
+      if (id === null) return null;
+      try {
+        return raceCourseOf(await roomView(db, id));
+      } catch (error) {
+        return refused(error);
+      }
+    },
+    progress: (key, code, progress) => recordProgress(db, code, key, progress),
   };
 }

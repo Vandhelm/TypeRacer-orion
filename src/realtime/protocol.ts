@@ -26,7 +26,21 @@ export const Player = z.object({ id: z.string(), name: z.string(), guest: z.bool
 export type Player = z.infer<typeof Player>;
 
 // not_member : le salon suivi n'admet pas (ou plus) ce joueur, ou n'existe pas (SALLE-07, SALLE-10 : même réponse).
-export const ERROR_CODES = ["invalid_message", "not_in_room", "not_member"] as const;
+// COURSE-06 : une progression refusée par l'arbitre (src/realtime/referee.ts) n'est ni gardée ni diffusée.
+export const ERROR_CODES = [
+  "invalid_message",
+  "not_in_room",
+  "not_member",
+  "not_a_runner",
+  "race_not_started",
+  "race_over",
+  "progress_backward",
+  "progress_jump",
+  "progress_too_fast",
+] as const;
+
+/** COURSE-06 : la place d'un coureur au classement du serveur ; `finishedMs` : temps d'arrivée depuis le départ serveur. */
+export const Standing = z.object({ playerId: z.string(), rank: z.number().int().min(1), progress: z.number().min(0).max(1), wpm: z.number(), finishedMs: z.number().nullable() });
 
 export const ServerMessage = z.discriminatedUnion("type", [
   z.object({ type: z.literal("welcome"), you: Player }),
@@ -36,6 +50,8 @@ export const ServerMessage = z.discriminatedUnion("type", [
   // l'état d'un salon suivi (follow), tel que le lit GET /api/rooms/:code, sans lien d'invitation (SALLE-04)
   z.object({ type: z.literal("room"), room: z.record(z.string(), z.unknown()) }),
   z.object({ type: z.literal("closed"), room: RoomCode }),
+  // COURSE-06 : le départ et la fin décidés par le serveur (ms epoch), et son classement des coureurs
+  z.object({ type: z.literal("standings"), room: RoomCode, startsAt: z.number(), endsAt: z.number().nullable(), players: z.array(Standing) }),
 ]);
 export type ServerMessage = z.infer<typeof ServerMessage>;
 
