@@ -73,3 +73,14 @@ describe("TECH-06 — server messages read by the client", () => {
     expect(parseServerMessage("nope")).toBeNull();
   });
 });
+
+describe("COURSE-06 — the server ranking message", () => {
+  const standings = { type: "standings" as const, room: "ABC234", startsAt: 1000, endsAt: null, players: [{ playerId: "g:a", rank: 1, progress: 0.5, wpm: 40, finishedMs: null }] };
+  test("parses the start, the end and the ranking", () => {
+    expect(parseServerMessage(raw(standings))).toEqual(standings);
+  });
+  test("a ranking with an impossible progress or rank is ignored", () => {
+    expect(parseServerMessage(raw({ ...standings, players: [{ ...standings.players[0], progress: 2 }] }))).toBeNull();
+    expect(parseServerMessage(raw({ ...standings, players: [{ ...standings.players[0], rank: 0 }] }))).toBeNull();
+  });
+});
