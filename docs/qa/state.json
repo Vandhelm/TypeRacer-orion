@@ -215,9 +215,9 @@
     "scope": "suivi (light)"
   },
   "CONF-09": {
-    "commit": "1fba673",
-    "date": "2026-11-18",
-    "scope": "site (light)"
+    "commit": "a48ca23",
+    "date": "2026-11-19",
+    "scope": "critère (medium)"
   },
   "CONF-10": {
     "commit": "2acdffe",
