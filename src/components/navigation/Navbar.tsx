@@ -15,7 +15,7 @@ type NavbarProps = {
 
 /** Top navigation bar (Tailwind). Its height is --navbar-height (tokens.css). */
 const LINK =
-  "flex items-center gap-2 px-3 font-mono text-[12px] leading-none font-medium tracking-[.22em] text-line-soft uppercase no-underline " +
+  "flex items-center gap-2 px-3 font-mono text-[12px] leading-none font-medium tracking-[.22em] text-muted uppercase no-underline " +
   "transition-[color,box-shadow] duration-200 ease-[ease] motion-reduce:transition-none hover:text-white phone:px-2 " +
   "aria-[current=page]:text-white aria-[current=page]:[box-shadow:inset_0_-3px_0_var(--color-red-solid)] " +
   "focus-visible:outline focus-visible:-outline-offset-4 focus-visible:outline-white " +

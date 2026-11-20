@@ -17,7 +17,7 @@ export function TextField({ id, label, num, children, inputProps, action }: Text
   return (
     <div className="flex flex-col gap-[.6vh]">
       <label
-        className="flex items-center gap-2.5 font-mono text-[max(10px,1.2vh)] leading-none font-normal tracking-[.2em] text-line-soft uppercase after:flex-1 after:[border-top:1px_dashed_var(--color-line-faint)]"
+        className="flex items-center gap-2.5 font-mono text-[max(10px,1.2vh)] leading-none font-normal tracking-[.2em] text-muted uppercase after:flex-1 after:[border-top:1px_dashed_var(--color-line-faint)]"
         htmlFor={id}
       >
         {num && <span className="text-white">{num}</span>}

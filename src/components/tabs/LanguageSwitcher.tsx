@@ -2,7 +2,8 @@ import { useTranslation } from "react-i18next";
 import { languages, setLanguage, type Language } from "../../i18n";
 import { HangingTabs } from "./HangingTabs";
 
-const TABS = (["fr", "en"] as const).map((code) => ({ value: code, label: code.toUpperCase(), ariaLabel: languages[code] }));
+// PERF-01 (Lighthouse, WCAG 2.5.3) : le nom accessible commence par le texte visible (« EN, English »).
+const TABS = (["fr", "en"] as const).map((code) => ({ value: code, label: code.toUpperCase(), ariaLabel: `${code.toUpperCase()}, ${languages[code]}` }));
 
 /** Pinned to the top-right corner, for pages without a navbar. */
 export const FLOATING_TABS = "fixed top-0 right-[clamp(16px,4vw,56px)] z-50 flex items-start gap-2";

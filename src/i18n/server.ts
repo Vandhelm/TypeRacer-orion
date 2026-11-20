@@ -45,3 +45,6 @@ const TITLES: Record<SupportedLanguage, Record<TitledPage, string>> = {
 export const notFoundText = (language: SupportedLanguage) => (language === "fr" ? fr : en).notFound;
 
 export const pageTitle = (language: SupportedLanguage, page: TitledPage) => TITLES[language][page];
+
+/** PERF-01 (Lighthouse, SEO) : la meta description de l'accueil, dans la langue de la requête. */
+export const homeDescription = (language: SupportedLanguage) => (language === "fr" ? fr : en).home.metaDescription;

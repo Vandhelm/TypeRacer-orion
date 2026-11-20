@@ -22,7 +22,7 @@ export function HangingTabs<T extends string>({ options, value, onChange, ariaLa
         return (
           <button
             key={option.value}
-            className={`hanging-tab ${TAB} ${active ? "h-[84px] cursor-default border-line text-white [box-shadow:inset_0_-3px_0_var(--color-red-solid)]" : "h-16 cursor-pointer border-line-soft text-line-soft hover:h-[72px] hover:border-line hover:text-white"}`}
+            className={`hanging-tab ${TAB} ${active ? "h-[84px] cursor-default border-line text-white [box-shadow:inset_0_-3px_0_var(--color-red-solid)]" : "h-16 cursor-pointer border-line-soft text-muted hover:h-[72px] hover:border-line hover:text-white"}`}
             type="button"
             aria-label={option.ariaLabel}
             aria-pressed={active}

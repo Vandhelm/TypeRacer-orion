@@ -11,7 +11,7 @@ export function LogoTitle({ overline, name }: { overline: string; name: string }
         </svg>
       </div>
       <div>
-        <p className="mb-[.9vh] font-mono text-[max(10px,1.25vh)] leading-none font-normal tracking-[.3em] text-line-soft">{overline}</p>
+        <p className="mb-[.9vh] font-mono text-[max(10px,1.25vh)] leading-none font-normal tracking-[.3em] text-muted">{overline}</p>
         <h1 className="font-sans text-[max(26px,5vh)] leading-[1.1] font-light tracking-[.12em]">{name}</h1>
       </div>
     </header>

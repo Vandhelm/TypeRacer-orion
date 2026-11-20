@@ -20,12 +20,12 @@ export function ViewTabs<T extends string>({ options, value, onChange, ariaLabel
         return (
           <button
             key={option.value}
-            className={`view-tab ${TAB} ${i > 0 ? "border-l border-l-line" : ""} ${active ? "cursor-default bg-[#f2f2f2] text-black" : "cursor-pointer text-line-soft hover:bg-[rgba(255,255,255,.06)] hover:text-white"}`}
+            className={`view-tab ${TAB} ${i > 0 ? "border-l border-l-line" : ""} ${active ? "cursor-default bg-[#f2f2f2] text-black" : "cursor-pointer text-muted hover:bg-[rgba(255,255,255,.06)] hover:text-white"}`}
             type="button"
             aria-pressed={active}
             onClick={() => onChange(option.value)}
           >
-            {option.num && <span className="font-mono tracking-[0] opacity-70">{option.num}</span>}
+            {option.num && <span className="font-mono tracking-[0] opacity-90">{option.num}</span>}
             <span>{option.label}</span>
           </button>
         );
