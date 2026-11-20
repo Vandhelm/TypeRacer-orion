@@ -2,7 +2,7 @@ import { useEffect, useMemo, useReducer, useState } from "react";
 import type { Player, Room } from "../../room/room";
 import { seededRandom } from "../../../rooms/text";
 import { buildWords } from "../course";
-import { advanceBots, applyInput, createCourse, createRace, everyoneDone, TICK_MS, type Race } from "../race";
+import { advanceBots, applyInput, applyRemote, createCourse, createRace, everyoneDone, TICK_MS, type Race } from "../race";
 
 export const COUNT_STEP_MS = 800;
 export const GO_MS = 500;
@@ -14,6 +14,7 @@ type Action =
   | { type: "start"; now: number }
   | { type: "input"; value: string; now: number }
   | { type: "tick"; now: number; jitters: number[] }
+  | { type: "remote"; updates: { lane: number; progress: number; wpm: number }[]; now: number }
   | { type: "finish" };
 
 function reduce(race: Race, action: Action): Race {
@@ -26,6 +27,8 @@ function reduce(race: Race, action: Action): Race {
       return applyInput(race, action.value, action.now);
     case "tick":
       return advanceBots(race, action.now, action.jitters);
+    case "remote":
+      return race.phase === "racing" ? action.updates.reduce((next, { lane, ...update }) => applyRemote(next, lane, update, action.now), race) : race;
     case "finish":
       return { ...race, phase: "done" };
   }
@@ -71,5 +74,9 @@ export function useRace(room: Room, players: Player[], ready: boolean, passage: 
   }, [phase]);
 
   const onInput = useMemo(() => (value: string) => dispatch({ type: "input", value, now: Date.now() }), []);
-  return { race, onInput, showResults };
+  /** COURSE-05 : les progressions reçues en temps réel des autres humains du salon. */
+  const onRemote = useMemo(() => (updates: { lane: number; progress: number; wpm: number }[]) => {
+    if (updates.length) dispatch({ type: "remote", updates, now: Date.now() });
+  }, []);
+  return { race, onInput, onRemote, showResults };
 }

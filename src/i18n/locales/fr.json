@@ -313,6 +313,11 @@
     "keyboard": {
       "title": "Sortez un clavier physique",
       "body": "L'épreuve se joue au clavier. Sur téléphone ou tablette tactile, le clavier à l'écran cache le texte et fausse le score : revenez sur un ordinateur, ou branchez un clavier."
+    },
+    "track": {
+      "label": "Piste : chaque participant, son rang et sa vitesse en direct",
+      "wpm": "{{wpm}} MPM",
+      "watching": "Tu regardes la course : spectateur, sans zone de frappe."
     }
   },
   "podium": {
