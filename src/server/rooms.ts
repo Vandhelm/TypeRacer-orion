@@ -1,10 +1,10 @@
 // Salons, côté serveur (SALLE-01, 02, 03, 09). Indépendant du transport : les routes HTTP (api.ts) et le temps réel
 // (realtime.ts) appellent ces fonctions ; rien ici ne connaît Request, WebSocket ou Next.js.
-import { and, asc, desc, eq, gt, inArray, isNull, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNull, ne, notInArray, sql } from "drizzle-orm";
 import type { z } from "zod";
 import type { Db } from "../../db/client";
 import { players, raceConfigs, roomBans, roomMembers, rooms } from "../../db/schema";
-import { allows, canJoin, newRoomCode } from "../rooms/access";
+import { allows, canJoin, isListed, newRoomCode } from "../rooms/access";
 import { launchBlocker } from "../rooms/launch";
 import type { RoomFilters } from "../rooms/explorer";
 import { seatColor } from "../rooms/seats";
@@ -105,7 +105,7 @@ export class RoomRefused extends Error {
   }
 }
 /** invite_taken : lien déjà lié à une autre IP ou une autre personne (SALLE-04) ; invite_limit : trop de liens dans ce salon. */
-export type RefusalReason = "not_found" | "not_member" | "not_host" | "full" | "in_race" | "closed" | "already_in_room" | "kicked" | "invalid_target" | "unknown_member" | "invite_taken" | "invite_limit" | "not_enough_players";
+export type RefusalReason = "not_found" | "not_member" | "not_host" | "full" | "in_race" | "closed" | "already_in_room" | "kicked" | "invalid_target" | "unknown_member" | "invite_taken" | "invite_limit" | "not_enough_players" | "no_room";
 
 /** SALLE-07 : cette personne a été expulsée de ce salon. L'IP compte pour un invité et pour un compte plus récent que le bannissement (voir ipBan). */
 async function isKicked(db: Db, who: Identity, roomId: number, key: string, ip: string | null): Promise<boolean> {
@@ -406,6 +406,60 @@ export async function joinRoom(db: Db, who: Identity, via: JoinVia, ip: string |
   });
   await entered.catch((error: unknown) => refuseSecondRoom(db, key, error));
   return { room: await roomView(db, id, key), you: key };
+}
+
+/** JOIN-03 : salons candidats lus par lot ; un lot épuisé sans entrée, on lit le suivant. */
+const QUICK_BATCH = 20;
+
+/**
+ * JOIN-03 : « Faire une course ». Parmi les salons publics joignables (en attente ou résultats, SALLE-09) et non
+ * pleins, le plus proche de sa capacité (le moins de places libres) ; à égalité, le plus ancien. Le choix est
+ * revérifié sous le verrou du salon, dans la transaction qui y fait entrer la personne : un salon rempli, lancé ou
+ * rendu privé entre la lecture et l'entrée est passé, et le suivant est essayé. Un salon dont la personne a été
+ * expulsée (SALLE-07) est passé aussi. Aucun salon : refus « no_room » (la route dit si la personne peut en créer un).
+ */
+export async function quickJoin(db: Db, who: Identity, ip: string | null = null): Promise<RoomResult> {
+  const key = memberKey(who);
+  // SALLE-06 : une salle à la fois ; la page propose de rouvrir la sienne
+  await settleCurrentRoom(db, key);
+  const current = await currentRoomOf(db, key);
+  if (current) throw new RoomRefused("already_in_room", current);
+  await sweepAll(db);
+  const seated = sql<number>`(select count(*) from ${roomMembers} where ${roomMembers.roomId} = ${rooms.id} and ${roomMembers.seat} is not null)`;
+  // par lots, jusqu'à épuisement : un salon essayé et refusé est exclu des lots suivants
+  const tried: number[] = [];
+  for (;;) {
+    const candidates = await db
+      .select({ id: rooms.id })
+      .from(rooms)
+      .where(and(eq(rooms.visibility, "public"), inArray(rooms.status, ["waiting", "results"]), sql`${seated} < ${rooms.guests}`, tried.length ? notInArray(rooms.id, tried) : undefined))
+      .orderBy(sql`${rooms.guests} - ${seated}`, asc(rooms.createdAt), asc(rooms.id))
+      .limit(QUICK_BATCH);
+    if (!candidates.length) throw new RoomRefused("no_room");
+    for (const { id } of candidates) {
+      tried.push(id);
+      if (await enterQuick(db, who, key, id, ip)) return { room: await roomView(db, id, key), you: key };
+    }
+  }
+}
+
+/** JOIN-03 : sous le verrou du salon, revérifie qu'il est toujours public, joignable et non plein, puis y fait entrer. False s'il ne l'est plus. */
+async function enterQuick(db: Db, who: Identity, key: string, id: number, ip: string | null): Promise<boolean> {
+  return db
+    .transaction(async (tx) => {
+      await sweep(tx, id);
+      const [room] = await tx.select({ status: rooms.status, visibility: rooms.visibility, guests: rooms.guests }).from(rooms).where(eq(rooms.id, id)).for("update");
+      if (!room || !isListed(room.visibility) || !canJoin(room.status)) return false;
+      const taken = (await tx.select({ seat: roomMembers.seat }).from(roomMembers).where(eq(roomMembers.roomId, id))).map((m) => m.seat);
+      if (taken.filter((seat) => seat !== null).length >= room.guests) return false;
+      if (await isKicked(tx, who, id, key, ip)) return false;
+      const current = await currentRoomOf(tx, key);
+      if (current) throw new RoomRefused("already_in_room", current);
+      const identity = who.kind === "account" ? { playerId: who.playerId } : { guestName: who.name };
+      await tx.insert(roomMembers).values({ roomId: id, memberKey: key, ...identity, role: "player", ...placeFor("player", taken, room.guests), ip });
+      return true;
+    })
+    .catch((error: unknown) => refuseSecondRoom(db, key, error));
 }
 
 /**

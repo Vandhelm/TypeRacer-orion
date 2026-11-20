@@ -24,6 +24,14 @@ describe("JOIN-01 — the join-by-code field is on the home page", () => {
   });
 });
 
+describe("JOIN-02 / JOIN-03 — the home page offers both the quick race and the explorer", () => {
+  test("the explorer is a button (it opens the guest session first), not a bare link", () => {
+    const html = render({ me: null });
+    expect(html).toMatch(/<button[^>]*id="open-rooms"/);
+    expect(html).not.toContain('href="#rooms"');
+  });
+});
+
 describe("AUTH-01 — le panneau de connexion offre GitHub, Discord et les identifiants", () => {
   const html = render({ me: null });
   const button = (id: string) => html.match(new RegExp(`<button[^>]*id="${id}"[^>]*>`))?.[0];

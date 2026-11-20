@@ -7,7 +7,6 @@
     "viewPlay": "JOUER",
     "viewAccount": "COMPTE",
     "nickname": "Surnom",
-    "play": "JOUER",
     "playBack": "C'EST PARTI",
     "createRoom": "CRÉER UN SALON",
     "rooms": "SALONS",
@@ -44,7 +43,12 @@
     "signUpFailed": "Ce pseudo est déjà pris.",
     "signedInAs": "Connecté",
     "myProfile": "MON PROFIL",
-    "signOut": "SE DÉCONNECTER"
+    "signOut": "SE DÉCONNECTER",
+    "quickRace": "FAIRE UNE COURSE",
+    "quickRaceFailed": "Impossible de trouver un salon. Réessaie.",
+    "noRoom": "Aucun salon n'est disponible pour l'instant.",
+    "noRoomGuest": "Reviens dans un instant, ou entre un code.",
+    "createPublicRoom": "CRÉER UN SALON PUBLIC"
   },
   "rooms": {
     "pageTitle": "Le kiosque — O.R.I.O.N",

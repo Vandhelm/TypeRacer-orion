@@ -7,7 +7,6 @@
     "viewPlay": "PLAY",
     "viewAccount": "ACCOUNT",
     "nickname": "Nickname",
-    "play": "PLAY",
     "playBack": "LET'S GO",
     "createRoom": "CREATE A ROOM",
     "rooms": "ROOMS",
@@ -44,7 +43,12 @@
     "signUpFailed": "This username is already taken.",
     "signedInAs": "Signed in",
     "myProfile": "MY PROFILE",
-    "signOut": "LOG OUT"
+    "signOut": "LOG OUT",
+    "quickRace": "START A RACE",
+    "quickRaceFailed": "Could not find a room. Try again.",
+    "noRoom": "No room is available right now.",
+    "noRoomGuest": "Come back in a moment, or enter a code.",
+    "createPublicRoom": "CREATE A PUBLIC ROOM"
   },
   "rooms": {
     "pageTitle": "The kiosk — O.R.I.O.N",
