@@ -8,6 +8,8 @@ import { useRaceResults, type ResultsState } from "./hooks/useRaceResults";
 import { PodiumBoard } from "./PodiumBoard";
 import { PodiumScene } from "./PodiumScene";
 import { RaceCharts } from "./RaceCharts";
+import type { PersonalRecord } from "../../players/records";
+import { podiumRecord, readRecord } from "./record";
 import { backToRoomHref, fetchRoomResults, finalRanking, raceErrorKey, saveResults, submitFailed, withRoomResults, type RaceResults } from "./results";
 
 /** COURSE-10 : relecture des résultats finaux, après un abandon suivi d'un rechargement. */
@@ -30,9 +32,11 @@ export function PodiumPage({ race }: { race?: ServerRace }) {
   // pour que le travelling ne démarre pas quand on revient d'un profil (#arrived).
   const [arrived, setArrived] = useState(false);
   const [notSaved, setNotSaved] = useState(false); // le serveur a refusé la course jouée dans cet onglet
+  const [record, setRecord] = useState<PersonalRecord | null>(null); // RES-04 : le record battu par la course jouée dans cet onglet
   useLayoutEffect(() => {
     setArrived(location.hash === "#arrived");
     setNotSaved(submitFailed());
+    setRecord(readRecord());
   }, []);
 
   useEffect(() => {
@@ -97,7 +101,7 @@ export function PodiumPage({ race }: { race?: ServerRace }) {
       <LanguageSwitcher className={FLOATING_TABS} />
       {raceId === null && notSaved ? <p className="fixed top-4 left-1/2 z-20 m-0 w-max max-w-[calc(100vw-32px)] border border-red-text bg-black px-3.5 py-2 text-center font-mono text-[12px] leading-[1.5] font-normal text-white [transform:translateX(-50%)]" role="alert">{t("podium.notSaved")}</p> : null}
       <PodiumScene players={players} arrived={arrived} raceId={raceId} roomHref={backToRoomHref(results.room)} after={after} />
-      <PodiumBoard players={players} showPlace arrived={arrived} raceId={raceId} charts={<RaceCharts players={players} />} />
+      <PodiumBoard players={players} showPlace arrived={arrived} raceId={raceId} charts={<RaceCharts players={players} />} record={podiumRecord(record, players, raceId)} />
     </>
   );
 }
