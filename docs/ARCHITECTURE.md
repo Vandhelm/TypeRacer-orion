@@ -146,8 +146,22 @@ Un coureur légitime refusé (paquets groupés) n'est pas bloqué : la marge aut
 - Refusé, 409 `duplicate_race` : ce membre a déjà enregistré ce lancement, même avec un nouvel identifiant (réservation conditionnelle sur `room_members.race_recorded`, remise à faux à chaque lancement).
 - Corrigé : `finished` du compte vient de la progression validée par le temps réel (`room_members.progress = 1`) ; le départ (`races.started_at`) est le départ serveur ; le **rang** est refait par le serveur, quel que soit l'ordre du corps (`rankByServer`).
 - **Qui est un bot** : le serveur le décide, jamais le drapeau `bot` du corps. Le compte qui envoie et tout membre humain du salon sont humains ; seuls les bots du salon sont des bots : ses membres bots, puis les places libres remplies par la liste fermée `BOT_NAMES` si le salon a les bots activés (comme `seatsOf`). Les noms de `BOT_NAMES` sont réservés : inscription, changement de nom, compte GitHub ou Discord (nom suffixé) et pseudo d'invité les refusent.
-- **Règle du rang** : d'abord les humains que le serveur a vus arriver (par heure d'arrivée), puis les bots (dans l'ordre du corps), puis les humains non arrivés selon le serveur (par progression validée), puis les humains inconnus du serveur. Un client ne gagne donc rien avec les bots : aucun bot devant un humain arrivé, aucun humain non arrivé devant un bot.
-- **Limite restante** : les bots sont simulés par le navigateur (BOT-*) ; le serveur ne peut pas encore reproduire leur course (graine des bots : BOT-05). Leur ordre entre eux, leurs MPM et leur arrivée viennent du corps, bornés par les refus ci-dessus ; un humain non arrivé mais devant un bot lent dans la vraie course est classé derrière lui.
+- **Règle du rang** : celle du classement final (COURSE-10, ci-dessous), appliquée par `rankByServer`.
+- **Limite restante** : les bots sont simulés par le navigateur (BOT-*) ; le serveur ne peut pas encore reproduire leur course (graine des bots : BOT-05). Leur arrivée, leur progression, leur ordre entre eux et leurs MPM viennent du corps, bornés par les refus ci-dessus : un client peut déclarer un bot non arrivé à faible progression pour passer devant lui, sans jamais passer devant un humain que le serveur a vu arriver.
+
+### Classement final (COURSE-10)
+
+Trois catégories, dans cet ordre :
+
+1. **Terminés**, par heure d'arrivée : les humains dont le serveur a noté l'arrivée (`room_members.finished_at`), puis les bots arrivés selon le navigateur (dans l'ordre du corps). Un bot ne passe jamais devant un humain arrivé (contrainte COURSE-06).
+2. **Non terminés à la fin du temps**, par progression décroissante : humains non arrivés et non partis (progression validée, `room_members.progress`) et bots non arrivés (progression envoyée par le navigateur, champ `progress` de 0 à 1). Un humain non arrivé ne passe jamais devant un bot arrivé. Un bot sans `progress` (client d'avant COURSE-10) se place en tête de ce groupe, comme avant.
+3. **Abandons**, par progression au moment de l'abandon : les humains dont le serveur a noté l'abandon (`room_members.abandoned_at` ; la progression validée est figée à ce moment, COURSE-07). Un bot n'abandonne jamais.
+
+Viennent enfin les humains inconnus du serveur (pas membres participants du salon).
+
+**Égalités** : à heure d'arrivée ou progression égale, la **place dans le salon** (`room_members.seat`) départage les humains ; un humain passe devant un bot à égalité (les couloirs des bots suivent ceux des humains) ; les bots gardent l'ordre du corps.
+
+**Où** : `rankByServer` (`src/server/races.ts`) fait foi pour le rang enregistré (historique, victoires). Le podium et son tableau appliquent la même règle (`finalRanking`, `src/views/podium/results.ts`) à la course jouée dans l'onglet : `buildResults` donne l'ordre d'arrivée et la progression de chaque couloir (dans l'ordre des couloirs, donc des places, à égalité) ; les abandons sont ceux que le serveur renvoie dans la relecture du salon que fait le podium (`members[].abandoned`, `useAfterRace`), et le sien propre (`markAbandoned`). Une course de l'historique garde les rangs enregistrés.
 - Reste du navigateur : MPM, précision et résultats des bots (bornés par les refus ci-dessus).
 
 **Reste côté pages (COURSE-03, après le merge)** : le décompte, le minuteur, la piste et le podium de la page de course ne suivent pas encore `startsAt`, `endsAt` et `standings` du serveur (exposés par `src/realtime/client.ts`, `state.race`) ; ils gardent leur horloge locale. C'est le décompte synchronisé de COURSE-03.
