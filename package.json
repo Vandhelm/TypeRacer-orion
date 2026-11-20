@@ -16,6 +16,7 @@
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.16",
+    "@playwright/test": "^1.65.1",
     "@tailwindcss/postcss": "^4.3.5",
     "@types/bun": "latest",
     "@types/matter-js": "^0.20.2",
@@ -41,6 +42,7 @@
     "check:no-js": "files=$(git ls-files '*.js' '*.jsx'); if [ -n \"$files\" ]; then echo \"TECH-02 : fichiers JavaScript dans le dépôt :\"; echo \"$files\"; exit 1; fi",
     "test": "bun test",
     "test:smoke": "bun test ./tests/smoke/app.smoke.ts",
+    "test:e2e": "playwright test",
     "test:requirements": "bun scripts/requirement-tests.ts",
     "vercel-build": "if [ \"$VERCEL_ENV\" = production ] || [ \"$VERCEL_ENV\" = preview ]; then bun db/cli.ts migrate; fi && bun --bun next build",
     "db:up": "docker compose up -d --wait",

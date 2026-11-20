@@ -46,3 +46,7 @@ next-env.d.ts
 * 2.*
 # rapports générés (scripts/requirement-tests.ts)
 reports/
+# Playwright (TEST-02) : résultats, rapport et captures
+test-results/
+playwright-report/
+.playwright-mcp/
