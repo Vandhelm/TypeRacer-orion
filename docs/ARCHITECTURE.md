@@ -108,6 +108,41 @@ Rien n'est déployé par le dépôt. Pour mettre le serveur en ligne sur Fly.io 
 3. Sur Vercel : `REALTIME_SECRET` (même valeur) et `REALTIME_PUBLIC_URL=wss://orion-realtime.fly.dev`.
 4. Ajuster `REALTIME_ALLOWED_ORIGINS` dans `fly.toml` si le domaine du site change.
 
+## Machine à états d'une course (COURSE-01)
+
+Code : `src/rooms/race-state.ts` (partagé serveur et client). Tests : `bun test -t COURSE-01`.
+
+```mermaid
+stateDiagram-v2
+    [*] --> EN_ATTENTE : création du salon
+    EN_ATTENTE --> DÉCOMPTE : launch (l'hôte lance, COURSE-02)
+    DÉCOMPTE --> EN_COURSE : start (3 s écoulées depuis le lancement)
+    EN_COURSE --> RÉSULTATS : finish (tous finis ou partis, ou échéance passée)
+    RÉSULTATS --> EN_ATTENTE : reopen (relance, COURSE-11)
+    RÉSULTATS --> FERMÉE : close (l'hôte ferme, COURSE-11)
+    EN_ATTENTE --> FERMÉE : abandon (SALLE-08)
+    DÉCOMPTE --> FERMÉE : abandon (SALLE-08)
+    EN_COURSE --> FERMÉE : abandon (SALLE-08)
+    RÉSULTATS --> FERMÉE : abandon (SALLE-08)
+    FERMÉE --> [*]
+```
+
+| État (énoncé) | En code | Stocké dans `rooms.status` |
+|---|---|---|
+| `EN_ATTENTE` | `waiting` | `waiting` |
+| `DÉCOMPTE` | `countdown` | `racing`, et `launched_at` il y a moins de 3 s |
+| `EN_COURSE` | `racing` | `racing`, et `launched_at` il y a 3 s ou plus |
+| `RÉSULTATS` | `results` | `results` |
+| `FERMÉE` | `closed` | `closed` |
+
+- **Une seule fonction de transition** : `transition(état, événement)` rend l'état suivant ou lève `InvalidTransition`. Tout ce qui n'est pas dans le diagramme est refusé, y compris tout départ de `FERMÉE`. `follow` enchaîne plusieurs transitions (refusées en bloc si une étape l'est).
+- **Seule écriture du statut** : `moveRoom` (`src/server/rooms.ts`), sous le verrou du salon. Elle passe par `follow`, puis n'écrit que si le statut stocké est encore celui de l'état de départ. Un test vérifie qu'aucun autre code n'écrit `rooms.status`.
+- **Le décompte est dérivé, pas stocké** : le lancement écrit `racing` et `launched_at = now()` ; `raceState(statut, ms depuis le lancement)` donne `countdown` pendant `COUNTDOWN_MS` (3 s), selon l'horloge de la base. Le départ (`start`) ne demande donc aucune écriture ni minuterie, ce qui convient à Vercel (pas de processus qui dure). Lecture : `roomRaceState(db, code)`.
+- **Relance** : depuis `RÉSULTATS`, le lancement suit `reopen` puis `launch` (RÉSULTATS → EN_ATTENTE → DÉCOMPTE) dans la même transaction.
+- **Écart assumé, `abandon`** : SALLE-08 ferme un salon où il ne reste aucun humain pour être hôte, quel que soit son état. C'est la seule flèche vers `FERMÉE` hors de `RÉSULTATS`, et elle porte un événement distinct de la fermeture par l'hôte (`close`, permise seulement depuis `RÉSULTATS`).
+- **Fin pendant le décompte** : tant que la fin est déclarée par le client (avant COURSE-06), si chaque participant a fini ou est parti pendant le décompte, le salon suit `start` puis `finish` (DÉCOMPTE → EN_COURSE → RÉSULTATS), sans sauter d'état.
+- **Client** (`src/views/game/race.ts`) : les phases de la page sont des états de la même machine (`PHASE_STATE` : `countdown` → DÉCOMPTE, `racing` → EN_COURSE, `done` → RÉSULTATS). `startRace` et `endRace` passent par `transition` ; une transition hors du schéma (deuxième départ, fin pendant le décompte) ne change rien. EN_ATTENTE et FERMÉE sont les pages du salon et de l'accueil, pas des phases de la course.
+
 ## Texte de la course : longueur et caractères exclus (CONF-04, CONF-07)
 
 Longueurs : très court 10 mots, court 25, moyen 50, long 100, autre de 1 à 1 000 (`wordTarget`, `src/rooms/text.ts`). Le texte est construit par `buildWords` (`src/views/game/course.ts`) à partir de la graine et du passage tirés par le serveur au lancement : il est le même pour tous les membres (CONF-03).
