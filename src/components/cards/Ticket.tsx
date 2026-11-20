@@ -7,6 +7,8 @@ type TicketStubProps = {
   label: string;
   actionLabel: string;
   actionAriaLabel?: string;
+  /** JOIN-02 : le salon ne peut pas être rejoint (course en cours) ; le bouton est désactivé, grisé. */
+  actionDisabled?: boolean;
   onAction?: () => void;
   className?: string;
   style?: CSSProperties;
@@ -17,7 +19,7 @@ type TicketStubProps = {
 const BUTTON =
   "ticket-button unset box-border flex h-[max(30px,calc(9.5*var(--u)))] cursor-pointer items-center justify-center border border-[rgba(255,140,120,.45)] bg-red-solid " +
   "pr-[calc(4*var(--u))] pl-[calc(4*var(--u)+.3em)] font-sans text-[max(10px,calc(3.8*var(--u)))] leading-none font-medium tracking-[.3em] text-white " +
-  "transition-[background,color,border-color] duration-200 ease-[ease] hover:bg-red-hover focus-visible:outline focus-visible:outline-offset-3 focus-visible:outline-white";
+  "transition-[background,color,border-color] duration-200 ease-[ease] hover:bg-red-hover disabled:cursor-not-allowed disabled:border-line disabled:bg-transparent disabled:text-line-soft focus-visible:outline focus-visible:outline-offset-3 focus-visible:outline-white";
 // The paper (its hover motion is a damped spring computed in JS), with an inner frame
 const PAPER =
   "relative flex origin-top flex-col gap-[calc(7*var(--u))] border border-line bg-[#070707] px-[calc(10*var(--u))] pt-[calc(15*var(--u))] pb-0 [will-change:transform] " +
@@ -28,14 +30,14 @@ const NUMBER_BOX =
   "[box-shadow:0_calc(-1.4*var(--u))_0_-1px_var(--color-line-faint),0_calc(1.4*var(--u))_0_-1px_var(--color-line-faint)]";
 
 /** Tear-off stub of a ticket. Also used alone for the copy that flies away. */
-export function TicketStub({ label, actionLabel, actionAriaLabel, onAction, className = "", style, ref }: TicketStubProps) {
+export function TicketStub({ label, actionLabel, actionAriaLabel, actionDisabled, onAction, className = "", style, ref }: TicketStubProps) {
   return (
     <div ref={ref} className={`flex flex-col gap-[calc(5*var(--u))] pt-[calc(2*var(--u))] pb-[calc(10*var(--u))] ${className}`.trim()} style={style}>
       <div className="flex items-center justify-between font-mono text-[max(9px,calc(3.2*var(--u)))] leading-none font-normal tracking-[.24em] text-line-soft">
         <span>{label}</span>
         <span className="size-[calc(3*var(--u))] bg-red-solid [transform:rotate(45deg)]" aria-hidden="true" />
       </div>
-      <button className={BUTTON} type="button" aria-label={actionAriaLabel} onClick={onAction}>
+      <button className={BUTTON} type="button" aria-label={actionAriaLabel} disabled={actionDisabled} onClick={onAction}>
         <span className="ticket-button-text">{actionLabel}</span>
       </button>
     </div>
