@@ -104,3 +104,13 @@ export function easeToward(shown: number, target: number, dtMs: number): number 
 
 /** BONUS-03 : la progression affichée à l'image suivante ; une cible plus basse (un bonus a rallongé le texte) est rejointe d'un coup. */
 export const laneFrame = (shown: number, target: number, dtMs: number) => (target < shown ? target : easeToward(shown, target, dtMs));
+
+/**
+ * PERF-03 : le style de la barre d'un couloir pour une nouvelle progression. La barre glisse par sa transition CSS
+ * (transform, sur le compositeur) : écrite une fois par mise à jour au lieu de 60 fois par seconde × 30 couloirs.
+ * BONUS-03 : une cible plus basse est rejointe d'un coup (transition coupée pour ce changement).
+ */
+export function barStyle(shown: number, target: number): { transform: string; transitionDuration: string } {
+  const value = Number.isFinite(target) ? Math.min(1, Math.max(0, target)) : 0;
+  return { transform: `scaleX(${value})`, transitionDuration: value < shown ? "0s" : "" };
+}

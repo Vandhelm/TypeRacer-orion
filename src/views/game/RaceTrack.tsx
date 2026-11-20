@@ -1,10 +1,10 @@
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { BotTag } from "../../players/BotTag";
 import { GeneratedAvatar } from "../profile/ProfileAvatar";
 import type { BonusAnnouncement } from "./announce";
 import { BONUS_HIT, bonusBadge, bonusSentence } from "./BonusNotice";
-import { laneFrame, type TrackLane } from "./track";
+import { barStyle, type TrackLane } from "./track";
 
 // Tout tient dans son couloir, de 2 à 8 couloirs : le nom passe à la ligne (deux lignes au plus), rang et MPM aussi.
 // L'avatar ne disparaît jamais : sous 96 px de couloir, il rapetisse (16 px) et passe au-dessus du nom.
@@ -21,7 +21,7 @@ const BONUS_BADGE =
 
 /**
  * COURSE-05 : sous le bassin, un couloir par participant : avatar, nom, rang courant, MPM et barre de progression.
- * La barre glisse d'une mise à jour à l'autre (easeToward, à chaque image), écrite directement dans son transform : pas de rendu React par image.
+ * La barre glisse d’une mise à jour à l’autre par sa transition CSS (barStyle), écrite dans son transform à chaque mise à jour : pas de rendu React ni d’écriture par image.
  * PERF-03 : jamais une variable héritée sur le couloir (tout son contenu serait restylé à chaque image, ×30 couloirs),
  * ni une largeur (mise en page) ; un couloir ne se rend de nouveau que si ce qu'il affiche change (LaneItem, memo).
  * BONUS-03 : un bonus en cours est annoncé sur le couloir qu'il touche (badge) et dit en une ligne (région polie, pour tous).
@@ -29,29 +29,20 @@ const BONUS_BADGE =
 export function RaceTrack({ lanes, bonuses = [] }: { lanes: TrackLane[]; bonuses?: readonly BonusAnnouncement[] }) {
   const { t } = useTranslation();
   const bars = useRef<(HTMLElement | null)[]>([]);
+  // la dernière progression écrite dans chaque barre
   const shown = useRef<number[]>([]);
-  const targets = useRef<number[]>([]);
-  targets.current = lanes.map((lane) => lane.progress);
   const latest = bonuses.at(-1);
 
-  useEffect(() => {
-    const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
-    let frame = 0;
-    let last = performance.now();
-    const draw = (now: number) => {
-      const dt = still ? Infinity : now - last;
-      last = now;
-      targets.current.forEach((target, lane) => {
-        const next = laneFrame(shown.current[lane] ?? 0, target, dt);
-        const bar = bars.current[lane];
-        if (bar && next !== shown.current[lane]) bar.style.transform = `scaleX(${next})`;
-        shown.current[lane] = next;
-      });
-      frame = requestAnimationFrame(draw);
-    };
-    frame = requestAnimationFrame(draw);
-    return () => cancelAnimationFrame(frame);
-  }, []);
+  // une écriture par mise à jour reçue, seulement pour les couloirs qui ont bougé ; la transition CSS fait le reste
+  useLayoutEffect(() => {
+    lanes.forEach(({ lane, progress }) => {
+      const bar = bars.current[lane];
+      const before = shown.current[lane] ?? 0;
+      if (!bar || progress === before) return;
+      Object.assign(bar.style, barStyle(before, progress));
+      shown.current[lane] = progress;
+    });
+  });
 
   return (
     <div className="relative compact:col-[1/-1]">
@@ -121,7 +112,7 @@ const LaneItem = memo(function LaneItem({ lane, bonus, shown, bars }: LaneItemPr
             bars[lane.lane] = el;
           }}
           data-part="bar"
-          className={`block h-full w-full origin-left ${lane.me ? "bg-red-text" : "bg-line"}`}
+          className={`block h-full w-full origin-left transition-transform duration-300 ease-out motion-reduce:transition-none ${lane.me ? "bg-red-text" : "bg-line"}`}
           style={{ transform: `scaleX(${start})` }}
         />
       </span>

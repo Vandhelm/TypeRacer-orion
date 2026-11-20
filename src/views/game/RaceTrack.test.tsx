@@ -183,4 +183,12 @@ describe("PERF-03 — the progress bar moves without restyling its lane", () => 
       expect(bar).not.toMatch(/w-\[calc/);
     });
   });
+
+  test("the bar glides by its own transform transition, cut when motion is reduced", () => {
+    lanes(render(state("player"), "en")).forEach((row) => {
+      const bar = part(row, "bar");
+      expect(bar).toContain("transition-transform");
+      expect(bar).toContain("motion-reduce:transition-none");
+    });
+  });
 });
