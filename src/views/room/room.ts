@@ -54,6 +54,23 @@ export function clampGuests(n: unknown, fallback: number) {
 export function cleanExcluded(value: unknown) {
   return [...new Set(String(value || "").toLowerCase().replace(/\s+/g, ""))].join("").slice(0, 20);
 }
+export type CompositionOption = { name: "punctuation" | "numbers" | "specials" | "capitals" | "accents"; locked: boolean; inactive: boolean };
+/**
+ * CONF-06 : les options de composition proposées dans le salon. `locked` : l'hôte ne peut pas la changer pour ce type de
+ * texte ; `inactive` : affichée grisée, sans effet. Les accents ne concernent que le français : absents d'un salon anglais.
+ */
+export function compositionOptions(room: Pick<Room, "textType" | "language" | "punctuation">): CompositionOption[] {
+  const custom = room.textType === "custom";
+  const random = room.textType === "words";
+  const options: CompositionOption[] = [
+    { name: "punctuation", locked: !random, inactive: !random && !custom },
+    { name: "numbers", locked: custom, inactive: false },
+    { name: "specials", locked: custom, inactive: false },
+    { name: "capitals", locked: custom, inactive: random && !room.punctuation },
+  ];
+  if (room.language === "fr") options.push({ name: "accents", locked: custom, inactive: false });
+  return options;
+}
 export function countWords(text: string) {
   const trimmed = text.trim();
   return trimmed ? trimmed.split(/\s+/).length : 0;

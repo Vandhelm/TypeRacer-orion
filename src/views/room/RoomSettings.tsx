@@ -9,7 +9,7 @@ import { SectionTabs } from "../../components/tabs/SectionTabs";
 import { DEFAULT_DURATION, MAX_DURATION, MIN_DURATION, ROLES } from "../../rooms/settings";
 import { excludedApplies } from "../../rooms/text";
 import type { RoomState } from "./hooks/useRoom";
-import { cleanExcluded, countWords, DURATION_PRESETS, durationChoice, type Room, type TextLength } from "./room";
+import { cleanExcluded, compositionOptions, countWords, DURATION_PRESETS, durationChoice, type CompositionOption, type Room, type TextLength } from "./room";
 import { LENGTH_KEY, useRoomLabels } from "./useRoomLabels";
 import { DASHED_TOP, LABEL, PLAIN_VALUE, SHADE } from "./styles";
 
@@ -100,8 +100,10 @@ export function RoomSettings({ state, onEditText, action }: RoomSettingsProps) {
       <TextChoice key={String(value)} type="radio" name={name} value={String(value)} label={t(`room.${key}`)} checked={room[name] === value} disabled={disabled} hidden={!host && room[name] !== value} onChange={() => pick(value)} />
     ));
   }
-  const checkbox = (name: "punctuation" | "numbers" | "specials" | "accents", key: string, disabled: boolean, inactive?: boolean) => (
-    <TextChoice type="checkbox" name={name} label={t(`room.${key}`)} checked={room[name]} disabled={disabled} inactive={inactive} hidden={!host && !room[name]} onChange={(e) => update({ [name]: e.target.checked })} />
+  // CONF-06 : l'hôte coche ou décoche ; les autres membres ne voient que les options actives, en lecture seule
+  const composition = compositionOptions(room);
+  const checkbox = ({ name, locked, inactive }: CompositionOption) => (
+    <TextChoice key={name} type="checkbox" name={name} label={t(`room.${name}`)} checked={room[name]} disabled={!host || locked} inactive={inactive} hidden={!host && !room[name]} onChange={(e) => update({ [name]: e.target.checked })} />
   );
 
   function pickTextType(textType: Room["textType"]) {
@@ -199,11 +201,8 @@ export function RoomSettings({ state, onEditText, action }: RoomSettingsProps) {
           {radios("textType", [["coherent", "coherent"], ["quote", "quote"], ["words", "scrambled"], ["custom", "custom"]], pickTextType)}
         </Row>
         <Row id="label-composition" label={t("room.composition")} role="group" inactive={isCustom}>
-          {checkbox("punctuation", "punctuation", !host || room.textType !== "words", room.textType !== "words" && !isCustom)}
-          {checkbox("numbers", "numbers", !host || isCustom)}
-          {checkbox("specials", "specials", !host || isCustom)}
-          {checkbox("accents", "accents", !host || isCustom)}
-          <span className={PLAIN_VALUE} hidden={host || room.punctuation || room.numbers || room.specials || room.accents}>{t("room.noOption")}</span>
+          {composition.map(checkbox)}
+          <span className={PLAIN_VALUE} hidden={host || composition.some(({ name }) => room[name])}>{t("room.noOption")}</span>
         </Row>
         <Row id="label-text" label={t("room.text")} role="group">
           <span className={PLAIN_VALUE}>{countWords(room.text) ? words : t("room.noText")}</span>

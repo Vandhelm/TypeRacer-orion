@@ -215,6 +215,7 @@
     "punctuation": "Punctuation",
     "numbers": "Numbers",
     "specials": "Special characters",
+    "capitals": "Capitals",
     "accents": "Accents",
     "noOption": "None",
     "length": "Length",

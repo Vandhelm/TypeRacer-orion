@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import type { TFunction } from "i18next";
-import { arrivalOf, DURATION_PRESETS, durationChoice, launchHint, raceHref, readSession, roomHrefOutsideRace, seatsOf } from "./room";
+import { arrivalOf, compositionOptions, DURATION_PRESETS, durationChoice, launchHint, raceHref, readSession, roomHrefOutsideRace, seatsOf } from "./room";
 
 const t = ((key: string) => key) as unknown as TFunction;
 
@@ -161,6 +161,41 @@ describe("CONF-01 — the maximum time choice in the room settings", () => {
   test("while the host types a custom value, « other » stays checked", () => {
     expect(durationChoice(null, true)).toBe("other");
     expect(durationChoice(120, true)).toBe("other");
+  });
+});
+
+describe("CONF-06 — the composition options shown in the room settings", () => {
+  const names = (room: Parameters<typeof compositionOptions>[0]) => compositionOptions(room).map((option) => option.name);
+  const option = (room: Parameters<typeof compositionOptions>[0], name: string) => compositionOptions(room).find((o) => o.name === name);
+
+  test("a French room offers punctuation, numbers, specials, capitals and accents", () => {
+    expect(names({ textType: "words", language: "fr", punctuation: false })).toEqual(["punctuation", "numbers", "specials", "capitals", "accents"]);
+  });
+
+  test("the accents option is for French only: an English room does not show it", () => {
+    expect(names({ textType: "words", language: "en", punctuation: false })).not.toContain("accents");
+    expect(names({ textType: "coherent", language: "en", punctuation: false })).toContain("capitals");
+  });
+
+  test("a custom text locks every option (it is typed as written)", () => {
+    expect(compositionOptions({ textType: "custom", language: "fr", punctuation: false }).every((o) => o.locked)).toBe(true);
+  });
+
+  test("capitals can be changed for every generated text, and look inactive on random words without punctuation", () => {
+    for (const textType of ["coherent", "quote", "words"] as const) expect(option({ textType, language: "fr", punctuation: true }, "capitals")?.locked).toBe(false);
+    expect(option({ textType: "words", language: "fr", punctuation: false }, "capitals")?.inactive).toBe(true);
+    expect(option({ textType: "words", language: "fr", punctuation: true }, "capitals")?.inactive).toBe(false);
+  });
+
+  test("punctuation is only chosen for random words, as before", () => {
+    expect(option({ textType: "coherent", language: "fr", punctuation: false }, "punctuation")).toEqual({ name: "punctuation", locked: true, inactive: true });
+    expect(option({ textType: "words", language: "fr", punctuation: false }, "punctuation")).toEqual({ name: "punctuation", locked: false, inactive: false });
+  });
+
+  test("the capitals label exists in French and English", () => {
+    const label = (lang: "fr" | "en") => (JSON.parse(readFileSync(`src/i18n/locales/${lang}.json`, "utf8")) as { room: Record<string, unknown> }).room.capitals;
+    expect(label("fr")).toBe("Majuscules");
+    expect(label("en")).toBe("Capitals");
   });
 });
 
