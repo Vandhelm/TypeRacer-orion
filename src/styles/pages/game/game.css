@@ -11,6 +11,13 @@
     100%{ opacity: 1; transform: scale(1); }
 }
 
+/* BONUS-03 : l'annonce d'un bonus tombe comme un tampon (BONUS_HIT, src/views/game/BonusNotice.tsx ; coupée par motion-reduce) */
+@keyframes game-bonus-hit{
+    0%  { opacity: 0; scale: 1.6; }
+    50% { opacity: 1; scale: .95; }
+    100%{ opacity: 1; scale: 1; }
+}
+
 @media (max-width: 760px), (max-height: 600px){
     .hanging-button.game-leave{ position: relative; top: auto; left: auto; grid-column: 1; grid-row: 1; justify-self: start; align-self: start; }
     .race-pool{ grid-column: 1 / -1; }

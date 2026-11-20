@@ -349,6 +349,30 @@
       "wpm": "{{wpm}} WPM",
       "watching": "You are watching the race: spectator, no typing area.",
       "abandoned": "You abandoned: the race goes on without you until the final ranking."
+    },
+    "bonus": {
+      "someone": "A player",
+      "badge": {
+        "fewer_words_one": "−{{count}} word",
+        "fewer_words_other": "−{{count}} words",
+        "extra_words_one": "+{{count}} word",
+        "extra_words_other": "+{{count}} words",
+        "fog": "Fog"
+      },
+      "track": {
+        "fewer_words_one": "Catch-up bonus for {{target}}: {{count}} word fewer.",
+        "fewer_words_other": "Catch-up bonus for {{target}}: {{count}} fewer words.",
+        "extra_words_one": "{{sender}}'s bonus: {{count}} more word for {{target}}.",
+        "extra_words_other": "{{sender}}'s bonus: {{count}} more words for {{target}}.",
+        "fog": "{{sender}}'s bonus: fog on {{target}} for {{count}} s."
+      },
+      "mine": {
+        "fewer_words_one": "Catch-up bonus: the last word of your text disappears.",
+        "fewer_words_other": "Catch-up bonus: the last {{count}} words of your text disappear.",
+        "extra_words_one": "{{sender}} adds {{count}} word to the end of your text.",
+        "extra_words_other": "{{sender}} adds {{count}} words to the end of your text.",
+        "fog": "{{sender}} sends you fog: your next words are blurred for {{count}} s."
+      }
     }
   },
   "podium": {

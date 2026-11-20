@@ -11,7 +11,9 @@ import { rememberGuestRace } from "../profile/stats";
 import { useRealtimeRoom } from "../../realtime/useRealtimeRoom";
 import { LiveList } from "../room/LiveList";
 import { READY } from "./countdown";
+import { useBonusAnnouncements } from "./hooks/useBonusAnnouncements";
 import { useRace } from "./hooks/useRace";
+import { BonusNotice } from "./BonusNotice";
 import { AbandonRace } from "./AbandonRace";
 import { bonusesFor, remoteBonuses } from "./bonus";
 import { abandonOver, canAbandon, handOverPlayers, raceExit } from "./abandon";
@@ -136,6 +138,8 @@ function GameRace({ state, onHandOver }: { state: RoomState; onHandOver?: (sendi
     // BONUS-03 : la piste suit aussi le texte changé d'un autre humain (le meneur à +3 mots recule)
     onBonus(effects, remoteBonuses(live?.bonuses, from, lanes, watching ? null : you));
   }, [live, watching, onBonus, lanes]);
+  // BONUS-03 : chaque bonus est annoncé sur la piste, pour tous, et au joueur qu'il cible
+  const announcements = useBonusAnnouncements(live?.bonuses, lanes, watching ? null : (live?.you?.id ?? null));
 
   useEffect(markSessionStart, []);
 
@@ -221,7 +225,8 @@ function GameRace({ state, onHandOver }: { state: RoomState; onHandOver?: (sendi
 
       {images ? <RacePool players={players} images={images} race={race} label={t("game.poolLabel", { count: players.length })} /> : <div className="race-pool" />}
 
-      <RaceTrack lanes={trackLanes(race, players)} />
+      <RaceTrack lanes={trackLanes(race, players)} bonuses={announcements} />
+      {!watching && <BonusNotice announcements={announcements} />}
 
       {!watching && resumeNotice({ arrivedMidRace, resumed, racing: race.phase === "racing", status: live?.status }) && (
         <p className="pointer-events-none fixed top-[84px] left-1/2 z-30 -translate-x-1/2 font-mono text-[max(11px,1.3vh)] leading-[1.6] tracking-[.12em] text-muted" role="status">
