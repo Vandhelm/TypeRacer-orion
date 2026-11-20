@@ -88,6 +88,8 @@ export type RoomView = {
   endsAt: number | null;
   /** COURSE-06 : l'empreinte des mots tirés au lancement (src/rooms/course-words.ts) ; null avant. */
   textHash: string | null;
+  /** COURSE-10 : qui a abandonné la dernière course lancée (noms), même parti depuis ; vidé au lancement suivant. */
+  abandoned?: string[];
 };
 export type RoomStatus = (typeof rooms.$inferSelect)["status"];
 /** Ce que renvoie une action réussie : l'état du salon, et la clé de celui qui l'a demandée. */
@@ -240,6 +242,7 @@ export async function roomView(db: Db, roomId: number, _viewer?: string): Promis
     seed: row.rooms.textSeed,
     ...raceClock(row.rooms.launchedAt, row.race_configs.duration),
     textHash: row.rooms.textHash,
+    abandoned: row.rooms.abandonedNames,
   };
 }
 
@@ -505,7 +508,7 @@ export async function launchRoom(db: Db, code: string, who: Identity): Promise<R
     const passage = config!.textType === "coherent" ? await pickPassage(tx, { language: config!.language, words: wordTarget(config!) }) : null;
     const textSeed = crypto.getRandomValues(new Int32Array(1))[0]!;
     // COURSE-01 : une relance repasse par EN_ATTENTE (results → waiting → countdown)
-    await moveRoom(tx, id, from, from === "results" ? ["reopen", "launch"] : ["launch"], { launchedAt: sql`now()`, textId: passage?.id ?? null, textSeed });
+    await moveRoom(tx, id, from, from === "results" ? ["reopen", "launch"] : ["launch"], { launchedAt: sql`now()`, textId: passage?.id ?? null, textSeed, abandonedNames: [] });
     await tx.update(roomMembers).set({ finishedAt: null, abandonedAt: null, progress: 0, raceRecorded: false }).where(eq(roomMembers.roomId, id));
     // COURSE-06 : l'empreinte des mots que la page de course va retirer, vérifiée par le serveur temps réel
     const words = courseWords(await roomView(tx, id));
@@ -709,13 +712,19 @@ export async function abandonRace(db: Db, code: string, who: Identity): Promise<
       .where(eq(rooms.id, id))
       .for("update");
     if (!room) throw new RoomRefused("not_found");
-    const [member] = await tx.select({ role: roomMembers.role, finishedAt: roomMembers.finishedAt, abandonedAt: roomMembers.abandonedAt }).from(roomMembers).where(and(eq(roomMembers.roomId, id), eq(roomMembers.memberKey, key)));
+    const [member] = await tx
+      .select({ role: roomMembers.role, finishedAt: roomMembers.finishedAt, abandonedAt: roomMembers.abandonedAt, name: sql<string>`coalesce(${players.name}, ${roomMembers.guestName})` })
+      .from(roomMembers)
+      .leftJoin(players, eq(players.id, roomMembers.playerId))
+      .where(and(eq(roomMembers.roomId, id), eq(roomMembers.memberKey, key)));
     if (!member) throw new RoomRefused("not_found"); // SALLE-10 : un non-membre ne sait pas si le salon existe
     if (member.abandonedAt) return;
     if ((await stateOf(tx, id)) !== "racing" || room.timeUp) throw new RoomRefused("not_racing");
     if (member.role !== "player") throw new RoomRefused("not_player");
     if (member.finishedAt) throw new RoomRefused("already_finished");
     await tx.update(roomMembers).set({ abandonedAt: sql`now()` }).where(and(eq(roomMembers.roomId, id), eq(roomMembers.memberKey, key)));
+    // COURSE-10 : gardé par le salon, même si ce membre part ensuite (sa ligne room_members est alors supprimée)
+    await tx.update(rooms).set({ abandonedNames: sql`array_append(${rooms.abandonedNames}, ${member.name}::text)` }).where(eq(rooms.id, id));
     await endIfAllFinished(tx, id);
   });
   return { room: await roomView(db, id, key), you: key };

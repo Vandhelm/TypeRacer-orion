@@ -60,6 +60,8 @@ export const rooms = pgTable(
     textSeed: integer("text_seed"),
     /** COURSE-06 : l'empreinte des mots tirés au lancement (src/rooms/course-words.ts), vérifiée par le serveur temps réel. */
     textHash: text("text_hash"),
+    /** COURSE-10 : les noms des membres qui ont abandonné la dernière course lancée, gardés même s'ils quittent le salon ; vidé au lancement. */
+    abandonedNames: text("abandoned_names").array().notNull().default(sql`'{}'::text[]`),
   },
   (table) => [index("rooms_lobby").on(table.status, table.visibility), check("rooms_guests_range", sql`${table.guests} between 2 and 30`),
     check("rooms_code_format", sql`${table.code} ~ ${sql.raw(`'${CODE_PATTERN}'`)}`),
