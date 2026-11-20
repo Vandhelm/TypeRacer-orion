@@ -260,9 +260,9 @@
     "scope": "critère feature/game/course-05 (rendu 8 couloirs 630/800/1280)"
   },
   "COURSE-06": {
-    "commit": "5bd144c",
-    "date": "2026-11-19",
-    "scope": "critère (medium, 3e passage)"
+    "commit": "7bce938",
+    "date": "2026-11-20",
+    "scope": "critère (fix/game/course-06-times)"
   },
   "COURSE-07": {
     "commit": "8ac9e3d",
