@@ -4,6 +4,25 @@
 
 export const ICE_CREAM_GL_OPTIONS = { alpha: true, antialias: true, failIfMajorPerformanceCaveat: true } as const;
 
+type ProbeContext = { getExtension(name: string): { loseContext(): void } | null };
+type ProbeCanvas = { getContext(type: string, attrs?: unknown): ProbeContext | null };
+
+/**
+ * Whether WebGL runs on a GPU. Asked on a throwaway canvas, then released: Three.js logs an error in the console
+ * when it cannot create its context, so it is only asked when the answer is yes.
+ */
+export function hardwareWebGL(createCanvas: () => ProbeCanvas = () => document.createElement("canvas") as unknown as ProbeCanvas): boolean {
+  const canvas = createCanvas();
+  for (const type of ["webgl2", "webgl"]) {
+    const gl = canvas.getContext(type, ICE_CREAM_GL_OPTIONS);
+    if (gl) {
+      gl.getExtension("WEBGL_lose_context")?.loseContext();
+      return true;
+    }
+  }
+  return false;
+}
+
 /**
  * Which layer draws the plates and the ice cream this frame. gl : "ready" (3D plates built), "pending" (WebGL works,
  * plates still being built, one per task so that loading the page never blocks the main thread), "none" (no WebGL).

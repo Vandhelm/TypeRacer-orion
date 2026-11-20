@@ -3,7 +3,7 @@
 // createScene démarre le rendu et renvoie de quoi piloter le comptoir et le tapis,
 // ainsi que destroy() pour tout arrêter (appelé quand le composant React est démonté).
 import * as THREE from 'three';
-import { ICE_CREAM_GL_OPTIONS, plateLayer, reshapeThisFrame, spanOnScreen } from './scene-quality';
+import { hardwareWebGL, ICE_CREAM_GL_OPTIONS, plateLayer, reshapeThisFrame, spanOnScreen } from './scene-quality';
 
 export type View = 'home' | 'rooms';
 
@@ -836,6 +836,7 @@ export function createScene(
     (function(){
         const glCanvas = canvases.iceCream;
         let renderer: THREE.WebGLRenderer;
+        if (!hardwareWebGL()) return;   // PERF-01 : sans carte graphique, assiettes en 2D
         try {
             renderer = new THREE.WebGLRenderer({ canvas: glCanvas, ...ICE_CREAM_GL_OPTIONS });
         } catch (e) { return; }

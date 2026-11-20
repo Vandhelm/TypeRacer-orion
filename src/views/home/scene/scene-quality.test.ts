@@ -1,9 +1,32 @@
 import { describe, expect, test } from "bun:test";
-import { ICE_CREAM_GL_OPTIONS, plateLayer, RESHAPE_EVERY, reshapeThisFrame, spanOnScreen } from "./scene-quality";
+import { hardwareWebGL, ICE_CREAM_GL_OPTIONS, plateLayer, RESHAPE_EVERY, reshapeThisFrame, spanOnScreen } from "./scene-quality";
 
 describe("PERF-01 — the home scene stays light without a GPU", () => {
   test("the 3D ice cream refuses a software WebGL context (SwiftShader, llvmpipe)", () => {
     expect(ICE_CREAM_GL_OPTIONS.failIfMajorPerformanceCaveat).toBe(true);
+  });
+
+  type Probe = Parameters<typeof hardwareWebGL>[0];
+  const probe = (contexts: Record<string, boolean>, seen: unknown[] = []): Probe => () => ({
+    getContext: (type: string, attrs?: unknown) => {
+      seen.push(attrs);
+      return contexts[type] ? { getExtension: () => ({ loseContext: () => seen.push("lost") }) } : null;
+    },
+  });
+
+  test("hardware WebGL is detected silently with a throwaway canvas, which is then released", () => {
+    const seen: unknown[] = [];
+    expect(hardwareWebGL(probe({ webgl2: true }, seen))).toBe(true);
+    expect(seen[0]).toEqual(ICE_CREAM_GL_OPTIONS);
+    expect(seen).toContain("lost");
+  });
+
+  test("WebGL 1 alone is enough", () => {
+    expect(hardwareWebGL(probe({ webgl: true }))).toBe(true);
+  });
+
+  test("no context with the performance caveat: no 3D (and Three.js is never asked, so no console error)", () => {
+    expect(hardwareWebGL(probe({}))).toBe(false);
   });
 
   test("without the 3D layer, the plates are drawn in 2D", () => {
