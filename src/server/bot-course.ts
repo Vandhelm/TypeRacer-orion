@@ -15,9 +15,9 @@ import { composePassage } from "./corpus";
 /**
  * Où en est un bot : son arrivée (heure de la base) s'il est arrivé, sa part du texte (0 à 1). COURSE-06 : `seconds` et
  * `wpm`, le temps et le MPM net de sa course calculée (annexe A, comme la page : caractères justes ÷ 5 ÷ minutes), jusqu'à
- * son arrivée, son élimination, ou maintenant (au plus la fin de la course).
+ * son arrivée, son élimination, ou maintenant (au plus la fin de la course). RES-05 : `eliminatedAt`, son élimination (mode fatal).
  */
-export type BotStanding = { finishedAt: Date | null; progress: number; seat: null; seconds: number; wpm: number };
+export type BotStanding = { finishedAt: Date | null; progress: number; seat: null; seconds: number; wpm: number; eliminatedAt: Date | null };
 
 /** COURSE-06 : le texte de la course tiré par le serveur (vide sans graine), son départ, sa fin et l'heure de la base, en ms. */
 export type LaunchCourse = { words: string[]; startsAt: number; endsAt: number | null; now: number };
@@ -68,7 +68,7 @@ export async function launchBots(db: Db, roomId: number, humans: number, withTex
     // Comptés comme la page (laneWpm) : les mots finis du texte qu'il a couru (BOT-04 : changé par ses bonus).
     const seconds = (run.arrivedMs ?? run.eliminatedMs ?? elapsed) / 1000;
     const wpm = netWpm(marksOf(run.words)[Math.floor(run.position)]! - run.missed, seconds);
-    standings.set(bot.name.toLowerCase(), { finishedAt: run.arrivedMs === null ? null : new Date(startsAt + run.arrivedMs), progress: run.progress, seat: null, seconds, wpm });
+    standings.set(bot.name.toLowerCase(), { finishedAt: run.arrivedMs === null ? null : new Date(startsAt + run.arrivedMs), progress: run.progress, seat: null, seconds, wpm, eliminatedAt: run.eliminatedMs === null ? null : new Date(startsAt + run.eliminatedMs) });
   }
   return { standings, running: running && (endsAt === null || row.now < endsAt), course: { words, startsAt, endsAt, now: row.now } };
 }

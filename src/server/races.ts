@@ -85,7 +85,11 @@ const fail = (what: string): never => {
 // et rien de ce qui n'est pas lu ici n'atteint la base.
 const int = (min = 0, high = 100_000) => z.number().finite().min(min).max(high).transform(Math.round);
 const decimal = (min = 0, high = 100) => z.number().finite().min(min).max(high);
+/** RES-05 : le MPM brut le plus haut reçu (le brut compte aussi les fautes : au-delà de MAX_HUMAN_WPM). */
+export const MAX_RAW_WPM = 1000;
 const series = z.array(int(0, 10_000)).max(UNLIMITED_SECONDS);
+/** RES-05 : un point de série au-delà de la mesure qu'il trace est ramené à sa borne (MPM net : MAX_HUMAN_WPM ; brut : MAX_RAW_WPM). */
+const bounded = (high: number) => series.transform((points) => points.map((point) => Math.min(point, high)));
 const flag = z.boolean().default(false);
 
 const SummarySchema = z.object({
@@ -112,7 +116,7 @@ const PlayerSchema = z.object({
   name: z.string().trim().min(1).max(20),
   bot: flag,
   wpm: int(0, 500),
-  raw: int(0, 1000),
+  raw: int(0, MAX_RAW_WPM),
   accuracy: decimal(),
   seconds: decimal(0, UNLIMITED_SECONDS),
   chars: z.tuple([int(), int(), int(), int()]),
@@ -122,8 +126,8 @@ const PlayerSchema = z.object({
   eliminated: flag,
   // COURSE-10 : la progression vue par le navigateur (0 à 1) ; seule celle d'un bot sert, celle d'un humain vient du serveur
   progress: z.number().finite().min(0).max(1).optional(),
-  wpmSeries: series,
-  rawSeries: series,
+  wpmSeries: bounded(MAX_HUMAN_WPM),
+  rawSeries: bounded(MAX_RAW_WPM),
   errorSeries: series,
   keys: KeysSchema.default({}),
 });
@@ -265,7 +269,9 @@ export async function recordRace(db: Db, parsed: ParsedRace, requester: Requeste
     // BOT-05 : celle d'un bot aussi, quand le serveur a calculé sa course (src/server/bot-course.ts)
     const standing = server?.standings?.get(r.name.toLowerCase());
     const measured = server ? serverMeasures(r, standing, server.course) : r;
-    return { ...measured, abandoned, finished: (standing ? !!standing.finishedAt : r.finished) && !abandoned };
+    // RES-05 : l'élimination d'un coureur connu du serveur est celle qu'il a datée (mode fatal), jamais le corps
+    const eliminated = standing ? !!standing.eliminatedAt : r.eliminated;
+    return { ...measured, abandoned, eliminated, finished: (standing ? !!standing.finishedAt : r.finished) && !abandoned };
   });
   const race = server?.standings ? { ...parsed, results: rankByServer(results, server.standings, serverBots) } : { ...parsed, results };
   const [account] = requester.playerId
