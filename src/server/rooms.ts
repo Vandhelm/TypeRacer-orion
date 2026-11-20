@@ -13,6 +13,7 @@ import { follow, raceState, storedStatus, type RaceEvent, type RaceState } from 
 import { concealText, textRevealed } from "../rooms/conceal";
 import { COUNTDOWN_MS, raceClock } from "../rooms/race-clock";
 import { ABANDON_AFTER_MS } from "../rooms/reconnect";
+import { CLOCK_TOLERANCE_MS } from "../realtime/referee";
 import { courseWords, textFingerprint } from "../rooms/course-words";
 import type { RoomFilters } from "../rooms/explorer";
 import { seatColor } from "../rooms/seats";
@@ -554,10 +555,13 @@ export async function launchRoom(db: Db, code: string, who: Identity): Promise<R
   return { room: await roomView(db, id, key), you: key };
 }
 
-/** SALLE-09 : marge après la durée de la course (décompte de 3 s, réseau, envoi de la fin) avant de la clore d'office. */
-export const RACE_GRACE_MS = 30_000;
-/** SALLE-09 : l'échéance d'une course, depuis son lancement : sa durée (race_configs.duration, en secondes) plus la marge. */
-export const raceDeadlineMs = (durationSeconds: number) => durationSeconds * 1000 + RACE_GRACE_MS;
+/**
+ * COURSE-09 / SALLE-09 : marge après endsAt avant de clore la course d'office. Le temps réel accepte encore une progression
+ * jusqu'à endsAt + CLOCK_TOLERANCE_MS (referee.ts) ; la seconde de plus couvre son écriture en base (recordProgress).
+ */
+export const RACE_GRACE_MS = CLOCK_TOLERANCE_MS + 1000;
+/** COURSE-09 : l'échéance d'une course, depuis son lancement : décompte, durée (race_configs.duration, en secondes), marge. */
+export const raceDeadlineMs = (durationSeconds: number) => COUNTDOWN_MS + durationSeconds * 1000 + RACE_GRACE_MS;
 /**
  * SALLE-08 : sans signe de vie (lecture du salon, action) depuis ce délai, un membre est parti, socket ou pas.
  * Les pages relisent le salon toutes les 3 à 15 s ; la marge couvre un onglet en arrière-plan, que le navigateur
@@ -576,7 +580,7 @@ export { ABANDON_AFTER_MS, RECONNECT_MS } from "../rooms/reconnect";
 /**
  * Le salon à jour, sous son verrou (pris ici) : l'heure de la base décide, sans minuterie de processus (Next.js, Vercel).
  * - `actor` (qui agit) donne signe de vie ;
- * - SALLE-09 : une course passée son échéance (sa propre durée) passe aux résultats ;
+ * - COURSE-09 / SALLE-09 : une course passée son échéance (endsAt, plus RACE_GRACE_MS) passe aux résultats ;
  * - SALLE-08 : un membre silencieux depuis MEMBER_AWAY_MS est retiré, puis afterDeparture (hôte, fermeture, course).
  * Renvoie true si quelque chose a changé.
  */
@@ -586,7 +590,7 @@ async function sweep(tx: Db, roomId: number, actor?: string | string[]): Promise
   const timedOut = await abandonSilentRunners(tx, roomId);
   const present = actor === undefined ? [] : [actor].flat();
   if (present.length) await tx.update(roomMembers).set({ lastSeenAt: sql`now()` }).where(and(eq(roomMembers.roomId, roomId), inArray(roomMembers.memberKey, present)));
-  const deadline = sql`${rooms.launchedAt} + (select ${raceConfigs.duration} from ${raceConfigs} where ${raceConfigs.id} = ${rooms.configId}) * interval '1 second' + ${RACE_GRACE_MS} * interval '1 millisecond'`;
+  const deadline = sql`${rooms.launchedAt} + ${COUNTDOWN_MS} * interval '1 millisecond' + (select ${raceConfigs.duration} from ${raceConfigs} where ${raceConfigs.id} = ${rooms.configId}) * interval '1 second' + ${RACE_GRACE_MS} * interval '1 millisecond'`;
   const ended = (await stateOf(tx, roomId)) === "racing" ? await moveRoom(tx, roomId, "racing", ["finish"], {}, sql`${deadline} <= now()`) : [];
   // BOT-05 : les humains déjà tous arrivés, l'arrivée du dernier bot (calculée par le serveur) termine la course
   const botsDone = !ended.length && (await stateOf(tx, roomId)) === "racing" && (await endIfAllFinished(tx, roomId));

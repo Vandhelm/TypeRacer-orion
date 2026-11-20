@@ -134,8 +134,8 @@ describe("COURSE-07 — a runner abandons the race, recorded by the server", () 
   test("refused once the time is up (after endsAt), even before the server closes the race", async () => {
     const { room, host } = await t.open("Abandon_Temps", { bots: true, guests: 2, duration: 60 });
     await launch(room.code, host.cookie);
-    // 5 s après la fin (départ + 60 s), dans la marge où la salle est encore « racing »
-    await t.db.update(rooms).set({ launchedAt: sql`now() - ${COUNTDOWN_MS + 65_000} * interval '1 millisecond'` }).where(eq(rooms.code, room.code));
+    // 0,5 s après la fin (départ + 60 s), dans la marge (RACE_GRACE_MS) où la salle est encore « racing »
+    await t.db.update(rooms).set({ launchedAt: sql`now() - ${COUNTDOWN_MS + 60_500} * interval '1 millisecond'` }).where(eq(rooms.code, room.code));
     expect((await t.read(host.cookie, room.code)).body.room.status).toBe("racing");
     const res = await abandon(room.code, host.cookie);
     expect(res.status).toBe(409);
