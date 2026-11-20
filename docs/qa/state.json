@@ -275,9 +275,9 @@
     "scope": "critère feature/game/course-08 (medium, 4e passage)"
   },
   "COURSE-09": {
-    "commit": "2acdffe",
-    "date": "2026-11-19",
-    "scope": "suivi (light)"
+    "commit": "f18a91d",
+    "date": "2026-11-20",
+    "scope": "critère (feature/game/course-09) + BOT-05"
   },
   "COURSE-10": {
     "commit": "9bf947d",
