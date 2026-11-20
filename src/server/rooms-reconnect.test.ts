@@ -133,7 +133,7 @@ describe("COURSE-08 — a runner who comes back within 30 s resumes, after that 
     expect((await row(code, host.key)).member!.abandonedAt).toBeNull();
   });
 
-  test("no abandon during the countdown, nor once the race time is up (he is ranked by progress)", async () => {
+  test("no abandon during the countdown, nor for a silence still below the delay when the race time ran out (he is ranked by progress)", async () => {
     const counting = await racingPair("Pendant_Decompte", -COUNTDOWN_MS + 500);
     await cutFor(counting.host.key, 36_000);
     await refreshRoom(t.db, counting.code);
@@ -143,7 +143,8 @@ describe("COURSE-08 — a runner who comes back within 30 s resumes, after that 
     // durée du salon, plus 5 s : le temps est écoulé, la salle attend encore la marge de SALLE-09
     const duration = (await t.read(over.host.cookie, over.code)).body.room.settings.duration!;
     await startedFor(over.code, duration * 1000 + 5_000);
-    await cutFor(over.host.key, 36_000);
+    // coupé 20 s avant endsAt : 24,9 s de silence à la fin de la course, sous le seuil (le silence d'après ne compte plus)
+    await cutFor(over.host.key, 25_000);
     await refreshRoom(t.db, over.code);
     expect((await row(over.code, over.host.key)).member!.abandonedAt).toBeNull();
   });

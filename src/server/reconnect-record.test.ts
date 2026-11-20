@@ -2,7 +2,8 @@
 // entrer pour enregistrer sa course marquée abandon (depuis ce que sa page gardait), puis l'envoie au podium.
 import { beforeAll, describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
-import { raceResults, roomMembers, rooms, user } from "../../db/schema";
+import { raceConfigs, raceResults, roomMembers, rooms, user } from "../../db/schema";
+import { COUNTDOWN_MS } from "../rooms/race-clock";
 import { createMockDatabase } from "../../db/mocks/test-database";
 import { placeholderEmail } from "../accounts/username";
 import { createAuth } from "./auth";
@@ -71,5 +72,32 @@ describe("COURSE-08 — the last human abandoned by silence comes back: his race
     const me = await signUp("Pas_Abandon");
     const { code, who } = await launchedRoomFor(db, auth, me.cookie, GUEST_SECRET, 10_000);
     expect(await gameDetour(db, code, who)).toBeNull();
+  });
+
+  test("silent past the delay before endsAt, back after endsAt during the grace: still abandoned, recorded as such", async () => {
+    const me = await signUp("Apres_Fin");
+    const { code, who } = await launchedRoomFor(db, auth, me.cookie, GUEST_SECRET, 10_000);
+    const [config] = await db.select({ duration: raceConfigs.duration }).from(rooms).innerJoin(raceConfigs, eq(raceConfigs.id, rooms.configId)).where(eq(rooms.code, code));
+    const durationMs = config!.duration! * 1000;
+    // maintenant = endsAt + 5 s ; dernier signe de vie = endsAt − 40 s
+    await db.update(rooms).set({ launchedAt: sql`now() - ${COUNTDOWN_MS + durationMs + 5_000} * interval '1 millisecond'` }).where(eq(rooms.code, code));
+    await db.update(roomMembers).set({ lastSeenAt: sql`now() - ${45_000} * interval '1 millisecond'` }).where(eq(roomMembers.memberKey, memberKey(who)));
+    expect(await gameDetour(db, code, who)).toBeNull(); // il entre pour enregistrer son abandon
+    const { room } = await readRoom(db, code, who);
+    expect(room.members.find((m) => m.key === memberKey(who))?.abandoned).toBe(true);
+    expect((await post({ room: code, summary: SUMMARY, players: [result("Apres_Fin", { seconds: 50 })] }, me.cookie)).status).toBe(201);
+    const [row] = await db.select().from(raceResults).where(eq(raceResults.playerId, me.playerId));
+    expect(row?.abandoned).toBe(true);
+  });
+
+  test("silent only from 20 s before endsAt: below the delay at the end, ranked by progress, not abandoned", async () => {
+    const me = await signUp("Fin_Proche");
+    const { code, who } = await launchedRoomFor(db, auth, me.cookie, GUEST_SECRET, 10_000);
+    const [config] = await db.select({ duration: raceConfigs.duration }).from(rooms).innerJoin(raceConfigs, eq(raceConfigs.id, rooms.configId)).where(eq(rooms.code, code));
+    await db.update(rooms).set({ launchedAt: sql`now() - ${COUNTDOWN_MS + config!.duration! * 1000 + 20_000} * interval '1 millisecond'` }).where(eq(rooms.code, code));
+    await db.update(roomMembers).set({ lastSeenAt: sql`now() - ${40_000} * interval '1 millisecond'` }).where(eq(roomMembers.memberKey, memberKey(who)));
+    await readRoom(db, code, who);
+    const [member] = await db.select({ abandonedAt: roomMembers.abandonedAt }).from(roomMembers).where(eq(roomMembers.memberKey, memberKey(who)));
+    expect(member!.abandonedAt).toBeNull();
   });
 });

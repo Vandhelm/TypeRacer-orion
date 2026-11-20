@@ -584,12 +584,16 @@ async function sweep(tx: Db, roomId: number, actor?: string | string[]): Promise
 /**
  * COURSE-08 : les coureurs (participants ni arrivés ni ayant abandonné) silencieux depuis ABANDON_AFTER_MS, comptés au plus
  * tôt depuis le départ, ont abandonné : même effet que abandonRace (abandoned_at, progression validée gardée, une fin
- * pour COURSE-09). Seulement en course, temps non écoulé : après, chacun est classé par sa progression. Sous le verrou.
+ * pour COURSE-09). Le silence compte jusqu'à la fin de la course (endsAt), pas au-delà : un coureur déjà silencieux depuis
+ * le délai à endsAt a abandonné, même balayé pendant la marge d'après (SALLE-09) ; un silence commencé trop tard pour
+ * l'atteindre avant endsAt laisse le coureur classé par sa progression. Sans limite de temps, jusqu'à maintenant.
+ * Seulement tant que la salle est en course (décompte exclu). Sous le verrou.
  */
 async function abandonSilentRunners(tx: Db, roomId: number): Promise<boolean> {
   if ((await stateOf(tx, roomId)) !== "racing") return false;
   const startsAt = sql`(select ${rooms.launchedAt} + ${COUNTDOWN_MS} * interval '1 millisecond' from ${rooms} where ${rooms.id} = ${roomId})`;
-  const running = sql`(select coalesce(${rooms.launchedAt} + ${COUNTDOWN_MS} * interval '1 millisecond' + ${raceConfigs.duration} * interval '1 second' > now(), true) from ${rooms} join ${raceConfigs} on ${raceConfigs.id} = ${rooms.configId} where ${rooms.id} = ${roomId})`;
+  // least() ignore un null : sans durée (CONF-01), la fin est maintenant
+  const until = sql`least(now(), (select ${rooms.launchedAt} + ${COUNTDOWN_MS} * interval '1 millisecond' + ${raceConfigs.duration} * interval '1 second' from ${rooms} join ${raceConfigs} on ${raceConfigs.id} = ${rooms.configId} where ${rooms.id} = ${roomId}))`;
   const gone = await tx
     .update(roomMembers)
     .set({ abandonedAt: sql`now()` })
@@ -599,8 +603,7 @@ async function abandonSilentRunners(tx: Db, roomId: number): Promise<boolean> {
         eq(roomMembers.role, "player"),
         isNull(roomMembers.finishedAt),
         isNull(roomMembers.abandonedAt),
-        sql`greatest(${roomMembers.lastSeenAt}, ${startsAt}) < now() - ${ABANDON_AFTER_MS} * interval '1 millisecond'`,
-        sql`${running}`,
+        sql`greatest(${roomMembers.lastSeenAt}, ${startsAt}) < ${until} - ${ABANDON_AFTER_MS} * interval '1 millisecond'`,
       ),
     )
     .returning({ key: roomMembers.memberKey });
