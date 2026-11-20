@@ -16,7 +16,7 @@ import { loadRacePoolImages, type RacePoolImages } from "./pool/createRacePool";
 import { laneProgress, myWpm } from "./race";
 import { RacePool } from "./RacePool";
 import { RaceTrack } from "./RaceTrack";
-import { remoteUpdates, trackLanes } from "./track";
+import { raceLanes, remoteUpdates, trackLanes } from "./track";
 import { TypingPanel } from "./TypingPanel";
 
 // One row per area: header, pool, names, typing panel. Compact screens scroll and put "Leave" beside the header.
@@ -66,8 +66,11 @@ export function GameScreen({ state, mobile }: { state: RoomState; mobile: boolea
 /** One lane per player and the shared text. It hands over to the podium at the end. COURSE-05: a spectator watches, without typing panel. */
 function GameRace({ state }: { state: RoomState }) {
   const { t } = useTranslation();
-  const { room, players, members, displayName, finish, leave, passage, seed } = state;
+  const { room, displayName, finish, leave, passage, seed } = state;
   const watching = state.role === "spectator";
+  // COURSE-05 : les couloirs sont figés au départ ; un membre qui quitte ensuite ne décale ni noms ni progressions
+  const [lanes] = useState(() => raceLanes(state.players, state.members ?? []));
+  const { players } = lanes;
   const [images, setImages] = useState<RacePoolImages | null>(null);
   const { race, onInput, onRemote, showResults } = useRace(room, players, images !== null, passage, seed);
 
@@ -80,8 +83,8 @@ function GameRace({ state }: { state: RoomState }) {
   }, [watching, race.phase, mine, wpm, sendProgress]);
   // COURSE-05 : les autres humains avancent dans leur couloir avec ce qu'ils envoient
   useEffect(() => {
-    if (race.phase === "racing") onRemote(remoteUpdates(live, members, players));
-  }, [race.phase, live, members, players, onRemote]);
+    if (race.phase === "racing") onRemote(remoteUpdates(live, lanes));
+  }, [race.phase, live, lanes, onRemote]);
 
   useEffect(markSessionStart, []);
 

@@ -309,7 +309,7 @@
     },
     "track": {
       "label": "Piste : chaque participant, son rang et sa vitesse en direct",
-      "stats": "{{rank}} · {{wpm}} MPM",
+      "wpm": "{{wpm}} MPM",
       "watching": "Tu regardes la course : spectateur, sans zone de frappe."
     }
   },

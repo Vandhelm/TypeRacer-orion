@@ -3,7 +3,8 @@ import { generatedAvatar } from "../../players/avatar";
 import type { RealtimeState } from "../../realtime/client";
 import type { MemberView, Player } from "../room/room";
 import { advanceBots, applyRemote, createCourse, createRace, everyoneDone, laneProgress, laneWpm, type Race } from "./race";
-import { easeToward, realtimeMemberKey, remoteUpdates, trackLanes } from "./track";
+import { seatsOf } from "../room/room";
+import { easeToward, raceLanes, realtimeMemberKey, remoteUpdates, trackLanes } from "./track";
 
 const ME: Player = { name: "Corail_418", color: "red", me: true };
 const RIVAL: Player = { name: "Maki_Test", color: "blue" };
@@ -85,8 +86,36 @@ describe("COURSE-05 — realtime progress is matched to the right lane", () => {
       players: [],
       progress: { "u:1": { progress: 0.9, wpm: 99 }, "u:2": { progress: 0.3, wpm: 41 }, "g:x": { progress: 1, wpm: 120 }, "u:77": { progress: 1, wpm: 1 } },
     };
-    expect(remoteUpdates(live, members, [ME, RIVAL, BOT])).toEqual([{ lane: 1, progress: 0.3, wpm: 41 }]);
-    expect(remoteUpdates(null, members, [ME, RIVAL, BOT])).toEqual([]);
+    const lanes = raceLanes([ME, RIVAL, BOT], members);
+    expect(lanes.keys).toEqual(["player:1", "player:2", null]);
+    expect(remoteUpdates(live, lanes)).toEqual([{ lane: 1, progress: 0.3, wpm: 41 }]);
+    expect(remoteUpdates(null, lanes)).toEqual([]);
+  });
+
+  test("a member who leaves mid-race does not shift the other lanes: each progress stays in its author's lane", () => {
+    const LATE: Player = { name: "Uni_Late", color: "pink" };
+    const start = [member("player:1", "Corail_418", 0), member("player:2", "Maki_Test", 1), member("player:3", "Uni_Late", 2)];
+    const lanes = raceLanes([ME, RIVAL, LATE], start);
+    // Maki_Test quitte : la liste des membres n'a plus que deux participants
+    const progress = { "u:3": { progress: 0.4, wpm: 50 } };
+    const live: RealtimeState = { status: "open", room: "ABC234", you: null, players: [], progress };
+    expect(remoteUpdates(live, lanes)).toEqual([{ lane: 2, progress: 0.4, wpm: 50 }]);
+    expect(lanes.players.map((player) => player.name)).toEqual(["Corail_418", "Maki_Test", "Uni_Late"]);
+  });
+
+  test("the lanes are a copy: later changes to the room's lists do not reach them", () => {
+    const players = [ME, RIVAL];
+    const members = [member("player:1", "Corail_418", 0), member("player:2", "Maki_Test", 1)];
+    const lanes = raceLanes(players, members);
+    players.pop();
+    members.pop();
+    expect(lanes.players).toHaveLength(2);
+    expect(lanes.keys).toEqual(["player:1", "player:2"]);
+  });
+
+  test("a seat holder's photo reaches their lane", () => {
+    const seats = seatsOf({ guests: 2, bots: false }, [{ ...member("player:1", "Corail_418", 0), image: "data:image/webp;base64,AAAA" }, member("guest:g", "Nori", 1)], "player:1");
+    expect(seats).toEqual([expect.objectContaining({ name: "Corail_418", image: "data:image/webp;base64,AAAA" }), expect.not.objectContaining({ image: expect.anything() })]);
   });
 });
 

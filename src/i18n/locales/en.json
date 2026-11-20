@@ -309,7 +309,7 @@
     },
     "track": {
       "label": "Track: every participant, their rank and live speed",
-      "stats": "{{rank}} · {{wpm}} WPM",
+      "wpm": "{{wpm}} WPM",
       "watching": "You are watching the race: spectator, no typing area."
     }
   },

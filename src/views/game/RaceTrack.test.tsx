@@ -5,9 +5,10 @@ import { I18nextProvider } from "react-i18next";
 import { createI18n } from "../../i18n";
 import { DEFAULT_SETTINGS } from "../../rooms/settings";
 import type { RoomState } from "../room/hooks/useRoom";
+import type { Player } from "../room/room";
 import { GameScreen } from "./GamePage";
 
-const PLAYERS = [
+const PLAYERS: Player[] = [
   { name: "Corail_418", color: "#e05a4a", me: true },
   { name: "Maki_Test", color: "#4a7ae0" },
   { name: "Thon_Rouge", color: "#4ae07a", bot: true },
@@ -38,6 +39,56 @@ describe("COURSE-05 — the track shows every participant with avatar, name, pos
     });
   });
 
+  test("an account's photo replaces the generated avatar in its lane", () => {
+    const photo = "data:image/webp;base64,UklGRg==";
+    const rows = lanes(render(state("player", [{ ...PLAYERS[0]!, image: photo }, ...PLAYERS.slice(1)])));
+    expect(rows[0]).toContain(`src="${photo}"`);
+    expect(rows[0]).not.toContain("<svg");
+    expect(rows[1]).toContain("<svg");
+  });
+
+  test("a photo that was not resized by the server falls back to the generated avatar", () => {
+    const rows = lanes(render(state("player", [{ ...PLAYERS[0]!, image: "https://example.com/x.png" }])));
+    expect(rows[0]).not.toContain("example.com");
+    expect(rows[0]).toContain("<svg");
+  });
+});
+
+/** Les classes d'un élément du couloir, repéré par son attribut data-part. */
+const part = (row: string, name: string) => row.match(new RegExp(`<[a-z]+ [^>]*data-part="${name}"[^>]*>`))?.[0] ?? "";
+
+describe("COURSE-05 — everything stays inside its lane, from 2 to 8 lanes", () => {
+  const eight: Player[] = Array.from({ length: 8 }, (_, i) => ({ name: i ? `Participant_${i}` : "Corail_418_long", color: "#fff", me: i === 0 || undefined, bot: i > 3 || undefined }));
+  const rows = lanes(render(state("player", eight), "en"));
+
+  test("a lane clips what does not fit instead of spilling into its neighbour", () => {
+    expect(rows).toHaveLength(8);
+    rows.forEach((row) => expect(row.slice(0, row.indexOf(">"))).toMatch(/\bmin-w-0\b[\s\S]*\boverflow-hidden\b|\boverflow-hidden\b[\s\S]*\bmin-w-0\b/));
+  });
+
+  test("rank and WPM are separate pieces that wrap onto two lines", () => {
+    const stats = part(rows[1]!, "stats");
+    expect(stats).toContain("flex-wrap");
+    expect(part(rows[1]!, "rank")).toContain("whitespace-nowrap");
+    expect(part(rows[1]!, "wpm")).toContain("whitespace-nowrap");
+  });
+
+  test("narrow lanes drop the WPM and the avatar first; the rank is never hidden", () => {
+    expect(part(rows[1]!, "wpm")).toMatch(/\[@container\(max-width:\d+px\)\]:hidden/);
+    expect(part(rows[1]!, "avatar")).toMatch(/\[@container\(max-width:\d+px\)\]:hidden/);
+    expect(part(rows[1]!, "rank")).not.toContain(":hidden");
+  });
+
+  test("the local name wraps instead of being covered: the YOU badge sits outside the name line", () => {
+    const name = rows[0]!.match(/<p [^>]*data-part="name"[^>]*>[\s\S]*?<\/p>/)?.[0] ?? "";
+    expect(name).toContain("Corail_418_long");
+    expect(name).not.toContain("YOU");
+    expect(part(rows[0]!, "label")).toMatch(/\[overflow-wrap:anywhere\]/);
+    expect(rows[0]).toContain("YOU");
+  });
+});
+
+describe("COURSE-05 — the local player stands out; a spectator watches without typing", () => {
   test("in English, the rank and WPM are translated", () => {
     const row = lanes(render(state("player"), "en"))[0]!;
     expect(row).toContain("1st");

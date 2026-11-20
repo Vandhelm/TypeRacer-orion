@@ -1,12 +1,12 @@
 // COURSE-05 : la piste de progression, sans React. Un couloir par participant du salon (humain ou bot) avec son avatar,
 // son nom, son rang courant et son MPM ; la progression des humains arrive en temps réel (TECH-06), celle des bots est
 // simulée ici ; l'affichage glisse d'une mise à jour à l'autre (easeToward) au lieu de sauter.
-import { generatedAvatar, type GeneratedAvatar } from "../../players/avatar";
+import { generatedAvatar, storedAvatar, type GeneratedAvatar } from "../../players/avatar";
 import type { RealtimeState } from "../../realtime/client";
 import type { MemberView, Player } from "../room/room";
 import { laneProgress, laneWpm, type Race } from "./race";
 
-export type TrackLane = { lane: number; name: string; me: boolean; bot: boolean; avatar: GeneratedAvatar; progress: number; wpm: number; rank: number; finished: boolean };
+export type TrackLane = { lane: number; name: string; me: boolean; bot: boolean; avatar: GeneratedAvatar; /** La photo du compte (AUTH-04) ; null : l'avatar généré. */ photo: string | null; progress: number; wpm: number; rank: number; finished: boolean };
 
 /** La clé de membre d'un joueur temps réel (realtime-ticket.ts) : `u:<id>` → `player:<id>`, `g:<session>` → `guest:<session>`. */
 export function realtimeMemberKey(id: string): string | null {
@@ -16,22 +16,29 @@ export function realtimeMemberKey(id: string): string | null {
   return guest ? `guest:${guest[1]}` : null;
 }
 
+/** Les couloirs d'une course, figés à son départ : un membre qui part ensuite ne décale ni les noms ni les progressions. */
+export type RaceLanes = { players: Player[]; /** La clé de membre de chaque couloir ; null pour un bot. */ keys: (string | null)[] };
+
 /**
- * Les progressions reçues, couloir par couloir. Les couloirs suivent seatsOf (src/views/room/room.ts) : d'abord les
- * participants assis, par place, puis les bots. Ni ma progression (mesurée par la page), ni celle d'un spectateur
- * ou d'un inconnu ne compte.
+ * Les couloirs suivent seatsOf (src/views/room/room.ts) : d'abord les participants assis, par place, puis les bots.
+ * Une copie : les listes du salon peuvent changer pendant la course sans la toucher.
  */
-export function remoteUpdates(live: RealtimeState | null, members: MemberView[], players: Player[]): { lane: number; progress: number; wpm: number }[] {
-  if (!live) return [];
+export function raceLanes(players: Player[], members: MemberView[]): RaceLanes {
   const seated = members
     .filter((m) => m.role === "player" && m.seat !== null)
     .sort((a, b) => a.seat! - b.seat!)
     .map((m) => m.key);
+  return { players: players.map((player) => ({ ...player })), keys: players.map((player, lane) => (player.bot ? null : (seated[lane] ?? null))) };
+}
+
+/** Les progressions reçues, couloir par couloir, selon leur auteur. Ni la mienne (mesurée par la page), ni celle d'un spectateur ou d'un inconnu ne compte. */
+export function remoteUpdates(live: RealtimeState | null, lanes: RaceLanes): { lane: number; progress: number; wpm: number }[] {
+  if (!live) return [];
   const updates: { lane: number; progress: number; wpm: number }[] = [];
   for (const [id, { progress, wpm }] of Object.entries(live.progress)) {
     const key = realtimeMemberKey(id);
-    const lane = key === null ? -1 : seated.indexOf(key);
-    const player = players[lane];
+    const lane = key === null ? -1 : lanes.keys.indexOf(key);
+    const player = lanes.players[lane];
     if (lane < 0 || !player || player.me || player.bot) continue;
     updates.push({ lane, progress, wpm });
   }
@@ -62,6 +69,7 @@ export function trackLanes(race: Race, players: Player[]): TrackLane[] {
     me: !!player.me,
     bot: !!player.bot,
     avatar: generatedAvatar(player.name),
+    photo: storedAvatar(player.image),
     progress: laneProgress(race, lane),
     wpm: laneWpm(race, lane),
     rank: rank[lane]!,

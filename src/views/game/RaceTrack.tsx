@@ -3,8 +3,11 @@ import { useTranslation } from "react-i18next";
 import { GeneratedAvatar } from "../profile/ProfileAvatar";
 import { easeToward, type TrackLane } from "./track";
 
-const NAME_LINE = "flex max-w-full items-center gap-[.6vh] overflow-hidden font-mono text-[max(10px,1.2vh)] leading-[1.2] tracking-[.1em] whitespace-nowrap";
-const STATS_LINE = "font-mono text-[max(10px,1.1vh)] leading-none tracking-[.12em] whitespace-nowrap tabular-nums [@container(max-width:56px)]:hidden";
+// Tout tient dans son couloir, de 2 à 8 couloirs : le nom passe à la ligne (deux lignes au plus), rang et MPM aussi.
+const NAME_LINE = "flex max-w-full items-center justify-center gap-[.6vh] py-[2px] font-mono text-[max(10px,1.2vh)] leading-[1.2] tracking-[.1em]";
+// sous 72 px, le nom serre ses lettres et prend jusqu'à trois lignes plutôt que d'être coupé
+const NAME_LABEL = "line-clamp-2 min-w-0 [overflow-wrap:anywhere] [@container(max-width:72px)]:line-clamp-3 [@container(max-width:72px)]:tracking-normal";
+const STATS_LINE = "flex max-w-full flex-wrap items-center justify-center gap-x-[.8ch] gap-y-[.4vh] font-mono text-[max(10px,1.1vh)] leading-none tracking-[.12em] tabular-nums";
 
 /**
  * COURSE-05 : sous le bassin, un couloir par participant : avatar, nom, rang courant, MPM et barre de progression.
@@ -45,21 +48,24 @@ export function RaceTrack({ lanes }: { lanes: TrackLane[] }) {
           }}
           data-lane={lane.lane}
           aria-current={lane.me || undefined}
-          className={`@container flex min-w-0 flex-col items-center gap-[.6vh] px-[.6vh] text-center ${lane.me ? "text-white" : "text-muted"}`}
+          className={`@container flex min-w-0 flex-col overflow-hidden items-center gap-[.6vh] px-[.6vh] text-center ${lane.me ? "text-white" : "text-muted"}`}
           style={{ "--progress": shown.current[lane.lane] ?? 0 } as CSSProperties}
         >
-          <p className={`${NAME_LINE} ${lane.me ? "font-medium" : "font-normal"}`}>
+          <p data-part="name" className={`${NAME_LINE} ${lane.me ? "font-medium" : "font-normal"}`}>
             <span
-              className={`block size-[max(18px,2.4vh)] flex-none overflow-hidden rounded-[50%] border [@container(max-width:56px)]:hidden ${lane.me ? "border-red-text [box-shadow:0_0_0_2px_var(--color-red-solid)]" : "border-line"}`}
+              data-part="avatar"
+              className={`block size-[max(18px,2.4vh)] flex-none overflow-hidden rounded-[50%] border [@container(max-width:96px)]:hidden ${lane.me ? "border-red-text [box-shadow:0_0_0_2px_var(--color-red-solid)]" : "border-line"}`}
               aria-hidden="true"
             >
-              <GeneratedAvatar name={lane.name} />
+              {lane.photo ? <img className="block size-full object-cover" src={lane.photo} alt="" /> : <GeneratedAvatar name={lane.name} />}
             </span>
-            <span className="min-w-0 overflow-hidden text-ellipsis">{lane.name}</span>
-            {lane.me && <b className="flex-none bg-red-solid px-[.5vh] font-medium text-white">{t("room.you")}</b>}
+            <span data-part="label" className={NAME_LABEL}>{lane.name}</span>
           </p>
-          <p className={`${STATS_LINE} ${lane.me ? "text-red-text" : ""}`}>
-            {t("game.track.stats", { rank: t("podium.rank", { count: lane.rank, ordinal: true }), wpm: lane.wpm })}
+          <p data-part="stats" className={`${STATS_LINE} ${lane.me ? "text-red-text" : ""}`}>
+            {/* masquage progressif quand le couloir rétrécit : le MPM, puis le badge ; le rang reste toujours */}
+            {lane.me && <b className="bg-red-solid px-[.5vh] font-medium whitespace-nowrap text-white [@container(max-width:44px)]:hidden">{t("room.you")}</b>}
+            <span data-part="rank" className="whitespace-nowrap">{t("podium.rank", { count: lane.rank, ordinal: true })}</span>
+            <span data-part="wpm" className="whitespace-nowrap [@container(max-width:60px)]:hidden">{t("game.track.wpm", { wpm: lane.wpm })}</span>
           </p>
           <span className={`block w-[70%] bg-line-faint ${lane.me ? "h-[3px]" : "h-px"}`} aria-hidden="true">
             <i className={`block h-full w-[calc(var(--progress)*100%)] ${lane.me ? "bg-red-text" : "bg-line"}`} />
