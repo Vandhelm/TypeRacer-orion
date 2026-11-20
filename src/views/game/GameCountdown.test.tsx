@@ -57,3 +57,18 @@ describe("COURSE-03 — the race page shows the countdown of the server start", 
     expect(html).toMatch(/>\s*25\s*(<!-- -->)?\s*s?\s*</);
   });
 });
+
+describe("COURSE-03 — the text is revealed at the start of the countdown (3, 2, 1), not during « get ready »", () => {
+  const custom = (startsAt: number) =>
+    ({ ...state({ startsAt }), room: { ...DEFAULT_SETTINGS, code: "ABC234", duration: 60, textType: "custom", text: "sakana maguro nori" } }) as unknown as RoomState;
+
+  test("during the preparation, no word of the text is in the page", () => {
+    const html = render(custom(Date.now() + COUNTDOWN_MS - 100));
+    expect(digit(html)).toBe("Prêts ?");
+    expect(html).not.toContain("maguro");
+  });
+
+  test("from the « 3 », the text is in the page", () => {
+    for (const left of [2_900, 1_500, 400]) expect(render(custom(Date.now() + left))).toContain("maguro");
+  });
+});
