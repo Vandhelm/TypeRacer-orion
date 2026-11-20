@@ -51,6 +51,8 @@ export const rooms = pgTable(
     launchedAt: timestamp("launched_at", { withTimezone: true }),
     /** CONF-03 : le passage du corpus tiré par le serveur au lancement, en mode cohérent ; null sinon. */
     textId: integer("text_id").references(() => corpusTexts.id, { onDelete: "set null" }),
+    /** CONF-03 : la graine des mots tirés au hasard (mode aléatoire, chiffres, caractères spéciaux), la même pour tous. */
+    textSeed: integer("text_seed"),
   },
   (table) => [index("rooms_lobby").on(table.status, table.visibility), check("rooms_guests_range", sql`${table.guests} between 2 and 30`),
     check("rooms_code_format", sql`${table.code} ~ ${sql.raw(`'${CODE_PATTERN}'`)}`),

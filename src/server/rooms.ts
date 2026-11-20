@@ -3,11 +3,11 @@
 import { and, asc, desc, eq, gt, inArray, isNull, ne, sql } from "drizzle-orm";
 import type { z } from "zod";
 import type { Db } from "../../db/client";
-import { corpusTexts, players, raceConfigs, roomBans, roomMembers, rooms } from "../../db/schema";
+import { players, raceConfigs, roomBans, roomMembers, rooms } from "../../db/schema";
 import { allows, canJoin, newRoomCode } from "../rooms/access";
 import { seatColor } from "../rooms/seats";
 import { wordTarget } from "../rooms/text";
-import { pickPassage } from "./corpus";
+import { composePassage, pickPassage } from "./corpus";
 import { claimInvite, revokeInvitesOf, roomOfInvite } from "./room-invites";
 import { DEFAULT_SETTINGS, type CreateRoomSchema, type Role, type RoomSettings, type UpdateRoomSchema } from "../rooms/settings";
 
@@ -71,6 +71,8 @@ export type RoomView = {
   members: MemberView[];
   /** CONF-03 : le passage tiré par le serveur au lancement (mode cohérent), le même pour tous ; null sinon. */
   passage: { body: string; source: string | null } | null;
+  /** CONF-03 : la graine tirée par le serveur au lancement ; chaque client en tire les mêmes mots. Null avant. */
+  seed: number | null;
 };
 export type RoomStatus = (typeof rooms.$inferSelect)["status"];
 /** Ce que renvoie une action réussie : l'état du salon, et la clé de celui qui l'a demandée. */
@@ -197,7 +199,6 @@ export async function roomView(db: Db, roomId: number, _viewer?: string): Promis
     .select()
     .from(rooms)
     .innerJoin(raceConfigs, eq(raceConfigs.id, rooms.configId))
-    .leftJoin(corpusTexts, eq(corpusTexts.id, rooms.textId))
     .where(eq(rooms.id, roomId));
   if (!row) throw new RoomRefused("not_found");
   const members = await db
@@ -207,13 +208,16 @@ export async function roomView(db: Db, roomId: number, _viewer?: string): Promis
     .where(eq(roomMembers.roomId, roomId))
     .orderBy(asc(roomMembers.joinedAt), asc(roomMembers.memberKey));
   const host = memberKey({ playerId: row.rooms.hostId });
+  const { textId } = row.rooms;
+  const passage = textId === null ? null : await composePassage(db, { language: row.race_configs.language, words: wordTarget(row.race_configs), startId: textId });
   return {
     code: row.rooms.code,
     status: row.rooms.status,
     host,
     settings: settingsOf(row.rooms, row.race_configs),
     members: members.map((m) => ({ key: m.key, name: m.playerName ?? m.guestName ?? "", guest: m.playerId === null, host: m.key === host, role: m.role, seat: m.seat, color: m.color, finished: m.finishedAt !== null })),
-    passage: row.corpus_texts ? { body: row.corpus_texts.body, source: row.corpus_texts.source } : null,
+    passage: passage && { body: passage.body, source: passage.source },
+    seed: row.rooms.textSeed,
   };
 }
 
@@ -405,10 +409,12 @@ export async function launchRoom(db: Db, code: string, who: Identity): Promise<R
     if (key !== memberKey({ playerId: room.hostId })) throw new RoomRefused("not_host");
     if (room.status === "closed") throw new RoomRefused("not_found");
     if (!canJoin(room.status)) throw new RoomRefused("in_race");
-    // CONF-03 : en mode cohérent, le serveur tire le passage du corpus, selon la langue, le niveau et la longueur du salon
+    // CONF-03 : le serveur tire le texte. En mode cohérent, un passage du corpus dans la langue du salon (suivi d'autres
+    // jusqu'à la longueur voulue) ; dans tous les modes, une graine, pour que chaque membre tire les mêmes mots.
     const [config] = await tx.select().from(raceConfigs).where(eq(raceConfigs.id, room.configId));
-    const passage = config!.textType === "coherent" ? await pickPassage(tx, { language: config!.language, level: config!.level, words: wordTarget(config!) }) : null;
-    await tx.update(rooms).set({ status: "racing", launchedAt: sql`now()`, textId: passage?.id ?? null }).where(eq(rooms.id, id));
+    const passage = config!.textType === "coherent" ? await pickPassage(tx, { language: config!.language, words: wordTarget(config!) }) : null;
+    const textSeed = crypto.getRandomValues(new Int32Array(1))[0]!;
+    await tx.update(rooms).set({ status: "racing", launchedAt: sql`now()`, textId: passage?.id ?? null, textSeed }).where(eq(rooms.id, id));
     await tx.update(roomMembers).set({ finishedAt: null }).where(eq(roomMembers.roomId, id));
   });
   return { room: await roomView(db, id, key), you: key };

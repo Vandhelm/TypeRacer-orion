@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { DEFAULT_SETTINGS } from "../../rooms/settings";
+import { seededRandom } from "../../rooms/text";
 import { buildWords, type CourseSettings } from "./course";
 import { LEXICON } from "./lexicon";
 
@@ -52,5 +53,32 @@ describe("CONF-03 — random mode draws its words from the dictionary", () => {
   test("two draws differ: the words are random, not a fixed text", () => {
     const draw = () => buildWords(settings({ textType: "words", length: "medium" })).join(" ");
     expect(draw()).not.toBe(draw());
+  });
+});
+
+describe("CONF-03 — every member of the room types the same text", () => {
+  const cases: Partial<CourseSettings>[] = [
+    { textType: "words", punctuation: true },
+    { textType: "coherent", numbers: true, specials: true },
+    { textType: "quote" },
+  ];
+  for (const patch of cases) {
+    test(`the seed drawn by the server gives the same words on two clients (${JSON.stringify(patch)})`, () => {
+      const draw = () => buildWords(settings({ length: "long", ...patch }), seededRandom(418_2026), PASSAGE).join(" ");
+      expect(draw()).toBe(draw());
+    });
+  }
+
+  test("two seeds give two random texts", () => {
+    const draw = (seed: number) => buildWords(settings({ textType: "words", length: "long" }), seededRandom(seed)).join(" ");
+    expect(draw(1)).not.toBe(draw(2));
+  });
+
+  test("the generator stays in [0, 1)", () => {
+    const random = seededRandom(-7);
+    for (let i = 0; i < 1000; i++) {
+      const value = random();
+      expect(value >= 0 && value < 1).toBe(true);
+    }
   });
 });

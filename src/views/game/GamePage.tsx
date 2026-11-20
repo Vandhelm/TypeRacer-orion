@@ -57,9 +57,9 @@ export function GamePage() {
 /** One lane per player and the shared text. It hands over to the podium at the end. */
 function GameRace({ state }: { state: RoomState }) {
   const { t } = useTranslation();
-  const { room, players, displayName, finish, leave, passage } = state;
+  const { room, players, displayName, finish, leave, passage, seed } = state;
   const [images, setImages] = useState<RacePoolImages | null>(null);
-  const { race, onInput, showResults } = useRace(room, players, images !== null, passage);
+  const { race, onInput, showResults } = useRace(room, players, images !== null, passage, seed);
 
   // TECH-06 : ma progression part dans le salon (10 envois par seconde au plus), celle des autres arrive en direct
   const { state: live, sendProgress } = useRealtimeRoom(room.code || null);

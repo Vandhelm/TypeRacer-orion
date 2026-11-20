@@ -4,7 +4,7 @@ import { corpusTexts, rooms } from "../../db/schema";
 import { roomsFixture, type Joined } from "./rooms.fixture";
 
 type Passage = { body: string; source: string | null } | null;
-type WithPassage = { room: Joined["room"] & { passage: Passage } };
+type WithPassage = { room: Joined["room"] & { passage: Passage; seed: number | null } };
 
 describe("CONF-03 — the server picks the race text from the corpus when the room is launched", () => {
   let t: Awaited<ReturnType<typeof roomsFixture>>;
@@ -24,18 +24,43 @@ describe("CONF-03 — the server picks the race text from the corpus when the ro
     expect((room as WithPassage["room"]).passage).toBeNull();
   });
 
-  test("coherent mode: every member sees the same corpus passage, in the room language and level", async () => {
+  test("coherent mode: the text starts with the corpus passage drawn, in the room language", async () => {
     for (const [i, language] of (["fr", "en"] as const).entries()) {
-      const { code, host, body } = await launch(`Text_Coh${i}`, { textType: "coherent", language, level: "rich" });
+      const { code, host, body } = await launch(`Text_Coh${i}`, { textType: "coherent", language });
       const passage = body.room.passage;
       expect(passage).not.toBeNull();
       const [stored] = await t.db.select({ textId: rooms.textId }).from(rooms).where(eq(rooms.code, code));
       const [row] = await t.db.select().from(corpusTexts).where(eq(corpusTexts.id, stored!.textId!));
-      expect(row).toMatchObject({ language, level: "rich", type: "coherent", body: passage!.body, source: passage!.source });
+      expect(row).toMatchObject({ language, type: "coherent" });
+      expect(passage!.body.startsWith(row!.body)).toBe(true);
       // la page de la course relit le salon : le même passage, pas un nouveau tirage
       const again = (await (await t.call("GET", `/api/rooms/${code}`, host.cookie)).json()) as WithPassage;
       expect(again.room.passage).toEqual(passage);
     }
+  });
+
+  for (const settings of [{ textType: "words" }, { textType: "coherent", numbers: true, specials: true }, { textType: "quote" }]) {
+    test(`two members of the room get the same text and the same seed (${JSON.stringify(settings)})`, async () => {
+      const { room, host } = await t.open(`Text_Two${settings.textType}`, settings);
+      const other = await t.signUp(`Text_Mate${settings.textType}`);
+      expect((await t.call("POST", "/api/rooms/join", other.cookie, { code: room.code })).status).toBe(200);
+      const launched = (await (await t.call("POST", `/api/rooms/${room.code}/launch`, host.cookie)).json()) as WithPassage;
+      const seen = (await (await t.call("GET", `/api/rooms/${room.code}`, other.cookie)).json()) as WithPassage;
+      expect(Number.isInteger(launched.room.seed)).toBe(true);
+      expect(seen.room.seed).toBe(launched.room.seed!);
+      expect(seen.room.passage).toEqual(launched.room.passage);
+    });
+  }
+
+  test("each launch draws a new seed on the server", async () => {
+    const seeds = new Set<number | null>();
+    for (let i = 0; i < 3; i++) seeds.add((await launch(`Text_Seed${i}`, { textType: "words" })).body.room.seed);
+    expect(seeds.size).toBe(3);
+  });
+
+  test("a waiting room has no seed yet", async () => {
+    const { room } = await t.open("Text_NoSeed", { textType: "words" });
+    expect((room as WithPassage["room"]).seed).toBeNull();
   });
 
   test("random mode: no passage, the words come from the dictionary", async () => {
