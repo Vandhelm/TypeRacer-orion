@@ -8,6 +8,11 @@ describe("CONF-10 — the bot list of a room (names from the closed list, one le
     expect([...BOT_LEVELS]).toEqual(["noob", "beginner", "intermediate", "expert", "impossible"]);
   });
 
+  test("BOT-01 — each of the five levels is accepted; the old speeds, a mixed case or a number are refused", () => {
+    for (const level of BOT_LEVELS) expect(BotListSchema.safeParse([{ name: "Wasabi99", level }]).success).toBe(true);
+    for (const level of ["slow", "medium", "fast", "Expert", " noob", 3, null]) expect(BotListSchema.safeParse([{ name: "Wasabi99", level }]).success).toBe(false);
+  });
+
   test("a list of bots, each with its own level, is valid", () => {
     expect(BotListSchema.safeParse([{ name: "Wasabi99", level: "beginner" }, { name: "Ebi_Fry", level: "expert" }]).success).toBe(true);
   });
