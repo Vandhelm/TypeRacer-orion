@@ -331,7 +331,7 @@ export function HomePanel({ ref, initialMe = null }: { ref?: Ref<HTMLElement>; i
                   })}
                   <OutlineButton onClick={() => void authClient.signOut()}>{t("home.signOut")}</OutlineButton>
                 </div>
-                <p role="status" className={`min-h-[1.4em] font-mono text-[max(11px,1.3vh)] tracking-[.08em] ${authError ? "text-red-text" : "text-line-soft"}`}>{authError || notice}</p>
+                <p role="status" className={`min-h-[1.4em] font-mono text-[max(11px,1.3vh)] tracking-[.08em] ${authError ? "text-red-text" : "text-muted"}`}>{authError || notice}</p>
               </>
             ) : (
               <>
@@ -348,7 +348,7 @@ export function HomePanel({ ref, initialMe = null }: { ref?: Ref<HTMLElement>; i
               inputProps={{ name: "password", type: showPassword ? "text" : "password", autoComplete: "current-password", value: password, onChange: (e) => setPassword(e.target.value) }}
               action={
                 <button
-                  className="unset min-h-[36px] cursor-pointer pl-3 font-mono text-[max(10px,1.1vh)] leading-none font-normal tracking-[.2em] text-line-soft hover:text-white focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-white"
+                  className="unset min-h-[36px] cursor-pointer pl-3 font-mono text-[max(10px,1.1vh)] leading-none font-normal tracking-[.2em] text-muted hover:text-white focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-white"
                   type="button" id="reveal-password" aria-pressed={showPassword} onClick={() => setShowPassword((v) => !v)}>
                   {t(showPassword ? "home.hide" : "home.show")}
                 </button>
@@ -360,7 +360,7 @@ export function HomePanel({ ref, initialMe = null }: { ref?: Ref<HTMLElement>; i
               <OutlineButton disabled={busy} onClick={() => void submitAccount("signUp")}>{t("home.createAccount")}</OutlineButton>
             </div>
             {/* Connexion via un fournisseur externe */}
-            <div className="flex items-center gap-[1.2vh] font-mono text-[max(10px,1.2vh)] leading-none tracking-[.2em] text-line-soft uppercase before:flex-1 before:border-t before:border-dashed before:border-line-faint after:flex-1 after:border-t after:border-dashed after:border-line-faint">
+            <div className="flex items-center gap-[1.2vh] font-mono text-[max(10px,1.2vh)] leading-none tracking-[.2em] text-muted uppercase before:flex-1 before:border-t before:border-dashed before:border-line-faint after:flex-1 after:border-t after:border-dashed after:border-line-faint">
               {t("home.or")}
             </div>
             <div className="grid grid-cols-2 gap-[1.3vh]">

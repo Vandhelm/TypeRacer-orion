@@ -10,7 +10,7 @@ const BUTTON =
   "unset box-border flex min-h-[36px] flex-[1_1_auto] cursor-pointer items-center justify-center px-3 font-mono text-[max(10px,1.2vh)] leading-none font-medium tracking-[.16em] " +
   "transition-[background,color] duration-200 ease-[ease] focus-visible:outline focus-visible:outline-offset-3 focus-visible:outline-white motion-reduce:transition-none narrow:min-h-[44px] narrow:px-2";
 const ON = "cursor-default bg-[#f2f2f2] text-black";
-const OFF = "text-line-soft hover:bg-[rgba(255,255,255,.06)] hover:text-white";
+const OFF = "text-muted hover:bg-[rgba(255,255,255,.06)] hover:text-white";
 
 type Option<T> = { value: T | undefined; label: string; ariaLabel?: string };
 

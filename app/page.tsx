@@ -1,11 +1,16 @@
 import { headers } from "next/headers";
-import { titleFor } from "../src/i18n/request";
+import type { Metadata } from "next";
+import { requestLanguage, titleFor } from "../src/i18n/request";
+import { homeDescription } from "../src/i18n/server";
 import { auth } from "../src/server/api";
 import { currentUser } from "../src/server/session";
 import { HomePage } from "../src/views/home/HomePage";
 import "../src/styles/pages/home/index.css";
 
-export const generateMetadata = titleFor("home");
+// PERF-01 (Lighthouse, SEO) : titre et meta description dans la langue de la requête.
+export async function generateMetadata(): Promise<Metadata> {
+  return { ...(await titleFor("home")()), description: homeDescription(await requestLanguage()) };
+}
 
 // TECH-01 : rendue par le serveur, avec le compte connecté déjà connu (le panneau ne montre pas d'abord le formulaire
 // de connexion). La scène canvas, le hash (#rooms) et le pseudo gardé dans l'onglet arrivent au montage.
