@@ -83,4 +83,24 @@ describe("BOT-04 — the server keeps the bonuses of a bot and replays them for 
     expect(standing.seconds).toBe(bonused.arrivedMs! / 1000);
     expect(standing.wpm).toBe(netWpm(marksOf(bonused.words).at(-1)! - bonused.missed, standing.seconds));
   });
+
+  test("two effects at the same time written concurrently keep the order the realtime server decided (at, seq)", async () => {
+    const { code, view, id, bot, course } = await launched("Bot04_Ordre", 0);
+    // +3 mots longs puis -3 mots : les mots ajoutés repartent ; dans l'autre ordre, ils restent
+    const first: BotBonus = { at: 2_000, seq: 0, effect: { kind: "extra_words", target: `bot:${BOT}`, words: ["xylophone", "chrysanthème", "kaléidoscope"] } };
+    const second: BotBonus = { at: 2_000, seq: 1, effect: { kind: "fewer_words", target: `bot:${BOT}`, removed: 3 } };
+    const decided = simulateBot(course, bot, Infinity, [first, second]);
+    // l'ordre compte : décidés dans l'autre ordre, l'arrivée change ; le moteur suit (at, seq), pas l'ordre de la liste
+    expect(simulateBot(course, bot, Infinity, [{ ...second, seq: 0 }, { ...first, seq: 1 }]).arrivedMs).not.toBe(decided.arrivedMs);
+    expect(simulateBot(course, bot, Infinity, [second, first]).arrivedMs).toBe(decided.arrivedMs);
+    // deux écritures non attendues ; la seconde décidée arrive en base la première
+    await Promise.all([keepBotBonus(t.db, code, view.startsAt!, second), keepBotBonus(t.db, code, view.startsAt!, first)]);
+    const [row] = await t.db.select({ list: rooms.botBonuses }).from(rooms).where(eq(rooms.id, id));
+    expect(row!.list).toEqual([first, second]);
+    await t.db.update(rooms).set({ launchedAt: new Date(Date.now() - COUNTDOWN_MS - decided.arrivedMs! - 500) }).where(eq(rooms.id, id));
+    const after = await launchBots(t.db, id, 1);
+    const [moved] = await t.db.select({ at: rooms.launchedAt }).from(rooms).where(eq(rooms.id, id));
+    expect(after.standings.get(BOT.toLowerCase())!.finishedAt!.getTime()).toBe(moved!.at!.getTime() + COUNTDOWN_MS + decided.arrivedMs!);
+  });
 });
+

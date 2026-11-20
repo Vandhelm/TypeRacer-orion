@@ -23,8 +23,7 @@ import { MAX_MESSAGE_BYTES, parseClientMessage, type Player, PROGRESS_INTERVAL_M
 import { awardBonuses, newTally, skipPassed, type BonusTally } from "../rooms/bonus";
 import { bonusKind, editWords, LATE_FINISH_MS, planEffect, wordsDone, type BonusEffect } from "../rooms/bonus-effects";
 import { seededRandom } from "../rooms/text";
-import type { BotBonus } from "../rooms/bot-engine";
-import { botNameOf } from "../rooms/bots";
+import { orderBotBonuses, type BotBonus } from "../rooms/bot-engine";
 import { botRunners } from "./bot-runners";
 import { charsAt, judge, standings, type Accepted, type RaceCourse } from "./referee";
 import type { RoomBackend, RoomState } from "./room-backend";
@@ -97,7 +96,7 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
   function botRaceOf(code: string, course: RaceCourse) {
     const known = botRaces.get(code);
     if (known?.startsAt === course.startsAt) return known;
-    const fresh = { startsAt: course.startsAt, bots: course.bots, list: [...(course.botBonuses ?? [])] };
+    const fresh = { startsAt: course.startsAt, bots: course.bots, list: orderBotBonuses(course.botBonuses ?? []) };
     botRaces.set(code, fresh);
     return fresh;
   }
@@ -356,15 +355,23 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
       const order = served.get(award.checkpoint) ?? 0;
       served.set(award.checkpoint, order + 1);
       const effect = bonusEffect(code, state, award.playerId, award.checkpoint, order, runners, keys, botWords, now);
-      const at = effect && botNameOf(effect.target) !== null ? { at: Math.max(0, now - state.course.startsAt) } : {};
+      // BOT-04 : un effet sur un bot part avec sa date et son rang, ceux gardés par keepBotBonus
+      const kept = effect && botWords.has(effect.target) ? botRace.list.at(-1) : undefined;
+      const at = kept ? { at: kept.at, ...(kept.seq === undefined ? {} : { seq: kept.seq }) } : {};
       server.publish(topic(code), encode({ type: "bonus", room: code, ...award, ...(effect ? { effect } : {}), ...at }));
     }
   }
 
-  /** BOT-04 : un effet sur un bot rejoint sa liste datée, rejouée par le moteur, et part en base (fin de course, pages). */
-  function keepBotBonus(code: string, course: RaceCourse, bonus: BotBonus) {
-    botRaceOf(code, course).list.push(bonus);
-    backend?.botBonus?.(code, course.startsAt, bonus).catch((error: unknown) => console.error(error));
+  /**
+   * BOT-04 : un effet sur un bot rejoint sa liste datée, rejouée par le moteur, et part en base (fin de course, pages).
+   * Son rang `seq` (la taille de la liste, reprise de la base après un redémarrage) fixe l'ordre de deux effets au même
+   * `at`, quel que soit l'ordre où les écritures arrivent en base.
+   */
+  function keepBotBonus(code: string, course: RaceCourse, bonus: Omit<BotBonus, "seq">) {
+    const { list } = botRaceOf(code, course);
+    const ranked: BotBonus = { at: bonus.at, seq: list.length, effect: bonus.effect };
+    list.push(ranked);
+    backend?.botBonus?.(code, course.startsAt, ranked).catch((error: unknown) => console.error(error));
   }
 
   /** Le texte arbitré d'un coureur : celui que lui a laissé un bonus, sinon celui de la course (null : inconnu). */

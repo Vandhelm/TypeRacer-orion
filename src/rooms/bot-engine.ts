@@ -254,9 +254,13 @@ export function botStep(text: BotText, state: BotState, bot: BotProfile & { seed
 /**
  * BOT-04 : un effet de bonus reçu par un bot, daté de `at` (ms depuis le départ, heure du serveur temps réel qui l'a
  * décidé). Il s'applique après le tick où tombe `at` (floor(at / BOT_TICK_MS)), sur l'état du bot à cet instant : celui
- * que le serveur a vu en le décidant.
+ * que le serveur a vu en le décidant. `seq` : son rang dans les effets de la course sur les bots (0, 1, 2…), donné par
+ * le serveur temps réel ; deux effets au même `at` s'appliquent dans cet ordre partout (orderBotBonuses).
  */
-export type BotBonus = { at: number; effect: BonusEffect };
+export type BotBonus = { at: number; seq?: number; effect: BonusEffect };
+
+/** BOT-04 : les effets dans l'ordre où le serveur les a décidés, (at, seq) ; sans seq (gardés avant lui), l'ordre reçu. */
+export const orderBotBonuses = <T extends BotBonus>(list: readonly T[]): T[] => [...list].sort((a, b) => a.at - b.at || (a.seq ?? 0) - (b.seq ?? 0));
 /** BOT-04 : dans le brouillard, un bot tape à 60 % de sa vitesse (il ne voit plus que le mot en cours). */
 export const BOT_FOG_SPEED = 0.6;
 
@@ -296,12 +300,13 @@ export function simulateBot(course: { words: readonly string[]; durationMs: numb
   if (!words.length) return { position: 0, progress: 1, arrivedMs: 0, eliminatedMs: null, typed: 0, errors: 0, missed: 0, words };
   let text = botText(words, course.mistakes);
   let state = BOT_START;
+  const ordered = orderBotBonuses(bonuses);
   const run = (arrivedMs: number | null, eliminatedMs: number | null): BotRun => {
     const position = botPosition(text, state.chars);
     return { position, progress: arrivedMs === null ? position / text.words.length : 1, arrivedMs, eliminatedMs, typed: state.typed, errors: state.errors, missed: state.missed, words: text.words };
   };
   for (let tick = 1; tick <= ticks; tick++) {
-    ({ text, state } = botBonusTick(text, state, bot, tick, bonuses));
+    ({ text, state } = botBonusTick(text, state, bot, tick, ordered));
     if (state.out) return run(null, tick * BOT_TICK_MS);
     if (botArrived(text, state)) return run(tick * BOT_TICK_MS, null);
   }

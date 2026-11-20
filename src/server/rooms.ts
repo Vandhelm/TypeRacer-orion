@@ -950,7 +950,12 @@ export async function keepBotBonus(db: Db, code: string, startsAt: number, bonus
   await db.transaction(async (tx) => {
     const [room] = await tx.select({ launchedAt: rooms.launchedAt, status: rooms.status }).from(rooms).where(eq(rooms.id, id)).for("update");
     if (!room?.launchedAt || room.status !== "racing" || room.launchedAt.getTime() + COUNTDOWN_MS !== startsAt) return;
-    await tx.update(rooms).set({ botBonuses: sql`${rooms.botBonuses} || ${JSON.stringify([bonus])}::jsonb` }).where(eq(rooms.id, id));
+    // deux écritures concurrentes peuvent passer dans le désordre : la liste est rangée par (at, seq), l'ordre du serveur
+    const list = sql`${rooms.botBonuses} || ${JSON.stringify([bonus])}::jsonb`;
+    await tx
+      .update(rooms)
+      .set({ botBonuses: sql`(select coalesce(jsonb_agg(e order by (e->>'at')::bigint, coalesce((e->>'seq')::bigint, 0), n), '[]'::jsonb) from jsonb_array_elements(${list}) with ordinality as t(e, n))` })
+      .where(eq(rooms.id, id));
   });
 }
 

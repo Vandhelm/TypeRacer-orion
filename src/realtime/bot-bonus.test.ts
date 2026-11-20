@@ -133,7 +133,9 @@ describe("BOT-04 — bots get and suffer the catch-up bonuses like humans", () =
     expect(first.at!).toBeGreaterThanOrEqual(30_000);
     expect(first.at!).toBeLessThan(32_000);
     await Bun.sleep(20);
-    expect(kept.map((k) => k.bonus)).toEqual([{ at: first.at!, effect: first.effect! }, { at: second.at!, effect: second.effect! }]);
+    // à heure égale, le rang (seq) fixe l'ordre du moteur : le même dans le message, en base et sur la page
+    expect([first.seq, second.seq]).toEqual([0, 1]);
+    expect(kept.map((k) => k.bonus)).toEqual([{ at: first.at!, seq: 0, effect: first.effect! }, { at: second.at!, seq: 1, effect: second.effect! }]);
     expect(kept.every((k) => k.startsAt === course.startsAt)).toBe(true);
   });
 
@@ -167,6 +169,14 @@ describe("BOT-04 — bots get and suffer the catch-up bonuses like humans", () =
     expect(parseServerMessage(JSON.stringify({ ...message, at: -1 }))).toBeNull();
     expect(parseServerMessage(JSON.stringify({ ...message, at: 1.5 }))).toBeNull();
     expect(parseServerMessage(JSON.stringify({ ...message, at: "1200" }))).toBeNull();
+  });
+
+  test("the rank of a bot effect is a whole number from 0", () => {
+    const message = { type: "bonus", room: ROOM, playerId: "g:alpha", checkpoint: 1, count: 1, effect: { kind: "fog", target: BOT_ID, durationMs: 5_000 }, at: 1_200 };
+    expect(parseServerMessage(JSON.stringify({ ...message, seq: 2 }))).toMatchObject({ seq: 2 });
+    expect(parseServerMessage(JSON.stringify({ ...message, seq: -1 }))).toBeNull();
+    expect(parseServerMessage(JSON.stringify({ ...message, seq: 0.5 }))).toBeNull();
+    expect(parseServerMessage(JSON.stringify({ ...message, seq: "1" }))).toBeNull();
   });
 
   test("a bot never gets more than 3 bonuses in a race", async () => {
