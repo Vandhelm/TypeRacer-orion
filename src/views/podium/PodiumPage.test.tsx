@@ -4,6 +4,7 @@ import { createElement } from "react";
 import { renderToString } from "react-dom/server";
 import { I18nextProvider } from "react-i18next";
 import { createI18n } from "../../i18n";
+import { PodiumBoard } from "./PodiumBoard";
 import { PodiumPage } from "./PodiumPage";
 import type { PlayerResult, RaceResults } from "./results";
 
@@ -44,5 +45,32 @@ describe("TECH-01 — /podium rendu côté serveur", () => {
     const route = readFileSync("app/podium/page.tsx", "utf8");
     expect(route).not.toContain("LegacyPage");
     expect(route).toContain("loadHistoryRace");
+  });
+});
+
+const board = (language: "fr" | "en", raceId: number | null = null) =>
+  (renderToString(createElement(I18nextProvider, { i18n: createI18n(language) }, createElement(PodiumBoard, { players: RESULTS.players, showPlace: true, arrived: true, raceId })))
+    .match(/<li[\s\S]*?<\/li>/g) ?? []);
+
+describe("BOT-04 — the results board marks a bot as such, and only bots", () => {
+  test("the bot's row carries the BOT marker with a spoken label; the human's row does not", () => {
+    const [human, bot] = board("fr");
+    expect(bot).toMatch(/data-part="bot"[\s\S]*BOT[\s\S]*<span class="sr-only">[^<]*joueur automatique/);
+    expect(human).not.toContain('data-part="bot"');
+  });
+
+  test("in English, the marker and its spoken label are translated", () => {
+    expect(board("en")[1]).toMatch(/data-part="bot"[\s\S]*BOT[\s\S]*computer player/);
+  });
+
+  test("a race replayed from the history marks its bots the same way", () => {
+    const [human, bot] = board("fr", 42);
+    expect(bot).toContain('data-part="bot"');
+    expect(human).not.toContain('data-part="bot"');
+  });
+
+  test("a long bot name is cut, not the marker: the marker sits outside the truncated name", () => {
+    const bot = board("fr")[1]!;
+    expect(bot).toMatch(/<span class="truncate">Nori_Ninja<\/span><b [^>]*data-part="bot"/);
   });
 });
