@@ -83,3 +83,18 @@ export function mergeAnnouncements(previous: readonly BonusAnnouncement[], fresh
   const shown = new Set(previous.map((a) => a.key));
   return [...activeAnnouncements(previous, now), ...fresh.filter((a) => !shown.has(a.key))];
 }
+
+/** Le point de contrôle d'une annonce : le début de sa clé (`<point>:<joueur>`). */
+const checkpointOf = (a: BonusAnnouncement) => a.key.slice(0, a.key.indexOf(":"));
+
+/**
+ * BONUS-03 : le dernier lot, les annonces reçues ensemble au même point de contrôle (la suite finale de la liste qui partage
+ * le point de la dernière). Tout le lot est dit, empilé dans l'ordre reçu ; un lot plus récent remplace le précédent.
+ */
+export function latestBatch(list: readonly BonusAnnouncement[]): BonusAnnouncement[] {
+  const last = list.at(-1);
+  if (!last) return [];
+  let start = list.length - 1;
+  while (start > 0 && checkpointOf(list[start - 1]!) === checkpointOf(last)) start--;
+  return list.slice(start);
+}

@@ -53,6 +53,23 @@ describe("BONUS-03 — the track announces the bonus on the lane it hits, for ev
     expect(news(markup)![1]).toContain("brouillard");
   });
 
+  test("two bonuses on the same lane at the same checkpoint: both badges stay visible, and the line tells both", () => {
+    const markup = html(createElement(RaceTrack, { lanes: LANES, bonuses: [announcement({ key: "1:u:40" }), announcement({ key: "1:u:0", kind: "fog", count: 5, sender: "Corail_418", from: 0 })] }));
+    const badges = rows(markup)[1]!.match(/<b [^>]*data-part="bonus"[^>]*>[\s\S]*?<\/b>/g) ?? [];
+    expect(badges).toHaveLength(2);
+    expect(badges[0]).toContain("+3 mots");
+    expect(badges[1]).toContain("Brouillard");
+    expect(news(markup)![1]).toContain("3 mots de plus");
+    expect(news(markup)![1]).toContain("brouillard");
+  });
+
+  test("the badge does not cover the lane's name: it sits in the stats line, in the flow", () => {
+    const row = rows(html(createElement(RaceTrack, { lanes: LANES, bonuses: [announcement({})] })))[1]!;
+    const stats = row.match(/<p [^>]*data-part="stats"[^>]*>[\s\S]*?<\/p>/)![0];
+    expect(stats).toContain('data-part="bonus"');
+    expect(stats.match(/<b [^>]*data-part="bonus"[^>]*>/)![0]).not.toMatch(/\babsolute\b/);
+  });
+
   test("without a bonus: no badge, the live region is there and empty", () => {
     const markup = html(createElement(RaceTrack, { lanes: LANES }));
     rows(markup).forEach((row) => expect(badge(row)).toBeNull());
@@ -98,6 +115,18 @@ describe("BONUS-03 — the targeted player is told what happens to them", () => 
 
   test("a bonus on someone else is not told to me here (the track says it)", () => {
     expect(notice(html(createElement(BonusNotice, { announcements: [announcement({})] })))![1]).toBe("");
+  });
+
+  test("two bonuses on me at the same checkpoint: both are told to me, not only the last", () => {
+    const markup = html(createElement(BonusNotice, { announcements: [announcement({ mine: true, key: "1:u:40" }), announcement({ kind: "fog", count: 5, mine: true, key: "1:u:12", sender: "Maki_Test" })] }));
+    expect(notice(markup)![1]).toContain("Saumon_7 ajoute 3 mots à la fin de ton texte");
+    expect(notice(markup)![1]).toContain("tes prochains mots sont flous pendant 5 s");
+  });
+
+  test("a bonus from a later checkpoint replaces the earlier one in my notice", () => {
+    const markup = html(createElement(BonusNotice, { announcements: [announcement({ mine: true, key: "1:u:40" }), announcement({ kind: "fog", count: 5, mine: true, key: "2:u:40" })] }));
+    expect(notice(markup)![1]).not.toContain("ajoute 3 mots");
+    expect(notice(markup)![1]).toContain("tes prochains mots sont flous");
   });
 
   test("the notice animates in, but not when motion is reduced", () => {
