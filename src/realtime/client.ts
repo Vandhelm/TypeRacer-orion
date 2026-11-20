@@ -20,6 +20,8 @@ export type RealtimeState = {
    * À BRANCHER (COURSE-05) : la piste et le décompte de la page de course lisent ce classement et ce départ.
    */
   race?: ServerRace | null;
+  /** COURSE-07 / COURSE-08 : le serveur tient ce coureur pour ayant abandonné (bouton, ou plus de 30 s sans signe de vie). */
+  abandoned?: boolean;
 };
 export type TicketGrant = { ticket: string; url: string };
 /** Ce que reçoit une page qui suit son salon (follow) : son état, sa fermeture, ou le refus du serveur (pas ou plus membre). */
@@ -133,6 +135,7 @@ export function connectRealtime({ room, onChange, getTicket = fetchTicket, WebSo
           return onRoom?.({ type: "closed" });
         case "error":
           if (message.code === "not_member") onRoom?.({ type: "not_member" });
+          if (message.code === "abandoned") update({ abandoned: true });
           return;
       }
     };

@@ -131,15 +131,18 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
   let refreshing = false;
   async function refreshAll() {
     if (!backend || refreshing) return;
-    if (!followers.size) {
+    if (!followers.size && !joined.size) {
       if (refreshTimer) clearInterval(refreshTimer);
       refreshTimer = null;
       return;
     }
     refreshing = true;
     try {
-      for (const [code, sockets] of followers) {
-        const present = [...new Set([...sockets].map((ws) => ws.data.follow!.key))];
+      // COURSE-08 : aussi les salles sans page salle ouverte (la page course ne suit pas) : le balayage y note les coureurs
+      // silencieux depuis 30 s comme ayant abandonné, et la course l'apprend (syncRace). Seules les pages salle donnent
+      // signe de vie ici (SALLE-08 inchangé) ; la page course le donne en relisant le salon (RACE_PRESENCE_MS).
+      for (const code of new Set([...followers.keys(), ...joined.keys()])) {
+        const present = [...new Set([...(followers.get(code) ?? [])].map((ws) => ws.data.follow!.key))];
         if (await backend.refresh(code, present)) await publishRoom(code);
       }
     } catch (error) {
@@ -183,6 +186,7 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
     if (!entry) return send(ws, { type: "error", code: "not_member" });
     join(ws, room);
     ws.data.key = entry.key;
+    refreshTimer ??= setInterval(() => void refreshAll(), refreshMs);
     await syncRace(room);
   }
 
