@@ -1,6 +1,6 @@
 // Salons, côté serveur (SALLE-01, 02, 03, 09). Indépendant du transport : les routes HTTP (api.ts) et le temps réel
 // (realtime.ts) appellent ces fonctions ; rien ici ne connaît Request, WebSocket ou Next.js.
-import { and, asc, desc, eq, gt, inArray, isNull, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNull, ne, notInArray, sql } from "drizzle-orm";
 import type { z } from "zod";
 import type { Db } from "../../db/client";
 import { players, raceConfigs, roomBans, roomMembers, rooms } from "../../db/schema";
@@ -391,8 +391,8 @@ export async function joinRoom(db: Db, who: Identity, via: JoinVia, ip: string |
   return { room: await roomView(db, id, key), you: key };
 }
 
-/** JOIN-03 : nombre de salons candidats lus d'un coup ; au-delà, ils se sont tous remplis entre-temps. */
-const QUICK_CANDIDATES = 20;
+/** JOIN-03 : salons candidats lus par lot ; un lot épuisé sans entrée, on lit le suivant. */
+const QUICK_BATCH = 20;
 
 /**
  * JOIN-03 : « Faire une course ». Parmi les salons publics joignables (en attente ou résultats, SALLE-09) et non
@@ -409,31 +409,40 @@ export async function quickJoin(db: Db, who: Identity, ip: string | null = null)
   if (current) throw new RoomRefused("already_in_room", current);
   await sweepAll(db);
   const seated = sql<number>`(select count(*) from ${roomMembers} where ${roomMembers.roomId} = ${rooms.id} and ${roomMembers.seat} is not null)`;
-  const candidates = await db
-    .select({ id: rooms.id })
-    .from(rooms)
-    .where(and(eq(rooms.visibility, "public"), inArray(rooms.status, ["waiting", "results"]), sql`${seated} < ${rooms.guests}`))
-    .orderBy(sql`${rooms.guests} - ${seated}`, asc(rooms.createdAt), asc(rooms.id))
-    .limit(QUICK_CANDIDATES);
-  for (const { id } of candidates) {
-    const entered = await db
-      .transaction(async (tx) => {
-        await sweep(tx, id);
-        const [room] = await tx.select({ status: rooms.status, visibility: rooms.visibility, guests: rooms.guests }).from(rooms).where(eq(rooms.id, id)).for("update");
-        if (!room || !isListed(room.visibility) || !canJoin(room.status)) return false;
-        const taken = (await tx.select({ seat: roomMembers.seat }).from(roomMembers).where(eq(roomMembers.roomId, id))).map((m) => m.seat);
-        if (taken.filter((seat) => seat !== null).length >= room.guests) return false;
-        if (await isKicked(tx, who, id, key, ip)) return false;
-        const current = await currentRoomOf(tx, key);
-        if (current) throw new RoomRefused("already_in_room", current);
-        const identity = who.kind === "account" ? { playerId: who.playerId } : { guestName: who.name };
-        await tx.insert(roomMembers).values({ roomId: id, memberKey: key, ...identity, role: "player", ...placeFor("player", taken, room.guests), ip });
-        return true;
-      })
-      .catch((error: unknown) => refuseSecondRoom(db, key, error));
-    if (entered) return { room: await roomView(db, id, key), you: key };
+  // par lots, jusqu'à épuisement : un salon essayé et refusé est exclu des lots suivants
+  const tried: number[] = [];
+  for (;;) {
+    const candidates = await db
+      .select({ id: rooms.id })
+      .from(rooms)
+      .where(and(eq(rooms.visibility, "public"), inArray(rooms.status, ["waiting", "results"]), sql`${seated} < ${rooms.guests}`, tried.length ? notInArray(rooms.id, tried) : undefined))
+      .orderBy(sql`${rooms.guests} - ${seated}`, asc(rooms.createdAt), asc(rooms.id))
+      .limit(QUICK_BATCH);
+    if (!candidates.length) throw new RoomRefused("no_room");
+    for (const { id } of candidates) {
+      tried.push(id);
+      if (await enterQuick(db, who, key, id, ip)) return { room: await roomView(db, id, key), you: key };
+    }
   }
-  throw new RoomRefused("no_room");
+}
+
+/** JOIN-03 : sous le verrou du salon, revérifie qu'il est toujours public, joignable et non plein, puis y fait entrer. False s'il ne l'est plus. */
+async function enterQuick(db: Db, who: Identity, key: string, id: number, ip: string | null): Promise<boolean> {
+  return db
+    .transaction(async (tx) => {
+      await sweep(tx, id);
+      const [room] = await tx.select({ status: rooms.status, visibility: rooms.visibility, guests: rooms.guests }).from(rooms).where(eq(rooms.id, id)).for("update");
+      if (!room || !isListed(room.visibility) || !canJoin(room.status)) return false;
+      const taken = (await tx.select({ seat: roomMembers.seat }).from(roomMembers).where(eq(roomMembers.roomId, id))).map((m) => m.seat);
+      if (taken.filter((seat) => seat !== null).length >= room.guests) return false;
+      if (await isKicked(tx, who, id, key, ip)) return false;
+      const current = await currentRoomOf(tx, key);
+      if (current) throw new RoomRefused("already_in_room", current);
+      const identity = who.kind === "account" ? { playerId: who.playerId } : { guestName: who.name };
+      await tx.insert(roomMembers).values({ roomId: id, memberKey: key, ...identity, role: "player", ...placeFor("player", taken, room.guests), ip });
+      return true;
+    })
+    .catch((error: unknown) => refuseSecondRoom(db, key, error));
 }
 
 /**

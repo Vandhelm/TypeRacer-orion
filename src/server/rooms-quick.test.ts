@@ -1,7 +1,8 @@
 import { beforeAll, beforeEach, describe, expect, setDefaultTimeout, test } from "bun:test";
-import { eq, sql } from "drizzle-orm";
-import { roomMembers, rooms } from "../../db/schema";
-import { roomsFixture, type Joined, type Refused } from "./rooms.fixture";
+import { eq, inArray, sql } from "drizzle-orm";
+import { roomBans, roomMembers, rooms } from "../../db/schema";
+import { handleGuest } from "./guest";
+import { roomsFixture, SECRET, type Joined, type Refused } from "./rooms.fixture";
 
 setDefaultTimeout(30_000); // un compte neuf (mot de passe haché) par salon
 
@@ -186,5 +187,54 @@ describe("JOIN-03 — the quick race route checks its input", () => {
 
   test("GET is not a quick race", async () => {
     expect((await t.call("GET", "/api/rooms/quick", t.guest("Lecteur_1"))).status).toBe(404);
+  });
+});
+
+describe("JOIN-03 — the search goes past the first candidates", () => {
+  let t: Fixture;
+  beforeAll(async () => {
+    t = await roomsFixture();
+  });
+  beforeEach(async () => {
+    await closeAll(t);
+  });
+
+  test("when the 20 best rooms refuse the person, the 21st is joined", async () => {
+    const person = await t.signUp("Refuse_Partout");
+    const best: string[] = [];
+    for (let i = 0; i < 20; i++) best.push((await openWith(t, 2, 1)).room.code); // 1 place libre chacune
+    const wide = await openWith(t, 8, 1); // 7 places libres : la dernière du classement
+    // SALLE-07 : la personne a été expulsée des 20 meilleures (ligne de room_bans, comme kickMember)
+    const ids = await t.db.select({ id: rooms.id }).from(rooms).where(inArray(rooms.code, best));
+    await t.db.insert(roomBans).values(ids.map(({ id }) => ({ roomId: id, memberKey: `player:${person.playerId}` })));
+    const res = await quick(t, person.cookie);
+    expect(res.status).toBe(200);
+    expect(res.body.room.code).toBe(wide.room.code);
+  });
+});
+
+describe("JOIN-02 / JOIN-03 — a fresh guest opens a session, browses and takes a ticket", () => {
+  let t: Fixture;
+  beforeAll(async () => {
+    t = await roomsFixture();
+  });
+  beforeEach(async () => {
+    await closeAll(t);
+  });
+
+  test("opening the session seats nobody; the ticket taken is the only room joined", async () => {
+    await openWith(t, 3, 2); // plus proche de sa capacité : « Faire une course » l'aurait choisi
+    const taken = await openWith(t, 8, 1);
+    const body = JSON.stringify({ nickname: "Flaneur_1" });
+    const session = await handleGuest(new Request("http://localhost/api/guest", { method: "POST", headers: { "content-type": "application/json" }, body }), { GUEST_SESSION_SECRET: SECRET });
+    expect(session.status).toBe(200);
+    const cookie = session.headers.get("set-cookie")!.split(";")[0]!;
+    expect(await t.db.$count(roomMembers, eq(roomMembers.guestName, "Flaneur_1"))).toBe(0);
+    const listed = (await (await t.call("GET", "/api/rooms", cookie)).json()) as { rooms: { code: string }[] };
+    expect(listed.rooms.map((r) => r.code)).toContain(taken.room.code);
+    const res = await t.join(cookie, { code: taken.room.code });
+    expect(res.status).toBe(200);
+    expect(res.body.room.code).toBe(taken.room.code);
+    expect(await t.db.$count(roomMembers, eq(roomMembers.memberKey, res.body.you))).toBe(1);
   });
 });
