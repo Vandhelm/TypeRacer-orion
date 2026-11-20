@@ -378,6 +378,11 @@
   "podium": {
     "pageTitle": "O.R.I.O.N — Le podium",
     "abandoned": "abandon",
+    "record": {
+      "title": "Record personnel battu",
+      "wpm": "{{current}} {{unit}} · ancien record {{previous}} {{unit}}",
+      "accuracy": "Précision {{current}} % · ancien record {{previous}} %"
+    },
     "label": "Podium",
     "wordsPerSecond": "mots/s",
     "avatar": "{{name}}, {{rank}} place, {{speed}} mots par seconde",
@@ -522,7 +527,11 @@
       "page": "Page {{page}} / {{pages}}",
       "rank": "{{rank}} sur {{players}}",
       "open": "Revoir les résultats de la course du {{date}}",
-      "raceTitle": "Course de l’historique"
+      "raceTitle": "Course de l’historique",
+      "record": {
+        "wpm": "Record MPM",
+        "accuracy": "Record précision"
+      }
     }
   },
   "account": {

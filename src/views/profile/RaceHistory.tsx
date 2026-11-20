@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { historyHref, oneDecimal } from "../podium/results";
-import { fetchHistory, historyRankText, outcomeKey, type HistoryPage, type HistoryRace } from "./history";
+import { fetchHistory, historyRankText, outcomeKey, recordText, type HistoryPage, type HistoryRace } from "./history";
 import { ACCOUNT_BUTTON, NOTE, SECTION, SECTION_TITLE } from "./styles";
 
 type State = { status: "loading" } | { status: "ready"; data: HistoryPage } | { status: "error" };
@@ -52,6 +52,7 @@ export function RaceHistory() {
 
 function HistoryRow({ race }: { race: HistoryRace }) {
   const { t, i18n } = useTranslation();
+  const record = recordText(t, race);
   const date = new Intl.DateTimeFormat(i18n.language === "en" ? "en-CA" : "fr-CA", { dateStyle: "medium", timeStyle: "short" }).format(new Date(race.at));
   return (
     <li>
@@ -61,7 +62,10 @@ function HistoryRow({ race }: { race: HistoryRace }) {
         <span>{historyRankText(t, race)}</span>
         <span className="whitespace-nowrap text-white tabular-nums">{race.wpm} {t("game.wpm")}</span>
         <span className="whitespace-nowrap text-white tabular-nums">{oneDecimal(i18n.language, race.accuracy)} %</span>
-        <span className="min-w-0 wrap-anywhere phone:[grid-column:1/-1]">{t(outcomeKey(race))} · {t(`profile.textTypes.${race.textType}`)} · {t("profile.words", { words: race.wordCount })}</span>
+        <span className="min-w-0 wrap-anywhere phone:[grid-column:1/-1]">
+          {/* RES-04 : la course a battu un record personnel, écrit en toutes lettres */}
+          {record && <span className="mr-2 inline-block border border-red-text px-1.5 text-[.85em] tracking-[.08em] text-red-text uppercase"><span aria-hidden="true">★ </span>{record}</span>}
+          {t(outcomeKey(race))} · {t(`profile.textTypes.${race.textType}`)} · {t("profile.words", { words: race.wordCount })}</span>
       </a>
     </li>
   );

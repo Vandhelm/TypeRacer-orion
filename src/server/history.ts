@@ -9,6 +9,7 @@ import { raceClock } from "../rooms/race-clock";
 import { memberKey, RoomRefused, type Identity } from "./rooms";
 import type { Auth } from "./auth";
 import { guestSecret, readGuest } from "./guest";
+import { recordFlags } from "./records";
 
 export const HISTORY_PAGE_SIZE = 10;
 
@@ -35,6 +36,7 @@ export async function listHistory(db: Db, playerId: number, page: number, pageSi
       language: raceConfigs.language,
       wordCount: raceConfigs.wordCount,
       others: sql<number>`jsonb_array_length(${races.others})`,
+      ...recordFlags, // RES-04
     })
     .from(raceResults)
     .innerJoin(races, eq(races.id, raceResults.raceId))

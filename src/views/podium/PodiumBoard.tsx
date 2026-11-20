@@ -2,6 +2,8 @@ import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { formatNumber } from "../../i18n/format";
 import { BotTag } from "../../players/BotTag";
+import type { PersonalRecord } from "../../players/records";
+import { RecordBadge } from "./RecordBadge";
 import { profileHref, rankLabel, type PlayerResult } from "./results";
 
 // The board under the podium, with blueprint-style corner marks (keyframe podium-board-arrive in styles/pages/podium/board.css).
@@ -18,7 +20,8 @@ const VALUE = "text-[.9em] whitespace-nowrap text-muted";
 
 /** Every player in final order, with the local player's place when the results come from a real race. */
 /** charts : RES-03, the button that opens the race charts, at the end of the header. */
-export function PodiumBoard({ players, showPlace, arrived, raceId = null, charts }: { players: PlayerResult[]; showPlace: boolean; arrived: boolean; raceId?: number | null; charts?: ReactNode }) {
+/** record : RES-04, the personal record beaten by the local player in this race, if any. */
+export function PodiumBoard({ players, showPlace, arrived, raceId = null, charts, record = null }: { players: PlayerResult[]; showPlace: boolean; arrived: boolean; raceId?: number | null; charts?: ReactNode; record?: PersonalRecord | null }) {
   const { t, i18n } = useTranslation();
   const me = showPlace ? players.find((player) => player.me) : undefined;
   const wpm = t("game.wpm");
@@ -33,6 +36,7 @@ export function PodiumBoard({ players, showPlace, arrived, raceId = null, charts
               {t("podium.yourPlace")} · <b className="font-medium text-white">{rankLabel(t, me.rank)}</b> · {formatNumber(i18n.language, me.wpm)} {wpm} · {formatNumber(i18n.language, me.accuracy)} % · {formatNumber(i18n.language, me.seconds)} s
             </p>
           )}
+          {record && <RecordBadge record={record} />}
           {charts}
         </div>
       </header>

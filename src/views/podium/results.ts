@@ -6,6 +6,7 @@ import { isRoomCode } from "../../rooms/access";
 import { effectiveComposition } from "../../rooms/text";
 import type { Player, Room } from "../room/room";
 import { formatNumber } from "../../i18n/format";
+import { forgetRecord, rememberRaceAnswer } from "./record";
 
 export type PlayerResult = {
   name: string;
@@ -262,8 +263,13 @@ export function submitRace(results: RaceResults, content: string): Promise<Submi
   const keepalive = new TextEncoder().encode(body).length <= KEEPALIVE_LIMIT;
   let timer: ReturnType<typeof setTimeout> | undefined;
   const late = new Promise<SubmitOutcome>((resolve) => (timer = setTimeout(resolve, keepalive ? KEEPALIVE_WAIT_MS : SUBMIT_WAIT_MS, "unconfirmed")));
+  forgetRecord(); // RES-04 : le record de la course d'avant ne passe pas à celle-ci
   const sent = fetch("/api/races", { method: "POST", keepalive, headers: { "content-type": "application/json" }, body }).then(
-    (response): SubmitOutcome => (response.ok ? "saved" : "failed"),
+    async (response): Promise<SubmitOutcome> => {
+      if (!response.ok) return "failed";
+      rememberRaceAnswer(await response.json().catch(() => null)); // RES-04 : record battu, d'après le serveur
+      return "saved";
+    },
     (): SubmitOutcome => "failed", // hors ligne : la course n'entre pas dans l'historique
   );
   return Promise.race([sent, late]).finally(() => clearTimeout(timer));

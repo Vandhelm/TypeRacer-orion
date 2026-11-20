@@ -16,6 +16,9 @@ const HistoryRaceSchema = z.object({
   language: z.string(),
   wordCount: z.number(),
   players: z.number(),
+  // RES-04 : la course a battu le record MPM ou de précision du joueur, quand elle a été courue (décidé par le serveur)
+  wpmRecord: z.boolean().optional(),
+  accuracyRecord: z.boolean().optional(),
 });
 export type HistoryRace = z.infer<typeof HistoryRaceSchema>;
 
@@ -52,5 +55,8 @@ export async function fetchHistory(page: number, signal?: AbortSignal): Promise<
 /** Même libellé que la carte de la dernière course. */
 export const outcomeKey = (race: Pick<HistoryRace, "finished" | "eliminated">) =>
   race.eliminated ? "profile.out" : race.finished ? "profile.finished" : "profile.notFinished";
+/** RES-04 : les records battus par cette course, en toutes lettres (« Record MPM · Record précision ») ; vide sinon. */
+export const recordText = (t: TFunction, race: Pick<HistoryRace, "wpmRecord" | "accuracyRecord">) =>
+  [race.wpmRecord && t("profile.history.record.wpm"), race.accuracyRecord && t("profile.history.record.accuracy")].filter(Boolean).join(" · ");
 /** « 2e sur 3 » : le rang parmi tous les participants de la course. */
 export const historyRankText = (t: TFunction, race: Pick<HistoryRace, "rank" | "players">) => t("profile.history.rank", { rank: rankLabel(t, race.rank), players: race.players });
