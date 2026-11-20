@@ -12,9 +12,13 @@ const TIME_STEPS = [1, 2, 5, 10, 15, 20, 30, 60];
 export const plotHeight = (windowWidth: number, windowHeight: number) =>
   windowWidth <= 700 ? 180 : Math.min(300, Math.max(180, windowHeight * 0.34));
 
-export function buildChart(wpm: number[], raw: number[], width: number, plot: number) {
-  const count = wpm.length;
-  const highest = Math.max(5, ...wpm, ...raw);
+/** Le graphique du profil : la vitesse et la vitesse brute d'un joueur. */
+export const buildChart = (wpm: number[], raw: number[], width: number, plot: number) => buildSeriesChart([wpm, raw], width, plot);
+
+/** RES-03 : plusieurs courbes de vitesse sur une même échelle ; l'axe du temps suit la plus longue. */
+export function buildSeriesChart(series: number[][], width: number, plot: number) {
+  const count = Math.max(0, ...series.map((values) => values.length));
+  const highest = Math.max(5, ...series.flat());
   const step = SPEED_STEPS.find((candidate) => highest / candidate <= 4) ?? 1000;
   const ceiling = Math.ceil(highest / step) * step;
   const span = width - LEFT - RIGHT;
@@ -43,3 +47,6 @@ export function buildChart(wpm: number[], raw: number[], width: number, plot: nu
 }
 
 export type Chart = ReturnType<typeof buildChart>;
+
+/** RES-03 : une courbe du graphique, avec ses classes (trait, point au survol, pastille de la légende). */
+export type ChartLine = { key: string; label: string; values: number[]; line: string; dot: string; swatch: string; bot?: boolean; me?: boolean };
