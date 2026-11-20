@@ -8,6 +8,14 @@ export function wordTarget(settings: Pick<RoomSettings, "length" | "wordCount">)
 }
 
 /**
+ * CONF-07 : les caractères exclus ne s'appliquent qu'aux mots aléatoires. En cohérent (et en citation), retirer des mots
+ * casserait le passage et la longueur demandée (CONF-04) : l'option y est désactivée dans le salon et ignorée par la course.
+ */
+export function excludedApplies(textType: RoomSettings["textType"]): boolean {
+  return textType === "words";
+}
+
+/**
  * CONF-03 : générateur à graine (mulberry32). La graine est tirée par le serveur au lancement (rooms.text_seed) :
  * chaque membre du salon tire les mêmes mots, donc tape le même texte.
  */

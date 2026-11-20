@@ -1,6 +1,6 @@
 // Le texte de la partie, d'après les réglages du salon.
 import type { Room } from "../room/room";
-import { wordTarget } from "../../rooms/text";
+import { excludedApplies, wordTarget } from "../../rooms/text";
 import { LEXICON, QUOTES } from "./lexicon";
 
 export type CourseSettings = Pick<Room, "language" | "textType" | "length" | "wordCount" | "level" | "punctuation" | "numbers" | "specials" | "accents" | "excluded" | "text">;
@@ -22,7 +22,7 @@ function withoutAccents(word: string) {
  */
 export function buildWords(settings: CourseSettings, random: () => number = Math.random, passage: string | null = null): string[] {
   const pick = <T,>(list: readonly T[]) => list[Math.floor(random() * list.length)]!;
-  const excluded = settings.textType === "words" ? [...settings.excluded] : [];
+  const excluded = excludedApplies(settings.textType) ? [...settings.excluded] : [];
   const allowed = (word: string) => !excluded.some((c) => word.toLowerCase().includes(c) || withoutAccents(word).toLowerCase().includes(c));
   const target = wordTarget(settings);
 
