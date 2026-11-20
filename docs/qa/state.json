@@ -365,9 +365,9 @@
     "scope": "suivi (light)"
   },
   "HIST-02": {
-    "commit": "5f62fa5",
+    "commit": "33f65fb",
     "date": "2026-11-20",
-    "scope": "critère, partie bonus (fix/server/res-05-status)"
+    "scope": "critère (fix/server/hist-02-rerank, rendu vu)"
   },
   "I18N-01": {
     "commit": "2acdffe",
