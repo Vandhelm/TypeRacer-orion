@@ -4,7 +4,7 @@ import { and, asc, desc, eq, gt, inArray, isNull, ne, sql } from "drizzle-orm";
 import type { z } from "zod";
 import type { Db } from "../../db/client";
 import { players, raceConfigs, roomBans, roomMembers, rooms } from "../../db/schema";
-import { allows, canJoin, newRoomCode } from "../rooms/access";
+import { allows, canJoin, isListed, newRoomCode } from "../rooms/access";
 import type { RoomFilters } from "../rooms/explorer";
 import { seatColor } from "../rooms/seats";
 import { claimInvite, revokeInvitesOf, roomOfInvite } from "./room-invites";
@@ -98,7 +98,7 @@ export class RoomRefused extends Error {
   }
 }
 /** invite_taken : lien déjà lié à une autre IP ou une autre personne (SALLE-04) ; invite_limit : trop de liens dans ce salon. */
-export type RefusalReason = "not_found" | "not_member" | "not_host" | "full" | "in_race" | "closed" | "already_in_room" | "kicked" | "invalid_target" | "unknown_member" | "invite_taken" | "invite_limit";
+export type RefusalReason = "not_found" | "not_member" | "not_host" | "full" | "in_race" | "closed" | "already_in_room" | "kicked" | "invalid_target" | "unknown_member" | "invite_taken" | "invite_limit" | "no_room";
 
 /** SALLE-07 : cette personne a été expulsée de ce salon. L'IP compte pour un invité et pour un compte plus récent que le bannissement (voir ipBan). */
 async function isKicked(db: Db, who: Identity, roomId: number, key: string, ip: string | null): Promise<boolean> {
@@ -389,6 +389,51 @@ export async function joinRoom(db: Db, who: Identity, via: JoinVia, ip: string |
   });
   await entered.catch((error: unknown) => refuseSecondRoom(db, key, error));
   return { room: await roomView(db, id, key), you: key };
+}
+
+/** JOIN-03 : nombre de salons candidats lus d'un coup ; au-delà, ils se sont tous remplis entre-temps. */
+const QUICK_CANDIDATES = 20;
+
+/**
+ * JOIN-03 : « Faire une course ». Parmi les salons publics joignables (en attente ou résultats, SALLE-09) et non
+ * pleins, le plus proche de sa capacité (le moins de places libres) ; à égalité, le plus ancien. Le choix est
+ * revérifié sous le verrou du salon, dans la transaction qui y fait entrer la personne : un salon rempli, lancé ou
+ * rendu privé entre la lecture et l'entrée est passé, et le suivant est essayé. Un salon dont la personne a été
+ * expulsée (SALLE-07) est passé aussi. Aucun salon : refus « no_room » (la route dit si la personne peut en créer un).
+ */
+export async function quickJoin(db: Db, who: Identity, ip: string | null = null): Promise<RoomResult> {
+  const key = memberKey(who);
+  // SALLE-06 : une salle à la fois ; la page propose de rouvrir la sienne
+  await settleCurrentRoom(db, key);
+  const current = await currentRoomOf(db, key);
+  if (current) throw new RoomRefused("already_in_room", current);
+  await sweepAll(db);
+  const seated = sql<number>`(select count(*) from ${roomMembers} where ${roomMembers.roomId} = ${rooms.id} and ${roomMembers.seat} is not null)`;
+  const candidates = await db
+    .select({ id: rooms.id })
+    .from(rooms)
+    .where(and(eq(rooms.visibility, "public"), inArray(rooms.status, ["waiting", "results"]), sql`${seated} < ${rooms.guests}`))
+    .orderBy(sql`${rooms.guests} - ${seated}`, asc(rooms.createdAt), asc(rooms.id))
+    .limit(QUICK_CANDIDATES);
+  for (const { id } of candidates) {
+    const entered = await db
+      .transaction(async (tx) => {
+        await sweep(tx, id);
+        const [room] = await tx.select({ status: rooms.status, visibility: rooms.visibility, guests: rooms.guests }).from(rooms).where(eq(rooms.id, id)).for("update");
+        if (!room || !isListed(room.visibility) || !canJoin(room.status)) return false;
+        const taken = (await tx.select({ seat: roomMembers.seat }).from(roomMembers).where(eq(roomMembers.roomId, id))).map((m) => m.seat);
+        if (taken.filter((seat) => seat !== null).length >= room.guests) return false;
+        if (await isKicked(tx, who, id, key, ip)) return false;
+        const current = await currentRoomOf(tx, key);
+        if (current) throw new RoomRefused("already_in_room", current);
+        const identity = who.kind === "account" ? { playerId: who.playerId } : { guestName: who.name };
+        await tx.insert(roomMembers).values({ roomId: id, memberKey: key, ...identity, role: "player", ...placeFor("player", taken, room.guests), ip });
+        return true;
+      })
+      .catch((error: unknown) => refuseSecondRoom(db, key, error));
+    if (entered) return { room: await roomView(db, id, key), you: key };
+  }
+  throw new RoomRefused("no_room");
 }
 
 /**
