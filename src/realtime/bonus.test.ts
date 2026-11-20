@@ -363,6 +363,60 @@ describe("BONUS-04 — the server counts every runner on the text he really runs
     expect(kept).toEqual([23, 20]); // le texte d'Alpha, gardé pour la reprise et l'enregistrement, revient à 20 mots
   });
 
+  test("a fake finish on the old length, refused, does not cancel +3 words: the text stays at 103", async () => {
+    const { a, b, fake } = await lengthened({ startsAt: Date.now() - 120_000 });
+    const kept: number[] = [];
+    fake.backend.bonusText = async (_code, _startsAt, key, text) => void (key === "g:alpha" && kept.push(text.length));
+    // 30 mots faits sur 100, puis « arrivé » aussitôt : 70 mots d'un coup, un saut
+    await stepOn(a, 1, 100);
+    expect(errors(a)).toEqual(["progress_jump"]);
+    expect(kept).toEqual([]);
+    for (let done = 37; done <= 100; done += 7) await stepOn(a, Math.min(1, done / 100), 100);
+    await stepOn(a, 1, 100);
+    expect(lastStandings(b).players.find((p) => p.playerId === "g:alpha")!.finishedMs).toBeNull();
+    // les points de contrôle suivants peuvent l'allonger encore (106), jamais le ramener aux 100 mots de la course
+    expect(kept).not.toContain(100);
+  });
+
+  /** 20 mots d'une lettre, graine 3 : Alpha passe 25 % et 50 % d'un coup, Bravo et Charlie derniers : deux +3 mots sur Alpha. */
+  async function twiceLengthened() {
+    const words = Array.from({ length: 20 }, (_, i) => String.fromCharCode(97 + i));
+    const kept: number[] = [];
+    const { fake, tabs } = await race({ catchUpBonus: true, seed: 3, words, marks: words.map((_, i) => i * 2).concat(40) });
+    fake.backend.bonusText = async (_code, _startsAt, key, text) => void (key === "g:alpha" && kept.push(text.length));
+    const [a, b, c] = tabs as [Tab, Tab, Tab];
+    await step(b, 0.05);
+    await step(c, 0.05);
+    a.send({ type: "progress", progress: 0.55, wpm: 40, words: 20 });
+    await a.until(() => a.messages.filter((m) => m.type === "bonus").length >= 4);
+    await Bun.sleep(50);
+    const plus = a.messages.filter((m) => m.type === "bonus" && m.effect?.kind === "extra_words" && m.effect.target === "g:alpha");
+    expect(plus).toHaveLength(2);
+    expect(kept).toEqual([23, 26]);
+    return { a, b, kept };
+  }
+  const finishedMs = (tab: Tab) => lastStandings(tab).players.find((p) => p.playerId === "g:alpha")!.finishedMs;
+
+  test("two +3 words in the same second, then finishes on the past lengths: only the last effect is cancelled, once", async () => {
+    const { a, b, kept } = await twiceLengthened();
+    // sa page avait fini les 23 mots sans avoir reçu le 2e bonus : arrivée acceptée, le 2e annulé
+    await stepOn(a, 1, 23);
+    expect(errors(a)).toEqual([]);
+    expect(finishedMs(b)).not.toBeNull();
+    expect(kept).toEqual([23, 26, 23]);
+    // une 2e « arrivée » sur les 20 mots d'avant le 1er n'annule rien de plus
+    await stepOn(a, 1, 20);
+    expect(kept).toEqual([23, 26, 23]);
+  });
+
+  test("two +3 words, then a finish on the length before both: no effect is cancelled, no arrival", async () => {
+    const { a, b, kept } = await twiceLengthened();
+    await stepOn(a, 1, 20);
+    expect(finishedMs(b)).toBeNull();
+    expect(progressOf(b, "g:alpha")).toBeCloseTo(20 / 26, 6);
+    expect(kept).toEqual([23, 26]);
+  });
+
   test("a length that never was this runner's text is not converted", async () => {
     const { a, b } = await lengthened();
     await stepOn(a, 0.33, 7);

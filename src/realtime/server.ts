@@ -415,23 +415,26 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
     adopt(state, ws);
     const previous = state.entries.get(ws.data.player.id);
     // BONUS-02 : un coureur dont un bonus a changé le texte est jugé sur ce texte
-    let text = state.texts.get(ws.data.player.id);
-    // BONUS-04 : sa page a fini le texte d'avant le dernier effet sans l'avoir reçu (en vol) : l'arrivée compte, l'effet
-    // est annulé pour lui ; au-delà de LATE_FINISH_MS, c'est une longueur passée comme une autre (pas une arrivée)
-    const before = text?.before;
-    if (before && words === before.text.words.length && Math.round(value * words) >= words && Date.now() - before.at <= LATE_FINISH_MS) {
-      text = before.text;
-      state.texts.set(ws.data.player.id, text);
-      if (backend.bonusText) backend.bonusText(room, state.course.startsAt, key, text.words, 1).catch((error: unknown) => console.error(error));
-    }
+    const current = state.texts.get(ws.data.player.id);
+    const now = Date.now();
+    // BONUS-04 : sa page a fini le texte d'avant le dernier effet sans l'avoir reçu (en vol) : cette arrivée est jugée sur
+    // ce texte-là ; acceptée, elle compte et l'effet est annulé pour lui (une fois : le texte rendu n'a plus de `before`).
+    // Refusée (saut, trop rapide), rien ne change. Au-delà de LATE_FINISH_MS, c'est une longueur passée comme une autre.
+    const before = current?.before;
+    const late = !!before && !previous?.finishedAt && words === before.text.words.length && Math.round(value * words) >= words && now - before.at <= LATE_FINISH_MS;
+    const text = late ? { ...before.text, before: undefined } : current;
     const marks = text?.marks ?? state.course.marks;
     // BONUS-04 : une progression comptée sur une longueur passée de son texte (partie avant le bonus) garde ses mots
     // validés, recomptés sur le texte d'aujourd'hui ; une longueur qu'il n'a jamais eue n'est pas convertie
     const counted = text && words !== undefined && words !== text.words.length && text.lengths.includes(words) ? Math.min(1, Math.round(value * words) / text.words.length) : value;
-    const verdict = judge({ ...state.course, marks }, previous, counted, wpm, Date.now());
+    const verdict = judge({ ...state.course, marks }, previous, counted, wpm, now);
     if (!verdict.ok) {
       send(ws, { type: "error", code: verdict.reason });
       return null;
+    }
+    if (late && text && verdict.entry.finishedAt !== null) {
+      state.texts.set(ws.data.player.id, text);
+      if (backend.bonusText) backend.bonusText(room, state.course.startsAt, key, text.words, 1).catch((error: unknown) => console.error(error));
     }
     state.entries.set(ws.data.player.id, verdict.entry);
     state.owners.set(ws.data.player.id, key);
