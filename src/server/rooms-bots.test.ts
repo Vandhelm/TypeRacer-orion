@@ -111,3 +111,14 @@ describe("CONF-10 — the host adds and removes bots one by one, each with its l
     expect(res.status).toBe(409);
   });
 });
+
+describe("CONF-10 — a change of the bots is pushed to the whole room (CONF-12)", () => {
+  test("adding a bot announces the room, so every member following it gets the new list", async () => {
+    const announced: string[] = [];
+    const t = await roomsFixture((code) => void announced.push(code));
+    const { room, host } = await t.open("Conf10_Annonce", { bots: false, guests: 4 });
+    announced.length = 0;
+    expect((await patch(t, room.code, host.cookie, { botList: [{ name: "Nori_Ninja", level: "fast" }] })).status).toBe(200);
+    expect(announced).toEqual([room.code]);
+  });
+});
