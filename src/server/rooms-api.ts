@@ -13,7 +13,7 @@ import { createInvite, listInvites } from "./room-invites";
 import { roomIdentity } from "./room-gate";
 import { closeRoom, CodeExhausted, createRoom, finishRoom, joinRoom, kickMember, launchRoom, leaveRoom, listPublicRooms, quickJoin, readRoom, RoomRefused, updateRoom, type RefusalReason, type RoomResult } from "./rooms";
 
-const STATUS: Record<RefusalReason, number> = { not_found: 404, not_member: 403, not_host: 403, full: 409, in_race: 409, closed: 410, already_in_room: 409, kicked: 403, invalid_target: 400, unknown_member: 404, invite_taken: 403, invite_limit: 409, not_enough_players: 409, no_room: 404 };
+const STATUS: Record<RefusalReason, number> = { not_found: 404, not_member: 403, not_host: 403, full: 409, in_race: 409, closed: 410, already_in_room: 409, kicked: 403, invalid_target: 400, unknown_member: 404, invite_taken: 403, invite_limit: 409, not_enough_players: 409, no_room: 404, not_results: 409 };
 
 /** Un refus attendu, en réponse HTTP. SALLE-06 : « already_in_room » donne le salon actuel, pour proposer d'en sortir. */
 const refusal = (error: RoomRefused) => json(error.room ? { error: error.reason, room: error.room } : { error: error.reason }, STATUS[error.reason]);

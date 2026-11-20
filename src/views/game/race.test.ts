@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { MistakeMode, Player } from "../room/room";
-import { advanceBots, applyInput, createCourse, createRace, elapsedMs, everyoneDone, laneProgress, myAccuracy, myWpm, secondsLeft, type Race } from "./race";
+import { advanceBots, applyInput, createCourse, createRace, elapsedMs, endRace, everyoneDone, laneProgress, myAccuracy, myWpm, PHASE_STATE, secondsLeft, startRace, type Race } from "./race";
 
 const ME: Player = { name: "me", color: "red", me: true };
 const BOT: Player = { name: "bot", color: "blue", bot: true };
@@ -151,5 +151,41 @@ describe("CONF-01 — a race with no time limit never ends on time", () => {
 
   test("a timed race still ends at its duration", () => {
     expect(advanceBots(racing("fix"), 1000 + 60_000, [0]).phase).toBe("done");
+  });
+});
+
+describe("COURSE-01 — the client phases follow the server state machine", () => {
+  const fresh = () => createRace(createCourse(["le", "riz"], 60, "fix"), [ME, BOT], "medium", "high", () => 0.5);
+
+  test("each phase is a server state: countdown is DÉCOMPTE, racing is EN_COURSE, done is RÉSULTATS", () => {
+    expect(PHASE_STATE).toEqual({ countdown: "countdown", racing: "racing", done: "results" });
+  });
+
+  test("a race opens on the countdown", () => {
+    expect(fresh().phase).toBe("countdown");
+  });
+
+  test("the end of the countdown starts the race", () => {
+    const race = startRace(fresh(), 5000);
+    expect(race.phase).toBe("racing");
+    expect(race.startedAt).toBe(5000);
+    expect(race.count).toBeNull();
+  });
+
+  test("a second start does not restart a running race", () => {
+    expect(startRace(startRace(fresh(), 5000), 9000).startedAt).toBe(5000);
+  });
+
+  test("a finished race cannot start again", () => {
+    expect(startRace(endRace(startRace(fresh(), 5000)), 9000).phase).toBe("done");
+  });
+
+  test("a race ends only once it has started: ending during the countdown is refused", () => {
+    expect(endRace(fresh()).phase).toBe("countdown");
+    expect(endRace(startRace(fresh(), 5000)).phase).toBe("done");
+  });
+
+  test("time up during the race moves it to done through the same machine", () => {
+    expect(advanceBots(startRace(fresh(), 1000), 1000 + 60_000, [0]).phase).toBe("done");
   });
 });

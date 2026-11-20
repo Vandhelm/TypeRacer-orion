@@ -122,6 +122,14 @@ describe("COURSE-11 — on the results screen, the host closes the room", () => 
     expect((await roomRow(t, code)).status).toBe("racing");
   });
 
+  test("COURSE-01 — closing outside the results screen is refused (409 not_results), never a 500", async () => {
+    const { room, host } = await t.open("C11_Waiting_Hote", { bots: false });
+    const res = await t.call("POST", `/api/rooms/${room.code}/close`, host.cookie);
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ error: "not_results" });
+    expect((await roomRow(t, room.code)).status).toBe("waiting");
+  });
+
   test("closing an already closed room answers 404", async () => {
     const { code, host } = await roomAfterRace(t, "C11_Again");
     expect((await t.call("POST", `/api/rooms/${code}/close`, host.cookie)).status).toBe(200);
