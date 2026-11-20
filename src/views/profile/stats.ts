@@ -1,5 +1,7 @@
 // Statistiques globales d'un joueur (AUTH-06) : lues sur le serveur, ou tirées de la session pour un invité.
 import { mergeKeys, parseKeys, type KeyCounts } from "../../players/keys";
+import { beatenRecord } from "../../players/records";
+import { rememberGuestRecord } from "../podium/record";
 
 /** Points du graphique de progression : les dernières courses (comme le serveur). */
 const PROGRESS_POINTS = 50;
@@ -36,6 +38,9 @@ type GuestRace = { at: string; wpm: number; accuracy: number; rank: number; keys
 export function rememberGuestRace(race: GuestRace) {
   try {
     const races = readGuestRaces();
+    // RES-04 : le record d'un invité se compare aux courses d'avant de sa session ; la première n'en bat aucun
+    const best = races.length ? { wpm: Math.max(...races.map((r) => r.wpm)), accuracy: Math.max(...races.map((r) => r.accuracy)) } : null;
+    rememberGuestRecord(beatenRecord(race, best));
     sessionStorage.setItem(GUEST_KEY, JSON.stringify([...races, race].slice(-MAX_GUEST_RACES)));
   } catch { /* stockage indisponible */ }
 }
