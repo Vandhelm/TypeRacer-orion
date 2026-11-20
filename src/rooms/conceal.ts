@@ -6,8 +6,8 @@
 export const textRevealed = (status: unknown) => status === "racing" || status === "results";
 
 /** La vue du salon pour `viewer` (clé de membre) : sans le texte personnalisé s'il n'est pas l'hôte d'un salon non lancé. */
-export function concealText<T extends { status?: unknown; host?: unknown; settings?: unknown }>(view: T, viewer: string): T {
-  const settings = view.settings as { text?: unknown } | undefined;
-  if (textRevealed(view.status) || view.host === viewer || !settings || typeof settings.text !== "string" || settings.text === "") return view;
+export function concealText<T extends object>(view: T, viewer: string): T {
+  const { status, host, settings } = view as { status?: unknown; host?: unknown; settings?: { text?: unknown } };
+  if (textRevealed(status) || host === viewer || !settings || typeof settings.text !== "string" || settings.text === "") return view;
   return { ...view, settings: { ...settings, text: "" } };
 }
