@@ -109,6 +109,14 @@ export function remountPlan({ abandoned, phase, watching, snapshot, sent }: { ab
   return "race";
 }
 
+/**
+ * Les résultats gardés pour le podium (sessionStorage) sont ceux d'une autre course : la page va au podium sans avoir
+ * envoyé celle-ci depuis cet onglet. Elle les efface plutôt que d'afficher le podium d'un autre départ.
+ */
+export function staleResults(plan: "race" | "record" | "podium", sent: boolean): boolean {
+  return plan === "podium" && !sent;
+}
+
 /** Ma course telle que la page la gardait (position, frappes, fautes), quelle que soit la phase ; sans snapshot, inchangée. */
 export function restoreSnapshot(race: Race, snapshot: RaceSnapshot | null): Race {
   if (!snapshot || race.myLane < 0) return race;

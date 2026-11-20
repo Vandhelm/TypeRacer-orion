@@ -7,7 +7,7 @@ import { MEMBER_AWAY_MS, RECONNECT_MS } from "../../server/rooms";
 import { RACE_PRESENCE_MS } from "../room/presence";
 import { buildWords, type CourseSettings } from "./course";
 import { advanceBots, applyInput, createCourse, createRace, laneProgress, myAccuracy, myWpm, secondsLeft, startRace, TICK_MS, type Race } from "./race";
-import { keepsSnapshot, loadSnapshot, markSent, mountRace, myStanding, remountPlan, restoreSnapshot, resumeNotice, resumeRace, resumeStep, saveSnapshot, timeoutAbandon, wasSent } from "./resume";
+import { keepsSnapshot, loadSnapshot, markSent, mountRace, myStanding, remountPlan, restoreSnapshot, resumeNotice, resumeRace, resumeStep, saveSnapshot, staleResults, timeoutAbandon, wasSent } from "./resume";
 import { trackLanes } from "./track";
 
 const ME: Player = { name: "me", color: "red", me: true };
@@ -257,6 +257,13 @@ describe("COURSE-08 — a page remounted after an abandon or after the end recor
     expect(myWpm(restored)).toBeGreaterThan(0);
     expect(restored.phase).toBe("done");
     expect(restoreSnapshot(ended, null)).toBe(ended);
+  });
+
+  test("straight to the podium without having sent this race: the results of a previous race are not shown", () => {
+    expect(staleResults("podium", false)).toBe(true);
+    expect(staleResults("podium", true)).toBe(false); // envoyée d'ici : les résultats gardés sont les siens
+    expect(staleResults("record", false)).toBe(false); // la page va les réécrire
+    expect(staleResults("race", false)).toBe(false);
   });
 
   test("sent once: the race of this room and start is marked sent in the tab", () => {

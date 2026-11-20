@@ -3,7 +3,7 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import { HangingButton } from "../../components/buttons/HangingButton";
 import { FLOATING_TABS, LanguageSwitcher } from "../../components/tabs/LanguageSwitcher";
-import { buildResults, buildSummary, markSessionStart, rememberSubmit, saveResults, sessionSeconds, submitRace } from "../podium/results";
+import { buildResults, buildSummary, clearResults, markSessionStart, rememberSubmit, saveResults, sessionSeconds, submitRace } from "../podium/results";
 import { useRoom, type RoomState } from "../room/hooks/useRoom";
 import { rememberGuestRace } from "../profile/stats";
 import { useRealtimeRoom } from "../../realtime/useRealtimeRoom";
@@ -18,7 +18,7 @@ import { loadRacePoolImages, type RacePoolImages } from "./pool/createRacePool";
 import { laneProgress, myWpm } from "./race";
 import { RacePool } from "./RacePool";
 import { RaceTrack } from "./RaceTrack";
-import { myStanding, remountPlan, resumeNotice, resumeStep, timeoutAbandon } from "./resume";
+import { myStanding, remountPlan, resumeNotice, resumeStep, staleResults, timeoutAbandon } from "./resume";
 import { raceLanes, remoteUpdates, trackLanes } from "./track";
 import { TypingPanel } from "./TypingPanel";
 
@@ -86,11 +86,12 @@ function GameRace({ state, onHandOver }: { state: RoomState; onHandOver?: (sendi
   // COURSE-08 : remontée après un abandon ou après la fin, la page enregistre ce qu'elle gardait, ou va au podium
   const [plan] = useState(() => remountPlan({ abandoned: state.abandoned, phase: race.phase, watching, ...stored }));
   useEffect(() => {
+    if (staleResults(plan, stored.sent)) clearResults();
     if (plan === "podium") location.replace("/podium");
     if (plan !== "record") return;
     onRestore();
     if (state.abandoned) setAbandoned(true);
-  }, [plan, onRestore, state.abandoned]);
+  }, [plan, onRestore, state.abandoned, stored.sent]);
 
   // TECH-06 : ma progression part dans le salon (10 envois par seconde au plus), celle des autres arrive en direct
   const { state: live, sendProgress } = useRealtimeRoom(room.code || null);
