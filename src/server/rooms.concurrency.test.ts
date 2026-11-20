@@ -166,4 +166,15 @@ describe.skipIf(!process.env.DATABASE_URL)("SALLE-03 / SALLE-06 / SALLE-09 — s
       expect(refused.room).toBe(inA ? a : b);
     }
   });
+
+  test("JOIN-03 — simultaneous quick races never overfill the chosen room: one gets the last seat, the others are told none is left", async () => {
+    for (let round = 0; round < 5; round++) {
+      await server.db.update(rooms).set({ status: "closed" }); // seul compte le salon de ce tour
+      const code = await open();
+      await server.db.update(rooms).set({ guests: 2 }).where(eq(rooms.code, code)); // l'hôte et une place libre
+      const answers = await Promise.all(["A", "B", "C", "D"].map((letter) => call("POST", "/api/rooms/quick", guest(`Rapide_${round}${letter}`), {})));
+      expect(answers.map((res) => res.status).sort()).toEqual([200, 404, 404, 404]);
+      expect(await membersOf(code)).toHaveLength(2);
+    }
+  });
 });
