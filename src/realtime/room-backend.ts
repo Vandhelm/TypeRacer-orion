@@ -49,7 +49,7 @@ export function raceCourseOf(view: RoomView): RaceCourse | null {
     marks = [0];
     for (const word of words) marks.push(marks.at(-1)! + word.length + 1);
   }
-  return { startsAt: view.startsAt, endsAt: view.endsAt, marks, runners: view.members.filter((m) => m.role === "player").map((m) => m.key), ...abandonedOf(view) };
+  return { startsAt: view.startsAt, endsAt: view.endsAt, marks, runners: view.members.filter((m) => m.role === "player").map((m) => m.key), ...abandonedOf(view), ...(view.settings.catchUpBonus ? { catchUpBonus: true } : {}) };
 }
 
 /** COURSE-07 : les coureurs qui ont abandonné, seulement s'il y en a. */

@@ -29,6 +29,8 @@ export type RaceCourse = {
   abandoned?: string[];
   /** COURSE-06 : la dernière progression gardée en base par coureur (clé de membre), pour reprendre le classement. */
   resume?: { key: string; progress: number; finishedAt: number | null }[];
+  /** BONUS-01 : les bonus de remontée sont activés pour cette course (CONF-09) ; absent : non. */
+  catchUpBonus?: boolean;
 };
 /** La dernière progression acceptée d'un coureur ; `finishedAt` : heure serveur de son arrivée. */
 export type Accepted = { progress: number; chars: number; wpm: number; at: number; finishedAt: number | null };

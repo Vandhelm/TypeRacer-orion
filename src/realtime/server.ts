@@ -20,6 +20,7 @@
 import type { Server, ServerWebSocket } from "bun";
 import { concealText } from "../rooms/conceal";
 import { MAX_MESSAGE_BYTES, parseClientMessage, type Player, PROGRESS_INTERVAL_MS, type ServerMessage } from "./protocol";
+import { awardBonuses, newTally, skipPassed, type BonusTally } from "../rooms/bonus";
 import { charsAt, judge, standings, type Accepted, type RaceCourse } from "./referee";
 import type { RoomBackend, RoomState } from "./room-backend";
 import { TICKET_TTL_MS, verifyTicket } from "./ticket";
@@ -34,7 +35,7 @@ type Member = { player: Player; connections: number };
 /** COURSE-06 : la course arbitrée d'une salle. `course` : la dernière connue ; `over` : le salon a quitté la course. */
 /** `resumed` : progressions relues en base (par clé de membre), reprises quand le coureur revient. */
 /** `alive` (COURSE-08) : clés des coureurs dont une progression a été acceptée depuis le dernier balayage. */
-type RaceState = { course: RaceCourse | null; over: boolean; entries: Map<string, Accepted>; resumed: Map<string, Accepted>; owners: Map<string, string>; kept: Set<string>; alive: Set<string>; lastSent: number; timer: ReturnType<typeof setTimeout> | null };
+type RaceState = { course: RaceCourse | null; over: boolean; entries: Map<string, Accepted>; resumed: Map<string, Accepted>; owners: Map<string, string>; kept: Set<string>; alive: Set<string>; lastSent: number; timer: ReturnType<typeof setTimeout> | null; bonus: BonusTally };
 type Throttle = { lastSent: number; pending: { ws: Socket; text: string } | null; timer: ReturnType<typeof setTimeout> | null };
 
 export type RealtimeOptions = {
@@ -215,7 +216,7 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
       // COURSE-07 : la course vient de finir (le dernier a peut-être abandonné) : sa progression validée reste en base
       if (state?.course && !state.over) keepValidated(code, state, null);
       if (state?.course) state.over = true;
-      else if (!state) races.set(code, { course: null, over: false, entries: new Map(), resumed: new Map(), owners: new Map(), kept: new Set(), alive: new Set(), lastSent: -Infinity, timer: null });
+      else if (!state) races.set(code, { course: null, over: false, entries: new Map(), resumed: new Map(), owners: new Map(), kept: new Set(), alive: new Set(), lastSent: -Infinity, timer: null, bonus: newTally() });
       return;
     }
     if (!state || !state.course || state.course.startsAt !== course.startsAt) {
@@ -227,7 +228,10 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
           .filter((r) => r.progress > 0)
           .map((r) => [r.key, { progress: r.progress, chars: course.marks ? charsAt(course.marks, r.progress) : 0, wpm: 0, at: now, finishedAt: r.finishedAt }] as const),
       );
-      races.set(code, { course, over: false, entries: new Map(), resumed, owners: new Map(), kept: new Set(course.abandoned ?? []), alive: new Set(), lastSent: -Infinity, timer: null });
+      const bonus = newTally();
+      // BONUS-01 : une course reprise garde ses points de contrôle franchis, sans redonner de bonus
+      skipPassed(bonus, [...resumed.values()].map((entry) => ({ playerId: "", progress: entry.progress, finished: entry.finishedAt !== null })));
+      races.set(code, { course, over: false, entries: new Map(), resumed, owners: new Map(), kept: new Set(course.abandoned ?? []), alive: new Set(), lastSent: -Infinity, timer: null, bonus });
     } else {
       state.course = course;
       state.over = false;
@@ -259,8 +263,8 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
     if (!state.entries.has(ws.data.player.id)) state.entries.set(ws.data.player.id, resumed);
   }
 
-  /** Le classement du serveur : progressions acceptées, et 0 pour les coureurs présents qui n'ont encore rien envoyé. */
-  function standingsMessage(code: string, state: RaceState & { course: RaceCourse }): ServerMessage {
+  /** Les progressions acceptées, et 0 pour les coureurs présents qui n'ont encore rien envoyé. */
+  function raceEntries(code: string, state: RaceState & { course: RaceCourse }): Map<string, Accepted> {
     for (const ws of joined.get(code) ?? []) adopt(state, ws);
     const entries = new Map(state.entries);
     const runners = new Set(state.course.runners);
@@ -269,8 +273,30 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
         entries.set(ws.data.player.id, { progress: 0, chars: 0, wpm: 0, at: state.course.startsAt, finishedAt: null });
       }
     }
-    const { startsAt, endsAt } = state.course;
-    return { type: "standings", room: code, startsAt, endsAt, players: standings(entries, startsAt) };
+    return entries;
+  }
+
+  /** Le classement du serveur ; avec les bonus activés, les bonus reçus par chacun (BONUS-01). */
+  function standingsMessage(code: string, state: RaceState & { course: RaceCourse }): ServerMessage {
+    const { startsAt, endsAt, catchUpBonus } = state.course;
+    const players = standings(raceEntries(code, state), startsAt);
+    return { type: "standings", room: code, startsAt, endsAt, players: catchUpBonus ? players.map((p) => ({ ...p, bonuses: state.bonus.received.get(p.playerId) ?? 0 })) : players };
+  }
+
+  /**
+   * BONUS-01 : après une progression acceptée, franchit les points de contrôle atteints par le meneur et annonce à toute
+   * la salle les bonus attribués aux coureurs en retard (src/rooms/bonus.ts). Seuls comptent les coureurs que le serveur
+   * arbitre (pas les bots, simulés par la page) ; un coureur qui a abandonné n'est ni en retard ni dernier.
+   */
+  function awardCatchUp(code: string, state: RaceState & { course: RaceCourse }) {
+    if (!state.course.catchUpBonus) return;
+    const abandoned = new Set(state.course.abandoned ?? []);
+    const keys = new Map(state.owners);
+    for (const ws of joined.get(code) ?? []) if (ws.data.key) keys.set(ws.data.player.id, ws.data.key);
+    const runners = [...raceEntries(code, state)]
+      .filter(([playerId]) => !abandoned.has(keys.get(playerId) ?? ""))
+      .map(([playerId, entry]) => ({ playerId, progress: entry.progress, finished: entry.finishedAt !== null }));
+    for (const award of awardBonuses(state.bonus, runners)) server.publish(topic(code), encode({ type: "bonus", room: code, ...award }));
   }
 
   /** Diffuse le classement à toute la salle, au plus une fois par PROGRESS_INTERVAL_MS (PERF-02) ; `now` : sans attendre. */
@@ -323,6 +349,7 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
     state.entries.set(ws.data.player.id, verdict.entry);
     state.owners.set(ws.data.player.id, key);
     state.alive.add(key); // COURSE-08 : le coureur est là, même si sa page relit peu le salon (onglet ralenti)
+    awardCatchUp(room, state as RaceState & { course: RaceCourse });
     publishStandings(room);
     if (verdict.entry.finishedAt !== null && !previous?.finishedAt && backend.progress) {
       backend.progress(key, room, 1).then(
