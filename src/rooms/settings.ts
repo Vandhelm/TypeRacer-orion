@@ -78,6 +78,14 @@ export const DEFAULT_SETTINGS: RoomSettings = {
   catchUpBonus: false,
 };
 
+/**
+ * CONF-04 : une citation n'a que des longueurs prédéfinies (elle reste entière) ; une longueur libre y est ramenée à
+ * « moyen », comme le fait le salon. Appliqué par le serveur à chaque création et modification d'un salon.
+ */
+export function normalizeSettings(settings: RoomSettings): RoomSettings {
+  return settings.textType === "quote" && settings.length === "other" ? { ...settings, length: "medium" } : settings;
+}
+
 /** POST /api/rooms : le rôle de l'hôte et, au besoin, des réglages de départ. Rien d'autre (ni hôte, ni code). */
 export const CreateRoomSchema = z.object({ role: z.enum(ROLES), settings: RoomSettingsSchema.partial().optional() }).strict();
 /** PATCH /api/rooms/:code : l'hôte change ses réglages ou son propre rôle. */

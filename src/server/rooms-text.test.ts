@@ -124,6 +124,32 @@ describe("CONF-04 — the text launched by the server has exactly the requested 
     t = await roomsFixture();
   });
 
+  type Settings = { room: { settings: RoomSettings } };
+  const settingsOf = async (code: string, cookie: string) => ((await (await t.call("GET", `/api/rooms/${code}`, cookie)).json()) as Settings).room.settings;
+
+  test("a quote has no free length: a direct PATCH quote + other is brought back to a preset length", async () => {
+    const { room, host } = await t.open("Len_QuotePatch", { textType: "coherent" });
+    const res = await t.call("PATCH", `/api/rooms/${room.code}`, host.cookie, { settings: { textType: "quote", length: "other", wordCount: 300 } });
+    expect(res.status).toBe(200);
+    expect((await settingsOf(room.code, host.cookie)).length).toBe("medium");
+  });
+
+  test("switching only the length to other on a quote room is brought back too", async () => {
+    const { room, host } = await t.open("Len_QuoteOther", { textType: "quote", length: "long" });
+    expect((await t.call("PATCH", `/api/rooms/${room.code}`, host.cookie, { settings: { length: "other", wordCount: 300 } })).status).toBe(200);
+    expect((await settingsOf(room.code, host.cookie)).length).toBe("medium");
+  });
+
+  test("a room created as quote + other is brought back to a preset length", async () => {
+    const { room, host } = await t.open("Len_QuoteNew", { textType: "quote", length: "other", wordCount: 300 });
+    expect((await settingsOf(room.code, host.cookie)).length).toBe("medium");
+  });
+
+  test("other stays allowed for random words", async () => {
+    const { room, host } = await t.open("Len_WordsOther", { textType: "words", length: "other", wordCount: 300 });
+    expect(await settingsOf(room.code, host.cookie)).toMatchObject({ length: "other", wordCount: 300 });
+  });
+
   const cases: [Partial<RoomSettings>, number][] = [
     [{ length: "very-short" }, 10],
     [{ length: "short" }, 25],
