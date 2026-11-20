@@ -176,6 +176,13 @@
       "when": 1795136436151,
       "tag": "0024_catch_up_bonus",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1795138323216,
+      "tag": "0025_race_authority",
+      "breakpoints": true
     }
   ]
 }

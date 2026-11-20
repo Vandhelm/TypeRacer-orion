@@ -6,6 +6,7 @@ import type { Db } from "../../db/client";
 import { players, raceConfigs, roomBans, roomMembers, rooms } from "../../db/schema";
 import { allows, canJoin, isListed, newRoomCode } from "../rooms/access";
 import { launchBlocker } from "../rooms/launch";
+import { raceClock } from "../rooms/race-clock";
 import type { RoomFilters } from "../rooms/explorer";
 import { seatColor } from "../rooms/seats";
 import { wordTarget } from "../rooms/text";
@@ -75,6 +76,10 @@ export type RoomView = {
   passage: { body: string; source: string | null } | null;
   /** CONF-03 : la graine tirée par le serveur au lancement ; chaque client en tire les mêmes mots. Null avant. */
   seed: number | null;
+  /** COURSE-06 : le départ de la course décidé par le serveur (lancement + décompte), en ms epoch ; null avant. */
+  startsAt: number | null;
+  /** COURSE-06 : la fin de la course (départ + durée), en ms epoch ; null sans limite de temps ou avant le lancement. */
+  endsAt: number | null;
 };
 export type RoomStatus = (typeof rooms.$inferSelect)["status"];
 /** Ce que renvoie une action réussie : l'état du salon, et la clé de celui qui l'a demandée. */
@@ -222,6 +227,7 @@ export async function roomView(db: Db, roomId: number, _viewer?: string): Promis
     members: members.map((m) => ({ key: m.key, name: m.playerName ?? m.guestName ?? "", guest: m.playerId === null, host: m.key === host, role: m.role, seat: m.seat, color: m.color, finished: m.finishedAt !== null })),
     passage: passage && { body: passage.body, source: passage.source },
     seed: row.rooms.textSeed,
+    ...raceClock(row.rooms.launchedAt, row.race_configs.duration),
   };
 }
 
@@ -486,7 +492,7 @@ export async function launchRoom(db: Db, code: string, who: Identity): Promise<R
     const passage = config!.textType === "coherent" ? await pickPassage(tx, { language: config!.language, words: wordTarget(config!) }) : null;
     const textSeed = crypto.getRandomValues(new Int32Array(1))[0]!;
     await tx.update(rooms).set({ status: "racing", launchedAt: sql`now()`, textId: passage?.id ?? null, textSeed }).where(eq(rooms.id, id));
-    await tx.update(roomMembers).set({ finishedAt: null }).where(eq(roomMembers.roomId, id));
+    await tx.update(roomMembers).set({ finishedAt: null, progress: 0, raceRecorded: false }).where(eq(roomMembers.roomId, id));
   });
   return { room: await roomView(db, id, key), you: key };
 }
@@ -605,6 +611,33 @@ export async function finishRoom(db: Db, code: string, who: Identity): Promise<R
     await endIfAllFinished(tx, id);
   });
   return { room: await roomView(db, id, key), you: key };
+}
+
+/**
+ * COURSE-06 : la progression validée par le serveur temps réel (src/realtime/referee.ts), jamais par une route HTTP.
+ * À 100 %, le coureur a fini (finished_at, heure de la base) et la course se termine si c'était le dernier (SALLE-09).
+ * Hors course, ou pour un non-membre, rien ne change. Vrai si l'état du salon a changé (un coureur est arrivé).
+ */
+export async function recordProgress(db: Db, code: string, key: string, progress: number): Promise<boolean> {
+  const id = await roomIdByCode(db, code);
+  if (id === null) return false;
+  return db.transaction(async (tx) => {
+    const [room] = await tx.select({ status: rooms.status }).from(rooms).where(eq(rooms.id, id)).for("update");
+    if (room?.status !== "racing") return false;
+    const value = Math.min(1, Math.max(0, progress));
+    const member = and(eq(roomMembers.roomId, id), eq(roomMembers.memberKey, key));
+    if (value < 1) {
+      await tx.update(roomMembers).set({ progress: sql`greatest(${roomMembers.progress}, ${value})` }).where(member);
+      return false;
+    }
+    const arrived = await tx.update(roomMembers).set({ progress: 1, finishedAt: sql`now()` }).where(and(member, isNull(roomMembers.finishedAt))).returning({ key: roomMembers.memberKey });
+    if (!arrived.length) {
+      await tx.update(roomMembers).set({ progress: 1 }).where(member);
+      return false;
+    }
+    await endIfAllFinished(tx, id);
+    return true;
+  });
 }
 
 /**

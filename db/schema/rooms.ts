@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { boolean, check, index, integer, pgTable, primaryKey, text, timestamp, unique } from "drizzle-orm/pg-core";
+import { boolean, check, index, integer, pgTable, primaryKey, real, text, timestamp, unique } from "drizzle-orm/pg-core";
 import { botAccuracy, botSpeed, language, level, memberRole, mistakeMode, roomStatus, textLength, textType, visibility } from "./enums";
 import { players } from "./players";
 import { corpusTexts } from "./texts";
@@ -80,6 +80,10 @@ export const roomMembers = pgTable(
     joinedAt: timestamp("joined_at", { withTimezone: true }).notNull().defaultNow(),
     /** SALLE-09 : ce membre a fini la course en cours ; remis à null à chaque lancement. */
     finishedAt: timestamp("finished_at", { withTimezone: true }),
+    /** COURSE-06 : la dernière progression validée par le serveur temps réel (0 à 1) ; remise à 0 à chaque lancement. */
+    progress: real("progress").notNull().default(0),
+    /** COURSE-06 : le résultat de ce membre pour la course en cours est déjà enregistré (POST /api/races). */
+    raceRecorded: boolean("race_recorded").notNull().default(false),
     /** SALLE-08 : dernier signe de vie (lecture du salon, action) ; silencieux trop longtemps, le membre est parti. */
     lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
     /** SALLE-07 : l'IP d'entrée (client-ip.ts), null si inconnue ; à l'expulsion, elle est bannie pour les invités. */
