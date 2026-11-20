@@ -8,6 +8,11 @@ export const MIN_GUESTS = 2;
 export const MAX_GUESTS = 30;
 export const MAX_NAME_LENGTH = 28;
 export const MAX_TEXT_LENGTH = 5000;
+/** CONF-01 : temps maximal d'une course, en secondes ; `null` = aucun (la course ne s'arrête pas au temps). */
+export const MIN_DURATION = 30;
+export const MAX_DURATION = 600;
+export const DEFAULT_DURATION = 120;
+export const DurationSchema = z.number().int().min(MIN_DURATION).max(MAX_DURATION).nullable();
 
 export const LANGUAGES = ["fr", "en"] as const;
 export const BOT_SPEEDS = ["slow", "medium", "fast", "mixed"] as const;
@@ -33,7 +38,7 @@ export const RoomSettingsSchema = z
     textType: z.enum(TEXT_TYPES),
     length: z.enum(TEXT_LENGTHS),
     wordCount: z.number().int().min(1).max(1000),
-    duration: z.number().int().min(10).max(600),
+    duration: DurationSchema,
     level: z.enum(LEVELS),
     punctuation: z.boolean(),
     numbers: z.boolean(),
@@ -59,7 +64,7 @@ export const DEFAULT_SETTINGS: RoomSettings = {
   textType: "coherent",
   length: "medium",
   wordCount: 50,
-  duration: 120,
+  duration: DEFAULT_DURATION,
   level: "common",
   punctuation: false,
   numbers: false,
