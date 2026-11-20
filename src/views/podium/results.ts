@@ -7,6 +7,7 @@ import { effectiveComposition } from "../../rooms/text";
 import type { Player, Room } from "../room/room";
 import { formatNumber } from "../../i18n/format";
 import { forgetRecord, rememberRaceAnswer } from "./record";
+import { parseBonuses, type ReceivedBonuses } from "./board";
 
 export type PlayerResult = {
   name: string;
@@ -35,6 +36,8 @@ export type PlayerResult = {
   errorSeries: number[];
   /** Frappes et fautes par touche (heatmap du clavier). */
   keys: KeyCounts;
+  /** RES-02 : bonus reçus ; absent si les bonus sont désactivés ou inconnus (une course de l'historique ne les garde pas). */
+  bonuses?: ReceivedBonuses;
 };
 export type RaceSummary = Pick<Room, "textType" | "language" | "duration" | "level" | "punctuation" | "numbers" | "specials" | "accents" | "excluded" | "mistakes" | "botSpeed" | "botAccuracy" | "length"> & {
   /** CONF-06 : absent d'un résultat gardé avant l'option (le texte avait alors ses majuscules). */
@@ -91,8 +94,8 @@ function detailOf(race: Race, lane: number) {
   };
 }
 
-/** Les joueurs dans l'ordre final : les arrivées, puis les autres selon leur avancée. */
-export function buildResults(race: Race, players: Player[]): PlayerResult[] {
+/** Les joueurs dans l'ordre final : les arrivées, puis les autres selon leur avancée. `bonuses` : par couloir (RES-02, laneBonuses). */
+export function buildResults(race: Race, players: Player[], bonuses?: ReceivedBonuses[]): PlayerResult[] {
   const others = players
     .map((_, lane) => lane)
     .filter((lane) => !race.arrivals.includes(lane))
@@ -111,6 +114,7 @@ export function buildResults(race: Race, players: Player[]): PlayerResult[] {
       eliminated: mine && race.eliminated,
       progress: Math.min(1, Math.max(0, laneProgress(race, lane))),
       ...detailOf(race, lane),
+      ...(bonuses?.[lane] ? { bonuses: bonuses[lane] } : {}),
     };
   });
 }
@@ -191,6 +195,11 @@ export function parseResults(raw: string | null): RaceResults | null {
 const byRank = (players: Record<string, unknown>[]) =>
   players.map((p, index) => ({ p, rank: Number.isInteger(p.rank) && Number(p.rank) >= 1 ? Number(p.rank) : index + 1 })).sort((a, b) => a.rank - b.rank);
 
+const withBonuses = (value: unknown) => {
+  const bonuses = parseBonuses(value);
+  return bonuses ? { bonuses } : {};
+};
+
 /** Des résultats confiés par le jeu (sessionStorage) ou relus sur le serveur (HIST-02), vérifiés champ par champ. */
 export function toResults(value: unknown): RaceResults | null {
   try {
@@ -218,6 +227,7 @@ export function toResults(value: unknown): RaceResults | null {
         rawSeries: numbersOf(p.rawSeries),
         errorSeries: numbersOf(p.errorSeries),
         keys: parseKeys(p.keys),
+        ...withBonuses(p.bonuses),
       };
     });
     const room = typeof stored.room === "string" && isRoomCode(stored.room) ? stored.room : undefined;

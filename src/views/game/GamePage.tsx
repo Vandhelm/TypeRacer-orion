@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { HangingButton } from "../../components/buttons/HangingButton";
 import { FLOATING_TABS, LanguageSwitcher } from "../../components/tabs/LanguageSwitcher";
 import { knownAbandons } from "../podium/after-race";
+import { laneBonuses, type ReceivedBonuses } from "../podium/board";
 import { buildResults, buildSummary, clearResults, markSessionStart, rememberSubmit, saveResults, sessionSeconds, submitRace, type PlayerResult, type SubmitOutcome } from "../podium/results";
 import { roomApi } from "../room/api";
 import { useRoom, type RoomState } from "../room/hooks/useRoom";
@@ -140,6 +141,11 @@ function GameRace({ state, onHandOver }: { state: RoomState; onHandOver?: (sendi
   }, [live, watching, onBonus, lanes]);
   // BONUS-03 : chaque bonus est annoncé sur la piste, pour tous, et au joueur qu'il cible
   const announcements = useBonusAnnouncements(live?.bonuses, lanes, watching ? null : (live?.you?.id ?? null));
+  // RES-02 : les bonus reçus par chaque couloir, confiés au podium avec les résultats
+  const received = useRef<ReceivedBonuses[] | undefined>(undefined);
+  useEffect(() => {
+    received.current = laneBonuses(live, lanes);
+  }, [live, lanes]);
 
   useEffect(markSessionStart, []);
 
@@ -156,7 +162,7 @@ function GameRace({ state, onHandOver }: { state: RoomState; onHandOver?: (sendi
   const abandonSent = useRef<Promise<SubmitOutcome> | null>(null);
   useEffect(() => {
     if (!abandoned || atAbandon.current) return;
-    const built = buildResults(race, players);
+    const built = buildResults(race, players, received.current);
     atAbandon.current = built.find((player) => player.me) ?? null;
     const results = { players: handOverPlayers(built, true, atAbandon.current), summary: buildSummary(race, room, sessionSeconds()), room: room.code };
     saveResults({ ...results, provisional: true });
@@ -187,7 +193,7 @@ function GameRace({ state, onHandOver }: { state: RoomState; onHandOver?: (sendi
     // une seule fois : une frappe ou un salon mis à jour pendant l'envoi relancerait l'effet
     if (!over || submitted.current) return;
     submitted.current = true;
-    const built = buildResults(race, players);
+    const built = buildResults(race, players, received.current);
     void (async () => {
       // COURSE-10 : les abandons notés par le serveur (même partis du salon), fusionnés comme sur le podium
       const known = room.code ? knownAbandons(await roomApi.read(room.code)) : [];
