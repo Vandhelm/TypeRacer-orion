@@ -43,6 +43,9 @@ export const RoomSettingsSchema = z
     punctuation: z.boolean(),
     numbers: z.boolean(),
     specials: z.boolean(),
+    /** CONF-06 : majuscules de début de phrase et noms propres ; désactivées, tout le texte est en minuscules. */
+    capitals: z.boolean(),
+    /** CONF-06 : accents du français ; ignoré pour un texte anglais. */
     accents: z.boolean(),
     mistakes: z.enum(MISTAKE_MODES),
     excluded: z.string().max(20),
@@ -71,6 +74,7 @@ export const DEFAULT_SETTINGS: RoomSettings = {
   punctuation: false,
   numbers: false,
   specials: false,
+  capitals: true,
   accents: true,
   mistakes: "fix",
   excluded: "",
