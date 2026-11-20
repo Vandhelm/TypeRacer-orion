@@ -334,7 +334,8 @@
     "track": {
       "label": "Piste : chaque participant, son rang et sa vitesse en direct",
       "wpm": "{{wpm}} MPM",
-      "watching": "Tu regardes la course : spectateur, sans zone de frappe."
+      "watching": "Tu regardes la course : spectateur, sans zone de frappe.",
+      "abandoned": "Tu as abandonné : la course continue sans toi jusqu'au classement final."
     }
   },
   "podium": {

@@ -1,6 +1,7 @@
 // COURSE-07 : abandonner la course, après confirmation. Le serveur enregistre l'abandon et gèle la progression
-// (POST /api/rooms/:code/abandon) ; la page passe ensuite au podium, où le joueur figure avec le statut « abandon ».
-import type { PlayerResult } from "../podium/results";
+// (POST /api/rooms/:code/abandon) ; la page suit la course jusqu'à sa fin (COURSE-10), puis passe au podium, où le joueur
+// figure parmi les abandons.
+import { finalRanking, type PlayerResult } from "../podium/results";
 import { roomHrefOutsideRace } from "../room/room";
 import type { RoomView } from "../../server/rooms";
 import type { Race } from "./race";
@@ -63,4 +64,22 @@ export async function requestAbandon(code: string, fetcher: typeof fetch = fetch
 /** Mon résultat porte l'abandon (pas une arrivée) ; le serveur le vérifie de son côté à l'enregistrement. */
 export function markAbandoned(players: PlayerResult[]): PlayerResult[] {
   return players.map((player) => (player.me ? { ...player, abandoned: true, finished: false } : player));
+}
+
+/**
+ * COURSE-10 : après un abandon, la page suit la course jusqu'à sa fin pour donner le classement final : la fin locale
+ * (temps écoulé), ou le salon sorti de la course (résultats : tous les humains ont fini ou abandonné ; ou fermé) une fois
+ * les bots de l'onglet arrivés.
+ */
+export function abandonOver(race: Pick<Race, "phase" | "bots">, status: RoomView["status"]): boolean {
+  return race.phase === "done" || (status !== "racing" && race.bots.every((bot) => bot.finishedAt > 0));
+}
+
+/**
+ * COURSE-10 : les résultats confiés au podium, dans l'ordre final (finalRanking). Après un abandon, mon résultat est
+ * celui figé au moment de l'abandon (atAbandon : temps, MPM, progression), marqué abandon ; les autres, leur état final.
+ */
+export function handOverPlayers(built: PlayerResult[], abandoned: boolean, atAbandon: PlayerResult | null): PlayerResult[] {
+  if (!abandoned) return finalRanking(built);
+  return finalRanking(markAbandoned(built.map((player) => (player.me && atAbandon ? { ...atAbandon, rank: player.rank } : player))));
 }
