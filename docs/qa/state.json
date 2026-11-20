@@ -170,9 +170,9 @@
     "scope": "critère (medium)"
   },
   "JOIN-03": {
-    "commit": "1fba673",
-    "date": "2026-11-18",
-    "scope": "site (light)"
+    "commit": "e9ef8fd",
+    "date": "2026-11-19",
+    "scope": "critère feature/home/join-03 (medium)"
   },
   "CONF-01": {
     "commit": "455ae18",
