@@ -30,9 +30,9 @@ export function raceLines(players: PlayerResult[]): { lines: ChartLine[]; missin
   let next = 0;
   const lines = players
     .filter((player) => player.wpmSeries.length > 0)
-    .map((player): ChartLine => {
+    .map((player, index): ChartLine => {
       const colors = player.me ? MINE : COLORS[next++ % COLORS.length]!;
-      return { key: player.name, label: player.name, values: player.wpmSeries.map(clean), bot: player.bot, me: player.me, ...colors };
+      return { key: `${index}:${player.name}`, label: player.name, values: player.wpmSeries.map(clean), bot: player.bot, me: player.me, ...colors };
     });
   return { lines, missing: players.filter((player) => !player.wpmSeries.length).map((player) => player.name) };
 }

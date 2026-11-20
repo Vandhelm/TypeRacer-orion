@@ -386,6 +386,17 @@
       "account_required": "Les invités n’ont pas d’historique : crée un compte pour garder tes courses.",
       "invalid_race": "Adresse de course invalide.",
       "network": "Impossible de charger cette course."
+    },
+    "charts": {
+      "open": "Graphiques",
+      "title": "Graphiques de la course",
+      "close": "Fermer",
+      "speedTitle": "Vitesse de chaque participant",
+      "speedLabel": "Mots par minute de chaque participant, seconde par seconde",
+      "keysTitle": "Tes touches ratées pendant cette course",
+      "noKeys": "Pas de carte des touches : tu n'as pas couru cette course.",
+      "keysNone": "Aucune frappe enregistrée pour cette course.",
+      "noSeries": "Sans mesure seconde par seconde : {{names}}."
     }
   },
   "notFound": {

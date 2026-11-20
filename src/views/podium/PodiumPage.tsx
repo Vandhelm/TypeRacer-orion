@@ -7,6 +7,7 @@ import { useAfterRace } from "./hooks/useAfterRace";
 import { useRaceResults, type ResultsState } from "./hooks/useRaceResults";
 import { PodiumBoard } from "./PodiumBoard";
 import { PodiumScene } from "./PodiumScene";
+import { RaceCharts } from "./RaceCharts";
 import { backToRoomHref, fetchRoomResults, finalRanking, raceErrorKey, saveResults, submitFailed, withRoomResults, type RaceResults } from "./results";
 
 /** COURSE-10 : relecture des résultats finaux, après un abandon suivi d'un rechargement. */
@@ -96,7 +97,7 @@ export function PodiumPage({ race }: { race?: ServerRace }) {
       <LanguageSwitcher className={FLOATING_TABS} />
       {raceId === null && notSaved ? <p className="fixed top-4 left-1/2 z-20 m-0 w-max max-w-[calc(100vw-32px)] border border-red-text bg-black px-3.5 py-2 text-center font-mono text-[12px] leading-[1.5] font-normal text-white [transform:translateX(-50%)]" role="alert">{t("podium.notSaved")}</p> : null}
       <PodiumScene players={players} arrived={arrived} raceId={raceId} roomHref={backToRoomHref(results.room)} after={after} />
-      <PodiumBoard players={players} showPlace arrived={arrived} raceId={raceId} />
+      <PodiumBoard players={players} showPlace arrived={arrived} raceId={raceId} charts={<RaceCharts players={players} />} />
     </>
   );
 }

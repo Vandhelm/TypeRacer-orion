@@ -43,6 +43,11 @@ describe("RES-03 — every participant's speed on one chart", () => {
     expect(missing).toEqual(["Corail_418"]);
   });
 
+  test("two participants with the same name still get two distinct lines", () => {
+    const { lines } = raceLines([player("Nori", 1), player("Nori", 2)]);
+    expect(new Set(lines.map((line) => line.key)).size).toBe(2);
+  });
+
   test("a series with junk values is drawn without them breaking the scale", () => {
     const { lines } = raceLines([player("Nori_Bot", 1, { wpmSeries: [40, Number.NaN, -5, 60] })]);
     expect(lines[0]!.values).toEqual([40, 0, 0, 60]);

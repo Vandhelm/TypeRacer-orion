@@ -386,6 +386,17 @@
       "account_required": "Guests have no history: create an account to keep your races.",
       "invalid_race": "Invalid race address.",
       "network": "Could not load this race."
+    },
+    "charts": {
+      "open": "Charts",
+      "title": "Race charts",
+      "close": "Close",
+      "speedTitle": "Every participant's speed",
+      "speedLabel": "Words per minute of every participant, second by second",
+      "keysTitle": "Keys you missed in this race",
+      "noKeys": "No key map: you did not race in this one.",
+      "keysNone": "No keystroke recorded for this race.",
+      "noSeries": "No second-by-second measure: {{names}}."
     }
   },
   "notFound": {

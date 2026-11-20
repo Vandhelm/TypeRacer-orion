@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { formatNumber } from "../../i18n/format";
 import { BotTag } from "../../players/BotTag";
@@ -16,7 +17,8 @@ const ROW =
 const VALUE = "text-[.9em] whitespace-nowrap text-muted";
 
 /** Every player in final order, with the local player's place when the results come from a real race. */
-export function PodiumBoard({ players, showPlace, arrived, raceId = null }: { players: PlayerResult[]; showPlace: boolean; arrived: boolean; raceId?: number | null }) {
+/** charts : RES-03, the button that opens the race charts, at the end of the header. */
+export function PodiumBoard({ players, showPlace, arrived, raceId = null, charts }: { players: PlayerResult[]; showPlace: boolean; arrived: boolean; raceId?: number | null; charts?: ReactNode }) {
   const { t, i18n } = useTranslation();
   const me = showPlace ? players.find((player) => player.me) : undefined;
   const wpm = t("game.wpm");
@@ -25,11 +27,14 @@ export function PodiumBoard({ players, showPlace, arrived, raceId = null }: { pl
     <section className={arrived ? BOARD : `${BOARD} animate-[podium-board-arrive_.6s_2.7s_cubic-bezier(.2,.8,.2,1)_both]`} aria-labelledby="podium-board-title">
       <header className="flex flex-none flex-wrap items-baseline justify-between gap-x-5 gap-y-1 border-b border-b-line-soft [border-bottom-style:dashed] pb-2">
         <h2 id="podium-board-title" className="font-mono text-[max(11px,1.3vh)] leading-[1.4] font-normal tracking-[.16em] uppercase">{t("podium.allPlayers", { count: players.length })}</h2>
-        {me && (
-          <p className="text-right font-mono text-[max(11px,1.3vh)] leading-[1.4] font-normal tracking-[.1em] text-muted uppercase phone:text-left phone:text-[10px] phone:tracking-[.04em]">
-            {t("podium.yourPlace")} · <b className="font-medium text-white">{rankLabel(t, me.rank)}</b> · {formatNumber(i18n.language, me.wpm)} {wpm} · {formatNumber(i18n.language, me.accuracy)} % · {formatNumber(i18n.language, me.seconds)} s
-          </p>
-        )}
+        <div className="flex flex-wrap items-center justify-end gap-x-5 gap-y-1.5 phone:justify-start">
+          {me && (
+            <p className="text-right font-mono text-[max(11px,1.3vh)] leading-[1.4] font-normal tracking-[.1em] text-muted uppercase phone:text-left phone:text-[10px] phone:tracking-[.04em]">
+              {t("podium.yourPlace")} · <b className="font-medium text-white">{rankLabel(t, me.rank)}</b> · {formatNumber(i18n.language, me.wpm)} {wpm} · {formatNumber(i18n.language, me.accuracy)} % · {formatNumber(i18n.language, me.seconds)} s
+            </p>
+          )}
+          {charts}
+        </div>
       </header>
       <ol className="min-h-0 flex-[1_1_auto] list-none overflow-y-auto phone:pr-2 min-[900px]:grid min-[900px]:auto-cols-[minmax(0,1fr)] min-[900px]:grid-flow-col min-[900px]:grid-rows-[repeat(4,34px)] min-[900px]:gap-x-8">
         {players.map((player, index) => (
