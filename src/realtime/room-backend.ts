@@ -32,6 +32,11 @@ export type RoomBackend = {
   progress?(key: string, code: string, progress: number): Promise<boolean>;
   /** COURSE-07 : garde la dernière progression validée de ces coureurs (abandon, fin de course) pour la course partie à `startsAt`. */
   keep?(code: string, startsAt: number, rows: { key: string; progress: number }[]): Promise<void>;
+  /**
+   * BONUS-04 : garde le texte d'un coureur changé par un bonus (+3 / -3 mots) et sa progression recomptée sur ce texte,
+   * pour la course partie à `startsAt` : le serveur redémarré et l'enregistrement de la course (POST /api/races) le relisent.
+   */
+  bonusText?(code: string, startsAt: number, key: string, words: string[], progress: number): Promise<void>;
 };
 
 /**

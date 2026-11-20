@@ -87,6 +87,17 @@ describe("TECH-06 — real-time client", () => {
     client.close();
   });
 
+  test("BONUS-04 — the progress sent names the length of the text when the page gives it", async () => {
+    const sent: string[] = [];
+    const states: RealtimeState[] = [];
+    const client = connectRealtime({ room: "CXNT25", getTicket: ticketOf(player("Alpha_44")), onChange: (s) => states.push(s), WebSocket: countingSocket(sent) });
+    await until(states, (s) => s.players.length === 1);
+    client.sendProgress(10 / 23, 40, 23);
+    await Bun.sleep(50);
+    expect(JSON.parse(sent[0]!)).toEqual({ type: "progress", progress: 10 / 23, wpm: 40, words: 23 });
+    client.close();
+  });
+
   test("without a ticket, the status says the player is not allowed", async () => {
     const states: RealtimeState[] = [];
     const client = connectRealtime({ room: "CXNT25", getTicket: async () => null, onChange: (s) => states.push(s) });

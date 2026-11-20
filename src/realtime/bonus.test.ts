@@ -242,3 +242,91 @@ describe("BONUS-02 — the server picks the bonus type and applies its effect to
     }
   });
 });
+
+describe("BONUS-04 — the server counts every runner on the text he really runs", () => {
+  const WORDS = Array.from({ length: 100 }, (_, i) => `w${String(i).padStart(3, "0")}`);
+  const MARKS100 = WORDS.map((_, i) => i * 5).concat(500);
+  const course = (seed: number): Partial<RaceCourse> => ({ catchUpBonus: true, seed, words: WORDS, marks: MARKS100 });
+  const progressOf = (tab: Tab, id: string) => lastStandings(tab).players.find((p) => p.playerId === id)!.progress;
+  const relayed = (tab: Tab, id: string) => tab.messages.filter((m): m is Extract<ServerMessage, { type: "progress" }> => m.type === "progress" && m.playerId === id).at(-1)?.progress;
+  async function stepOn(tab: Tab, progress: number, words: number) {
+    const before = tab.messages.length;
+    tab.send({ type: "progress", progress, wpm: 40, words });
+    await tab.until(() => tab.messages.slice(before).some((m) => m.type === "standings" || m.type === "error"));
+    await Bun.sleep(120);
+  }
+  /** Graine 4 : Alpha, à 30 mots sur 100, reçoit +3 mots au point 1 (30/103). */
+  async function lengthened(extra: Partial<RaceCourse> = {}) {
+    const { fake, tabs } = await race({ ...course(4), ...extra });
+    const [a, b, c] = tabs as [Tab, Tab, Tab];
+    await step(b, 0.1);
+    await step(c, 0.05);
+    await step(a, 0.3);
+    await a.until(() => a.messages.some((m) => m.type === "bonus"));
+    await Bun.sleep(120);
+    return { fake, a, b, c };
+  }
+
+  test("a progress sent before +3 words, received after, is counted on the new text: no backward refusal next", async () => {
+    const { a, b } = await lengthened();
+    expect(progressOf(b, "g:alpha")).toBeCloseTo(30 / 103, 6);
+    // parti de la page avant l'effet : 33 mots sur 100
+    await stepOn(a, 0.33, 100);
+    expect(errors(a)).toEqual([]);
+    expect(progressOf(b, "g:alpha")).toBeCloseTo(33 / 103, 6);
+    expect(relayed(b, "g:alpha")).toBeCloseTo(33 / 103, 6);
+    // la suivante, sur les 103 mots, n'est pas un recul
+    await stepOn(a, 34 / 103, 103);
+    expect(errors(a)).toEqual([]);
+    expect(progressOf(b, "g:alpha")).toBeCloseTo(34 / 103, 6);
+  });
+
+  test("two +3 words bonuses, then the finish on the 106 words: progress 1, the arrival is noted once", async () => {
+    const { a, b, fake } = await lengthened({ startsAt: Date.now() - 120_000 });
+    const arrivals: number[] = [];
+    fake.backend.progress = async (_key, _code, value) => (arrivals.push(value), false);
+    // le texte d'Alpha, au fil des bonus qui le visent (aux points 50 % et 75 %, il peut en recevoir d'autres)
+    const length = () => 100 + 3 * a.messages.filter((m) => m.type === "bonus" && m.effect?.kind === "extra_words" && m.effect.target === "g:alpha").length;
+    // 7 mots (35 caractères) par envoi : sous la marge de saut de l'arbitre
+    for (let done = 37; done < length(); done += 7) await stepOn(a, done / length(), length());
+    expect(length()).toBeGreaterThan(103); // deux bonus +3 mots : 106 mots
+    await stepOn(a, 1, length());
+    expect(errors(a)).toEqual([]);
+    expect(progressOf(b, "g:alpha")).toBe(1);
+    expect(arrivals).toEqual([1]);
+  });
+
+  test("a length that never was this runner's text is not converted", async () => {
+    const { a, b } = await lengthened();
+    await stepOn(a, 0.33, 7);
+    expect(progressOf(b, "g:alpha")).toBeCloseTo(0.33, 6);
+  });
+
+  test("the changed text and the progress on it are kept for the room, to resume after a server restart", async () => {
+    const kept: { key: string; words: number; progress: number }[] = [];
+    const { fake, tabs } = await race(course(4));
+    fake.backend.bonusText = async (_code, _startsAt, key, words, progress) => void kept.push({ key, words: words.length, progress });
+    const [a, b, c] = tabs as [Tab, Tab, Tab];
+    await step(b, 0.1);
+    await step(c, 0.05);
+    await step(a, 0.3);
+    await a.until(() => a.messages.some((m) => m.type === "bonus"));
+    await Bun.sleep(50);
+    expect(kept).toHaveLength(1);
+    expect(kept[0]!.key).toBe("g:alpha");
+    expect(kept[0]!.words).toBe(103);
+    expect(kept[0]!.progress).toBeCloseTo(30 / 103, 6);
+  });
+
+  test("after a restart, a runner resumes on the changed text read back from the room", async () => {
+    const changed = [...WORDS, "w001", "w002", "w003"];
+    const resume = [{ key: "g:alpha", progress: 30 / 103, finishedAt: null, words: changed }];
+    const { tabs } = await race({ ...course(4), resume });
+    const [a, b] = tabs as [Tab, Tab];
+    expect(progressOf(b, "g:alpha")).toBeCloseTo(30 / 103, 6);
+    // une progression partie avant le redémarrage, sur les 100 mots de la course : recomptée sur les 103
+    await stepOn(a, 0.31, 100);
+    expect(errors(a)).toEqual([]);
+    expect(progressOf(b, "g:alpha")).toBeCloseTo(31 / 103, 6);
+  });
+});

@@ -52,6 +52,13 @@ describe("TECH-07 — real-time client messages are validated by a schema", () =
     expect(parseClientMessage(raw({ type: "progress", progress: 1, wpm: 300.01 }))).toBeNull(); // COURSE-06 : borne à 300
   });
 
+  test("BONUS-04 — a progress may name the length of the text it counts on, a whole number of words", () => {
+    expect(parseClientMessage(raw({ type: "progress", progress: 0.5, wpm: 50, words: 23 }))).toEqual({ type: "progress", progress: 0.5, wpm: 50, words: 23 });
+    for (const words of [0, -3, 2.5, "23", null, 100_001]) {
+      expect(parseClientMessage(raw({ type: "progress", progress: 0.5, wpm: 50, words }))).toBeNull();
+    }
+  });
+
   test("rejects extra fields, so nobody can slip an identity into a message", () => {
     expect(parseClientMessage(raw({ type: "progress", progress: 0.5, wpm: 50, playerId: "g:Admin" }))).toBeNull();
     expect(parseClientMessage(raw({ type: "join", room: "ABC234", name: "Admin" }))).toBeNull();
