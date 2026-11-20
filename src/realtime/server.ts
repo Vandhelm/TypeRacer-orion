@@ -373,6 +373,9 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
       const kept = effect && (botWords.has(effect.target) || botWords.has(award.playerId)) ? botRace.list.at(-1) : undefined;
       const at = kept ? { at: kept.at, ...(kept.seq === undefined ? {} : { seq: kept.seq }) } : {};
       server.publish(topic(code), encode({ type: "bonus", room: code, ...award, ...(effect ? { effect } : {}), ...at }));
+      // HIST-02 : un bonus reçu par un humain part en base avec son type (un bot a le sien dans sa liste, `from`)
+      const receiver = botWords.has(award.playerId) ? undefined : keys.get(award.playerId);
+      if (receiver) backend?.bonusReceived?.(code, state.course.startsAt, receiver, effect?.kind ?? null).catch((error: unknown) => console.error(error));
     }
     return awards.length;
   }

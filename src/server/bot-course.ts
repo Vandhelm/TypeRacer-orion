@@ -5,6 +5,7 @@
 import { eq, sql } from "drizzle-orm";
 import type { Db } from "../../db/client";
 import { raceConfigs, rooms } from "../../db/schema";
+import { receivedOf, type ReceivedBonuses } from "../rooms/bonus";
 import { botProfile, botSeed, simulateBot } from "../rooms/bot-engine";
 import { botRunnerId, seatedBots } from "../rooms/bots";
 import { courseWords } from "../rooms/course-words";
@@ -15,9 +16,10 @@ import { composePassage } from "./corpus";
 /**
  * Où en est un bot : son arrivée (heure de la base) s'il est arrivé, sa part du texte (0 à 1). COURSE-06 : `seconds` et
  * `wpm`, le temps et le MPM net de sa course calculée (annexe A, comme la page : caractères justes ÷ 5 ÷ minutes), jusqu'à
- * son arrivée, son élimination, ou maintenant (au plus la fin de la course).
+ * son arrivée, son élimination, ou maintenant (au plus la fin de la course). RES-05 : `eliminatedAt`, son élimination (mode fatal).
+ * HIST-02 : `bonuses`, les bonus qu'il a reçus (rooms.bot_bonuses, `from`).
  */
-export type BotStanding = { finishedAt: Date | null; progress: number; seat: null; seconds: number; wpm: number };
+export type BotStanding = { finishedAt: Date | null; progress: number; seat: null; seconds: number; wpm: number; eliminatedAt: Date | null; bonuses: ReceivedBonuses };
 
 /** COURSE-06 : le texte de la course tiré par le serveur (vide sans graine), son départ, sa fin et l'heure de la base, en ms. */
 export type LaunchCourse = { words: string[]; startsAt: number; endsAt: number | null; now: number };
@@ -57,6 +59,8 @@ export async function launchBots(db: Db, roomId: number, humans: number, withTex
   const course = { words, durationMs: endsAt === null ? null : endsAt - startsAt, mistakes: config.mistakes };
   const elapsed = Math.max(0, Math.min(row.now, endsAt ?? Infinity) - startsAt);
   let running = false;
+  // HIST-02 : les bonus reçus par un bot, gardés par le serveur temps réel avec `from` (BOT-04)
+  const received = (name: string) => row.rooms.botBonuses.filter((bonus) => bonus.from === botRunnerId(name)).map((bonus) => bonus.effect.kind);
   for (const bot of bots) {
     const seed = botSeed(row.rooms.textSeed!, bot.name);
     // BOT-04 : avec les bonus qu'il a reçus (rooms.bot_bonuses), rejoués par le moteur comme sur la page
@@ -68,7 +72,7 @@ export async function launchBots(db: Db, roomId: number, humans: number, withTex
     // Comptés comme la page (laneWpm) : les mots finis du texte qu'il a couru (BOT-04 : changé par ses bonus).
     const seconds = (run.arrivedMs ?? run.eliminatedMs ?? elapsed) / 1000;
     const wpm = netWpm(marksOf(run.words)[Math.floor(run.position)]! - run.missed, seconds);
-    standings.set(bot.name.toLowerCase(), { finishedAt: run.arrivedMs === null ? null : new Date(startsAt + run.arrivedMs), progress: run.progress, seat: null, seconds, wpm });
+    standings.set(bot.name.toLowerCase(), { finishedAt: run.arrivedMs === null ? null : new Date(startsAt + run.arrivedMs), progress: run.progress, seat: null, seconds, wpm, eliminatedAt: run.eliminatedMs === null ? null : new Date(startsAt + run.eliminatedMs), bonuses: receivedOf(received(bot.name)) });
   }
   return { standings, running: running && (endsAt === null || row.now < endsAt), course: { words, startsAt, endsAt, now: row.now } };
 }

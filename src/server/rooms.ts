@@ -7,7 +7,8 @@ import type { Db } from "../../db/client";
 import { players, raceConfigs, roomBans, roomMembers, rooms, user } from "../../db/schema";
 import { storedAvatar } from "../players/avatar";
 import { allows, canJoin, isListed, newRoomCode } from "../rooms/access";
-import { CHECKPOINTS } from "../rooms/bonus";
+import { CHECKPOINTS, MAX_BONUSES } from "../rooms/bonus";
+import { BONUS_KINDS, type BonusKind } from "../rooms/bonus-effects";
 import type { BotBonus } from "../rooms/bot-engine";
 import { resolveBots } from "../rooms/bots";
 import { launchBlocker } from "../rooms/launch";
@@ -553,7 +554,7 @@ export async function launchRoom(db: Db, code: string, who: Identity): Promise<R
     const textSeed = crypto.getRandomValues(new Int32Array(1))[0]!;
     // COURSE-01 : une relance repasse par EN_ATTENTE (results → waiting → countdown)
     await moveRoom(tx, id, from, from === "results" ? ["reopen", "launch"] : ["launch"], { launchedAt: sql`now()`, textId: passage?.id ?? null, textSeed, abandons: [], departed: [], botBonuses: [], bonusCheckpoints: 0 });
-    await tx.update(roomMembers).set({ finishedAt: null, abandonedAt: null, eliminatedAt: null, progress: 0, raceRecorded: false, bonusWords: null }).where(eq(roomMembers.roomId, id));
+    await tx.update(roomMembers).set({ finishedAt: null, abandonedAt: null, eliminatedAt: null, progress: 0, raceRecorded: false, bonusWords: null, receivedBonuses: [] }).where(eq(roomMembers.roomId, id));
     // COURSE-06 : l'empreinte des mots que la page de course va retirer, vérifiée par le serveur temps réel
     const words = courseWords(await roomView(tx, id));
     await tx.update(rooms).set({ textHash: words && textFingerprint(words) }).where(eq(rooms.id, id));
@@ -957,6 +958,24 @@ export async function keepBotBonus(db: Db, code: string, startsAt: number, bonus
       .update(rooms)
       .set({ botBonuses: sql`(select coalesce(jsonb_agg(e order by (e->>'at')::bigint, coalesce((e->>'seq')::bigint, 0), n), '[]'::jsonb) from jsonb_array_elements(${list}) with ordinality as t(e, n))` })
       .where(eq(rooms.id, id));
+  });
+}
+
+/**
+ * HIST-02 : ajoute un bonus reçu par ce membre (son type, null : sans effet) à ceux de la course partie à `startsAt`
+ * (room_members.received_bonuses), au plus MAX_BONUSES, en course seulement. Écrit par le serveur temps réel ; relu à
+ * l'enregistrement de la course (launchStandings), qui garde ces bonus avec elle pour l'historique (RES-02).
+ */
+export async function keepReceivedBonus(db: Db, code: string, startsAt: number, key: string, kind: BonusKind | null): Promise<void> {
+  const id = await roomIdByCode(db, code);
+  if (id === null || (kind !== null && !BONUS_KINDS.includes(kind))) return;
+  await db.transaction(async (tx) => {
+    const [room] = await tx.select({ launchedAt: rooms.launchedAt, status: rooms.status }).from(rooms).where(eq(rooms.id, id)).for("update");
+    if (!room?.launchedAt || room.status !== "racing" || room.launchedAt.getTime() + COUNTDOWN_MS !== startsAt) return;
+    await tx
+      .update(roomMembers)
+      .set({ receivedBonuses: sql`${roomMembers.receivedBonuses} || ${JSON.stringify([kind])}::jsonb` })
+      .where(and(eq(roomMembers.roomId, id), eq(roomMembers.memberKey, key), sql`jsonb_array_length(${roomMembers.receivedBonuses}) < ${MAX_BONUSES}`));
   });
 }
 

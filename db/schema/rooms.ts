@@ -11,6 +11,7 @@ import { corpusTexts } from "./texts";
 import { CODE_PATTERN } from "../../src/rooms/access";
 import type { RoomBot } from "../../src/rooms/bots";
 import type { BotBonus } from "../../src/rooms/bot-engine";
+import type { BonusKind } from "../../src/rooms/bonus-effects";
 
 /** Réglages d'une course, immuables : modifier un salon crée une nouvelle ligne, pour que chaque course garde les siens. */
 export const raceConfigs = pgTable(
@@ -125,6 +126,11 @@ export const roomMembers = pgTable(
      * serveur temps réel ; null : celui de la course. Remis à null à chaque lancement.
      */
     bonusWords: jsonb("bonus_words").$type<string[]>(),
+    /**
+     * HIST-02 : les bonus reçus par ce membre pendant la course en cours, dans l'ordre, par type (null : sans effet),
+     * écrits par le serveur temps réel ; relus à l'enregistrement de la course. Remis à vide à chaque lancement.
+     */
+    receivedBonuses: jsonb("received_bonuses").$type<(BonusKind | null)[]>().notNull().default([]),
     /** SALLE-08 : dernier signe de vie (lecture du salon, action) ; silencieux trop longtemps, le membre est parti. */
     lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
     /** SALLE-07 : l'IP d'entrée (client-ip.ts), null si inconnue ; à l'expulsion, elle est bannie pour les invités. */

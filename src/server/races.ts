@@ -12,7 +12,7 @@ import { storedAvatar } from "../players/avatar";
 import { isBotName } from "../players/bots";
 import { seatedBots } from "../rooms/bots";
 import { KeysSchema, type KeyCounts } from "../players/keys";
-import { DurationSchema, MAX_DURATION } from "../rooms/settings";
+import { DurationSchema, MAX_DURATION, MAX_GUESTS } from "../rooms/settings";
 import { CODE_PATTERN } from "../rooms/access";
 import { raceClock } from "../rooms/race-clock";
 import { effectiveComposition } from "../rooms/text";
@@ -33,17 +33,18 @@ const LEVELS = ["common", "rich", "expert"] as const;
 const MISTAKE_MODES = ["fix", "carry-on", "fatal"] as const;
 /**
  * CONF-01 : sans limite de temps, une course reçue peut durer jusqu'à une heure (garde-fou de taille du corps :
- * 8 joueurs × 3 séries de 3 600 points restent sous MAX_BODY_BYTES). Une course chronométrée, jusqu'à MAX_DURATION.
+ * MAX_GUESTS joueurs × 3 séries de 3 600 points restent sous MAX_BODY_BYTES). Une course chronométrée, jusqu'à MAX_DURATION.
  */
 const UNLIMITED_SECONDS = 3600;
 /** Points du graphique de progression : les dernières courses. */
 export const PROGRESS_LIMIT = 50;
 
 /**
- * Taille maximale du corps de POST /api/races, en octets. Un corps réel : 8 joueurs, 3 séries de 600 points (~3 Ko chacune)
- * et 200 touches (~6 Ko) soit ~120 Ko, plus le texte (10 Ko). 512 Ko laisse une marge large ; au-delà : 413, avant tout parse.
+ * Taille maximale du corps de POST /api/races, en octets. RES-05 : un salon plein (MAX_GUESTS = 30 coureurs, SALLE-05),
+ * 3 séries de 3 600 points (~18 Ko chacune au pire) et 200 touches (~6 Ko) par coureur, soit ~1,8 Mo, plus le texte
+ * (10 Ko). 2 Mo ; au-delà : 413, avant tout parse.
  */
-export const MAX_BODY_BYTES = 512 * 1024;
+export const MAX_BODY_BYTES = 2 * 1024 * 1024;
 
 class BodyTooLarge extends Error {}
 
@@ -85,7 +86,11 @@ const fail = (what: string): never => {
 // et rien de ce qui n'est pas lu ici n'atteint la base.
 const int = (min = 0, high = 100_000) => z.number().finite().min(min).max(high).transform(Math.round);
 const decimal = (min = 0, high = 100) => z.number().finite().min(min).max(high);
+/** RES-05 : le MPM brut le plus haut reçu (le brut compte aussi les fautes : au-delà de MAX_HUMAN_WPM). */
+export const MAX_RAW_WPM = 1000;
 const series = z.array(int(0, 10_000)).max(UNLIMITED_SECONDS);
+/** RES-05 : un point de série au-delà de la mesure qu'il trace est ramené à sa borne (MPM net : MAX_HUMAN_WPM ; brut : MAX_RAW_WPM). */
+const bounded = (high: number) => series.transform((points) => points.map((point) => Math.min(point, high)));
 const flag = z.boolean().default(false);
 
 const SummarySchema = z.object({
@@ -112,7 +117,7 @@ const PlayerSchema = z.object({
   name: z.string().trim().min(1).max(20),
   bot: flag,
   wpm: int(0, 500),
-  raw: int(0, 1000),
+  raw: int(0, MAX_RAW_WPM),
   accuracy: decimal(),
   seconds: decimal(0, UNLIMITED_SECONDS),
   chars: z.tuple([int(), int(), int(), int()]),
@@ -122,8 +127,8 @@ const PlayerSchema = z.object({
   eliminated: flag,
   // COURSE-10 : la progression vue par le navigateur (0 à 1) ; seule celle d'un bot sert, celle d'un humain vient du serveur
   progress: z.number().finite().min(0).max(1).optional(),
-  wpmSeries: series,
-  rawSeries: series,
+  wpmSeries: bounded(MAX_HUMAN_WPM),
+  rawSeries: bounded(MAX_RAW_WPM),
   errorSeries: series,
   keys: KeysSchema.default({}),
 });
@@ -135,7 +140,8 @@ const RaceSchema = z.object({
   room: z.string().regex(new RegExp(CODE_PATTERN)).optional(),
   summary: SummarySchema,
   content: z.string().default("").transform((value) => value.slice(0, 10_000)),
-  players: z.array(PlayerSchema).min(1).max(8),
+  // RES-05 : tous les coureurs d'un salon plein (humains et bots, SALLE-05), aucun de plus
+  players: z.array(PlayerSchema).min(1).max(MAX_GUESTS),
 }).superRefine(({ summary, players: list }, ctx) => {
   // CONF-01 : une course chronométrée ne dure pas plus que la durée maximale ; seule une course sans limite va au-delà
   const limit = summary.duration === null ? UNLIMITED_SECONDS : MAX_DURATION;
@@ -192,7 +198,8 @@ const sameName = (a: string, b: string | null | undefined) => !!b && a.toLowerCa
 /** COURSE-10 : roomId, le salon de la course (races.room_id) ; departed, les abandons partis du salon, ajoutés s'ils manquent au corps. */
 /** `content` (BONUS-04) : le texte de ce membre changé par un bonus, gardé par le serveur temps réel ; absent : aucun. */
 /** `course` (COURSE-06) : le texte tiré par le serveur et son horloge, pour le temps et le MPM de chaque coureur (serverMeasures). */
-export type ServerRace = { startedAt: Date; finished: boolean; abandoned?: boolean; standings?: Map<string, ServerStanding>; bots?: Set<string>; roomId?: number; departed?: { name: string; progress: number }[]; content?: string; course?: LaunchCourse | null };
+/** `bonuses` (HIST-02) : les bonus de remontée étaient activés pour ce lancement (CONF-09). */
+export type ServerRace = { startedAt: Date; finished: boolean; abandoned?: boolean; standings?: Map<string, ServerStanding>; bots?: Set<string>; roomId?: number; departed?: { name: string; progress: number }[]; content?: string; course?: LaunchCourse | null; bonuses?: boolean };
 
 /**
  * COURSE-06 : tolérance du MPM envoyé, une seule à la fois. Coureur arrivé : les caractères exacts de son texte, avec
@@ -265,7 +272,11 @@ export async function recordRace(db: Db, parsed: ParsedRace, requester: Requeste
     // BOT-05 : celle d'un bot aussi, quand le serveur a calculé sa course (src/server/bot-course.ts)
     const standing = server?.standings?.get(r.name.toLowerCase());
     const measured = server ? serverMeasures(r, standing, server.course) : r;
-    return { ...measured, abandoned, finished: (standing ? !!standing.finishedAt : r.finished) && !abandoned };
+    // RES-05 : l'élimination d'un coureur connu du serveur est celle qu'il a datée (mode fatal), jamais le corps
+    const eliminated = standing ? !!standing.eliminatedAt : r.eliminated;
+    // HIST-02 : les bonus reçus, ceux que le serveur a gardés (jamais le corps) ; aucun si les bonus sont désactivés
+    const bonuses = server?.bonuses && standing?.bonuses ? { bonuses: standing.bonuses } : {};
+    return { ...measured, abandoned, eliminated, ...bonuses, finished: (standing ? !!standing.finishedAt : r.finished) && !abandoned };
   });
   const race = server?.standings ? { ...parsed, results: rankByServer(results, server.standings, serverBots) } : { ...parsed, results };
   const [account] = requester.playerId
@@ -331,7 +342,7 @@ export const ELAPSED_TOLERANCE_SECONDS = 2;
 export async function claimServerRace(db: Db, race: ParsedRace, key: string | null): Promise<ServerRace & { release: () => Promise<void> }> {
   if (!race.room || !key) throw new RaceRefused("race_not_launched");
   const [row] = await db
-    .select({ roomId: rooms.id, launchedAt: rooms.launchedAt, duration: raceConfigs.duration, progress: roomMembers.progress, abandonedAt: roomMembers.abandonedAt, bonusWords: roomMembers.bonusWords, bots: rooms.bots, botList: rooms.botList, guests: rooms.guests })
+    .select({ roomId: rooms.id, launchedAt: rooms.launchedAt, duration: raceConfigs.duration, progress: roomMembers.progress, abandonedAt: roomMembers.abandonedAt, bonusWords: roomMembers.bonusWords, bots: rooms.bots, botList: rooms.botList, guests: rooms.guests, catchUpBonus: raceConfigs.catchUpBonus })
     .from(rooms)
     .innerJoin(raceConfigs, eq(raceConfigs.id, rooms.configId))
     .innerJoin(roomMembers, and(eq(roomMembers.roomId, rooms.id), eq(roomMembers.memberKey, key)))
@@ -358,6 +369,7 @@ export async function claimServerRace(db: Db, race: ParsedRace, key: string | nu
     departed: absent,
     course,
     bots,
+    bonuses: row.catchUpBonus,
     // BONUS-04 : le texte que ce membre a couru, quand un bonus l'a changé : celui du serveur, pas celui du corps
     ...(row.bonusWords?.length ? { content: row.bonusWords.join(" ").slice(0, 10_000) } : {}),
     release: async () => void (await db.update(roomMembers).set({ raceRecorded: false }).where(member)),

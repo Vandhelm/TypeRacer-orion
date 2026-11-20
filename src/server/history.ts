@@ -149,6 +149,8 @@ async function raceDetailFor(db: Db, raceId: number, viewer: { playerId?: number
       rawSeries: series.map((sample) => sample.raw),
       errorSeries: series.map((sample) => sample.errors),
       keys: result.keys,
+      // HIST-02 : les bonus reçus, gardés par le serveur (RES-02, colonne Bonus) ; absents si désactivés
+      ...(result.bonuses ? { bonuses: result.bonuses } : {}),
     };
   });
   // sans historique : jamais « moi », jamais un bot (le flag venait du navigateur)
