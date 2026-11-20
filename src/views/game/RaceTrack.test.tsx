@@ -173,3 +173,22 @@ describe("BOT-04 — a bot is clearly marked on the track, a human is not", () =
     });
   });
 });
+
+describe("PERF-03 — the progress bar moves without restyling its lane", () => {
+  test("the bar is scaled on its own element: no inherited --progress on the lane, no width to lay out", () => {
+    lanes(render(state("player"), "en")).forEach((row) => {
+      expect(row).not.toContain("--progress");
+      const bar = part(row, "bar");
+      expect(bar).toContain("transform:scaleX(0)");
+      expect(bar).not.toMatch(/w-\[calc/);
+    });
+  });
+
+  test("the bar glides by its own transform transition, cut when motion is reduced", () => {
+    lanes(render(state("player"), "en")).forEach((row) => {
+      const bar = part(row, "bar");
+      expect(bar).toContain("transition-transform");
+      expect(bar).toContain("motion-reduce:transition-none");
+    });
+  });
+});

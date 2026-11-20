@@ -1,10 +1,10 @@
-import { useEffect, useRef, type CSSProperties } from "react";
+import { memo, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { BotTag } from "../../players/BotTag";
 import { GeneratedAvatar } from "../profile/ProfileAvatar";
 import type { BonusAnnouncement } from "./announce";
 import { BONUS_HIT, bonusBadge, bonusSentence } from "./BonusNotice";
-import { laneFrame, type TrackLane } from "./track";
+import { barStyle, type TrackLane } from "./track";
 
 // Tout tient dans son couloir, de 2 à 8 couloirs : le nom passe à la ligne (deux lignes au plus), rang et MPM aussi.
 // L'avatar ne disparaît jamais : sous 96 px de couloir, il rapetisse (16 px) et passe au-dessus du nom.
@@ -21,34 +21,28 @@ const BONUS_BADGE =
 
 /**
  * COURSE-05 : sous le bassin, un couloir par participant : avatar, nom, rang courant, MPM et barre de progression.
- * La barre glisse d'une mise à jour à l'autre (easeToward, à chaque image), écrite directement dans --progress : pas de rendu React par image.
+ * La barre glisse d’une mise à jour à l’autre par sa transition CSS (barStyle), écrite dans son transform à chaque mise à jour : pas de rendu React ni d’écriture par image.
+ * PERF-03 : jamais une variable héritée sur le couloir (tout son contenu serait restylé à chaque image, ×30 couloirs),
+ * ni une largeur (mise en page) ; un couloir ne se rend de nouveau que si ce qu'il affiche change (LaneItem, memo).
  * BONUS-03 : un bonus en cours est annoncé sur le couloir qu'il touche (badge) et dit en une ligne (région polie, pour tous).
  */
 export function RaceTrack({ lanes, bonuses = [] }: { lanes: TrackLane[]; bonuses?: readonly BonusAnnouncement[] }) {
   const { t } = useTranslation();
-  const items = useRef<(HTMLLIElement | null)[]>([]);
+  const bars = useRef<(HTMLElement | null)[]>([]);
+  // la dernière progression écrite dans chaque barre
   const shown = useRef<number[]>([]);
-  const targets = useRef<number[]>([]);
-  targets.current = lanes.map((lane) => lane.progress);
   const latest = bonuses.at(-1);
 
-  useEffect(() => {
-    const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
-    let frame = 0;
-    let last = performance.now();
-    const draw = (now: number) => {
-      const dt = still ? Infinity : now - last;
-      last = now;
-      targets.current.forEach((target, lane) => {
-        const next = laneFrame(shown.current[lane] ?? 0, target, dt);
-        if (next !== shown.current[lane]) items.current[lane]?.style.setProperty("--progress", String(next));
-        shown.current[lane] = next;
-      });
-      frame = requestAnimationFrame(draw);
-    };
-    frame = requestAnimationFrame(draw);
-    return () => cancelAnimationFrame(frame);
-  }, []);
+  // une écriture par mise à jour reçue, seulement pour les couloirs qui ont bougé ; la transition CSS fait le reste
+  useLayoutEffect(() => {
+    lanes.forEach(({ lane, progress }) => {
+      const bar = bars.current[lane];
+      const before = shown.current[lane] ?? 0;
+      if (!bar || progress === before) return;
+      Object.assign(bar.style, barStyle(before, progress));
+      shown.current[lane] = progress;
+    });
+  });
 
   return (
     <div className="relative compact:col-[1/-1]">
@@ -56,46 +50,74 @@ export function RaceTrack({ lanes, bonuses = [] }: { lanes: TrackLane[]; bonuses
         {latest && <span key={latest.key} className={`block bg-[rgba(0,0,0,.72)] px-2 ${BONUS_HIT}`}>{bonusSentence(t, latest, "track")}</span>}
       </p>
       <ul className="grid grid-cols-[repeat(var(--lanes),minmax(0,1fr))]" aria-label={t("game.track.label")}>
-        {lanes.map((lane) => {
-          const bonus = bonuses.findLast((a) => a.lane === lane.lane);
-          return (
-            <li
-              key={`${lane.lane}-${lane.name}`}
-              ref={(el) => {
-                items.current[lane.lane] = el;
-              }}
-              data-lane={lane.lane}
-              aria-current={lane.me || undefined}
-              className={`@container relative flex min-w-0 flex-col overflow-hidden items-center gap-[.6vh] px-[.6vh] text-center ${lane.me ? "text-white" : "text-muted"}`}
-              style={{ "--progress": shown.current[lane.lane] ?? 0 } as CSSProperties}
-            >
-              <p data-part="name" className={`${NAME_LINE} ${lane.me ? "font-medium" : "font-normal"}`}>
-                <span
-                  data-part="avatar"
-                  className={`block size-[max(18px,2.4vh)] flex-none overflow-hidden rounded-[50%] border [@container(max-width:96px)]:size-[16px] ${lane.me ? "border-red-text [box-shadow:0_0_0_2px_var(--color-red-solid)]" : "border-line"}`}
-                  aria-hidden="true"
-                >
-                  {lane.photo ? <img className="block size-full object-cover" src={lane.photo} alt="" /> : <GeneratedAvatar name={lane.name} />}
-                </span>
-                <span data-part="label" className={NAME_LABEL}>{lane.name}</span>
-              </p>
-              <p data-part="stats" className={`${STATS_LINE} ${lane.me ? "text-red-text" : ""}`}>
-                {/* masquage progressif quand le couloir rétrécit : le MPM, puis le badge ; le rang reste toujours */}
-                {/* BOT-04 : le marqueur bot n'est jamais masqué ; sous 44 px il serre ses lettres et perd son retrait */}
-                {lane.bot && <BotTag className="[@container(max-width:44px)]:px-px [@container(max-width:44px)]:tracking-normal" />}
-                {lane.me && <b className="bg-red-solid px-[.5vh] font-medium whitespace-nowrap text-white [@container(max-width:44px)]:hidden">{t("room.you")}</b>}
-                <span data-part="rank" className="whitespace-nowrap">{t("podium.rank", { count: lane.rank, ordinal: true })}</span>
-                <span data-part="wpm" className="whitespace-nowrap [@container(max-width:60px)]:hidden">{t("game.track.wpm", { wpm: lane.wpm })}</span>
-              </p>
-              <span className={`block w-[70%] bg-line-faint ${lane.me ? "h-[3px]" : "h-px"}`} aria-hidden="true">
-                <i className={`block h-full w-[calc(var(--progress)*100%)] ${lane.me ? "bg-red-text" : "bg-line"}`} />
-              </span>
-              {/* le badge double la ligne annoncée : les lecteurs d'écran l'entendent déjà une fois */}
-              {bonus && <b key={bonus.key} data-part="bonus" aria-hidden="true" className={`${BONUS_BADGE} ${BONUS_HIT}`}>{bonusBadge(t, bonus)}</b>}
-            </li>
-          );
-        })}
+        {lanes.map((lane) => (
+          <LaneItem
+            key={`${lane.lane}-${lane.name}`}
+            lane={lane}
+            bonus={bonuses.findLast((a) => a.lane === lane.lane)}
+            shown={shown.current[lane.lane] ?? 0}
+            bars={bars.current}
+          />
+        ))}
       </ul>
     </div>
   );
 }
+
+type LaneItemProps = { lane: TrackLane; bonus: BonusAnnouncement | undefined; shown: number; bars: (HTMLElement | null)[] };
+
+/** Ce qu'un couloir affiche ; sa progression n'en fait pas partie (la boucle d'images l'écrit dans la barre). */
+const sameLane = (a: LaneItemProps, b: LaneItemProps) =>
+  a.bonus === b.bonus &&
+  a.bars === b.bars &&
+  a.lane.lane === b.lane.lane &&
+  a.lane.name === b.lane.name &&
+  a.lane.me === b.lane.me &&
+  a.lane.bot === b.lane.bot &&
+  a.lane.photo === b.lane.photo &&
+  a.lane.rank === b.lane.rank &&
+  a.lane.wpm === b.lane.wpm;
+
+const LaneItem = memo(function LaneItem({ lane, bonus, shown, bars }: LaneItemProps) {
+  const { t } = useTranslation();
+  // la barre part de la progression affichée au montage ; ensuite, seule la boucle d'images l'écrit
+  const [start] = useState(shown);
+  return (
+    <li
+      data-lane={lane.lane}
+      aria-current={lane.me || undefined}
+      className={`@container relative flex min-w-0 flex-col overflow-hidden items-center gap-[.6vh] px-[.6vh] text-center ${lane.me ? "text-white" : "text-muted"}`}
+    >
+      <p data-part="name" className={`${NAME_LINE} ${lane.me ? "font-medium" : "font-normal"}`}>
+        <span
+          data-part="avatar"
+          className={`block size-[max(18px,2.4vh)] flex-none overflow-hidden rounded-[50%] border [@container(max-width:96px)]:size-[16px] ${lane.me ? "border-red-text [box-shadow:0_0_0_2px_var(--color-red-solid)]" : "border-line"}`}
+          aria-hidden="true"
+        >
+          {lane.photo ? <img className="block size-full object-cover" src={lane.photo} alt="" /> : <GeneratedAvatar name={lane.name} />}
+        </span>
+        <span data-part="label" className={NAME_LABEL}>{lane.name}</span>
+      </p>
+      <p data-part="stats" className={`${STATS_LINE} ${lane.me ? "text-red-text" : ""}`}>
+        {/* masquage progressif quand le couloir rétrécit : le MPM, puis le badge ; le rang reste toujours */}
+        {/* BOT-04 : le marqueur bot n'est jamais masqué ; sous 44 px il serre ses lettres et perd son retrait */}
+        {lane.bot && <BotTag className="[@container(max-width:44px)]:px-px [@container(max-width:44px)]:tracking-normal" />}
+        {lane.me && <b className="bg-red-solid px-[.5vh] font-medium whitespace-nowrap text-white [@container(max-width:44px)]:hidden">{t("room.you")}</b>}
+        <span data-part="rank" className="whitespace-nowrap">{t("podium.rank", { count: lane.rank, ordinal: true })}</span>
+        <span data-part="wpm" className="whitespace-nowrap [@container(max-width:60px)]:hidden">{t("game.track.wpm", { wpm: lane.wpm })}</span>
+      </p>
+      <span className={`block w-[70%] bg-line-faint ${lane.me ? "h-[3px]" : "h-px"}`} aria-hidden="true">
+        <i
+          ref={(el) => {
+            bars[lane.lane] = el;
+          }}
+          data-part="bar"
+          className={`block h-full w-full origin-left transition-transform duration-300 ease-out motion-reduce:transition-none ${lane.me ? "bg-red-text" : "bg-line"}`}
+          style={{ transform: `scaleX(${start})` }}
+        />
+      </span>
+      {/* le badge double la ligne annoncée : les lecteurs d'écran l'entendent déjà une fois */}
+      {bonus && <b key={bonus.key} data-part="bonus" aria-hidden="true" className={`${BONUS_BADGE} ${BONUS_HIT}`}>{bonusBadge(t, bonus)}</b>}
+    </li>
+  );
+}, sameLane);

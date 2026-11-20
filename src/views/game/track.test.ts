@@ -4,7 +4,7 @@ import type { RealtimeState } from "../../realtime/client";
 import type { MemberView, Player } from "../room/room";
 import { advanceBots, applyRemote, createCourse, createRace, everyoneDone, laneProgress, laneWpm, type Race } from "./race";
 import { seatsOf } from "../room/room";
-import { easeToward, laneFrame, raceLanes, realtimeMemberKey, remoteUpdates, trackLanes } from "./track";
+import { barStyle, easeToward, laneFrame, raceLanes, realtimeMemberKey, remoteUpdates, trackLanes } from "./track";
 
 const ME: Player = { name: "Corail_418", color: "red", me: true };
 const RIVAL: Player = { name: "Maki_Test", color: "blue" };
@@ -187,6 +187,21 @@ describe("BONUS-03 — a lane sent back by a bonus is shown back at once", () =>
 
   test("a higher target still glides toward it", () => {
     expect(laneFrame(0, 0.5, 16)).toBe(easeToward(0, 0.5, 16));
+  });
+});
+
+describe("PERF-03 — the bar glides by a CSS transition, written once per update, not at every frame", () => {
+  test("a higher target is scaled to and keeps the bar's transition", () => {
+    expect(barStyle(0.2, 0.5)).toEqual({ transform: "scaleX(0.5)", transitionDuration: "" });
+  });
+
+  test("BONUS-03 — a lower target is reached at once: no transition", () => {
+    expect(barStyle(0.6, 0.45)).toEqual({ transform: "scaleX(0.45)", transitionDuration: "0s" });
+  });
+
+  test("an out-of-range progress is clamped to the lane", () => {
+    expect(barStyle(0, 1.4).transform).toBe("scaleX(1)");
+    expect(barStyle(0, Number.NaN).transform).toBe("scaleX(0)");
   });
 });
 

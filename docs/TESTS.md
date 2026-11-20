@@ -6,6 +6,7 @@
 | `bun run test:smoke` | l'application démarre et répond (`tests/smoke/app.smoke.ts`) | `<base>_smoke` jetable |
 | `bun run test:e2e` | parcours de bout en bout dans Chromium, avec Playwright (TEST-02) | `<base>_e2e` jetable |
 | `bun run test:a11y` | contraste des textes (WCAG AA) sur chaque page, axe-core dans Chromium (A11Y-01) ; hors de `bun test` | `<base>_e2e` jetable |
+| `bun run test:perf` | fluidité de la piste à 30 participants, seuil 55 FPS (PERF-03) ; hors de `bun test` et de `test:e2e` | `<base>_e2e` jetable |
 | `bun run lighthouse [url]` | Lighthouse sur l'accueil, mobile et desktop, seuil 90 par catégorie (PERF-01) ; hors de `bun test` | celle du serveur mesuré |
 
 ## Tests de bout en bout (TEST-02, TEST-03)
@@ -117,3 +118,41 @@ Ce qui faisait perdre des points, et ce qui a changé :
 - **SEO** : meta description de l'accueil, traduite (`home.metaDescription`).
 
 Les tests `src/views/home/home-lighthouse.test.tsx`, `src/views/home/scene/scene-quality.test.ts` et `scripts/lighthouse.test.ts` (`bun test -t PERF-01`) gardent ces corrections sans navigateur.
+
+## Fluidité de la piste à pleine capacité (PERF-03)
+
+`tests/e2e/race-pool.perf.ts` mesure la page de course à la capacité maximale d'un salon (SALLE-05 : 30 participants) : un compte hôte qui tape au clavier (~100 MPM) dans sa page, 22 invités et les 7 bots du salon, bonus de remontée activés (CONF-09 : annonces, badges, recul d'un couloir). Les invités courent sans page : chacun prend un cookie invité, entre dans le salon public par son code, demande un ticket et envoie sa progression au serveur temps réel par sa propre socket (de 35 à 90 MPM). Ainsi seule la page de l'hôte charge le navigateur.
+
+Pendant 15 s de pleine course, processeur ralenti 2 fois par Chrome DevTools (un portable courant), le test relève chaque image (`requestAnimationFrame`), les longues tâches (`longtask`), les longues images (`long-animation-frame`, avec les scripts en cause) et les compteurs de Chrome (recalculs de style, mises en page, temps de script). Il échoue si :
+
+- la moyenne est sous **55 images par seconde** ;
+- plus de **5 %** des images dépassent 25 ms (une image et demie) ;
+- une longue tâche dépasse **100 ms**.
+
+```bash
+bunx playwright install chromium   # une fois par machine
+E2E_DATABASE_URL=postgres://orion@localhost:5544/orion_e2e bun run test:perf
+```
+
+- Même serveur que les tests e2e (webServer de `playwright.config.ts` : base `_e2e` remise à zéro, `next build`, `next start` sous Bun et serveur temps réel). `PERF=1` (posé par `test:perf`) fait chercher `*.perf.ts` au lieu de `*.e2e.ts` : la mesure ne tourne ni dans `bun test` ni dans `bun run test:e2e`.
+- Réglages : `PERF_CPU_THROTTLE` (2), `PERF_MEASURE_MS` (15000), `PERF_MIN_FPS` (55), `PERF_MAX_DROPPED` (0.05), `PERF_MAX_LONG_TASK_MS` (100). `PERF_TRACE=invalidation` ajoute à la trace qui invalide les styles (plus lent, à ne pas comparer). `E2E_PORT` et `E2E_REALTIME_PORT` changent les ports (3100 et 3101) quand une autre série tourne déjà.
+- Résultats : `reports/perf/race-pool.json` (mesures, compteurs, animations en cours, cinq pires images) et `reports/perf/race-pool-trace.json`, trace à ouvrir dans l'onglet Performance de Chrome DevTools. Ignorés par git.
+- Le calcul des mesures (`tests/e2e/frames.ts`) est testé par `tests/e2e/frames.test.ts`, dans `bun test`.
+
+### Mesures
+
+Le 20/11/2026, MacBook (Apple M4) partagé avec d'autres séries de tests (charge de 9 à 16), Chromium headless de Playwright, 1280 × 720. La charge de la machine fait varier les chiffres ; une mesure prise sous une charge de 70 donnait 32 FPS avant correction à 1×.
+
+| Ralentissement | Avant (`dev`, 8fb678c) | Après (`feature/game/perf-03`) |
+|---|---|---|
+| 1× | 59,9 FPS · 0,2 % d'images sautées · aucune longue tâche | 59,8 FPS · 0,3 % · aucune |
+| 2× (seuil) | 52,5 FPS · 10,7 % · 10 longues tâches, pire 154 ms | 58,0 et 57,8 FPS · 3,2 et 2,4 % · pire 0 et 62 ms |
+| 4× | 14,1 FPS · 94,5 % · 98 longues tâches, pire 213 ms | 40,8 FPS · 25,8 % · 32, pire 128 ms |
+
+Ce qui faisait chuter les images, et ce qui a changé :
+
+- **Mesures forcées dans le bassin** : à chaque image, chacun des 30 couloirs relisait sa taille (`clientWidth`, `offsetWidth`, `offsetHeight`) entre deux écritures de style, ce qui forçait styles et mise en page 30 fois par image (le premier poste du profil). La géométrie est gardée et remesurée seulement quand un `ResizeObserver` voit le couloir changer de taille (`src/views/game/pool/measure.ts`, `createRacePool.ts`). La gueule des poissons (10 fois par seconde et par couloir) n'écrit plus son style s'il n'a pas changé.
+- **Barres de la piste** : la progression était écrite dans `--progress` sur chaque couloir à chaque image ; variable héritée, elle restylait tout le contenu du couloir (requêtes de conteneur comprises), et elle changeait une largeur, donc la mise en page. La barre est maintenant mise à l'échelle (`transform: scaleX`) sur son propre élément, écrite une fois par mise à jour reçue, et glisse par une transition CSS de 300 ms (`barStyle`, `src/views/game/track.ts`), coupée avec `prefers-reduced-motion` et pour un recul (bonus +3 mots), rejoint d'un coup.
+- **Rendus React** : chaque mise à jour (tick des bots, message temps réel, frappe) rendait les 30 couloirs et leurs avatars ; un couloir (`LaneItem`, `memo`) ne se rend plus que si son nom, son rang, son MPM, sa photo ou son bonus change.
+
+Restent à 4× : la physique des boules (un moteur Matter.js par couloir) et le dessin des 30 canevas, et le rendu de `GamePage` à chaque message temps réel (environ 30 par seconde avec 22 invités).

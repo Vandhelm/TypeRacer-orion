@@ -50,3 +50,6 @@ reports/
 test-results/
 playwright-report/
 .playwright-mcp/
+# PERF-03 : profils et traces de performance (bun run test:perf écrit dans reports/perf/)
+*.cpuprofile
+Trace-*.json
