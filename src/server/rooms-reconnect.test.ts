@@ -10,6 +10,9 @@ import { MEMBER_AWAY_MS, RECONNECT_MS, recordProgress, refreshRoom } from "./roo
 
 type Fixture = Awaited<ReturnType<typeof roomsFixture>>;
 type Member = { key: string; abandoned?: boolean; finished: boolean };
+/** La vue du salon, avec ce que la page de course en lit (COURSE-03 : texte et horloge du serveur). */
+type RaceView = { members: Member[]; status: string; seed: unknown; passage: unknown; startsAt: unknown; endsAt: unknown; textHash: unknown };
+const viewOf = (body: Joined) => body.room as unknown as RaceView;
 
 describe("COURSE-08 — a runner who comes back within 30 s resumes, after that he has abandoned", () => {
   let t: Fixture;
@@ -25,7 +28,7 @@ describe("COURSE-08 — a runner who comes back within 30 s resumes, after that 
     const [member] = await t.db.select().from(roomMembers).where(and(eq(roomMembers.roomId, room!.id), eq(roomMembers.memberKey, key)));
     return { status: room!.status, member };
   };
-  const meIn = (body: Joined, key: string) => (body.room.members as Member[]).find((m) => m.key === key)!;
+  const meIn = (body: Joined, key: string) => viewOf(body).members.find((m) => m.key === key)!;
   /** Deux humains (l'hôte et un invité) en course depuis `ms`. */
   const racingPair = async (name: string, ms = 60_000) => {
     const { room, host } = await t.open(name, { bots: false });
@@ -53,7 +56,7 @@ describe("COURSE-08 — a runner who comes back within 30 s resumes, after that 
     expect(back.body.room.status).toBe("racing");
     expect(meIn(back.body, host.key).abandoned).toBe(false);
     // même texte et même horloge : graine, passage, départ et fin du serveur
-    for (const field of ["seed", "passage", "startsAt", "endsAt", "textHash"] as const) expect(back.body.room[field]).toEqual(before.body.room[field]);
+    for (const field of ["seed", "passage", "startsAt", "endsAt", "textHash"] as const) expect(viewOf(back.body)[field]).toEqual(viewOf(before.body)[field]);
     expect(raceExit(back.body.room.status as "racing", code, false)).toBeNull();
     expect((await row(code, host.key)).member!.progress).toBeCloseTo(0.3);
   });
@@ -118,8 +121,8 @@ describe("COURSE-08 — a runner who comes back within 30 s resumes, after that 
 
     const over = await racingPair("Temps_Fini", 0);
     // durée du salon, plus 5 s : le temps est écoulé, la salle attend encore la marge de SALLE-09
-    const clock = (await t.read(over.host.cookie, over.code)).body.room as { startsAt: number; endsAt: number };
-    await startedFor(over.code, clock.endsAt - clock.startsAt + 5_000);
+    const duration = (await t.read(over.host.cookie, over.code)).body.room.settings.duration!;
+    await startedFor(over.code, duration * 1000 + 5_000);
     await silentFor(over.host.key, 31_000);
     await refreshRoom(t.db, over.code);
     expect((await row(over.code, over.host.key)).member!.abandonedAt).toBeNull();
