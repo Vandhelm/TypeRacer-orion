@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import type { TFunction } from "i18next";
-import { arrivalOf, DURATION_PRESETS, durationChoice, raceHref, readSession, roomHrefOutsideRace, seatsOf } from "./room";
+import { arrivalOf, DURATION_PRESETS, durationChoice, launchHint, raceHref, readSession, roomHrefOutsideRace, seatsOf } from "./room";
 
 const t = ((key: string) => key) as unknown as TFunction;
 
@@ -161,5 +161,45 @@ describe("CONF-01 — the maximum time choice in the room settings", () => {
   test("while the host types a custom value, « other » stays checked", () => {
     expect(durationChoice(null, true)).toBe("other");
     expect(durationChoice(120, true)).toBe("other");
+  });
+});
+
+describe("COURSE-02 — the Launch button is greyed out with the reason, by the server's rule", () => {
+  const member = (n: number, role: "player" | "spectator") => ({ key: `player:${n}`, name: `P${n}`, guest: false, host: n === 0, role, seat: role === "player" ? n : null, color: null, finished: false });
+
+  test("1 human alone: greyed out, at least 2 participants needed", () => {
+    expect(launchHint({ guests: 4, bots: false }, [member(0, "player")])).toBe("room.notEnough");
+  });
+
+  test("1 human + spectators: still greyed out, spectators do not count", () => {
+    expect(launchHint({ guests: 4, bots: false }, [member(0, "player"), member(1, "spectator"), member(2, "spectator")])).toBe("room.notEnough");
+  });
+
+  test("only bots race (the host watches): greyed out, a human player is needed", () => {
+    expect(launchHint({ guests: 4, bots: true }, [member(0, "spectator")])).toBe("room.noHuman");
+  });
+
+  test("1 human + bots, or 2 humans: the button is active", () => {
+    expect(launchHint({ guests: 2, bots: true }, [member(0, "player")])).toBeNull();
+    expect(launchHint({ guests: 2, bots: false }, [member(0, "player"), member(1, "player")])).toBeNull();
+  });
+
+  test("the button agrees with the seats shown: active exactly when 2 seats are taken and a human races", () => {
+    for (const bots of [true, false])
+      for (let guests = 2; guests <= 4; guests++)
+        for (let humans = 0; humans <= 2; humans++) {
+          const members = [...Array.from({ length: humans }, (_, i) => member(i, "player")), member(9, "spectator")];
+          const taken = seatsOf({ guests, bots }, members, "").filter((s) => !("free" in s)).length;
+          expect(launchHint({ guests, bots }, members) === null).toBe(humans >= 1 && taken >= 2);
+        }
+  });
+
+  test("the hints and the server refusal are translated in both languages", () => {
+    for (const lang of ["fr", "en"]) {
+      const room = JSON.parse(readFileSync(`src/i18n/locales/${lang}.json`, "utf8")).room;
+      expect(room.notEnough).toBeTruthy();
+      expect(room.noHuman).toBeTruthy();
+      expect(room.errors.not_enough_players).toBeTruthy();
+    }
   });
 });

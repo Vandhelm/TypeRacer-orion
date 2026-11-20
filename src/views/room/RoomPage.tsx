@@ -9,7 +9,7 @@ import { useRealtimeRoom } from "../../realtime/useRealtimeRoom";
 import { FishPond } from "./FishPond";
 import { LiveList } from "./LiveList";
 import { useRoom } from "./hooks/useRoom";
-import { isPlayer, raceHref } from "./room";
+import { isPlayer, launchHint, raceHref } from "./room";
 import { RoomIntro } from "./RoomIntro";
 import { RoomSettings } from "./RoomSettings";
 import { RoomTicket } from "./RoomTicket";
@@ -22,7 +22,7 @@ const VISIBILITY_KEY = { private: "private", semi: "semiPrivate", public: "publi
 export function RoomPage() {
   const { t } = useTranslation();
   const state = useRoom();
-  const { room, update, host, seats, players, spectators, displayName, ready, error, watchInstead, elsewhere, leave, others, kick, status, finished, launch: launchOnServer } = state;
+  const { room, update, host, seats, players, spectators, displayName, ready, error, watchInstead, elsewhere, leave, others, kick, status, finished, members, launch: launchOnServer } = state;
   const editor = useRef<TextEditorHandle>(null);
   const launched = useRef(false);
   const [stampOn, setStampOn] = useState(false);
@@ -54,7 +54,9 @@ export function RoomPage() {
   }
 
   const openEditor = () => editor.current?.open();
-  const enough = players.length >= 2;
+  // COURSE-02 : la règle du serveur (2 participants dont 1 humain ; bots oui, spectateurs non), et pourquoi le bouton est grisé
+  const blocked = launchHint(room, members);
+  const enough = blocked === null;
 
   // le salon vient du serveur : rien à montrer tant qu'il n'a pas répondu, ou s'il refuse
   // TECH-01 : le bassin et les onglets de langue sont déjà dans le HTML du serveur, aux mêmes places qu'une fois le salon reçu
@@ -113,7 +115,7 @@ export function RoomPage() {
             action={
               <div className="room-action fixed right-[clamp(16px,4vw,56px)] bottom-[clamp(16px,3vh,28px)] z-5 w-[min(300px,calc(100vw-32px))] phone:mt-0.5 narrow:right-4 narrow:bottom-[14px] narrow:left-4 narrow:w-auto">
                 <FlipButton label={t("room.start")} backLabel={t("room.startBack")} disabled={!enough} hidden={!host} onClick={launch} />
-                <p className="mt-2 bg-black font-mono text-[max(11px,1.2vh)] leading-[1.5] font-normal text-muted" hidden={!host || enough}>{t("room.notEnough")}</p>
+                <p className="mt-2 bg-black font-mono text-[max(11px,1.2vh)] leading-[1.5] font-normal text-muted" hidden={!host || enough}>{blocked && t(blocked)}</p>
                 <p
                   className="flex min-h-[max(46px,6.2vh)] items-center justify-center border border-dashed border-line-soft bg-black px-3 py-2 text-center font-mono text-[max(12px,1.4vh)] leading-[1.3] font-normal tracking-[.1em] text-muted"
                   role="status"
