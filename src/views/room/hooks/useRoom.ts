@@ -10,7 +10,7 @@ import { arrivalOf, isPlayer, roomOf, seatsOf, type Arrival, type Room, type Roo
 
 /** Le temps d'attendre la fin d'une saisie avant d'envoyer les réglages au serveur. */
 const SAVE_DELAY_MS = 400;
-const EMPTY_VIEW: RoomView = { code: "", status: "waiting", host: "", settings: DEFAULT_SETTINGS, members: [] };
+const EMPTY_VIEW: RoomView = { code: "", status: "waiting", host: "", settings: DEFAULT_SETTINGS, members: [], passage: null };
 
 /**
  * The room shown on this page, as the server knows it: its settings, its members, who we are in it.
@@ -188,6 +188,8 @@ export function useRoom(page: "room" | "game" = "room") {
     finish,
     /** waiting, racing, results, closed : l'état du salon selon le serveur. */
     status: view.status,
+    /** CONF-03 : le passage de la course en cours, tiré par le serveur (mode cohérent). */
+    passage: view.passage?.body ?? null,
     room,
     update,
     host,
