@@ -4,10 +4,17 @@
 @import "tailwindcss/utilities.css" layer(utilities);
 @source "../../../views/podium";
 @source "../../../components";
+/* RES-03 : the charts of the results reuse the profile's chart and keyboard heatmap */
+@source "../../../views/profile/SpeedChart.tsx";
+@source "../../../views/profile/KeyboardHeatmap.tsx";
+@source "../../../views/profile/styles.ts";
+@source "../../../players/BotTag.tsx";
 
 @import "../../base/tokens.css";
 @import "../../base/reset.css" layer(base);
 @import "../../base/animations.css";
+
+@import "../../components/keymap.css";
 
 @import "./scene.css";
 @import "./board.css";

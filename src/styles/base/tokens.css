@@ -15,6 +15,15 @@
     --color-red-text: #e0574a;
 
     --color-chart-raw: #9a9a9a;
+    /* RES-03 : one color per participant on the race chart (the local player keeps the red) */
+    --color-chart-1: #f2f2f2;
+    --color-chart-2: #5b9bd5;
+    --color-chart-3: #e3b23c;
+    --color-chart-4: #6cc28a;
+    --color-chart-5: #b48ee0;
+    --color-chart-6: #4fc1c9;
+    --color-chart-7: #e48ab8;
+    --color-chart-8: #9a9a9a;
 
     --color-face-front-a: #070707;
     --color-face-front-b: #141414;

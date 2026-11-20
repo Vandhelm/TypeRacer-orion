@@ -9,5 +9,6 @@
 @import "../../base/reset.css" layer(base);
 @import "../../base/animations.css";
 
+@import "../../components/keymap.css";
 
 @import "./profile.css";

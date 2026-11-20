@@ -1,5 +1,30 @@
 import { describe, expect, test } from "bun:test";
-import { buildChart, plotHeight } from "./chart";
+import { buildChart, buildSeriesChart, plotHeight } from "./chart";
+
+describe("RES-03 — buildSeriesChart: several speed lines on one scale", () => {
+  test("the scale covers the highest value of every line", () => {
+    expect(buildSeriesChart([[40, 50], [30, 95], [10]], 600, 200).speedTicks).toEqual([0, 25, 50, 75, 100]);
+  });
+
+  test("the time axis spans the longest line (a player who finished early stops sooner)", () => {
+    const chart = buildSeriesChart([[40, 50], [30, 35, 40, 45, 50]], 600, 200);
+    expect(chart.count).toBe(5);
+    expect(chart.path([40, 50]).split("L")).toHaveLength(2);
+  });
+
+  test("no line at all keeps a usable empty chart", () => {
+    const chart = buildSeriesChart([], 600, 200);
+    expect(chart.count).toBe(0);
+    expect(chart.speedTicks).toEqual([0, 5]);
+  });
+
+  test("buildChart (profile) is the same chart with its two lines", () => {
+    const a = buildChart([40, 72], [50, 61], 600, 200);
+    const b = buildSeriesChart([[40, 72], [50, 61]], 600, 200);
+    expect(a.speedTicks).toEqual(b.speedTicks);
+    expect(a.path([40, 72])).toBe(b.path([40, 72]));
+  });
+});
 
 describe("buildChart", () => {
   test("picks round speed ticks that cover the highest value", () => {
