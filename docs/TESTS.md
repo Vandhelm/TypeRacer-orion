@@ -5,6 +5,7 @@
 | `bun test` | tests unitaires et de régression (`*.test.ts`) | PGlite en mémoire, sans Docker |
 | `bun run test:smoke` | l'application démarre et répond (`tests/smoke/app.smoke.ts`) | `<base>_smoke` jetable |
 | `bun run test:e2e` | parcours de bout en bout dans Chromium, avec Playwright (TEST-02) | `<base>_e2e` jetable |
+| `bun run test:a11y` | contraste des textes (WCAG AA) sur chaque page, axe-core dans Chromium (A11Y-01) ; hors de `bun test` | `<base>_e2e` jetable |
 | `bun run lighthouse [url]` | Lighthouse sur l'accueil, mobile et desktop, seuil 90 par catégorie (PERF-01) ; hors de `bun test` | celle du serveur mesuré |
 
 ## Tests de bout en bout (TEST-02, TEST-03)
@@ -52,6 +53,7 @@ Pourquoi pas `bun run dev` : sous Bun, `next dev` (Turbopack) ne charge pas `sha
 | Variable | Rôle | Défaut |
 |---|---|---|
 | `E2E_DATABASE_URL` | base des tests, remise à zéro à chaque lancement | `DATABASE_URL` suffixée par `_e2e` (l'une des deux est obligatoire) |
+| `E2E_PORT`, `E2E_REALTIME_PORT` | ports du serveur de test et du temps réel | 3100 et 3101 |
 | `E2E_SKIP_BUILD` | `1` : ne reconstruit pas l'application | vide |
 | `BETTER_AUTH_SECRET` | secret des sessions | celui du `.env`, sinon une valeur de test |
 
@@ -62,6 +64,23 @@ Tous les tests viennent de la même IP : la limite de débit de Better Auth sur 
 ### Résultats
 
 `test-results/` (traces et captures des échecs) et `playwright-report/` (rapport HTML, en CI) sont ignorés par git. Revoir un échec : `bunx playwright show-trace test-results/<test>/trace.zip`.
+
+## Contraste des textes (A11Y-01)
+
+Deux niveaux :
+
+- `src/styles/contrast.test.ts` (dans `bun test`, `bun test -t A11Y-01`) : formule WCAG 2.x (`src/styles/contrast.ts`) ; chaque jeton de texte de `src/styles/base/tokens.css` (`line`, `muted`, `red-text`, `chart-raw`) atteint 4,5:1 sur le noir et sur les faces `face-front-a` / `face-front-b`, le blanc atteint 4,5:1 sur `red-solid` et `red-hover`, `line-soft` (traits) atteint 3:1 ; et aucun fichier de `src/` ne donne à un texte une couleur sous 4,5:1 (`text-line-soft`, `text-line-faint`, `text-[rgba(255,255,255,a)]`, `placeholder:` compris, `color: var(--color-line-soft)` en CSS). Seul l'état `disabled:` est exempté (WCAG 1.4.3, composant inactif).
+- `tests/e2e/contrast.e2e.ts` (`bun run test:a11y`, même installation que les tests e2e ci-dessus) : axe-core (`@axe-core/playwright`, règle `color-contrast`) sur l'accueil (déconnecté, chaque volet, connexion refusée, connecté), le salon (chaque onglet de réglages, bots, option inactive mais modifiable), la course (champ sans focus, faute de frappe, texte à moitié tapé), le podium et le profil (chaque onglet), plus une passe par élément atteint au clavier (focus). Attendu : 0 violation.
+
+axe ne mesure pas les placeholders et ne conclut pas sur un fond en dégradé, un pseudo-élément ou un texte d'un caractère. Le test mesure lui-même ces nœuds : couleur du texte, opacités des parents comprises, sur la pile de leurs fonds (pseudo-éléments compris, un dégradé compté par sa couleur la plus claire). Un fond peint par un élément voisin superposé (scène 3D du podium, bassin de course) n'est pas vu : ces nœuds sont listés en fin de lancement avec le rapport mesuré sur leurs propres fonds, à vérifier à la main.
+
+```bash
+E2E_DATABASE_URL=postgres://orion@localhost:5544/orion_e2e bun run test:a11y
+```
+
+`E2E_PORT` et `E2E_REALTIME_PORT` (3100 et 3101 par défaut) changent les ports du serveur de test, pour lancer deux suites en même temps.
+
+Un seul thème existe (sombre). Le critère demande les deux thèmes : le thème clair (DES-05) n'est pas fait, et devra repasser ces deux tests.
 
 ## Lighthouse sur la page d'accueil (PERF-01)
 
