@@ -170,7 +170,7 @@
     "quote": "Quote",
     "scrambled": "Scrambled words",
     "custom": "Custom",
-    "helpCoherent": "Sentences that follow each other, picked at random.",
+    "helpCoherent": "Passages from public-domain works, drawn from the corpus.",
     "helpQuote": "One quote, as long as the length setting.",
     "helpScrambled": "Unrelated words, by difficulty.",
     "helpCustom": "Your own text: write it or import it.",
