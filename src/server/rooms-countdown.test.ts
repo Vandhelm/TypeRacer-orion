@@ -63,6 +63,17 @@ describe("COURSE-03 — the room view gives the server clock", () => {
     expect(seen.serverNow).toBeLessThanOrEqual(after + 5);
   });
 
+  test("serverNow is the server time at the middle of the handling, even when the handling is slow", async () => {
+    const slow = await roomsFixture(() => new Promise((resolve) => setTimeout(resolve, 400)));
+    const { room, host } = await slow.open("Count_Slow", { bots: true });
+    const before = Date.now();
+    const res = await slow.call("POST", `/api/rooms/${room.code}/launch`, host.cookie);
+    const after = Date.now();
+    const { serverNow } = ((await res.json()) as { room: TextView }).room;
+    // lu en fin de traitement, il vaudrait « after » ; au milieu, (before + after) / 2
+    expect(Math.abs(serverNow - (before + after) / 2)).toBeLessThan(60);
+  });
+
   test("right after the launch, the start is about one countdown after serverNow", async () => {
     const { room, host } = await t.open("Count_Start", {});
     const res = await t.call("POST", `/api/rooms/${room.code}/launch`, host.cookie);

@@ -11,7 +11,7 @@ import type { Guard } from "./rate-limit";
 import { guestSecret } from "./guest";
 import { createInvite, listInvites } from "./room-invites";
 import { roomIdentity } from "./room-gate";
-import { closeRoom, CodeExhausted, createRoom, finishRoom, joinRoom, kickMember, launchRoom, leaveRoom, listPublicRooms, quickJoin, readRoom, RoomRefused, updateRoom, type RefusalReason, type RoomResult } from "./rooms";
+import { closeRoom, CodeExhausted, createRoom, finishRoom, joinRoom, kickMember, launchRoom, leaveRoom, listPublicRooms, quickJoin, readRoom, RoomRefused, updateRoom, dbClockAt, type RefusalReason, type RoomResult, type RoomView } from "./rooms";
 
 const STATUS: Record<RefusalReason, number> = { not_found: 404, not_member: 403, not_host: 403, full: 409, in_race: 409, closed: 410, already_in_room: 409, kicked: 403, invalid_target: 400, unknown_member: 404, invite_taken: 403, invite_limit: 409, not_enough_players: 409, no_room: 404, not_results: 409 };
 
@@ -40,12 +40,25 @@ async function optionalBodyOf(req: Request): Promise<unknown> {
   }
 }
 
+/**
+ * COURSE-03 : serverNow à l'heure du milieu du traitement (entre la réception de la demande et l'envoi de la réponse),
+ * celle que le navigateur suppose en prenant le milieu de son aller-retour. Lu en base pendant roomView, il est
+ * reporté à ce milieu par l'écart entre l'horloge de la base et celle de ce processus (dbClockAt).
+ */
+function centered<T>(result: T, receivedAt: number): T {
+  const view = (result as { room?: unknown } | null)?.room;
+  if (!view || typeof view !== "object") return result;
+  const at = dbClockAt(view as RoomView, (receivedAt + Date.now()) / 2);
+  if (at !== null) (view as RoomView).serverNow = Math.round(at);
+  return result;
+}
+
 /** Exécute une action ; un refus attendu devient son statut HTTP, une erreur inattendue remonte. */
-async function run<T = RoomResult>(action: () => Promise<T>, status = 200, done?: (result: T) => void | Promise<void>): Promise<Response> {
+async function run<T = RoomResult>(receivedAt: number, action: () => Promise<T>, status = 200, done?: (result: T) => void | Promise<void>): Promise<Response> {
   try {
     const result = await action();
     await done?.(result);
-    return json(result, status);
+    return json(centered(result, receivedAt), status);
   } catch (error) {
     if (error instanceof RoomRefused) return refusal(error);
     if (error instanceof CodeExhausted) return json({ error: "no_free_code" }, 503);
@@ -58,6 +71,7 @@ export type RoomChanged = (code: string) => void | Promise<void>;
 
 /** `joinLimit` (SALLE-10) : la limite de tentatives par IP sur /join ; api.ts la branche toujours, les tests la passent. */
 export async function handleRoomsApi(req: Request, db: Db, auth: Auth, secret = guestSecret(), changed: RoomChanged = () => {}, joinLimit?: Guard, ip: IpContext = {}): Promise<Response> {
+  const receivedAt = Date.now(); // COURSE-03 : début du traitement, pour centrer serverNow
   const { pathname } = new URL(req.url);
   const parts = pathname.replace(/\/$/, "").split("/").slice(3); // après /api/rooms
   const who = await roomIdentity(req.headers, auth, secret);
@@ -68,7 +82,7 @@ export async function handleRoomsApi(req: Request, db: Db, auth: Auth, secret = 
     if (who.kind !== "account") return json({ error: "account_required" }, 403);
     const input = CreateRoomSchema.safeParse(await bodyOf(req));
     if (!input.success) return json({ error: "invalid_body" }, 400);
-    return run(() => createRoom(db, { playerId: who.playerId, ip: clientIp(req.headers, ip) }, input.data), 201);
+    return run(receivedAt, () => createRoom(db, { playerId: who.playerId, ip: clientIp(req.headers, ip) }, input.data), 201);
   }
 
   // GET /api/rooms — SALLE-03 : les salons publics seulement, pour l'explorateur et « Faire une course ».
@@ -88,7 +102,7 @@ export async function handleRoomsApi(req: Request, db: Db, auth: Auth, secret = 
     const input = JoinRoomSchema.safeParse(await bodyOf(req));
     if (!input.success) return json({ error: "invalid_body" }, 400);
     // SALLE-04 : un lien d'invitation est lié à l'IP du client (client-ip.ts : proxy connu ou socket)
-    return run(() => joinRoom(db, who, input.data, clientIp(req.headers, ip)), 200, (result) => changed(result.room.code));
+    return run(receivedAt, () => joinRoom(db, who, input.data, clientIp(req.headers, ip)), 200, (result) => changed(result.room.code));
   }
 
   // POST /api/rooms/quick — JOIN-03 : le serveur choisit le salon et y fait entrer, sous le même verrou que /join.
@@ -100,7 +114,7 @@ export async function handleRoomsApi(req: Request, db: Db, auth: Auth, secret = 
     try {
       const result = await quickJoin(db, who, clientIp(req.headers, ip));
       await changed(result.room.code);
-      return json(result);
+      return json(centered(result, receivedAt));
     } catch (error) {
       if (error instanceof RoomRefused && error.reason === "no_room") return json({ error: "no_room", canCreate: who.kind === "account" }, 404);
       if (error instanceof RoomRefused) return refusal(error);
@@ -126,40 +140,40 @@ export async function handleRoomsApi(req: Request, db: Db, auth: Auth, secret = 
     if (!who) return json({ error: "unauthorized" }, 401);
     const input = KickSchema.safeParse(await bodyOf(req));
     if (!input.success) return json({ error: "invalid_body" }, 400);
-    return run(() => kickMember(db, code, who, input.data.member), 200, () => changed(code));
+    return run(receivedAt, () => kickMember(db, code, who, input.data.member), 200, () => changed(code));
   }
   // GET / POST /api/rooms/:code/invites — SALLE-04 : l'hôte liste et génère les liens d'invitation, un par invité
   if (code && isRoomCode(code) && action === "invites" && (req.method === "GET" || req.method === "POST")) {
     if (!who) return json({ error: "unauthorized" }, 401);
-    if (req.method === "GET") return run(async () => ({ invites: await listInvites(db, code, who) }));
-    return run(async () => ({ invite: await createInvite(db, code, who) }), 201);
+    if (req.method === "GET") return run(receivedAt, async () => ({ invites: await listInvites(db, code, who) }));
+    return run(receivedAt, async () => ({ invite: await createInvite(db, code, who) }), 201);
   }
   // POST /api/rooms/:code/launch — SALLE-09 : l'hôte lance la course ; le salon n'accepte plus d'arrivant
   if (code && isRoomCode(code) && action === "launch" && req.method === "POST") {
     if (!who) return json({ error: "unauthorized" }, 401);
-    return run(() => launchRoom(db, code, who), 200, () => changed(code));
+    return run(receivedAt, () => launchRoom(db, code, who), 200, () => changed(code));
   }
   // POST /api/rooms/:code/close — COURSE-11 : l'hôte ferme la salle ; tous les membres en sortent
   if (code && isRoomCode(code) && action === "close" && req.method === "POST") {
     if (!who) return json({ error: "unauthorized" }, 401);
     const input = CloseRoomSchema.safeParse(await optionalBodyOf(req));
     if (!input.success) return json({ error: "invalid_body" }, 400);
-    return run(() => closeRoom(db, code, who), 200, () => changed(code));
+    return run(receivedAt, () => closeRoom(db, code, who), 200, () => changed(code));
   }
   // POST /api/rooms/:code/finish — SALLE-09 : la course est finie, le salon passe aux résultats
   if (code && isRoomCode(code) && action === "finish" && req.method === "POST") {
     if (!who) return json({ error: "unauthorized" }, 401);
-    return run(() => finishRoom(db, code, who), 200, () => changed(code));
+    return run(receivedAt, () => finishRoom(db, code, who), 200, () => changed(code));
   }
   if (code && isRoomCode(code) && !action) {
     if (!who) return json({ error: "unauthorized" }, 401);
     // GET /api/rooms/:code — l'état du salon, pour ses membres
-    if (req.method === "GET") return run(() => readRoom(db, code, who));
+    if (req.method === "GET") return run(receivedAt, () => readRoom(db, code, who));
     // PATCH /api/rooms/:code — réglages et rôle de l'hôte
     if (req.method === "PATCH") {
       const input = UpdateRoomSchema.safeParse(await bodyOf(req));
       if (!input.success) return json({ error: "invalid_body" }, 400);
-      return run(() => updateRoom(db, code, who, input.data), 200, () => changed(code));
+      return run(receivedAt, () => updateRoom(db, code, who, input.data), 200, () => changed(code));
     }
   }
   return json({ error: "not_found" }, 404);
