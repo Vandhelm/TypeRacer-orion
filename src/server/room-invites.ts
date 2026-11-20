@@ -20,12 +20,18 @@ const viewOf = (row: typeof roomInvites.$inferSelect): InviteView => ({
   usedAt: row.usedAt?.toISOString() ?? null,
 });
 
-/** Le salon ouvert de ce code dont `who` est l'hôte. Non-membre ou salon fermé : not_found (SALLE-10) ; membre : not_host. */
-async function hostedRoom(db: Db, code: string, who: Identity) {
-  const [room] = await db.select({ id: rooms.id, hostId: rooms.hostId, status: rooms.status }).from(rooms).where(eq(rooms.code, code));
+/**
+ * Le salon ouvert de ce code dont `who` est l'hôte, lu dans `tx` sous le verrou du salon (pris ici), comme les autres
+ * actions d'hôte : un départ ou un transfert d'hôte simultané (SALLE-08) passe avant ou après, jamais entre la
+ * vérification et l'action (SEC-01). Non-membre ou salon fermé : not_found (SALLE-10) ; membre : not_host.
+ */
+async function lockHostedRoom(tx: Db, code: string, who: Identity) {
+  const [found] = await tx.select({ id: rooms.id }).from(rooms).where(eq(rooms.code, code));
+  if (!found) throw new RoomRefused("not_found");
+  const [room] = await tx.select({ id: rooms.id, hostId: rooms.hostId, status: rooms.status }).from(rooms).where(eq(rooms.id, found.id)).for("update");
   if (!room || room.status === "closed") throw new RoomRefused("not_found");
   const key = memberKey(who);
-  const [member] = await db.select({ key: roomMembers.memberKey }).from(roomMembers).where(and(eq(roomMembers.roomId, room.id), eq(roomMembers.memberKey, key)));
+  const [member] = await tx.select({ key: roomMembers.memberKey }).from(roomMembers).where(and(eq(roomMembers.roomId, room.id), eq(roomMembers.memberKey, key)));
   if (!member) throw new RoomRefused("not_found");
   if (key !== memberKey({ playerId: room.hostId })) throw new RoomRefused("not_host");
   return room;
@@ -33,17 +39,17 @@ async function hostedRoom(db: Db, code: string, who: Identity) {
 
 /** Les liens du salon, du plus ancien au plus récent, pour son hôte seulement. */
 export async function listInvites(db: Db, code: string, who: Identity): Promise<InviteView[]> {
-  const room = await hostedRoom(db, code, who);
-  const rows = await db.select().from(roomInvites).where(eq(roomInvites.roomId, room.id)).orderBy(asc(roomInvites.id));
-  return rows.map(viewOf);
+  return db.transaction(async (tx) => {
+    const room = await lockHostedRoom(tx, code, who);
+    const rows = await tx.select().from(roomInvites).where(eq(roomInvites.roomId, room.id)).orderBy(asc(roomInvites.id));
+    return rows.map(viewOf);
+  });
 }
 
 /** L'hôte génère un nouveau lien. Sous le verrou du salon : le plafond MAX_INVITES tient face aux demandes simultanées. */
 export async function createInvite(db: Db, code: string, who: Identity): Promise<InviteView> {
-  const { id } = await hostedRoom(db, code, who);
   return db.transaction(async (tx) => {
-    const [room] = await tx.select({ status: rooms.status }).from(rooms).where(eq(rooms.id, id)).for("update");
-    if (!room || room.status === "closed") throw new RoomRefused("not_found");
+    const { id } = await lockHostedRoom(tx, code, who);
     // seuls les liens libres comptent : un lien utilisé ou révoqué ne bloque pas les invitations suivantes
     const unused = await tx.$count(roomInvites, and(eq(roomInvites.roomId, id), isNull(roomInvites.usedBy), isNull(roomInvites.revokedAt)));
     if (unused >= MAX_INVITES) throw new RoomRefused("invite_limit");

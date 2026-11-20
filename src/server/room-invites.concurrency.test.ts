@@ -64,4 +64,51 @@ describe.skipIf(!process.env.DATABASE_URL)("SALLE-04 — simultaneous use of one
     const [row] = await server.db.select({ id: rooms.id }).from(rooms).where(eq(rooms.code, room.code));
     expect(await server.db.$count(roomInvites, eq(roomInvites.roomId, row!.id))).toBe(MAX_INVITES);
   });
+
+  /** SEC-01 : un salon avec son hôte H et un compte A ; A reprendra l'hôte au départ de H (SALLE-08). */
+  const hostAndHeir = async (name: string) => {
+    const hostCookie = await signUp(`Hote_${name}`);
+    const heirCookie = await signUp(`Heir_${name}`);
+    const { room } = (await (await call("POST", "/api/rooms", hostCookie, { role: "player", settings: { visibility: "public" } })).json()) as { room: { code: string } };
+    expect((await call("POST", "/api/rooms/join", heirCookie, { code: room.code })).status).toBe(200);
+    const [row] = await server.db.select({ id: rooms.id }).from(rooms).where(eq(rooms.code, room.code));
+    return { code: room.code, id: row!.id, hostCookie };
+  };
+
+  test("SEC-01 — the host leaves while asking for a link, the leave taking the lock first: the link is refused", async () => {
+    const { code, id, hostCookie } = await hostAndHeir("Depart_Lien");
+    // une transaction tient le verrou du salon : le départ attend derrière, puis la demande de lien derrière le départ
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    let locked!: () => void;
+    const isLocked = new Promise<void>((resolve) => (locked = resolve));
+    const holder = server.db.transaction(async (tx) => {
+      await tx.select({ id: rooms.id }).from(rooms).where(eq(rooms.id, id)).for("update");
+      locked();
+      await held;
+    });
+    await isLocked;
+    const leave = call("POST", `/api/rooms/${code}/leave`, hostCookie);
+    await Bun.sleep(150);
+    const invite = call("POST", `/api/rooms/${code}/invites`, hostCookie);
+    await Bun.sleep(150);
+    release();
+    await holder;
+    const [left, asked] = await Promise.all([leave, invite]);
+    expect(left.status).toBe(200);
+    expect([403, 404]).toContain(asked.status);
+    expect(await server.db.$count(roomInvites, eq(roomInvites.roomId, id))).toBe(0);
+  });
+
+  test("SEC-01 — POST /invites and POST /leave at once by the host: a link exists only if it was made before the leave", async () => {
+    for (let round = 0; round < 10; round++) {
+      const { code, id, hostCookie } = await hostAndHeir(`Course_${round}`);
+      const [asked, left] = await Promise.all([call("POST", `/api/rooms/${code}/invites`, hostCookie), call("POST", `/api/rooms/${code}/leave`, hostCookie)]);
+      expect(left.status).toBe(200);
+      expect([201, 403, 404]).toContain(asked.status);
+      expect(await server.db.$count(roomInvites, eq(roomInvites.roomId, id))).toBe(asked.status === 201 ? 1 : 0);
+      // l'ancien hôte n'est plus membre : il ne crée plus aucun lien
+      expect((await call("POST", `/api/rooms/${code}/invites`, hostCookie)).status).toBe(404);
+    }
+  });
 });
