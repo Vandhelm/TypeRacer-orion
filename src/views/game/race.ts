@@ -2,7 +2,7 @@
 // qu'il envoie en temps réel (applyRemote). Progression déclarée par le client : le serveur autoritaire reste à faire (COURSE-06).
 import { countKey, type KeyCounts } from "../../players/keys";
 import { transition, type RaceEvent, type RaceState } from "../../rooms/race-state";
-import { BOT_ACCURACY, BOT_TICK_MS, BOT_WPM, botJitter, botProfile, botSeed, botStep } from "../../rooms/bot-engine";
+import { BOT_ACCURACY_FACTOR, BOT_LEVEL_SPECS, BOT_START, BOT_TICK_MS, botArrived, botErrorChance, botJitter, botPosition, botProfile, botSeed, botStep, botText, levelOfSpeed, type BotProfile, type BotState, type BotText } from "../../rooms/bot-engine";
 import type { BotAccuracy, BotSpeed, MistakeMode, Player } from "../room/room";
 
 export const CHARS_PER_WORD = 5;
@@ -13,8 +13,10 @@ export type Course = { words: string[]; /** Caractères cumulés (espaces compri
 /**
  * typed et errors : frappes et fautes cumulées, comme pour moi. keys : les mêmes, touche par touche.
  * BOT-05 : seed, la graine du bot (celle du salon mêlée à son nom) ; tick, le dernier tick du moteur joué.
+ * BOT-01 à BOT-03 : son profil (niveau, vitesse, précision) et l'état du moteur (caractères, fautes, attente,
+ * caractères manqués en mode libre, `out` : éliminé en mode fatal) ; words, sa position en mots.
  */
-export type Bot = { lane: number; name: string; seed: number; tick: number; wpm: number; accuracy: number; words: number; typed: number; errors: number; keys: KeyCounts; finishedAt: number };
+export type Bot = { lane: number; name: string; seed: number; tick: number; words: number; keys: KeyCounts; finishedAt: number } & BotProfile & BotState;
 /** COURSE-05 : un adversaire humain, tel qu'il se déclare en temps réel (progression de 0 à 1, MPM courant). */
 export type Remote = {
   lane: number;
@@ -110,7 +112,6 @@ export function createCourse(words: string[], durationSeconds: number | null, mi
  * son nom, comme le serveur. Une fonction d'aléa reste acceptée (tests, page sans serveur de salons).
  */
 export function createRace(course: Course, players: Player[], botSpeed: BotSpeed, botAccuracy: BotAccuracy, source: (() => number) | number = Math.random): Race {
-  const [worst, best] = BOT_ACCURACY[botAccuracy];
   const bots: Bot[] = [];
   const remotes: Remote[] = [];
   players.forEach((player, lane) => {
@@ -119,16 +120,18 @@ export function createRace(course: Course, players: Player[], botSpeed: BotSpeed
       remotes.push({ lane, progress: 0, wpm: 0, finishedAt: 0 });
       return;
     }
-    // CONF-10 : chaque bot à son niveau ; sans niveau, la vitesse du salon
-    const level = player.level ?? botSpeed;
-    const start = { lane, name: player.name, tick: 0, words: 0, typed: 0, errors: 0, keys: {}, finishedAt: 0 };
+    // CONF-10 : chaque bot à son niveau ; sans niveau, celui de la vitesse du salon
+    const level = player.level ?? levelOfSpeed(botSpeed);
+    const start = { lane, name: player.name, tick: 0, words: 0, keys: {}, finishedAt: 0, ...BOT_START };
     if (typeof source === "number") {
       const seed = botSeed(source, player.name);
       bots.push({ ...start, seed, ...botProfile(seed, level, botAccuracy) });
       return;
     }
-    const [low, high] = BOT_WPM[level];
-    bots.push({ ...start, wpm: Math.round(low + source() * (high - low)), accuracy: worst + source() * (best - worst), seed: Math.floor(source() * 2 ** 32) | 0 });
+    const { wpm: [low, high], errorRate } = BOT_LEVEL_SPECS[level];
+    const wpm = Math.round(low + source() * (high - low));
+    const accuracy = 100 * (1 - errorRate * BOT_ACCURACY_FACTOR[botAccuracy] * (0.8 + source() * 0.4));
+    bots.push({ ...start, level, wpm, accuracy, seed: Math.floor(source() * 2 ** 32) | 0 });
   });
   return {
     course,
@@ -244,28 +247,24 @@ export function applyRemote(race: Race, lane: number, update: { progress: number
  */
 export function advanceBots(race: Race, now: number, jitters?: number[]): Race {
   if (race.phase !== "racing") return race;
-  const { words, durationMs } = race.course;
+  const { durationMs } = race.course;
+  const text = botText(race.course.words, race.course.mistakes);
   const arrivals = [...race.arrivals];
   let bots = race.bots;
+  // BOT-03 : un bot éliminé (mode fatal) s'arrête là, sans arrivée ; un bot arrivé prend la place suivante
+  const settle = (moved: Bot, at: number): Bot => {
+    if (moved.out) return { ...moved, finishedAt: at };
+    if (!botArrived(text, moved)) return moved;
+    arrivals.push(moved.lane);
+    return { ...moved, finishedAt: at };
+  };
   if (jitters) {
-    bots = bots.map((bot, i) => {
-      if (bot.finishedAt) return bot;
-      const moved = botTick(race, bot, jitters[i] ?? 0.5);
-      if (moved.words < words.length) return moved;
-      arrivals.push(bot.lane);
-      return { ...moved, finishedAt: now };
-    });
+    bots = bots.map((bot, i) => (bot.finishedAt ? bot : settle(botTick(race, text, bot, jitters[i] ?? 0.5), now)));
   } else {
     // tick par tick, tous les bots à la fois : deux arrivées rattrapées d'un coup restent dans leur ordre
     const target = Math.floor(capped(race, now - race.startedAt) / TICK_MS);
     for (let tick = Math.min(...bots.map((bot) => bot.tick)) + 1; tick <= target; tick++) {
-      bots = bots.map((bot) => {
-        if (bot.finishedAt || bot.tick >= tick) return bot;
-        const moved = { ...botTick(race, bot, botJitter(bot.seed, tick)), tick };
-        if (moved.words < words.length) return moved;
-        arrivals.push(bot.lane);
-        return { ...moved, finishedAt: race.startedAt + tick * TICK_MS };
-      });
+      bots = bots.map((bot) => (bot.finishedAt || bot.tick >= tick ? bot : settle({ ...botTick(race, text, bot, botJitter(bot.seed, tick)), tick }, race.startedAt + tick * TICK_MS)));
     }
   }
   const ticked: Race = { ...race, bots, arrivals, now };
@@ -273,29 +272,31 @@ export function advanceBots(race: Race, now: number, jitters?: number[]): Race {
   return { ...moved, samples: recordSamples(moved) };
 }
 
-/** Un pas du moteur pour ce bot, et ses frappes : chaque caractère validé coûte en moyenne 100 / précision frappes. */
-function botTick(race: Race, bot: Bot, jitter: number): Bot {
-  const progress = botStep(race.course.words, bot.words, bot.wpm, jitter);
-  // le surplus, ce sont ses fautes
-  const gained = botChars(race, { ...bot, words: progress }) - botChars(race, bot);
-  const rate = (100 / bot.accuracy - 1) * (0.5 + jitter);
-  const mistakes = gained * rate;
-  const keys = botKeys(race, bot.keys, botChars(race, bot), gained, rate);
-  return { ...bot, words: progress, typed: bot.typed + gained + mistakes, errors: bot.errors + mistakes, keys };
+/**
+ * Un pas du moteur pour ce bot : ses caractères, frappes et fautes viennent du moteur (BOT-03). Ses touches suivent le
+ * texte qu'il dépasse, avec des fautes réparties selon sa précision, plus nombreuses sur les touches difficiles.
+ */
+function botTick(race: Race, text: BotText, bot: Bot, jitter: number): Bot {
+  const state = botStep(text, bot, bot, jitter);
+  const keys = botKeys(race, bot, bot.chars, state.chars - bot.chars);
+  return { ...bot, ...state, words: botPosition(text, state.chars), keys };
 }
 
-/** Chaque caractère du texte qu'un bot dépasse ce tick-ci : ses fautes tombent plus souvent sur les touches difficiles. */
-function botKeys(race: Race, keys: KeyCounts, from: number, gained: number, rate: number): KeyCounts {
+/**
+ * Chaque caractère du texte qu'un bot dépasse ce tick-ci, avec les fautes qu'il y fait en moyenne : la chance de faute
+ * du moteur (botErrorChance, plus forte sur les touches difficiles). Le total des fautes des touches suit donc
+ * `bot.errors` ; en mode « corriger », la touche est aussi retapée.
+ */
+function botKeys(race: Race, bot: Bot, from: number, gained: number): KeyCounts {
   const text = race.course.words.join(" ") + " ";
-  let counts = keys;
+  const { mistakes } = race.course;
+  let counts = bot.keys;
   for (let i = Math.floor(from); i < Math.floor(from + gained) && i < text.length; i++) {
-    const misses = rate * difficulty(text[i]!);
-    counts = countKey(counts, text[i]!, misses > 0, 1 + misses, misses);
+    const misses = botErrorChance(bot, mistakes, text[i]!);
+    counts = countKey(counts, text[i]!, misses > 0, mistakes === "fix" ? 1 + misses : 1, misses);
   }
   return counts;
 }
-
-const difficulty = (char: string) => (/[a-z ]/.test(char) ? 1 : 2);
 
 function myValidChars(race: Race) {
   return Math.max(0, myCourse(race).marks[race.wordIndex]! - race.missedChars);
@@ -323,7 +324,7 @@ function sampleOf(race: Race, lane: number): Sample | null {
   }
   const bot = race.bots.find((candidate) => candidate.lane === lane);
   if (!bot || bot.finishedAt) return null;
-  return { chars: botChars(race, bot), typed: bot.typed, errors: bot.errors };
+  return { chars: Math.max(0, botChars(race, bot) - bot.missed), typed: bot.typed, errors: bot.errors };
 }
 
 function recordSamples(race: Race) {
@@ -391,7 +392,8 @@ export function laneWpm(race: Race, lane: number) {
   if (remote) return remote.wpm;
   const bot = race.bots.find((candidate) => candidate.lane === lane);
   const minutes = laneElapsedMs(race, lane) / 60000;
-  return bot && minutes > 0.02 ? Math.round((race.course.marks[Math.floor(bot.words)] ?? 0) / CHARS_PER_WORD / minutes) : 0;
+  // BOT-03 : en mode libre, les mots laissés faux ne comptent pas (annexe A, caractères justes)
+  return bot && minutes > 0.02 ? Math.round(Math.max(0, (race.course.marks[Math.floor(bot.words)] ?? 0) - bot.missed) / CHARS_PER_WORD / minutes) : 0;
 }
 
 /** Part du texte faite dans ce couloir, de 0 à 1. */

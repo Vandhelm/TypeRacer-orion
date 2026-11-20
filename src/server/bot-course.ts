@@ -34,12 +34,14 @@ export async function launchBots(db: Db, roomId: number, humans: number): Promis
   const { config } = row;
   const passage = row.rooms.textId === null ? null : await composePassage(db, { language: config.language, words: wordTarget(config), startId: row.rooms.textId });
   const words = courseWords({ settings: { ...config, text: config.customText }, seed: row.rooms.textSeed, passage }) ?? [];
-  const course = { words, durationMs: endsAt === null ? null : endsAt - startsAt };
+  // BOT-03 : le mode d'erreur du lancement, comme la page (createCourse)
+  const course = { words, durationMs: endsAt === null ? null : endsAt - startsAt, mistakes: config.mistakes };
   let running = false;
   for (const bot of bots) {
     const seed = botSeed(row.rooms.textSeed, bot.name);
-    const run = simulateBot(course, { seed, wpm: botProfile(seed, bot.level, config.botAccuracy).wpm }, row.now - startsAt);
-    if (run.arrivedMs === null) running = true;
+    const run = simulateBot(course, { seed, ...botProfile(seed, bot.level, config.botAccuracy) }, row.now - startsAt);
+    // un bot éliminé (mode fatal) ne court plus : il ne retient pas la course
+    if (run.arrivedMs === null && run.eliminatedMs === null) running = true;
     standings.set(bot.name.toLowerCase(), { finishedAt: run.arrivedMs === null ? null : new Date(startsAt + run.arrivedMs), progress: run.progress, seat: null });
   }
   return { standings, running: running && (endsAt === null || row.now < endsAt) };

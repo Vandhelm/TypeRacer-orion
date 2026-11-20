@@ -295,13 +295,13 @@ describe("BOT-04 — the spoken list of players says which ones are bots", () =>
 
 describe("CONF-10 — the seats show the bots of the room's list, each with its level", () => {
   const member = (key: string, seat: number) => ({ key, name: key, guest: false, host: seat === 0, role: "player" as const, seat, color: `c${seat}`, finished: false });
-  const botList = [{ name: "Ebi_Fry", level: "fast" }, { name: "Wasabi99", level: "slow" }] as const;
+  const botList = [{ name: "Ebi_Fry", level: "expert" }, { name: "Wasabi99", level: "beginner" }] as const;
 
   test("the bots follow the list, with their level, after the humans", () => {
     const seats = seatsOf({ guests: 4, bots: true, botList: [...botList] }, [member("player:1", 0)], "player:1");
     expect(seats.slice(1)).toEqual([
-      { name: "Ebi_Fry", color: expect.any(String), bot: true, level: "fast" },
-      { name: "Wasabi99", color: expect.any(String), bot: true, level: "slow" },
+      { name: "Ebi_Fry", color: expect.any(String), bot: true, level: "expert" },
+      { name: "Wasabi99", color: expect.any(String), bot: true, level: "beginner" },
       { free: true },
     ]);
   });
@@ -318,14 +318,14 @@ describe("CONF-10 — the seats show the bots of the room's list, each with its 
 });
 
 describe("CONF-10 — the host edits the bot list one bot at a time", () => {
-  const list = [{ name: "Thon_Rouge", level: "slow" }, { name: "Saba_Sensei", level: "fast" }] as const;
+  const list = [{ name: "Thon_Rouge", level: "beginner" }, { name: "Saba_Sensei", level: "expert" }] as const;
 
   test("adding a bot takes the next free name, at the medium level", () => {
-    expect(withBotAdded([...list])).toEqual([...list, { name: "Wasabi99", level: "medium" }]);
+    expect(withBotAdded([...list])).toEqual([...list, { name: "Wasabi99", level: "intermediate" }]);
   });
 
   test("adding when every name is taken changes nothing", () => {
-    const full = BOT_NAMES.map((name) => ({ name, level: "slow" as const }));
+    const full = BOT_NAMES.map((name) => ({ name, level: "beginner" as const }));
     expect(withBotAdded(full)).toBe(full);
   });
 
@@ -334,6 +334,6 @@ describe("CONF-10 — the host edits the bot list one bot at a time", () => {
   });
 
   test("changing one bot's level leaves the other one", () => {
-    expect(withBotLevel([...list], "Saba_Sensei", "medium")).toEqual([list[0], { name: "Saba_Sensei", level: "medium" }]);
+    expect(withBotLevel([...list], "Saba_Sensei", "intermediate")).toEqual([list[0], { name: "Saba_Sensei", level: "intermediate" }]);
   });
 });

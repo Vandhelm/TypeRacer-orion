@@ -159,13 +159,53 @@ Un coureur légitime refusé (paquets groupés) n'est pas bloqué : la marge aut
 **Choix** : un seul moteur, pur, partagé par la page de course et le serveur (`src/rooms/bot-engine.ts`), sans `Math.random` ni `Date.now`. Tout vient de la graine du lancement (`rooms.text_seed`, déjà tirée par le serveur pour les mots, COURSE-03) :
 
 - **Graine d'un bot** : celle du lancement mêlée à son nom (`botSeed`, FNV-1a, sans la casse). Le nom plutôt que le couloir : l'ordre des places peut différer d'une page à l'autre, pas le nom (liste fermée, CONF-10).
-- **Profil** (`botProfile`) : vitesse et précision tirées de cette graine dans les plages de son niveau (`BOT_WPM`, `BOT_ACCURACY`, inchangées).
-- **Trajectoire** : la course avance par ticks de 200 ms depuis le départ serveur (`startsAt`) ; l'aléa du tick `k` (`botJitter`) ne dépend que de la graine du bot et de `k`, et un pas (`botStep`) garde la formule d'avant (vitesse constante en caractères, rythme de 55 % à 145 %). `simulateBot` donne, à un instant donné, la position, la part du texte et l'arrivée (un nombre entier de ticks), bornées à la durée de la course.
+- **Profil** (`botProfile`) : vitesse et précision tirées de cette graine selon son niveau (`BOT_LEVEL_SPECS`, voir « Niveaux et comportement des bots » ci-dessous).
+- **Trajectoire** : la course avance par ticks de 200 ms depuis le départ serveur (`startsAt`) ; l'aléa du tick `k` (`botJitter`) ne dépend que de la graine du bot et de `k`, les autres tirages (faute, hésitation, rythme d'un mot) de la graine et de l'indice du caractère ou du mot. Un pas (`botStep`) part de l'état du bot (caractères, frappes, fautes, attente) et le mode d'erreur du lancement fait partie du texte (`botText`). `simulateBot` donne, à un instant donné, la position, la part du texte, l'arrivée ou l'élimination (un nombre entier de ticks), les frappes, fautes et caractères manqués, bornés à la durée de la course.
 - **Navigateur** (`advanceBots`, `src/views/game/race.ts`) : à chaque tick, chaque bot rattrape le moteur jusqu'au tick de l'heure serveur ; un onglet ralenti, une page rechargée ou ouverte en retard (`mountRace`) retombe exactement au même endroit, et toutes les pages du salon voient les mêmes bots. Son arrivée est celle du moteur (départ + ticks), pas l'instant où la page l'a vue. Sans serveur de salons (pas de graine), la page tire une graine locale.
 - **Serveur** (`launchBots`, `src/server/bot-course.ts`) : retire les mots comme la page (`courseWords`), prend les bots assis (`seatedBots`, humains du lancement comptés comme à l'enregistrement) et calcule chacun à l'heure de la base, au plus `endsAt`.
 - **Fin de course** (`endIfAllFinished`, `src/server/rooms.ts`) : plus aucun humain en course **et** plus aucun bot en course (arrivé, ou arrêté par la fin du temps). L'arrivée du dernier bot, sans action de personne, est vue par le balayage existant (`sweep`, appelé à chaque lecture du salon et par `refreshRoom` du temps réel toutes les 5 s) : le passage aux résultats arrive donc au plus un balayage après elle. Les humains tous partis ou ayant abandonné attendent aussi les bots.
 - **Classement** (`launchStandings`, `rankByServer`) : un bot calculé est classé comme un humain connu : arrivés par heure d'arrivée (un humain devant à égalité), non arrivés par progression calculée ; `race_results.finished` d'un bot suit aussi son arrivée calculée.
 - **Limite** : le moteur est rejoué depuis le départ à chaque calcul (quelques milliers de ticks au plus pour 10 min), sans cache. Changer le moteur change la course des bots d'un lancement en cours entre deux versions du code.
+
+### Niveaux et comportement des bots (BOT-01, BOT-02, BOT-03)
+
+Tout est dans le moteur partagé (`src/rooms/bot-engine.ts`) : la page de course et le serveur appliquent les mêmes valeurs, avec le même mode d'erreur (celui du lancement : `createCourse` côté page, `race_configs.mistakes` côté serveur dans `launchBots`) et la même précision de salon.
+
+**Niveaux** (`BOT_LEVELS`, `BOT_LEVEL_SPECS`) : choisis bot par bot par l'hôte dans l'onglet Bots du salon (CONF-10, `room.level_*`).
+
+| Niveau | MPM net visé (plage de tirage) | Taux d'erreur visé | Réaction avant correction | Hésitation avant un mot (chance, durée moyenne) |
+|---|---|---|---|---|
+| Noob (`noob`) | 10–20 | 12 % | 700 ms | 30 %, 700 ms |
+| Débutant (`beginner`) | 20–35 | 8 % | 550 ms | 22 %, 550 ms |
+| Intermédiaire (`intermediate`) | 35–60 | 5 % | 400 ms | 15 %, 450 ms |
+| Expert (`expert`) | 70–100 | 2 % | 300 ms | 10 %, 350 ms |
+| Impossible (`impossible`) | 140–170 | 0,5 % | 200 ms | 5 %, 250 ms |
+
+- **Vitesse** : chaque bot tire sa vitesse visée uniformément dans la plage (« 140+ » est borné à 170). Sa vitesse de frappe de base est plus haute (`basePace`), calculée sur le texte de la course : elle compense en moyenne, sur tout le texte, le ralentissement de ses mots difficiles, ses hésitations (plus nombreuses avant les mots difficiles) et ses corrections (mode « corriger », taux du niveau, plus de fautes sur les caractères difficiles), pour que son MPM net mesuré (annexe A) tombe dans la plage quel que soit le texte (mots courants, passages du corpus, accents, majuscules). La charge du texte est calculée une fois (`botText`, champ `load`). La compensation est globale : dans un même texte, un mot difficile reste plus lent qu'un mot facile (BOT-02).
+- **Mesures** (MPM net moyen, 40 graines ; corpus : passages cohérents de 50 mots, réglages par défaut, `src/server/bot-levels-corpus.test.ts`) :
+
+  | Niveau | Plage | Corpus fr, correcte, corriger | Corpus en, correcte, corriger | fr, hésitante, corriger | fr, haute, corriger | fr, correcte, libre | fr, hésitante, libre |
+  |---|---|---|---|---|---|---|---|
+  | Noob | 10–20 | 15,3 | 15,2 | 10,9 | 18,1 | 8,9 | 3,8 |
+  | Débutant | 20–35 | 28,1 | 27,8 | 21,9 | 31,6 | 19,6 | 11,0 |
+  | Intermédiaire | 35–60 | 48,0 | 47,4 | 40,9 | 52,5 | 38,5 | 27,2 |
+  | Expert | 70–100 | 85,3 | 84,9 | 78,8 | 88,9 | 78,6 | 67,1 |
+  | Impossible | 140–170 | 154,7 | 154,3 | 151,5 | 156,8 | 151,9 | 146,7 |
+
+  Sur 100 mots courants (mode « corriger », correcte) : 14,7, 27,1, 46,6, 83,7, 153,1. **Choix** : la compensation vise le réglage par défaut (précision correcte, mode « corriger »). La précision hésitante et le mode libre ne sont pas compensés et peuvent sortir de la plage (en dessous) : leurs fautes doivent coûter (BOT-03), et en mode libre les mots laissés faux ne comptent pas dans le MPM net (annexe A). Avec la précision haute, le bot est un peu plus rapide, toujours dans la plage.
+- **Touches** (podium) : chaque caractère dépassé compte une frappe et, en moyenne, la chance de faute du moteur sur ce caractère (`botErrorChance`) ; le total des fautes des touches suit donc les fautes du bot (à quelques % près sur une course), sans être tiré caractère par caractère.
+- **Taux d'erreur** = fautes ÷ frappes (la précision est son complément). Chaque bot tire son taux à ±20 % de celui du niveau ; la précision du salon le multiplie (`BOT_ACCURACY_FACTOR` : hésitante × 2, correcte × 1, haute × 0,5 ; « correcte » par défaut, donc le tableau). Une faute sur un caractère hors a-z (majuscule, accent, chiffre, ponctuation) est 1,5 fois plus probable. La faute tombe sur un caractère donné par la graine et son indice : la même quel que soit le rythme des ticks.
+- **Ancienne vitesse de salon** (`levelOfSpeed`) : un salon qui remplit les places d'un coup ou un bot sans niveau prend lent → débutant, moyen → intermédiaire, rapide → expert ; « mixte » alterne débutant, intermédiaire, expert. La migration `0032_bot_levels` convertit de même les listes enregistrées.
+
+**Vitesse variable (BOT-02)** : une vitesse constante n'existe plus.
+- **Accélérations et ralentissements** : chaque tick multiplie la vitesse par 0,6 à 1,4 (aléa du tick) et chaque mot par 0,8 à 1,25 (son rythme, tiré par mot) : des mots enlevés, d'autres plus lents.
+- **Hésitations** : avant chaque mot (sauf le premier), le bot peut s'arrêter (chance et durée du niveau, durée de 50 % à 150 % de la moyenne). La chance est multipliée par 1 + difficulté du mot.
+- **Mots difficiles** (`wordDifficulty`, de 0 à 1) : 0,1 par lettre au-delà de 6 et 0,25 par caractère hors a-z, plafonné à 1. Le mot est tapé à (1 − 0,45 × difficulté) de la vitesse : 55 % pour le plus difficile.
+
+**Fautes et mode d'erreur (BOT-03)** :
+- **Corriger** (`fix`, CONF-08 « correction obligatoire ») : la faute est une frappe de plus, puis le bot réagit (temps du niveau), efface et retape : réaction + 2 frappes à sa vitesse de base. Il n'avance qu'une fois corrigé ; une faute sur le dernier caractère retarde son arrivée. Frappes = caractères du texte + fautes.
+- **Libre** (`carry-on`) : le bot continue sans corriger ; la faute est comptée (précision) et le mot reste faux : ses caractères (espace comprise) sont des caractères manqués, retirés de son MPM net et de ses mesures (`missed`, page et podium). Il marque seulement un temps d'un tiers de sa réaction.
+- **Fatale** (`fatal`, en plus de CONF-08) : comme pour un humain, la première faute arrête le bot (`eliminatedMs`) : il reste à sa position, n'arrive jamais, ne retient plus la fin de course (`launchBots`, `running`) et se classe parmi les non-arrivés par sa progression ; le podium l'affiche éliminé.
 
 ### Classement final (COURSE-10)
 

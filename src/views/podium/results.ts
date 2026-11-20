@@ -65,7 +65,8 @@ const deltas = (samples: Sample[], pick: (sample: Sample) => number) => samples.
 function totalsOf(race: Race, lane: number) {
   if (lane === race.myLane) return { typed: race.keystrokes, wrong: race.wrongChars, extra: race.extraChars, missed: race.missedChars };
   const bot = race.bots.find((candidate) => candidate.lane === lane);
-  return { typed: bot?.typed ?? 0, wrong: bot?.errors ?? 0, extra: 0, missed: 0 };
+  // BOT-03 : en mode libre, les mots qu'un bot a laissés faux comptent comme manqués
+  return { typed: bot?.typed ?? 0, wrong: bot?.errors ?? 0, extra: 0, missed: bot?.missed ?? 0 };
 }
 
 function accuracyOf(race: Race, lane: number) {
@@ -108,7 +109,8 @@ export function buildResults(race: Race, players: Player[]): PlayerResult[] {
       accuracy: accuracyOf(race, lane),
       seconds: Math.round(laneElapsedMs(race, lane) / 1000),
       finished: race.arrivals.includes(lane),
-      eliminated: mine && race.eliminated,
+      // BOT-03 : un bot éliminé en mode fatal l'est aussi
+      eliminated: mine ? race.eliminated : !!race.bots.find((bot) => bot.lane === lane)?.out,
       progress: Math.min(1, Math.max(0, laneProgress(race, lane))),
       ...detailOf(race, lane),
     };

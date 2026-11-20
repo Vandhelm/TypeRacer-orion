@@ -225,6 +225,13 @@
       "when": 1795188274609,
       "tag": "0031_room_bonus_words",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1795191643858,
+      "tag": "0032_bot_levels",
+      "breakpoints": true
     }
   ]
 }

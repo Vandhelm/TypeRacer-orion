@@ -35,15 +35,15 @@ describe("BOT-05 — the server waits for the bots it computes from the room see
 
   /** L'hôte seul avec un bot lent, lancé ; `arrivalMs` : l'arrivée du bot selon le moteur, depuis le départ. */
   const hostWithSlowBot = async (name: string, settings: Partial<RoomSettings> = {}) => {
-    const { room, host } = await t.open(name, { bots: true, guests: 2, duration: null, textType: "words", length: "long", botList: [{ name: BOT, level: "slow" }], ...settings });
+    const { room, host } = await t.open(name, { bots: true, guests: 2, duration: null, textType: "words", length: "long", botList: [{ name: BOT, level: "beginner" }], ...settings });
     expect((await t.call("POST", `/api/rooms/${room.code}/launch`, host.cookie)).status).toBe(200);
     const launched = (await t.read(host.cookie, room.code)).body.room as unknown as RoomView;
     const words = courseWords(launched)!;
     const seed = botSeed(launched.seed!, BOT);
-    const { wpm } = botProfile(seed, "slow", launched.settings.botAccuracy);
+    const profile = botProfile(seed, launched.settings.botList[0]!.level, launched.settings.botAccuracy);
     const durationMs = launched.settings.duration === null ? null : launched.settings.duration * 1000;
-    const run = simulateBot({ words, durationMs }, { seed, wpm }, Infinity);
-    return { code: room.code, host, arrivalMs: run.arrivedMs };
+    const run = simulateBot({ words, durationMs, mistakes: launched.settings.mistakes }, { seed, ...profile }, Infinity);
+    return { code: room.code, host, arrivalMs: run.arrivedMs, eliminatedMs: run.eliminatedMs };
   };
 
   test("no time limit: the room keeps racing after the host arrives, and moves to results when the last bot arrives", async () => {
@@ -98,6 +98,23 @@ describe("BOT-05 — the server waits for the bots it computes from the room see
     expect(res.status).toBe(201);
     const ranks = await t.db.select({ name: players.name, rank: raceResults.rank, finished: raceResults.finished }).from(raceResults).innerJoin(players, eq(players.id, raceResults.playerId)).where(eq(raceResults.raceId, ((await res.json()) as { raceId: number }).raceId));
     expect(ranks.sort((a, b) => a.rank - b.rank)).toEqual([{ name: BOT, rank: 1, finished: true }, { name: "Bot05_Derriere", rank: 2, finished: true }]);
+  });
+
+  test("BOT-03 — fatal mode: the server computes the bot's elimination; it holds the room only until then, and never ranks as arrived", async () => {
+    const { code, host, arrivalMs, eliminatedMs } = await hostWithSlowBot("Bot03_Fatal", { mistakes: "fatal", botList: [{ name: BOT, level: "noob" }] });
+    expect(arrivalMs).toBeNull();
+    expect(eliminatedMs).not.toBeNull();
+    await launchedAgo(code, COUNTDOWN_MS + Math.max(0, eliminatedMs! - 200));
+    await finishAsServer(t.db, t.call, code, host.cookie);
+    // le bot court encore juste avant son élimination
+    if (eliminatedMs! > 400) expect(await roomRaceState(t.db, code)).toBe("racing");
+    await launchedAgo(code, COUNTDOWN_MS + eliminatedMs! + 500);
+    await refreshRoom(t.db, code);
+    expect(await roomRaceState(t.db, code)).toBe("results");
+    const res = await post({ room: code, summary: { ...SUMMARY, mistakes: "fatal" }, players: [{ ...result(BOT, true, true), seconds: 0 }, { ...result("Bot03_Fatal", false, true), seconds: 0 }] }, host.cookie);
+    expect(res.status).toBe(201);
+    const ranks = await t.db.select({ name: players.name, rank: raceResults.rank, finished: raceResults.finished }).from(raceResults).innerJoin(players, eq(players.id, raceResults.playerId)).where(eq(raceResults.raceId, ((await res.json()) as { raceId: number }).raceId));
+    expect(ranks.sort((a, b) => a.rank - b.rank)).toEqual([{ name: "Bot03_Fatal", rank: 1, finished: true }, { name: BOT, rank: 2, finished: false }]);
   });
 });
 

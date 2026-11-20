@@ -2,14 +2,13 @@
 // (validation, places, statut bot de COURSE-06) et la page du salon (liste, places, course).
 import { z } from "zod";
 import { BOT_NAMES } from "../players/bots";
+import { BOT_LEVELS, levelOfSpeed, type BotLevel } from "./bot-engine";
 import type { RoomSettings } from "./settings";
 
-/**
- * Les niveaux d'un bot : les vitesses existantes du moteur (src/views/game/race.ts, BOT_WPM), sans « mixte », qui
- * mélangeait les vitesses de toute la salle. Les cinq niveaux de BOT-01 remplaceront cette liste.
- */
-export const BOT_LEVELS = ["slow", "medium", "fast"] as const;
-export type BotLevel = (typeof BOT_LEVELS)[number];
+/** Les niveaux d'un bot : les cinq de BOT-01, définis par le moteur (src/rooms/bot-engine.ts). */
+export { BOT_LEVELS, type BotLevel };
+/** « Mixte » alterne ces niveaux : les vitesses de l'ancien réglage (lents, moyens, rapides). */
+const MIXED_LEVELS: readonly BotLevel[] = ["beginner", "intermediate", "expert"];
 export type BotName = (typeof BOT_NAMES)[number];
 
 /** Un bot du salon : un nom de la liste fermée (COURSE-06 : le serveur ne reconnaît qu'elle) et son niveau. */
@@ -33,11 +32,11 @@ export function canAddBot(room: { guests: number; botList: readonly RoomBot[] },
 }
 
 /**
- * L'ancien réglage (bots oui) : un bot par place libre, dans l'ordre de la liste fermée, à la vitesse du salon ;
- * « mixte » alterne les niveaux.
+ * L'ancien réglage (bots oui) : un bot par place libre, dans l'ordre de la liste fermée, au niveau de la vitesse du
+ * salon (levelOfSpeed) ; « mixte » alterne débutant, intermédiaire et expert.
  */
 export function defaultBots(count: number, speed: RoomSettings["botSpeed"]): RoomBot[] {
-  return BOT_NAMES.slice(0, Math.max(0, count)).map((name, i) => ({ name, level: speed === "mixed" ? BOT_LEVELS[i % BOT_LEVELS.length]! : speed }));
+  return BOT_NAMES.slice(0, Math.max(0, count)).map((name, i) => ({ name, level: speed === "mixed" ? MIXED_LEVELS[i % MIXED_LEVELS.length]! : levelOfSpeed(speed) }));
 }
 
 /**
