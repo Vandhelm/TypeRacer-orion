@@ -3,15 +3,25 @@
 // mais le dit (avertissement au démarrage de Next.js, instrumentation.ts) et l'affiche dans GET /api/health.
 // En local, le serveur tourne sur ws://localhost:3001 (`bun run dev`) : rien à configurer, aucun avertissement.
 
-type Env = Record<string, string | undefined>;
+import { realtimeSecret } from "../realtime/ticket";
 
-const REQUIRED = ["REALTIME_PUBLIC_URL", "REALTIME_SECRET"] as const;
+type Env = Record<string, string | undefined>;
 
 export type RealtimeReadiness = { required: boolean; configured: boolean; missing: string[] };
 
+/** Le secret des tickets, avec le même repli que leur signature (REALTIME_SECRET, sinon BETTER_AUTH_SECRET, src/realtime/ticket.ts). */
+function hasTicketSecret(env: Env) {
+  try {
+    realtimeSecret(env);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function realtimeReadiness(env: Env = process.env): RealtimeReadiness {
   const required = env.VERCEL_ENV === "production" || env.NODE_ENV === "production";
-  const missing = REQUIRED.filter((name) => !env[name]);
+  const missing = [...(env.REALTIME_PUBLIC_URL ? [] : ["REALTIME_PUBLIC_URL"]), ...(hasTicketSecret(env) ? [] : ["REALTIME_SECRET"])];
   return { required, configured: missing.length === 0, missing: required ? missing : [] };
 }
 

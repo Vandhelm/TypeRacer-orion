@@ -21,6 +21,16 @@ describe("COURSE-06 — the realtime server is required in production, and its a
     expect(realtimeWarning({ ...PROD, ...FULL })).toBeNull();
   });
 
+  test("REALTIME_SECRET falls back on BETTER_AUTH_SECRET, like the ticket signature (.env.example)", () => {
+    const fallback = { ...PROD, REALTIME_PUBLIC_URL: FULL.REALTIME_PUBLIC_URL, BETTER_AUTH_SECRET: "b".repeat(32) };
+    expect(realtimeReadiness(fallback)).toEqual({ required: true, configured: true, missing: [] });
+    expect(realtimeWarning(fallback)).toBeNull();
+  });
+
+  test("a secret too short to sign tickets counts as missing", () => {
+    expect(realtimeReadiness({ ...PROD, REALTIME_PUBLIC_URL: FULL.REALTIME_PUBLIC_URL, REALTIME_SECRET: "court" }).missing).toEqual(["REALTIME_SECRET"]);
+  });
+
   test("a Vercel production deploy counts as production", () => {
     expect(realtimeReadiness({ VERCEL_ENV: "production" }).required).toBe(true);
   });
