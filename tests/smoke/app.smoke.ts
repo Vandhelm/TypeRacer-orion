@@ -100,7 +100,10 @@ describe("SMOKE — pages", () => {
 describe("SMOKE — API", () => {
   test("/api/health voit la base de données", async () => {
     const res = await fetch(`${base}/api/health`);
-    expect(await res.json()).toEqual({ ok: true, database: true });
+    const body = await res.json();
+    expect(body).toMatchObject({ ok: true, database: true });
+    // TECH-05/06 : en production, le site doit connaître l'adresse du serveur temps réel.
+    if (remote) expect(body.realtime).toMatchObject({ configured: true, missing: [] });
   });
 
   test("une route inconnue renvoie 404", async () => {
