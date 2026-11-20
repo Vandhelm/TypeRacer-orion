@@ -43,6 +43,8 @@ export const races = pgTable(
     clientId: uuid("client_id").unique("races_client_id_unique"),
     // Les participants sans historique (invités, autres humains) : de quoi réafficher toute la course, chacun à son rang (HIST-02).
     others: jsonb("others").$type<RaceOther[]>().notNull().default([]),
+    // RES-02 : le pseudo de l'invité qui a envoyé cette course (cookie signé) ; null pour un compte. Seule sa ligne le mesure.
+    guest: text("guest"),
   },
   (table) => [index("races_room").on(table.roomId)],
 );

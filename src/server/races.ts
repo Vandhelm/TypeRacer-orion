@@ -289,15 +289,18 @@ export async function recordRace(db: Db, parsed: ParsedRace, requester: Requeste
       others.push(other);
     }
   }
-  if (!kept.length) return null;
+  // RES-02 : la course d'un invité dans un salon est gardée même sans ligne à historiser (pas de bot) : ses others
+  // donnent ses mesures aux autres membres ; elle ne lui ouvre aucun historique (AUTH-03)
+  const guest = !account && requester.guest && server?.roomId ? requester.guest : null;
+  if (!kept.length && !guest) return null;
 
   return db.transaction(async (tx) => {
     const [config] = await tx.insert(raceConfigs).values(race.config).returning({ id: raceConfigs.id });
-    const longest = Math.max(...kept.map((result) => result.seconds));
+    const longest = Math.max(0, ...kept.map((result) => result.seconds));
     const startedAt = server?.startedAt ?? new Date(Date.now() - longest * 1000);
     const [row] = await tx
       .insert(races)
-      .values({ clientId: race.id, configId: config!.id, content: server?.content ?? race.content, others, startedAt, finishedAt: new Date(), roomId: server?.roomId ?? null })
+      .values({ clientId: race.id, configId: config!.id, content: server?.content ?? race.content, others, guest, startedAt, finishedAt: new Date(), roomId: server?.roomId ?? null })
       .onConflictDoNothing({ target: races.clientId })
       .returning({ id: races.id });
     if (!row) throw new DuplicateRace("Race already recorded");
