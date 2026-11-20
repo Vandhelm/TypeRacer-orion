@@ -340,9 +340,9 @@
     "scope": "suivi (light)"
   },
   "RES-02": {
-    "commit": "2acdffe",
-    "date": "2026-11-19",
-    "scope": "suivi (light)"
+    "commit": "fe57c61",
+    "date": "2026-11-20",
+    "scope": "critère (feature/podium/res-02)"
   },
   "RES-03": {
     "commit": "ff84eaf",
