@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { eq, sql } from "drizzle-orm";
 import { rooms } from "../../db/schema";
 import { COUNTDOWN_MS } from "../rooms/race-state";
+import { finishAsServer } from "./finish.fixture";
 import { roomsFixture } from "./rooms.fixture";
 import { roomRaceState } from "./rooms";
 
@@ -13,7 +14,7 @@ describe("COURSE-01 — the server moves a room through the state machine", () =
   let t: Fixture;
   const launchedAgo = (code: string, ms: number) => t.db.update(rooms).set({ launchedAt: sql`now() - ${ms} * interval '1 millisecond'` }).where(eq(rooms.code, code));
   const launch = (code: string, cookie: string) => t.call("POST", `/api/rooms/${code}/launch`, cookie);
-  const finish = (code: string, cookie: string) => t.call("POST", `/api/rooms/${code}/finish`, cookie);
+  const finish = (code: string, cookie: string) => finishAsServer(t.db, t.call, code, cookie);
   /** Un salon de deux humains : l'hôte et un invité. */
   const pair = async (name: string) => {
     const { room, host } = await t.open(name, { bots: false });

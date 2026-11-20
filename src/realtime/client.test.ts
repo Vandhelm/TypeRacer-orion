@@ -83,7 +83,7 @@ describe("TECH-06 — real-time client", () => {
     await until(states, (s) => s.players.length === 1);
     client.sendProgress(1.7, 900);
     await Bun.sleep(50);
-    expect(JSON.parse(sent[0]!)).toEqual({ type: "progress", progress: 1, wpm: 500 });
+    expect(JSON.parse(sent[0]!)).toEqual({ type: "progress", progress: 1, wpm: 300 }); // COURSE-06 : borne à 300
     client.close();
   });
 
@@ -114,5 +114,44 @@ describe("TECH-06 — real-time client", () => {
     await until(states, (s) => s.status === "open" && s.players.length >= 1, 3000);
     expect(tickets).toBeGreaterThanOrEqual(2);
     client.close();
+  });
+});
+
+describe("COURSE-06 — the client exposes the server start, end and ranking", () => {
+  test("server ranking: the race page reads the server's start and standings from the client state", async () => {
+    const people = [player("Alpha_60"), player("Bravo_61")];
+    const startsAt = Date.now() - 20_000;
+    const course = { startsAt, endsAt: startsAt + 60_000, marks: Array.from({ length: 101 }, (_, i) => i * 6), runners: people.map((p) => p.id) };
+    const members = new Set<string>();
+    const refereed = createRealtimeServer({
+      port: 0,
+      secret: SECRET,
+      rooms: {
+        enter: async (p, code) => ({ key: p.id, room: { code, members: [...members.add(p.id)].map((key) => ({ key })) } }),
+        view: async (code) => ({ code, members: [...members].map((key) => ({ key })) }),
+        refresh: async () => false,
+        leave: async () => false,
+        changes: () => () => undefined,
+        course: async () => course,
+      },
+    });
+    const target = `ws://localhost:${refereed.port}`;
+    const a: RealtimeState[] = [];
+    const ca = connectRealtime({ room: "CXNT23", getTicket: async () => ({ ticket: signTicket(people[0]!, SECRET), url: target }), onChange: (s) => a.push(s) });
+    const cb = connectRealtime({ room: "CXNT23", getTicket: async () => ({ ticket: signTicket(people[1]!, SECRET), url: target }), onChange: () => undefined });
+    await until(a, (s) => s.race?.standings.length === 2);
+    cb.sendProgress(0.3, 50);
+    const state = await until(a, (s) => s.race?.standings[0]?.progress === 0.3);
+    expect(state.race).toEqual({
+      startsAt,
+      endsAt: startsAt + 60_000,
+      standings: [
+        { playerId: "g:bravo_61", rank: 1, progress: 0.3, wpm: 50, finishedMs: null },
+        { playerId: "g:alpha_60", rank: 2, progress: 0, wpm: 0, finishedMs: null },
+      ],
+    });
+    ca.close();
+    cb.close();
+    refereed.stop(true);
   });
 });

@@ -2,10 +2,12 @@
 // Demande un ticket à /api/realtime/ticket, se connecte, rejoint la salle, suit la présence et la progression
 // des autres, et se reconnecte avec un ticket neuf si la connexion tombe.
 // PERF-02 : au plus une progression envoyée toutes les 100 ms ; la dernière valeur part toujours.
-import { type ClientMessage, parseServerMessage, type Player, PROGRESS_INTERVAL_MS, WPM_MAX } from "./protocol";
+import { type ClientMessage, parseServerMessage, type Player, PROGRESS_INTERVAL_MS, type ServerMessage, WPM_MAX } from "./protocol";
 
 export type RealtimeStatus = "connecting" | "open" | "reconnecting" | "unauthorized" | "closed";
 export type PlayerProgress = { progress: number; wpm: number };
+/** COURSE-06 : la course vue par le serveur : départ et fin (ms epoch, horloge serveur) et son classement des coureurs. */
+export type ServerRace = { startsAt: number; endsAt: number | null; standings: Extract<ServerMessage, { type: "standings" }>["players"] };
 export type RealtimeState = {
   status: RealtimeStatus;
   you: Player | null;
@@ -13,6 +15,11 @@ export type RealtimeState = {
   players: Player[];
   /** Dernière progression reçue de chaque autre joueur, par id. */
   progress: Record<string, PlayerProgress>;
+  /**
+   * COURSE-06 : la course arbitrée par le serveur, null tant qu'il n'en a rien dit (ou sans salons en base).
+   * À BRANCHER (COURSE-05) : la piste et le décompte de la page de course lisent ce classement et ce départ.
+   */
+  race?: ServerRace | null;
 };
 export type TicketGrant = { ticket: string; url: string };
 /** Ce que reçoit une page qui suit son salon (follow) : son état, sa fermeture, ou le refus du serveur (pas ou plus membre). */
@@ -44,7 +51,7 @@ export async function fetchTicket(): Promise<TicketGrant | null> {
 const clamp = (value: number, max: number) => (Number.isFinite(value) ? Math.min(max, Math.max(0, value)) : 0);
 
 export function connectRealtime({ room, onChange, getTicket = fetchTicket, WebSocket: Socket = WebSocket, retryDelayMs = 1000, onRoom }: RealtimeOptions): RealtimeConnection {
-  let state: RealtimeState = { status: "connecting", you: null, room, players: [], progress: {} };
+  let state: RealtimeState = { status: "connecting", you: null, room, players: [], progress: {}, race: null };
   let ws: WebSocket | null = null;
   let closed = false;
   let attempts = 0;
@@ -118,6 +125,8 @@ export function connectRealtime({ room, onChange, getTicket = fetchTicket, WebSo
         }
         case "progress":
           return update({ progress: { ...state.progress, [message.playerId]: { progress: message.progress, wpm: message.wpm } } });
+        case "standings":
+          return update({ race: { startsAt: message.startsAt, endsAt: message.endsAt, standings: message.players } });
         case "room":
           return onRoom?.({ type: "room", room: message.room });
         case "closed":

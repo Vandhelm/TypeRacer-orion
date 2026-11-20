@@ -27,8 +27,9 @@ const TRANSITIONS: Record<RaceEvent, { from: readonly RaceState[]; to: RaceState
   abandon: { from: ["waiting", "countdown", "racing", "results"], to: "closed" },
 };
 
-/** COURSE-03 : le décompte (3, 2, 1) entre le lancement et le départ. Même valeur que race-clock.ts (COURSE-06). */
-export const COUNTDOWN_MS = 3000;
+/** COURSE-03 : le décompte (3, 2, 1) entre le lancement et le départ ; une seule source, race-clock.ts (COURSE-06). */
+export { COUNTDOWN_MS } from "./race-clock";
+import { COUNTDOWN_MS } from "./race-clock";
 
 /** Une transition hors du schéma. */
 export class InvalidTransition extends Error {

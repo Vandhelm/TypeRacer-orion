@@ -34,7 +34,7 @@ export type RaceSummary = Pick<Room, "textType" | "language" | "duration" | "lev
   wordCount: number;
   sessionSeconds: number;
 };
-/** `room` : le code du salon de la course, pour y revenir depuis le podium (SALLE-09). Jamais envoyé au serveur. */
+/** `room` : le code du salon de la course, pour y revenir depuis le podium (SALLE-09) ; envoyé à /api/races, qui vérifie que le serveur l'a lancé (COURSE-06). */
 export type RaceResults = { players: PlayerResult[]; summary: RaceSummary; room?: string };
 
 const RESULTS_KEY = "orion-results";
@@ -163,7 +163,7 @@ export function saveResults(results: RaceResults) {
 }
 
 /** Le corps envoyé au serveur : la course et son identifiant unique, pour que le serveur refuse un rejeu (AUTH-06). */
-export function raceBody({ room: _room, ...results }: RaceResults, content: string) {
+export function raceBody(results: RaceResults, content: string) {
   return { id: crypto.randomUUID(), ...results, content };
 }
 

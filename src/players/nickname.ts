@@ -2,14 +2,17 @@
 // la même règle que les pseudos de compte (src/accounts/username.ts), pour qu'un nom reste lisible et
 // tapable partout et sans homoglyphes. Le serveur (src/server/guest.ts) revalide et le garde dans un cookie
 // signé ; sessionStorage ne sert qu'à pré-remplir le champ de l'accueil.
+import { isBotName } from "./bots";
+
 export const NICKNAME_MIN = 3;
 export const NICKNAME_MAX = 20;
 export const NICKNAME_PATTERN = `[A-Za-z0-9_]{${NICKNAME_MIN},${NICKNAME_MAX}}`;
 const NICKNAME = new RegExp(`^${NICKNAME_PATTERN}$`);
 const KEY = "orion-nickname";
 
+/** COURSE-06 : un nom de la liste des bots (BOT_NAMES) est réservé, quelle que soit la casse. */
 export function isValidNickname(value: string) {
-  return NICKNAME.test(value);
+  return NICKNAME.test(value) && !isBotName(value);
 }
 
 /** Le dernier pseudonyme accepté par le serveur dans cet onglet, pour pré-remplir le champ. */

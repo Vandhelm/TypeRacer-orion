@@ -41,6 +41,12 @@ describe("username accounts", () => {
     await expect(signUp(auth, "thon_rouge")).rejects.toThrow();
   });
 
+  test("COURSE-06 — rejects the name of a bot of the closed list, even never used yet, in any case", async () => {
+    await expect(signUp(auth, "Tako_San")).rejects.toThrow();
+    await expect(signUp(auth, "uni_kun")).rejects.toThrow();
+    expect(await db.$count(players, eq(players.name, "Tako_San"))).toBe(0);
+  });
+
   test("rejects too short, too long or odd usernames", async () => {
     await expect(signUp(auth, "ab")).rejects.toThrow();
     await expect(signUp(auth, "a".repeat(21))).rejects.toThrow();
@@ -64,6 +70,15 @@ describe("GitHub and Discord accounts", () => {
     expect(usernameFromLogin("octo.cat")).toBe("octo_cat");
     expect(usernameFromLogin("ab")).toBe("ab_");
     expect(usernameFromLogin("a".repeat(30))).toHaveLength(20);
+  });
+
+  test("COURSE-06 — a GitHub user named like a bot gets a free name, never the bot's", async () => {
+    const db = await createMockDatabase();
+    const auth = createAuth(db);
+    const ctx = await auth.$context;
+    const created = await ctx.internalAdapter.createUser({ name: "Ebi", email: "ebi@example.com", emailVerified: true, displayUsername: "Ebi_Fry" }, { method: "oauth", oauth: { providerId: "github", profile: {} } });
+    expect(created.displayUsername).toBe("Ebi_Fry_2");
+    expect(await db.$count(players, eq(players.name, "Ebi_Fry"))).toBe(0);
   });
 
   test("a GitHub user whose name is taken gets a free one", async () => {
@@ -108,6 +123,17 @@ describe("changing username", () => {
     const [player] = await db.select().from(players).where(eq(players.id, row!.playerId));
     expect(player!.name).toBe("Nouveau_Nom");
     expect(row!.needsUsername).toBe(false);
+  });
+
+  test("COURSE-06 — refuses renaming to a bot name", async () => {
+    const db = await createMockDatabase();
+    const auth = createAuth(db);
+    await signUp(auth, "Futur_Bot");
+    const { headers } = await auth.api.signInUsername({ body: { username: "Futur_Bot", password: "sushi-roll-42" }, returnHeaders: true });
+    const cookie = headers.get("set-cookie")!.split(";")[0]!;
+    await expect(auth.api.updateUser({ body: { username: "Ebi_Fry", displayUsername: "Ebi_Fry" }, headers: new Headers({ cookie }) })).rejects.toThrow();
+    const [row] = await db.select().from(user).where(eq(user.username, "futur_bot"));
+    expect(row).toBeDefined();
   });
 
   test("refuses a name already used by a guest", async () => {

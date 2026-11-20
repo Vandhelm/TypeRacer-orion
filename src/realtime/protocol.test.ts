@@ -48,7 +48,8 @@ describe("TECH-07 — real-time client messages are validated by a schema", () =
 
   test("accepts the bounds themselves", () => {
     expect(parseClientMessage(raw({ type: "progress", progress: 0, wpm: 0 }))).not.toBeNull();
-    expect(parseClientMessage(raw({ type: "progress", progress: 1, wpm: 500 }))).not.toBeNull();
+    expect(parseClientMessage(raw({ type: "progress", progress: 1, wpm: 300 }))).not.toBeNull();
+    expect(parseClientMessage(raw({ type: "progress", progress: 1, wpm: 300.01 }))).toBeNull(); // COURSE-06 : borne à 300
   });
 
   test("rejects extra fields, so nobody can slip an identity into a message", () => {
@@ -71,5 +72,16 @@ describe("TECH-06 — server messages read by the client", () => {
   test("ignores anything else", () => {
     expect(parseServerMessage(raw({ type: "boom" }))).toBeNull();
     expect(parseServerMessage("nope")).toBeNull();
+  });
+});
+
+describe("COURSE-06 — the server ranking message", () => {
+  const standings = { type: "standings" as const, room: "ABC234", startsAt: 1000, endsAt: null, players: [{ playerId: "g:a", rank: 1, progress: 0.5, wpm: 40, finishedMs: null }] };
+  test("parses the start, the end and the ranking", () => {
+    expect(parseServerMessage(raw(standings))).toEqual(standings);
+  });
+  test("a ranking with an impossible progress or rank is ignored", () => {
+    expect(parseServerMessage(raw({ ...standings, players: [{ ...standings.players[0], progress: 2 }] }))).toBeNull();
+    expect(parseServerMessage(raw({ ...standings, players: [{ ...standings.players[0], rank: 0 }] }))).toBeNull();
   });
 });

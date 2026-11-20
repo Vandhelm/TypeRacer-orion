@@ -1,6 +1,6 @@
 // Salons, côté serveur (SALLE-01, 02, 03, 09). Indépendant du transport : les routes HTTP (api.ts) et le temps réel
 // (realtime.ts) appellent ces fonctions ; rien ici ne connaît Request, WebSocket ou Next.js.
-import { and, asc, desc, eq, gt, inArray, isNull, ne, notInArray, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, inArray, isNull, ne, notInArray, sql, type SQL } from "drizzle-orm";
 import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 import type { z } from "zod";
 import type { Db } from "../../db/client";
@@ -9,6 +9,8 @@ import { storedAvatar } from "../players/avatar";
 import { allows, canJoin, isListed, newRoomCode } from "../rooms/access";
 import { launchBlocker } from "../rooms/launch";
 import { follow, raceState, storedStatus, type RaceEvent, type RaceState } from "../rooms/race-state";
+import { raceClock } from "../rooms/race-clock";
+import { courseWords, textFingerprint } from "../rooms/course-words";
 import type { RoomFilters } from "../rooms/explorer";
 import { seatColor } from "../rooms/seats";
 import { wordTarget } from "../rooms/text";
@@ -79,6 +81,12 @@ export type RoomView = {
   passage: { body: string; source: string | null } | null;
   /** CONF-03 : la graine tirée par le serveur au lancement ; chaque client en tire les mêmes mots. Null avant. */
   seed: number | null;
+  /** COURSE-06 : le départ de la course décidé par le serveur (lancement + décompte), en ms epoch ; null avant. */
+  startsAt: number | null;
+  /** COURSE-06 : la fin de la course (départ + durée), en ms epoch ; null sans limite de temps ou avant le lancement. */
+  endsAt: number | null;
+  /** COURSE-06 : l'empreinte des mots tirés au lancement (src/rooms/course-words.ts) ; null avant. */
+  textHash: string | null;
 };
 export type RoomStatus = (typeof rooms.$inferSelect)["status"];
 /** Ce que renvoie une action réussie : l'état du salon, et la clé de celui qui l'a demandée. */
@@ -227,6 +235,8 @@ export async function roomView(db: Db, roomId: number, _viewer?: string): Promis
     members: members.map((m) => ({ key: m.key, name: m.playerName ?? m.guestName ?? "", guest: m.playerId === null, host: m.key === host, role: m.role, seat: m.seat, color: m.color, finished: m.finishedAt !== null, image: storedAvatar(m.image) })),
     passage: passage && { body: passage.body, source: passage.source },
     seed: row.rooms.textSeed,
+    ...raceClock(row.rooms.launchedAt, row.race_configs.duration),
+    textHash: row.rooms.textHash,
   };
 }
 
@@ -493,7 +503,10 @@ export async function launchRoom(db: Db, code: string, who: Identity): Promise<R
     const textSeed = crypto.getRandomValues(new Int32Array(1))[0]!;
     // COURSE-01 : une relance repasse par EN_ATTENTE (results → waiting → countdown)
     await moveRoom(tx, id, from, from === "results" ? ["reopen", "launch"] : ["launch"], { launchedAt: sql`now()`, textId: passage?.id ?? null, textSeed });
-    await tx.update(roomMembers).set({ finishedAt: null }).where(eq(roomMembers.roomId, id));
+    await tx.update(roomMembers).set({ finishedAt: null, progress: 0, raceRecorded: false }).where(eq(roomMembers.roomId, id));
+    // COURSE-06 : l'empreinte des mots que la page de course va retirer, vérifiée par le serveur temps réel
+    const words = courseWords(await roomView(tx, id));
+    await tx.update(rooms).set({ textHash: words && textFingerprint(words) }).where(eq(rooms.id, id));
   });
   return { room: await roomView(db, id, key), you: key };
 }
@@ -627,8 +640,8 @@ async function moveRoom(tx: Db, roomId: number, from: RaceState | null, events: 
 
 /**
  * SALLE-09 : ce membre a fini la course. Le salon passe aux résultats (et accepte de nouveau des arrivants) quand
- * chaque participant humain a fini ou est parti ; les spectateurs ne comptent pas. La course se joue dans chaque
- * navigateur (COURSE-* pas encore côté serveur) : un membre ne peut déclarer fini que lui-même, jamais les autres.
+ * chaque participant humain a fini ou est parti ; les spectateurs ne comptent pas. COURSE-06 : l'arrivée est celle
+ * que le serveur temps réel a validée (recordProgress) ; un membre qui se déclare fini sans 100 % validé est ignoré.
  * Hors course, rien ne change (appel répété sans effet).
  */
 export async function finishRoom(db: Db, code: string, who: Identity): Promise<RoomResult> {
@@ -640,10 +653,38 @@ export async function finishRoom(db: Db, code: string, who: Identity): Promise<R
     if (!room) throw new RoomRefused("not_found");
     if (!(await membership(tx, id, key))) throw new RoomRefused("not_found"); // SALLE-10 : un non-membre ne sait pas si le salon existe
     if (room.status !== "racing") return;
-    await tx.update(roomMembers).set({ finishedAt: sql`now()` }).where(and(eq(roomMembers.roomId, id), eq(roomMembers.memberKey, key), isNull(roomMembers.finishedAt)));
+    // COURSE-06 : seule une arrivée validée par le serveur temps réel (progress = 1) compte ; sinon l'appel est ignoré
+    await tx.update(roomMembers).set({ finishedAt: sql`now()` }).where(and(eq(roomMembers.roomId, id), eq(roomMembers.memberKey, key), isNull(roomMembers.finishedAt), gte(roomMembers.progress, 1)));
     await endIfAllFinished(tx, id);
   });
   return { room: await roomView(db, id, key), you: key };
+}
+
+/**
+ * COURSE-06 : la progression validée par le serveur temps réel (src/realtime/referee.ts), jamais par une route HTTP.
+ * À 100 %, le coureur a fini (finished_at, heure de la base) et la course se termine si c'était le dernier (SALLE-09).
+ * Hors course, ou pour un non-membre, rien ne change. Vrai si l'état du salon a changé (un coureur est arrivé).
+ */
+export async function recordProgress(db: Db, code: string, key: string, progress: number): Promise<boolean> {
+  const id = await roomIdByCode(db, code);
+  if (id === null) return false;
+  return db.transaction(async (tx) => {
+    const [room] = await tx.select({ status: rooms.status }).from(rooms).where(eq(rooms.id, id)).for("update");
+    if (room?.status !== "racing") return false;
+    const value = Math.min(1, Math.max(0, progress));
+    const member = and(eq(roomMembers.roomId, id), eq(roomMembers.memberKey, key));
+    if (value < 1) {
+      await tx.update(roomMembers).set({ progress: sql`greatest(${roomMembers.progress}, ${value})` }).where(member);
+      return false;
+    }
+    const arrived = await tx.update(roomMembers).set({ progress: 1, finishedAt: sql`now()` }).where(and(member, isNull(roomMembers.finishedAt))).returning({ key: roomMembers.memberKey });
+    if (!arrived.length) {
+      await tx.update(roomMembers).set({ progress: 1 }).where(member);
+      return false;
+    }
+    await endIfAllFinished(tx, id);
+    return true;
+  });
 }
 
 /**

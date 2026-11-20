@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { roomMembers, rooms } from "../../db/schema";
+import { finishAsServer } from "./finish.fixture";
 import { roomsFixture } from "./rooms.fixture";
 
 type Fixture = Awaited<ReturnType<typeof roomsFixture>>;
@@ -17,7 +18,7 @@ async function roomAfterRace(t: Fixture, prefix: string) {
   await t.join(a.cookie, { code: room.code });
   await t.join(b, { code: room.code });
   expect((await t.call("POST", `/api/rooms/${room.code}/launch`, host.cookie)).status).toBe(200);
-  for (const cookie of [host.cookie, a.cookie, b]) await t.call("POST", `/api/rooms/${room.code}/finish`, cookie);
+  for (const cookie of [host.cookie, a.cookie, b]) await finishAsServer(t.db, t.call, room.code, cookie);
   expect((await roomRow(t, room.code)).status).toBe("results");
   return { code: room.code, host, a, b };
 }

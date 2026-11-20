@@ -1,5 +1,6 @@
 // La page salle suit son salon par le serveur temps réel (follow) : membres, expulsion, départ, échéances.
 // Les routes HTTP (handleRoomsApi) annoncent leurs changements par un émetteur en mémoire, comme NOTIFY en production.
+import { finishAsServer } from "../server/finish.fixture";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import type { Server } from "bun";
 import { eq, sql } from "drizzle-orm";
@@ -192,8 +193,8 @@ describe("SALLE-09 — going from the room to the race never costs a member thei
     await tab.next();
     await tab.close();
     expect((await h.call("POST", `/api/rooms/${code}/launch`, hostCookie)).status).toBe(200);
-    await h.call("POST", `/api/rooms/${code}/finish`, hostCookie);
-    await h.call("POST", `/api/rooms/${code}/finish`, runner);
+    await finishAsServer(h.db, h.call, code, hostCookie);
+    await finishAsServer(h.db, h.call, code, runner);
     await Bun.sleep(AWAY_MS * 3);
     const room = (await (await h.call("GET", `/api/rooms/${code}`, hostCookie)).json()) as { room: { status: string; members: { key: string }[] } };
     expect(room.room.status).toBe("results");
@@ -377,5 +378,56 @@ describe("SALLE-07 — a kicked member's race socket leaves the room at once", (
     expect(host.seen.some((m) => m.type === "progress")).toBe(false);
     host.ws.close();
     victim.ws.close();
+  });
+});
+
+describe("COURSE-06 — with the rooms database, the realtime server referees the race end to end", () => {
+  let h: Awaited<ReturnType<typeof harness>>;
+  beforeAll(async () => {
+    h = await harness();
+  });
+  afterAll(() => h.server.stop(true));
+
+  test("server start sent on join, impossible progress refused, validated arrivals end the race in the database", async () => {
+    const hostCookie = await h.signUp("Hote_Arbitre");
+    const code = await created(await h.call("POST", "/api/rooms", hostCookie, { role: "player", settings: { visibility: "public", bots: false, duration: 60 } }));
+    const cookie = `${GUEST_COOKIE}=${signGuest("Coureur_Arbitre", SECRET)}`;
+    const { you } = (await (await h.call("POST", "/api/rooms/join", cookie, { code })).json()) as { you: string };
+    expect((await h.call("POST", `/api/rooms/${code}/launch`, hostCookie)).status).toBe(200);
+    // le départ a eu lieu il y a 27 s (lancement il y a 30 s, décompte de 3 s)
+    await h.db.update(rooms).set({ launchedAt: sql`now() - interval '30 seconds'` }).where(eq(rooms.code, code));
+    const host = await raw(h.server, h.auth, hostCookie);
+    const runner = await raw(h.server, h.auth, cookie);
+    host.send({ type: "join", room: code });
+    runner.send({ type: "join", room: code });
+    const standings = (tab: typeof host) => tab.seen.filter((m) => m.type === "standings") as unknown as { startsAt: number; players: { playerId: string; progress: number; rank: number }[] }[];
+    while (standings(runner).at(-1)?.players.length !== 2) await Bun.sleep(10);
+    const [launched] = await h.db.select({ at: rooms.launchedAt }).from(rooms).where(eq(rooms.code, code));
+    expect(standings(runner).at(-1)!.startsAt).toBe(launched!.at!.getTime() + 3000);
+
+    // 90 % puis un recul : le recul est refusé
+    runner.send({ type: "progress", progress: 0.9, wpm: 50 });
+    while (!standings(host).at(-1)?.players.some((p) => p.progress === 0.9)) await Bun.sleep(10);
+    await Bun.sleep(120);
+    runner.send({ type: "progress", progress: 0.2, wpm: 50 });
+    while (!runner.seen.some((m) => m.type === "error")) await Bun.sleep(10);
+    expect(runner.seen.find((m) => m.type === "error")?.code).toBe("progress_backward");
+
+    runner.send({ type: "progress", progress: 1, wpm: 55 });
+    const memberRow = async (key: string) => (await h.db.select().from(roomMembers).where(eq(roomMembers.memberKey, key)))[0]!;
+    while ((await memberRow(you)).progress !== 1) await Bun.sleep(10);
+    expect((await memberRow(you)).finishedAt).not.toBeNull();
+    while (standings(host).at(-1)!.players[0]!.progress !== 1) await Bun.sleep(10);
+    const ranked = standings(host).at(-1)!.players;
+    expect(ranked[0]).toMatchObject({ progress: 1, rank: 1 });
+
+    host.send({ type: "progress", progress: 1, wpm: 50 });
+    const statusOf = async () => (await h.db.select({ status: rooms.status }).from(rooms).where(eq(rooms.code, code)))[0]!.status;
+    while ((await statusOf()) !== "results") await Bun.sleep(10);
+    host.send({ type: "progress", progress: 1, wpm: 50 });
+    while (!host.seen.some((m) => m.type === "error")) await Bun.sleep(10);
+    expect(host.seen.find((m) => m.type === "error")?.code).toBe("race_over");
+    host.ws.close();
+    runner.ws.close();
   });
 });

@@ -1,16 +1,23 @@
 // Enregistrer une course terminée et lire les statistiques d'un joueur (AUTH-06).
-// À BRANCHER : le navigateur envoie lui-même les résultats ; le serveur de jeu devra les produire pour qu'on ne puisse pas les inventer.
-// D'ici là, qui envoie la course vient de sa session (compte ou cookie d'invité signé), jamais du corps de la requête.
-import { avg, count, desc, eq, max, sql } from "drizzle-orm";
+// Qui envoie la course vient de sa session (compte ou cookie d'invité signé), jamais du corps de la requête.
+// COURSE-06 : la course doit avoir été lancée par le serveur, dans un salon dont l'expéditeur est membre ; un résultat
+// qui contredit le serveur (plus long que la course, plus rapide qu'un humain) est refusé ; l'arrivée et le départ
+// sont ceux du serveur (corrigés) ; un seul enregistrement par membre et par lancement.
+import { and, avg, count, desc, eq, inArray, max, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Db } from "../../db/client";
 import type { Auth } from "./auth";
-import { guestSecret, readGuest } from "./guest";
+import { guestSecret } from "./guest";
 import { storedAvatar } from "../players/avatar";
-import { isBotName } from "../players/bots";
+import { BOT_NAMES, isBotName } from "../players/bots";
 import { KeysSchema, type KeyCounts } from "../players/keys";
 import { DurationSchema, MAX_DURATION } from "../rooms/settings";
-import { players, raceConfigs, raceResults, races, raceSamples, user, type RaceOther } from "../../db/schema";
+import { CODE_PATTERN } from "../rooms/access";
+import { raceClock } from "../rooms/race-clock";
+import { MAX_HUMAN_WPM } from "../realtime/referee";
+import { players, raceConfigs, raceResults, races, raceSamples, roomMembers, rooms, user, type RaceOther } from "../../db/schema";
+import { readGuestSession } from "./guest";
+import { memberKey } from "./rooms";
 
 const LANGUAGES = ["fr", "en"] as const;
 const BOT_SPEEDS = ["slow", "medium", "fast", "mixed"] as const;
@@ -57,6 +64,12 @@ async function readBody(req: Request) {
 export class InvalidRace extends Error {}
 /** La même course, déjà reçue (même identifiant) : un rejeu. */
 export class DuplicateRace extends Error {}
+/** COURSE-06 : la course n'a pas été lancée par le serveur, ou la contredit. */
+export class RaceRefused extends Error {
+  constructor(readonly reason: "race_not_launched" | "race_contradicted") {
+    super(reason);
+  }
+}
 
 const fail = (what: string): never => {
   throw new InvalidRace(`Invalid race: ${what}`);
@@ -109,6 +122,8 @@ const PlayerSchema = z.object({
 const RaceSchema = z.object({
   // l'identifiant de la course (AUTH-06) : facultatif ici, exigé par la route
   id: z.uuid().optional(),
+  // COURSE-06 : le salon de la course, lancé par le serveur : facultatif ici, exigé par la route
+  room: z.string().regex(new RegExp(CODE_PATTERN)).optional(),
   summary: SummarySchema,
   content: z.string().default("").transform((value) => value.slice(0, 10_000)),
   players: z.array(PlayerSchema).min(1).max(8),
@@ -128,7 +143,7 @@ const fieldOf = (path: PropertyKey[]) => [...path].reverse().find((key): key is 
 export function parseRace(body: unknown) {
   const parsed = RaceSchema.safeParse(body);
   if (!parsed.success) return fail(fieldOf(parsed.error.issues[0]?.path ?? []));
-  const { id, summary, content, players: list } = parsed.data;
+  const { id, room, summary, content, players: list } = parsed.data;
   const { sessionSeconds, ...config } = summary;
   const results = list.map(({ chars: [correctChars, wrongChars, extraChars, missedChars], ...player }, index) => ({
     ...player,
@@ -138,7 +153,7 @@ export function parseRace(body: unknown) {
     extraChars,
     missedChars,
   }));
-  return { id: id ?? null, config, content, sessionSeconds, results };
+  return { id: id ?? null, room: room ?? null, config, content, sessionSeconds, results };
 }
 
 type ParsedRace = ReturnType<typeof parseRace>;
@@ -162,7 +177,34 @@ const sameName = (a: string, b: string | null | undefined) => !!b && a.toLowerCa
  * ils sont seulement gardés avec la course (`others`, sans le flag « bot »), pour la réafficher en entier (HIST-02).
  * Renvoie l'id de la course, ou null s'il n'y avait rien à garder.
  */
-export async function recordRace(db: Db, race: ParsedRace, requester: Requester = {}) {
+/** COURSE-06 : la place d'un membre participant au classement du serveur (temps réel, room_members). */
+export type ServerStanding = { finishedAt: Date | null; progress: number };
+/** COURSE-06 : ce que le serveur sait de la course : son départ, si l'expéditeur est arrivé, et le classement des humains (par nom en minuscules). */
+export type ServerRace = { startedAt: Date; finished: boolean; standings?: Map<string, ServerStanding>; bots?: Set<string> };
+
+/**
+ * COURSE-06 : les rangs du corps refaits d'après le serveur. `bots` : les bots du salon, décidés par le serveur (jamais
+ * le drapeau du corps) ; tout le reste est humain. Ordre : les humains que le serveur a vus arriver (par heure
+ * d'arrivée), puis les bots (simulés par le navigateur, BOT-* : dans l'ordre du corps, que le serveur ne peut pas encore
+ * vérifier), puis les humains non arrivés selon le serveur (par progression validée), puis les humains inconnus du
+ * serveur. Ainsi un client ne gagne rien en plaçant les bots : aucun bot devant un humain arrivé, aucun humain non
+ * arrivé devant un bot.
+ */
+export function rankByServer<T extends { name: string; rank: number }>(results: T[], server: Map<string, ServerStanding>, bots: Set<string> = new Set()): T[] {
+  const isBot = (r: T) => bots.has(r.name.toLowerCase());
+  const standing = (r: T) => server.get(r.name.toLowerCase());
+  const humans = results.filter((r) => !isBot(r));
+  const arrived = humans.filter((r) => standing(r)?.finishedAt).sort((a, b) => standing(a)!.finishedAt!.getTime() - standing(b)!.finishedAt!.getTime());
+  const racing = humans.filter((r) => standing(r) && !standing(r)!.finishedAt).sort((a, b) => standing(b)!.progress - standing(a)!.progress);
+  const unknown = humans.filter((r) => !standing(r));
+  return [...arrived, ...results.filter(isBot), ...racing, ...unknown].map((r, index) => ({ ...r, rank: index + 1 }));
+}
+
+export async function recordRace(db: Db, parsed: ParsedRace, requester: Requester = {}, server?: ServerRace) {
+  // COURSE-06 : avec le serveur, le statut bot vient de lui (les bots du salon), jamais du corps ; le rang aussi
+  const serverBots = server?.bots;
+  const results = serverBots ? parsed.results.map((r) => ({ ...r, bot: serverBots.has(r.name.toLowerCase()) })) : parsed.results;
+  const race = server?.standings ? { ...parsed, results: rankByServer(results, server.standings, serverBots) } : { ...parsed, results };
   const [account] = requester.playerId
     ? await db.select({ id: players.id, name: players.name }).from(players).where(eq(players.id, requester.playerId))
     : [];
@@ -175,6 +217,7 @@ export async function recordRace(db: Db, race: ParsedRace, requester: Requester 
       if (accountKept) continue;
       accountKept = true;
       playerId = account.id;
+      if (server) result.finished = server.finished; // COURSE-06 : l'arrivée est celle que le serveur a vue
     } else if (result.bot && !sameName(result.name, requester.guest)) playerId = await botPlayer(db, result.name);
     if (playerId) kept.push({ ...result, playerId });
     else {
@@ -187,9 +230,10 @@ export async function recordRace(db: Db, race: ParsedRace, requester: Requester 
   return db.transaction(async (tx) => {
     const [config] = await tx.insert(raceConfigs).values(race.config).returning({ id: raceConfigs.id });
     const longest = Math.max(...kept.map((result) => result.seconds));
+    const startedAt = server?.startedAt ?? new Date(Date.now() - longest * 1000);
     const [row] = await tx
       .insert(races)
-      .values({ clientId: race.id, configId: config!.id, content: race.content, others, startedAt: new Date(Date.now() - longest * 1000), finishedAt: new Date() })
+      .values({ clientId: race.id, configId: config!.id, content: race.content, others, startedAt, finishedAt: new Date() })
       .onConflictDoNothing({ target: races.clientId })
       .returning({ id: races.id });
     if (!row) throw new DuplicateRace("Race already recorded");
@@ -204,24 +248,80 @@ export async function recordRace(db: Db, race: ParsedRace, requester: Requester 
   });
 }
 
+/** Écart toléré entre le temps de course déclaré et le temps écoulé depuis le départ serveur (réseau, horloges). */
+export const ELAPSED_TOLERANCE_SECONDS = 2;
+
+/**
+ * COURSE-06 : la course de ce membre, telle que le serveur l'a lancée. Refus « race_not_launched » : pas de salon, pas
+ * membre, jamais lancé (ou fermé) ; « race_contradicted » : un joueur du corps a couru plus longtemps que la course du
+ * serveur, ou plus vite qu'un humain (MAX_HUMAN_WPM) ; DuplicateRace : ce membre a déjà enregistré ce lancement
+ * (réservé ici, sous une écriture conditionnelle : deux envois simultanés n'en gardent qu'un).
+ * Renvoie le départ serveur, l'arrivée vue par le temps réel, et de quoi annuler la réservation si l'écriture échoue.
+ */
+export async function claimServerRace(db: Db, race: ParsedRace, key: string | null): Promise<ServerRace & { release: () => Promise<void> }> {
+  if (!race.room || !key) throw new RaceRefused("race_not_launched");
+  const [row] = await db
+    .select({ roomId: rooms.id, launchedAt: rooms.launchedAt, duration: raceConfigs.duration, progress: roomMembers.progress, bots: rooms.bots, guests: rooms.guests })
+    .from(rooms)
+    .innerJoin(raceConfigs, eq(raceConfigs.id, rooms.configId))
+    .innerJoin(roomMembers, and(eq(roomMembers.roomId, rooms.id), eq(roomMembers.memberKey, key)))
+    .where(and(eq(rooms.code, race.room), inArray(rooms.status, ["racing", "results"])));
+  const { startsAt } = raceClock(row?.launchedAt ?? null, row?.duration ?? null);
+  if (!row || startsAt === null) throw new RaceRefused("race_not_launched");
+  const elapsed = (Date.now() - startsAt) / 1000 + ELAPSED_TOLERANCE_SECONDS;
+  if (race.results.some((result) => result.seconds > elapsed || result.wpm > MAX_HUMAN_WPM)) throw new RaceRefused("race_contradicted");
+  const member = and(eq(roomMembers.roomId, row.roomId), eq(roomMembers.memberKey, key));
+  const claimed = await db.update(roomMembers).set({ raceRecorded: true }).where(and(member, eq(roomMembers.raceRecorded, false))).returning({ key: roomMembers.memberKey });
+  if (!claimed.length) throw new DuplicateRace("Race already recorded");
+  const runners = await db
+    .select({ name: sql<string>`coalesce(${players.name}, ${roomMembers.guestName})`, isBot: sql<boolean>`coalesce(${players.isBot}, false)`, finishedAt: roomMembers.finishedAt, progress: roomMembers.progress })
+    .from(roomMembers)
+    .leftJoin(players, eq(players.id, roomMembers.playerId))
+    .where(and(eq(roomMembers.roomId, row.roomId), eq(roomMembers.role, "player")));
+  // les bots du salon : ses membres bots, puis les places libres remplies par la liste fermée, comme la page salle
+  // (seatsOf) ; jamais un nom porté par un membre humain
+  const humans = runners.filter((r) => !r.isBot);
+  const humanNames = new Set(humans.map((r) => r.name.toLowerCase()));
+  const seatBots = row.bots ? BOT_NAMES.slice(0, Math.max(0, row.guests - runners.length)) : [];
+  const bots = new Set([...runners.filter((r) => r.isBot).map((r) => r.name), ...seatBots].map((name) => name.toLowerCase()).filter((name) => !humanNames.has(name)));
+  return {
+    startedAt: new Date(startsAt),
+    finished: row.progress >= 1,
+    standings: new Map(humans.map((r) => [r.name.toLowerCase(), { finishedAt: r.finishedAt, progress: r.progress }])),
+    bots,
+    release: async () => void (await db.update(roomMembers).set({ raceRecorded: false }).where(member)),
+  };
+}
+
 /**
  * POST /api/races : refusé sans session (compte ou invité signé) ; le compte est celui de la session.
  * Chaque course porte un identifiant unique tiré par le navigateur : le même envoi rejoué est refusé (409).
- * Limite : un client qui tire un nouvel identifiant peut encore inventer une course ; MPM et rang viennent du navigateur
- * tant que le serveur de jeu (COURSE-06) ne les calcule pas.
+ * COURSE-06 : la course doit venir d'un salon lancé par le serveur (claimServerRace) ; un seul envoi par membre et par lancement.
+ * Limite : le MPM et le rang restent ceux du navigateur, bornés par le serveur (durée de la course, MPM humain).
  */
 export async function handleRace(req: Request, db: Db, auth: Auth, secret = guestSecret()): Promise<Response> {
   if (req.method !== "POST") return Response.json({ error: "method_not_allowed" }, { status: 405 });
   const session = await auth.api.getSession({ headers: req.headers }).catch(() => null);
   const playerId = (session?.user as { playerId?: number | null } | undefined)?.playerId ?? null;
-  const guest = session ? null : readGuest(req.headers, secret);
+  const guestSession = session ? null : readGuestSession(req.headers, secret);
+  const guest = guestSession?.nickname ?? null;
   if (!session && !guest) return Response.json({ error: "unauthorized" }, { status: 401 });
+  // la clé de membre de l'expéditeur, comme dans les salons (memberKey) ; un invité sans id de session n'en a pas
+  const key = playerId ? memberKey({ playerId }) : guestSession?.id ? `guest:${guestSession.id}` : null;
   try {
     const race = parseRace(JSON.parse(await readBody(req)));
     if (!race.id) fail("id");
-    const raceId = await recordRace(db, race, { playerId, guest });
+    const { release, ...server } = await claimServerRace(db, race, key);
+    let raceId: number | null;
+    try {
+      raceId = await recordRace(db, race, { playerId, guest }, server);
+    } catch (error) {
+      await release();
+      throw error;
+    }
     return Response.json({ raceId }, { status: raceId ? 201 : 200 });
   } catch (error) {
+    if (error instanceof RaceRefused) return Response.json({ error: error.reason }, { status: error.reason === "race_contradicted" ? 422 : 409 });
     if (error instanceof BodyTooLarge) return Response.json({ error: "payload_too_large" }, { status: 413 });
     if (error instanceof DuplicateRace) return Response.json({ error: "duplicate_race" }, { status: 409 });
     if (error instanceof InvalidRace || error instanceof SyntaxError) return Response.json({ error: error.message }, { status: 400 });

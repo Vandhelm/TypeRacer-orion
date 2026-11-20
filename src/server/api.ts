@@ -4,6 +4,7 @@ import { connect } from "../../db/client";
 import { handleRace, handleStats } from "./races";
 import { handleAvatar, saveAvatar } from "./account";
 import { handleGuest } from "./guest";
+import { realtimeReadiness } from "./realtime-config";
 import { handleRealtimeTicket } from "./realtime-ticket";
 import { handleHistory } from "./history";
 import { createAuth, type Auth } from "./auth";
@@ -31,10 +32,11 @@ const routes: Record<string, Handler> = {
   "/api/health": async () => {
     try {
       await db().execute(sql`select 1`);
-      return Response.json({ ok: true, database: true });
+      // COURSE-06 : le serveur temps réel est obligatoire en production ; son absence se voit ici, sans faire tomber le site
+      return Response.json({ ok: true, database: true, realtime: realtimeReadiness() });
     } catch (error) {
       console.error(error);
-      return Response.json({ ok: false, database: false }, { status: 503 });
+      return Response.json({ ok: false, database: false, realtime: realtimeReadiness() }, { status: 503 });
     }
   },
 };

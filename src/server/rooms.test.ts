@@ -1,3 +1,4 @@
+import { finishAsServer } from "./finish.fixture";
 import { beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { players, raceConfigs, roomMembers, rooms, user } from "../../db/schema";
@@ -467,7 +468,7 @@ describe("SALLE-09 — the race ends on the server: racing → results once ever
 
   test("one human finishing while another still races keeps the room racing; a newcomer gets 409", async () => {
     const { code, runner } = await launched();
-    const res = await t.call("POST", `/api/rooms/${code}/finish`, runner);
+    const res = await finishAsServer(t.db, t.call, code, runner);
     expect(res.status).toBe(200);
     expect(await statusOf(code)).toBe("racing");
     expect((await t.call("POST", "/api/rooms/join", t.freshGuest("Opportuniste"), { code })).status).toBe(409);
@@ -475,15 +476,15 @@ describe("SALLE-09 — the race ends on the server: racing → results once ever
 
   test("a member calling finish right after the launch does not reopen the room", async () => {
     const { code, runner } = await launched();
-    await t.call("POST", `/api/rooms/${code}/finish`, runner);
-    await t.call("POST", `/api/rooms/${code}/finish`, runner);
+    await finishAsServer(t.db, t.call, code, runner);
+    await finishAsServer(t.db, t.call, code, runner);
     expect(await statusOf(code)).toBe("racing");
   });
 
   test("when every human player has finished, the room is on results and a newcomer can join (200)", async () => {
     const { code, runner } = await launched();
-    await t.call("POST", `/api/rooms/${code}/finish`, runner);
-    const res = await t.call("POST", `/api/rooms/${code}/finish`, host.cookie);
+    await finishAsServer(t.db, t.call, code, runner);
+    const res = await finishAsServer(t.db, t.call, code, host.cookie);
     expect(((await res.json()) as { room: { status: string } }).room.status).toBe("results");
     expect(await statusOf(code)).toBe("results");
     expect((await t.call("POST", "/api/rooms/join", t.freshGuest("Arrivant_Resultats"), { code })).status).toBe(200);
@@ -491,13 +492,13 @@ describe("SALLE-09 — the race ends on the server: racing → results once ever
 
   test("a spectating host does not hold the race: the last player finishing ends it", async () => {
     const { code, runner } = await launched("spectator");
-    await t.call("POST", `/api/rooms/${code}/finish`, runner);
+    await finishAsServer(t.db, t.call, code, runner);
     expect(await statusOf(code)).toBe("results");
   });
 
   test("a player leaving mid-race does not hold it either", async () => {
     const { code, runner } = await launched();
-    await t.call("POST", `/api/rooms/${code}/finish`, host.cookie);
+    await finishAsServer(t.db, t.call, code, host.cookie);
     expect(await statusOf(code)).toBe("racing");
     await t.call("POST", `/api/rooms/${code}/leave`, runner);
     expect(await statusOf(code)).toBe("results");
@@ -505,17 +506,17 @@ describe("SALLE-09 — the race ends on the server: racing → results once ever
 
   test("a new launch starts with nobody finished", async () => {
     const { code, runner } = await launched();
-    await t.call("POST", `/api/rooms/${code}/finish`, runner);
-    await t.call("POST", `/api/rooms/${code}/finish`, host.cookie);
+    await finishAsServer(t.db, t.call, code, runner);
+    await finishAsServer(t.db, t.call, code, host.cookie);
     expect((await t.call("POST", `/api/rooms/${code}/launch`, host.cookie)).status).toBe(200);
-    await t.call("POST", `/api/rooms/${code}/finish`, runner);
+    await finishAsServer(t.db, t.call, code, runner);
     expect(await statusOf(code)).toBe("racing");
   });
 
   test("finishing on a waiting room changes nothing", async () => {
     host = await t.newHost("Hote_Fin");
     const { room } = (await (await t.call("POST", "/api/rooms", host.cookie, { role: "player" })).json()) as Joined;
-    await t.call("POST", `/api/rooms/${room.code}/finish`, host.cookie);
+    await finishAsServer(t.db, t.call, room.code, host.cookie);
     expect(await statusOf(room.code)).toBe("waiting");
   });
 
@@ -541,7 +542,7 @@ describe("SALLE-09 — a race nobody finishes ends on its own after the maximum 
     const runner = t.freshGuest(`Fantome_${room.code}`);
     const { you } = (await (await t.call("POST", "/api/rooms/join", runner, { code: room.code })).json()) as Joined;
     expect((await t.call("POST", `/api/rooms/${room.code}/launch`, host.cookie)).status).toBe(200);
-    await t.call("POST", `/api/rooms/${room.code}/finish`, host.cookie);
+    await finishAsServer(t.db, t.call, room.code, host.cookie);
     const sessionId = you.slice("guest:".length);
     expect((await leaveAfterDisconnect(t.db, room.code, { kind: "guest", name: "Fantome", sessionId })).left).toBe(false);
     return room.code;
@@ -589,8 +590,8 @@ describe("SALLE-09 — a race nobody finishes ends on its own after the maximum 
     const { you } = (await (await t.call("POST", "/api/rooms/join", cookie, { code: room.code })).json()) as Joined;
     const who = { kind: "guest" as const, name: "Absent", sessionId: you.slice("guest:".length) };
     await t.call("POST", `/api/rooms/${room.code}/launch`, host.cookie);
-    await t.call("POST", `/api/rooms/${room.code}/finish`, host.cookie);
-    await t.call("POST", `/api/rooms/${room.code}/finish`, cookie);
+    await finishAsServer(t.db, t.call, room.code, host.cookie);
+    await finishAsServer(t.db, t.call, room.code, cookie);
     expect(await statusOf(room.code)).toBe("results");
     expect((await leaveAfterDisconnect(t.db, room.code, who, 15_000)).left).toBe(false);
     await launchedAgo(room.code, 31_000);
