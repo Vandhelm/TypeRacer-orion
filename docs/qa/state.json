@@ -345,9 +345,9 @@
     "scope": "suivi (light)"
   },
   "RES-03": {
-    "commit": "1836ffb",
+    "commit": "ff84eaf",
     "date": "2026-11-20",
-    "scope": "critère (feature/profile/res-03)"
+    "scope": "critère (feature/profile/res-03 + fix/podium/res-03-scroll)"
   },
   "RES-04": {
     "commit": "1fba673",
