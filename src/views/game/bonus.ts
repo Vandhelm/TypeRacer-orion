@@ -48,7 +48,8 @@ export function applyRemoteBonus(race: Race, lane: number, effect: BonusEffect):
   const done = wordsDone(words, remote.progress);
   const next = editWords(Array.from({ length: words }, () => ""), effect, done).length;
   if (next === words || next === 0) return race;
-  const moved = { ...remote, words: next, progress: done / next, stale: remote.progress };
+  // un 2e bonus avant sa progression suivante garde la valeur relayée d'avant le 1er (c'est elle que le relais renvoie)
+  const moved = { ...remote, words: next, progress: done / next, stale: remote.stale ?? remote.progress };
   return { ...race, remotes: race.remotes.map((candidate) => (candidate === remote ? moved : candidate)) };
 }
 

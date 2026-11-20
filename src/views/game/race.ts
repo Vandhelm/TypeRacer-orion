@@ -191,16 +191,19 @@ const unit = (value: number) => (Number.isFinite(value) ? Math.min(1, Math.max(0
 /**
  * COURSE-05 : la progression qu'un adversaire humain vient d'envoyer. Elle ne recule jamais (un message en retard ne
  * ramène pas son poisson en arrière) ; à 1, il arrive, une seule fois. Mon couloir et ceux des bots ne bougent pas ici.
- * BONUS-03 : la progression d'avant un bonus sur son texte (`stale`), relayée de nouveau, ne le refait pas avancer.
+ * BONUS-03 : la dernière progression relayée avant un bonus sur son texte (`stale`), relayée de nouveau, ne le refait
+ * pas avancer ; elle reste ignorée jusqu'à la progression suivante, même après plusieurs bonus.
  */
 export function applyRemote(race: Race, lane: number, update: { progress: number; wpm: number }, now: number): Race {
   const remote = race.remotes.find((candidate) => candidate.lane === lane);
   if (!remote || remote.finishedAt) return race;
-  const progress = update.progress === remote.stale ? remote.progress : Math.max(remote.progress, unit(update.progress));
+  const old = update.progress === remote.stale;
+  const progress = old ? remote.progress : Math.max(remote.progress, unit(update.progress));
   const wpm = Number.isFinite(update.wpm) ? Math.max(0, Math.round(update.wpm)) : remote.wpm;
-  if (progress === remote.progress && wpm === remote.wpm) return race;
+  const stale = old ? remote.stale : undefined;
+  if (progress === remote.progress && wpm === remote.wpm && stale === remote.stale) return race;
   const arrived = progress >= 1;
-  const moved: Remote = { ...remote, progress, wpm, finishedAt: arrived ? now : 0 };
+  const moved: Remote = { ...remote, progress, wpm, finishedAt: arrived ? now : 0, stale };
   return {
     ...race,
     remotes: race.remotes.map((candidate) => (candidate === remote ? moved : candidate)),

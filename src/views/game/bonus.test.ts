@@ -106,6 +106,35 @@ describe("BONUS-03 — the lane of another human follows the bonus that changed 
     expect(laneProgress(race, 1)).toBeCloseTo(7 / 12, 6);
   });
 
+  // 20 mots, la moitié faite : 10 mots validés
+  function rivalOn20(progress: number): Race {
+    const words = Array.from({ length: 20 }, (_, i) => `mot${i}`);
+    const race = createRace(createCourse(words, 60, "fix"), [ME, RIVAL], "medium", "high", () => 0.5);
+    return applyRemote({ ...race, phase: "racing", count: null, startedAt: 1000, now: 1000 }, 1, { progress, wpm: 60 }, 2000);
+  }
+
+  test("two bonuses before their next progress: the progress from before both, relayed again, does not bring the lane back", () => {
+    let race = applyRemoteBonus(applyRemoteBonus(rivalOn20(0.5), 1, extra3), 1, extra3);
+    expect(laneProgress(race, 1)).toBeCloseTo(10 / 26, 6);
+    race = applyRemote(race, 1, { progress: 0.5, wpm: 60 }, 2100);
+    expect(laneProgress(race, 1)).toBeCloseTo(10 / 26, 6);
+  });
+
+  test("after a bonus, their real next progress on the longer text is shown, even below the old one", () => {
+    let race = applyRemoteBonus(rivalOn20(0.5), 1, extra3);
+    race = applyRemote(race, 1, { progress: 11 / 23, wpm: 60 }, 2100);
+    expect(laneProgress(race, 1)).toBeCloseTo(11 / 23, 6);
+  });
+
+  test("progress, bonus, progress, bonus: the progress relayed last before the second bonus does not come back", () => {
+    let race = applyRemoteBonus(rivalOn20(0.5), 1, extra3);
+    race = applyRemote(race, 1, { progress: 11 / 23, wpm: 60 }, 2100);
+    race = applyRemoteBonus(race, 1, extra3);
+    expect(laneProgress(race, 1)).toBeCloseTo(11 / 26, 6);
+    race = applyRemote(race, 1, { progress: 11 / 23, wpm: 61 }, 2200);
+    expect(laneProgress(race, 1)).toBeCloseTo(11 / 26, 6);
+  });
+
   test("a second +3 words counts on the text already lengthened", () => {
     expect(laneProgress(applyRemoteBonus(applyRemoteBonus(rivalAt(6 / 9), 1, extra3), 1, extra3), 1)).toBeCloseTo(6 / 15, 6);
   });
