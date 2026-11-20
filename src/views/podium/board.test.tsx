@@ -79,6 +79,11 @@ describe("RES-02 — bonuses received, from the server (bonus messages and stand
     expect(laneBonuses(state, LANES)).toEqual([{ count: 3, kinds: [] }, { count: 0, kinds: [] }, { count: 0, kinds: [] }]);
   });
 
+  test("BOT-04 — a bot gets the bonuses awarded to it, like a human", () => {
+    const state = live({ bonuses: [bonus("bot:Bip", 1, "fewer_words"), bonus("bot:Bip", 2, "fog")], race: { startsAt: 0, endsAt: null, standings: [standing("u:1", 0)] } });
+    expect(laneBonuses(state, LANES)![2]).toEqual({ count: 2, kinds: ["fewer_words", "fog"] });
+  });
+
   test("a bonus for an unknown runner or a spectator is not given to any lane", () => {
     const state = live({ bonuses: [bonus("u:99", 1, "fog")], race: { startsAt: 0, endsAt: null, standings: [standing("u:99", 1)] } });
     expect(laneBonuses(state, LANES)).toEqual([{ count: 0, kinds: [] }, { count: 0, kinds: [] }, { count: 0, kinds: [] }]);

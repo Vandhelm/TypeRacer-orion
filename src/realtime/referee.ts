@@ -6,6 +6,7 @@
 // - pas plus de caractères entre deux messages que ne peut taper un humain depuis le dernier accepté (saut).
 // Les caractères sont comptés par le serveur sur le texte qu'il a tiré (CONF-03), espaces comprises (annexe A),
 // jamais déclarés par le client. Les seuils sont documentés dans docs/ARCHITECTURE.md.
+import type { BotBonus, BotMode, BotProfile } from "../rooms/bot-engine";
 
 /** Au-delà de 300 MPM soutenus (record humain autour de 300 en pointe), une progression est irréaliste. */
 export const MAX_HUMAN_WPM = 300;
@@ -36,6 +37,13 @@ export type RaceCourse = {
   words?: string[];
   /** BONUS-02 : la graine du salon (CONF-03), qui choisit le type de chaque bonus ; absente : le départ en tient lieu. */
   seed?: number;
+  /**
+   * BOT-04 : avec les bonus et le texte connu, les bots assis (id temps réel `bot:<nom>`, graine et profil du moteur),
+   * le mode d'erreur du salon et les effets déjà reçus par les bots (gardés en base) : le serveur les fait courir.
+   */
+  bots?: { id: string; seed: number; profile: BotProfile }[];
+  mistakes?: BotMode;
+  botBonuses?: BotBonus[];
 };
 /** La dernière progression acceptée d'un coureur ; `finishedAt` : heure serveur de son arrivée. */
 export type Accepted = { progress: number; chars: number; wpm: number; at: number; finishedAt: number | null };

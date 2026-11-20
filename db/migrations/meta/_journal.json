@@ -239,6 +239,13 @@
       "when": 1795194211636,
       "tag": "0033_room_eliminated_at",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1795196479168,
+      "tag": "0034_bot_bonuses",
+      "breakpoints": true
     }
   ]
 }

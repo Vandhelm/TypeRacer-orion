@@ -3,6 +3,7 @@
 // simulée ici ; l'affichage glisse d'une mise à jour à l'autre (easeToward) au lieu de sauter.
 import { generatedAvatar, storedAvatar, type GeneratedAvatar } from "../../players/avatar";
 import type { RealtimeState } from "../../realtime/client";
+import { botNameOf } from "../../rooms/bots";
 import type { MemberView, Player } from "../room/room";
 import { laneProgress, laneWpm, type Race } from "./race";
 
@@ -29,6 +30,17 @@ export function raceLanes(players: Player[], members: MemberView[]): RaceLanes {
     .sort((a, b) => a.seat! - b.seat!)
     .map((m) => m.key);
   return { players: players.map((player) => ({ ...player })), keys: players.map((player, lane) => (player.bot ? null : (seated[lane] ?? null))) };
+}
+
+/**
+ * Le couloir d'un coureur temps réel : un humain par sa clé de membre, un bot par son id `bot:<nom>` (BOT-04, bonus) ;
+ * -1 s'il n'en a pas. Un humain ne peut pas prendre le couloir d'un bot : son id n'a jamais cette forme.
+ */
+export function laneOfRunner(id: string, lanes: RaceLanes): number {
+  const bot = botNameOf(id);
+  if (bot !== null) return lanes.players.findIndex((player) => player.bot && player.name.toLowerCase() === bot.toLowerCase());
+  const key = realtimeMemberKey(id);
+  return key === null ? -1 : lanes.keys.indexOf(key);
 }
 
 /** Les progressions reçues, couloir par couloir, selon leur auteur. Ni la mienne (mesurée par la page), ni celle d'un spectateur ou d'un inconnu ne compte. */

@@ -226,6 +226,8 @@ export function useRoom(page: "room" | "game" = "room") {
     passage: view.passage?.body ?? null,
     /** CONF-03 : la graine des mots tirés au hasard, la même pour tous les membres. */
     seed: view.seed,
+    /** BOT-04 : les bonus déjà reçus par les bots de la course, que la page rejoue en montant. */
+    botBonuses: view.botBonuses,
     /** COURSE-03 / COURSE-06 : départ et fin de la course, heure du serveur (ms epoch) ; null avant le lancement. */
     startsAt: view.startsAt,
     endsAt: view.endsAt,

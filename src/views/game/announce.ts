@@ -3,7 +3,7 @@
 // Un bonus sans effet (aucun type ne pouvait s'appliquer) ne change rien : il n'est pas annoncé.
 import type { ServerBonus } from "../../realtime/client";
 import type { BonusKind } from "../../rooms/bonus-effects";
-import { realtimeMemberKey, type RaceLanes } from "./track";
+import { laneOfRunner, type RaceLanes } from "./track";
 
 /** Durée d'une annonce ; le brouillard reste annoncé tant qu'il dure. */
 export const ANNOUNCE_MS = 4000;
@@ -25,11 +25,8 @@ export type BonusAnnouncement = {
   until: number;
 };
 
-/** Le couloir d'un joueur temps réel, par sa clé de membre ; -1 s'il n'en a pas. */
-function laneOf(id: string, lanes: RaceLanes): number {
-  const key = realtimeMemberKey(id);
-  return key === null ? -1 : lanes.keys.indexOf(key);
-}
+/** Le couloir d'un joueur temps réel ; BOT-04 : un bot aussi, par son id `bot:<nom>`. -1 s'il n'en a pas. */
+const laneOf = laneOfRunner;
 
 /** L'annonce d'un bonus reçu à `now`, ou null s'il ne change rien ou vise un joueur hors piste. `you` : mon id temps réel. */
 export function announceBonus(bonus: ServerBonus, lanes: RaceLanes, you: string | null, now: number): BonusAnnouncement | null {
