@@ -4,6 +4,7 @@
 import { z } from "zod";
 import { CODE_PATTERN } from "../rooms/access";
 import { CHECKPOINTS, MAX_BONUSES } from "../rooms/bonus";
+import { FOG_MS, WORDS_CHANGED } from "../rooms/bonus-effects";
 import { MAX_HUMAN_WPM } from "./referee";
 
 /** Un message plus long est refusé par le serveur avant même d'être lu. */
@@ -47,6 +48,13 @@ export const ERROR_CODES = [
 /** COURSE-06 : la place d'un coureur au classement du serveur ; `finishedMs` : temps d'arrivée depuis le départ serveur ; `bonuses` (BONUS-01) : bonus reçus, seulement quand les bonus sont activés. */
 export const Standing = z.object({ playerId: z.string(), rank: z.number().int().min(1), progress: z.number().min(0).max(1), wpm: z.number().min(0).max(WPM_MAX), finishedMs: z.number().nullable(), bonuses: z.number().int().min(0).max(MAX_BONUSES).optional() });
 
+/** BONUS-02 : l'effet d'un bonus (src/rooms/bonus-effects.ts), sur `target` (id du joueur). */
+export const BonusEffect = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("fewer_words"), target: z.string(), removed: z.number().int().min(1).max(WORDS_CHANGED) }),
+  z.object({ kind: z.literal("extra_words"), target: z.string(), words: z.array(z.string().min(1).max(64)).min(1).max(WORDS_CHANGED) }),
+  z.object({ kind: z.literal("fog"), target: z.string(), durationMs: z.number().int().min(1).max(FOG_MS) }),
+]);
+
 export const ServerMessage = z.discriminatedUnion("type", [
   z.object({ type: z.literal("welcome"), you: Player }),
   z.object({ type: z.literal("presence"), room: RoomCode, players: z.array(Player) }),
@@ -59,7 +67,8 @@ export const ServerMessage = z.discriminatedUnion("type", [
   z.object({ type: z.literal("standings"), room: RoomCode, startsAt: z.number(), endsAt: z.number().nullable(), players: z.array(Standing) }),
   // BONUS-01 : un bonus de remontée attribué par le serveur à `playerId`, au point de contrôle `checkpoint` (1 à 3) ;
   // `count` : ses bonus dans la course, celui-ci compris. L'effet (BONUS-02) et l'annonce (BONUS-03) s'y branchent.
-  z.object({ type: z.literal("bonus"), room: RoomCode, playerId: z.string(), checkpoint: z.number().int().min(1).max(CHECKPOINTS.length), count: z.number().int().min(1).max(MAX_BONUSES) }),
+  // BONUS-02 : `effect`, choisi par le serveur ; absent quand aucun type ne peut s'appliquer.
+  z.object({ type: z.literal("bonus"), room: RoomCode, playerId: z.string(), checkpoint: z.number().int().min(1).max(CHECKPOINTS.length), count: z.number().int().min(1).max(MAX_BONUSES), effect: BonusEffect.optional() }),
 ]);
 export type ServerMessage = z.infer<typeof ServerMessage>;
 

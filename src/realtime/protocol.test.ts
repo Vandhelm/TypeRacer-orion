@@ -85,3 +85,28 @@ describe("COURSE-06 — the server ranking message", () => {
     expect(parseServerMessage(raw({ ...standings, players: [{ ...standings.players[0], rank: 0 }] }))).toBeNull();
   });
 });
+
+describe("BONUS-02 — the bonus effect read by the client", () => {
+  const bonus = (effect: unknown) => JSON.stringify({ type: "bonus", room: "RMQWZC", playerId: "g:late", checkpoint: 1, count: 1, effect });
+  test("each of the three effects is read", () => {
+    for (const effect of [
+      { kind: "fewer_words", target: "g:late", removed: 3 },
+      { kind: "extra_words", target: "g:lead", words: ["maki", "sushi", "nori"] },
+      { kind: "fog", target: "g:lead", durationMs: 5000 },
+    ]) expect(parseServerMessage(bonus(effect))).toMatchObject({ effect });
+    expect(parseServerMessage(JSON.stringify({ type: "bonus", room: "RMQWZC", playerId: "g:late", checkpoint: 1, count: 1 }))).not.toBeNull();
+  });
+
+  test("an effect out of bounds is ignored: more than 3 words, a long fog, an unknown kind, no target", () => {
+    for (const effect of [
+      { kind: "fewer_words", target: "g:late", removed: 4 },
+      { kind: "fewer_words", target: "g:late", removed: 0 },
+      { kind: "extra_words", target: "g:lead", words: ["a", "b", "c", "d"] },
+      { kind: "extra_words", target: "g:lead", words: [""] },
+      { kind: "fog", target: "g:lead", durationMs: 60_000 },
+      { kind: "freeze", target: "g:lead" },
+      { kind: "fog", durationMs: 5000 },
+      null,
+    ]) expect(parseServerMessage(bonus(effect))).toBeNull();
+  });
+});

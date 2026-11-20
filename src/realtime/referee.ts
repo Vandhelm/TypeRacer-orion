@@ -31,6 +31,10 @@ export type RaceCourse = {
   resume?: { key: string; progress: number; finishedAt: number | null }[];
   /** BONUS-01 : les bonus de remontée sont activés pour cette course (CONF-09) ; absent : non. */
   catchUpBonus?: boolean;
+  /** BONUS-02 : les mots tirés (avec `marks`), où le bonus +3 mots puise les siens ; absent : texte inconnu. */
+  words?: string[];
+  /** BONUS-02 : la graine du salon (CONF-03), qui choisit le type de chaque bonus ; absente : le départ en tient lieu. */
+  seed?: number;
 };
 /** La dernière progression acceptée d'un coureur ; `finishedAt` : heure serveur de son arrivée. */
 export type Accepted = { progress: number; chars: number; wpm: number; at: number; finishedAt: number | null };

@@ -21,6 +21,8 @@ import type { Server, ServerWebSocket } from "bun";
 import { concealText } from "../rooms/conceal";
 import { MAX_MESSAGE_BYTES, parseClientMessage, type Player, PROGRESS_INTERVAL_MS, type ServerMessage } from "./protocol";
 import { awardBonuses, newTally, skipPassed, type BonusTally } from "../rooms/bonus";
+import { bonusKind, editWords, planEffect, wordsDone, type BonusEffect } from "../rooms/bonus-effects";
+import { seededRandom } from "../rooms/text";
 import { charsAt, judge, standings, type Accepted, type RaceCourse } from "./referee";
 import type { RoomBackend, RoomState } from "./room-backend";
 import { TICKET_TTL_MS, verifyTicket } from "./ticket";
@@ -35,7 +37,9 @@ type Member = { player: Player; connections: number };
 /** COURSE-06 : la course arbitrée d'une salle. `course` : la dernière connue ; `over` : le salon a quitté la course. */
 /** `resumed` : progressions relues en base (par clé de membre), reprises quand le coureur revient. */
 /** `alive` (COURSE-08) : clés des coureurs dont une progression a été acceptée depuis le dernier balayage. */
-type RaceState = { course: RaceCourse | null; over: boolean; entries: Map<string, Accepted>; resumed: Map<string, Accepted>; owners: Map<string, string>; kept: Set<string>; alive: Set<string>; lastSent: number; timer: ReturnType<typeof setTimeout> | null; bonus: BonusTally };
+/** `texts` (BONUS-02) : le texte d'un coureur changé par un bonus (+3 / -3 mots), par id ; les autres gardent celui de la course. */
+type RunnerText = { words: string[]; marks: number[] };
+type RaceState = { course: RaceCourse | null; over: boolean; entries: Map<string, Accepted>; resumed: Map<string, Accepted>; owners: Map<string, string>; kept: Set<string>; alive: Set<string>; lastSent: number; timer: ReturnType<typeof setTimeout> | null; bonus: BonusTally; texts: Map<string, RunnerText> };
 type Throttle = { lastSent: number; pending: { ws: Socket; text: string } | null; timer: ReturnType<typeof setTimeout> | null };
 
 export type RealtimeOptions = {
@@ -216,7 +220,7 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
       // COURSE-07 : la course vient de finir (le dernier a peut-être abandonné) : sa progression validée reste en base
       if (state?.course && !state.over) keepValidated(code, state, null);
       if (state?.course) state.over = true;
-      else if (!state) races.set(code, { course: null, over: false, entries: new Map(), resumed: new Map(), owners: new Map(), kept: new Set(), alive: new Set(), lastSent: -Infinity, timer: null, bonus: newTally() });
+      else if (!state) races.set(code, { course: null, over: false, entries: new Map(), resumed: new Map(), owners: new Map(), kept: new Set(), alive: new Set(), lastSent: -Infinity, timer: null, bonus: newTally(), texts: new Map() });
       return;
     }
     if (!state || !state.course || state.course.startsAt !== course.startsAt) {
@@ -231,7 +235,7 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
       const bonus = newTally();
       // BONUS-01 : une course reprise garde ses points de contrôle franchis, sans redonner de bonus
       skipPassed(bonus, [...resumed.values()].map((entry) => ({ playerId: "", progress: entry.progress, finished: entry.finishedAt !== null })));
-      races.set(code, { course, over: false, entries: new Map(), resumed, owners: new Map(), kept: new Set(course.abandoned ?? []), alive: new Set(), lastSent: -Infinity, timer: null, bonus });
+      races.set(code, { course, over: false, entries: new Map(), resumed, owners: new Map(), kept: new Set(course.abandoned ?? []), alive: new Set(), lastSent: -Infinity, timer: null, bonus, texts: new Map() });
     } else {
       state.course = course;
       state.over = false;
@@ -296,7 +300,45 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
     const runners = [...raceEntries(code, state)]
       .filter(([playerId]) => !abandoned.has(keys.get(playerId) ?? ""))
       .map(([playerId, entry]) => ({ playerId, progress: entry.progress, finished: entry.finishedAt !== null }));
-    for (const award of awardBonuses(state.bonus, runners)) server.publish(topic(code), encode({ type: "bonus", room: code, ...award }));
+    const served = new Map<number, number>();
+    for (const award of awardBonuses(state.bonus, runners)) {
+      const order = served.get(award.checkpoint) ?? 0;
+      served.set(award.checkpoint, order + 1);
+      const effect = bonusEffect(state, award.playerId, award.checkpoint, order, runners);
+      server.publish(topic(code), encode({ type: "bonus", room: code, ...award, ...(effect ? { effect } : {}) }));
+    }
+  }
+
+  /** Le texte arbitré d'un coureur : celui que lui a laissé un bonus, sinon celui de la course (null : inconnu). */
+  function textOf(state: RaceState & { course: RaceCourse }, playerId: string): RunnerText | null {
+    const { words, marks } = state.course;
+    return state.texts.get(playerId) ?? (words && marks ? { words, marks } : null);
+  }
+
+  /**
+   * BONUS-02 : le type du bonus est tiré de la graine du salon (src/rooms/bonus-effects.ts) ; un effet sur le texte
+   * (+3 / -3 mots) change le texte arbitré de la cible, et sa progression acceptée est recalculée sur ce texte (mêmes mots
+   * validés, nouvelle longueur), pour que l'arbitre continue de compter juste (annexe A).
+   */
+  function bonusEffect(state: RaceState & { course: RaceCourse }, playerId: string, checkpoint: number, order: number, runners: { playerId: string; progress: number; finished: boolean }[]): BonusEffect | null {
+    const seed = state.course.seed ?? state.course.startsAt;
+    const effect = planEffect({
+      kind: bonusKind(seed, checkpoint, order),
+      beneficiary: playerId,
+      runners: runners.map((runner) => ({ ...runner, words: textOf(state, runner.playerId)?.words ?? null })),
+      pool: state.course.words ?? null,
+      random: seededRandom((seed ^ Math.imul(checkpoint * 31 + order, 0x9e3779b1)) | 0),
+    });
+    if (!effect || effect.kind === "fog") return effect;
+    const text = textOf(state, effect.target)!;
+    const entry = state.entries.get(effect.target);
+    const done = wordsDone(text.words.length, entry?.progress ?? 0);
+    const words = editWords(text.words, effect, done);
+    const marks = [0];
+    for (const word of words) marks.push(marks.at(-1)! + word.length + 1);
+    state.texts.set(effect.target, { words, marks });
+    if (entry) state.entries.set(effect.target, { ...entry, progress: done / words.length, chars: marks[done]! });
+    return effect;
   }
 
   /** Diffuse le classement à toute la salle, au plus une fois par PROGRESS_INTERVAL_MS (PERF-02) ; `now` : sans attendre. */
@@ -341,7 +383,9 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
     }
     adopt(state, ws);
     const previous = state.entries.get(ws.data.player.id);
-    const verdict = judge(state.course, previous, value, wpm, Date.now());
+    // BONUS-02 : un coureur dont un bonus a changé le texte est jugé sur ce texte
+    const marks = state.texts.get(ws.data.player.id)?.marks ?? state.course.marks;
+    const verdict = judge({ ...state.course, marks }, previous, value, wpm, Date.now());
     if (!verdict.ok) {
       send(ws, { type: "error", code: verdict.reason });
       return false;
