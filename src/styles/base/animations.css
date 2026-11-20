@@ -6,7 +6,7 @@
 @keyframes trace{ to{ stroke-dashoffset: 0; } }
 
 @keyframes stamp-hit{
-    0%  { opacity: 0; transform: translate(-50%,-50%) scale(2.2) rotate(-14deg); }
+    0%  { opacity: 0; transform: translate(-50%,-50%) scale(var(--stamp-from, 2.2)) rotate(-14deg); }
     45% { opacity: 1; transform: translate(-50%,-50%) scale(.9)  rotate(0deg); }
     60% { transform: translate(-50%,-50%) scale(1.05) rotate(0deg); }
     72% { transform: translate(-50%,-50%) scale(1)    rotate(0deg); }
