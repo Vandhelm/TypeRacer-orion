@@ -5,6 +5,9 @@
 // BOT-01 : cinq niveaux (vitesse, taux d'erreur). BOT-02 : rythme variable (accélérations, hésitations, mots
 // difficiles plus lents). BOT-03 : des fautes qui coûtent du temps, selon le mode d'erreur du salon (CONF-08).
 // Valeurs retenues : docs/ARCHITECTURE.md, « Niveaux et comportement des bots ».
+// BOT-04 : les bonus reçus par un bot (liste datée, décidée par le serveur temps réel) sont rejoués ici, tick par tick :
+// +3 / -3 mots changent son texte, le brouillard le ralentit (BOT_FOG_SPEED). Voir « Bots et bonus (BOT-04) ».
+import { editWords, type BonusEffect } from "./bonus-effects";
 import type { RoomSettings } from "./settings";
 import { seededRandom } from "./text";
 
@@ -188,9 +191,9 @@ export const botArrived = (text: BotText, state: BotState) => state.chars >= tex
  * caractère à sa vitesse de base × `jitter` (60 % à 140 %, l'aléa du tick) × son rythme du mot (80 % à 125 %, tiré par
  * mot) × la difficulté du mot. Chaque frappe peut être fausse (tirage lié au caractère) : selon le mode, le bot corrige
  * (réaction, effacement, nouvelle frappe), continue en laissant le mot faux, ou s'arrête (fatal). Avant chaque mot, il
- * peut hésiter, plus souvent avant un mot difficile.
+ * peut hésiter, plus souvent avant un mot difficile. BOT-04 : `slow` multiplie sa vitesse de frappe (brouillard).
  */
-export function botStep(text: BotText, state: BotState, bot: BotProfile & { seed: number }, jitter: number): BotState {
+export function botStep(text: BotText, state: BotState, bot: BotProfile & { seed: number }, jitter: number, slow = 1): BotState {
   if (state.out || botArrived(text, state)) return state;
   const { marks, words, difficulty, mistakes } = text;
   const total = marks.at(-1)!;
@@ -206,7 +209,7 @@ export function botStep(text: BotText, state: BotState, bot: BotProfile & { seed
   wait();
   while (time > 0 && s.chars < total) {
     const word = wordAt(marks, s.chars);
-    const speed = pace * (0.6 + 0.8 * jitter) * (0.8 + 0.45 * draw(bot.seed, RHYTHM_SALT, word)) * (1 - HARD_SLOWDOWN * difficulty[word]!);
+    const speed = slow * pace * (0.6 + 0.8 * jitter) * (0.8 + 0.45 * draw(bot.seed, RHYTHM_SALT, word)) * (1 - HARD_SLOWDOWN * difficulty[word]!);
     const next = Math.min(Math.floor(s.chars) + 1, total);
     const need = ((next - s.chars) / speed) * 1000;
     if (need > time) {
@@ -249,25 +252,56 @@ export function botStep(text: BotText, state: BotState, bot: BotProfile & { seed
 }
 
 /**
+ * BOT-04 : un effet de bonus reçu par un bot, daté de `at` (ms depuis le départ, heure du serveur temps réel qui l'a
+ * décidé). Il s'applique après le tick où tombe `at` (floor(at / BOT_TICK_MS)), sur l'état du bot à cet instant : celui
+ * que le serveur a vu en le décidant.
+ */
+export type BotBonus = { at: number; effect: BonusEffect };
+/** BOT-04 : dans le brouillard, un bot tape à 60 % de sa vitesse (il ne voit plus que le mot en cours). */
+export const BOT_FOG_SPEED = 0.6;
+
+const dueTick = (at: number) => Math.max(0, Math.floor(at / BOT_TICK_MS));
+
+/**
+ * BOT-04 : le tick `tick` (à partir de 1) d'un bot avec ses bonus. Les effets sur le texte dus avant ce tick s'appliquent
+ * d'abord, dans l'ordre de la liste (editWords, mots validés = mots finis du bot) ; un brouillard en cours le ralentit
+ * pendant ceil(durée / BOT_TICK_MS) ticks. Renvoie son texte (le même objet s'il n'a pas changé) et son état.
+ */
+export function botBonusTick(text: BotText, state: BotState, bot: BotProfile & { seed: number }, tick: number, bonuses: readonly BotBonus[]): { text: BotText; state: BotState } {
+  let current = text;
+  let slow = 1;
+  for (const { at, effect } of bonuses) {
+    const due = dueTick(at);
+    if (effect.kind === "fog") {
+      if (tick > due && tick <= due + Math.ceil(effect.durationMs / BOT_TICK_MS)) slow = BOT_FOG_SPEED;
+    } else if (due === tick - 1) {
+      current = botText(editWords(current.words, effect, wordAt(current.marks, state.chars)), current.mistakes);
+    }
+  }
+  return { text: current, state: botStep(current, state, bot, botJitter(bot.seed, tick), slow) };
+}
+
+/**
  * La course d'un bot `elapsedMs` après le départ : sa position (en mots), sa part du texte (0 à 1), son arrivée et
  * son élimination (ms depuis le départ, un nombre entier de ticks ; null sinon), ses frappes, fautes et caractères
- * manqués. Une course limitée l'arrête à sa durée.
+ * manqués. Une course limitée l'arrête à sa durée. BOT-04 : `bonuses`, les effets qu'il a reçus, rejoués à leur
+ * heure ; `words`, son texte à cet instant (celui de la course, changé par ses bonus).
  */
-export type BotRun = { position: number; progress: number; arrivedMs: number | null; eliminatedMs: number | null; typed: number; errors: number; missed: number };
+export type BotRun = { position: number; progress: number; arrivedMs: number | null; eliminatedMs: number | null; typed: number; errors: number; missed: number; words: readonly string[] };
 
-export function simulateBot(course: { words: readonly string[]; durationMs: number | null; mistakes: BotMode }, bot: BotProfile & { seed: number }, elapsedMs: number): BotRun {
+export function simulateBot(course: { words: readonly string[]; durationMs: number | null; mistakes: BotMode }, bot: BotProfile & { seed: number }, elapsedMs: number, bonuses: readonly BotBonus[] = []): BotRun {
   const { words, durationMs } = course;
   const until = Math.min(elapsedMs, durationMs ?? Infinity);
   const ticks = Number.isNaN(until) ? 0 : Math.min(MAX_TICKS, Math.max(0, Math.floor(until / BOT_TICK_MS)));
-  if (!words.length) return { position: 0, progress: 1, arrivedMs: 0, eliminatedMs: null, typed: 0, errors: 0, missed: 0 };
-  const text = botText(words, course.mistakes);
+  if (!words.length) return { position: 0, progress: 1, arrivedMs: 0, eliminatedMs: null, typed: 0, errors: 0, missed: 0, words };
+  let text = botText(words, course.mistakes);
   let state = BOT_START;
   const run = (arrivedMs: number | null, eliminatedMs: number | null): BotRun => {
     const position = botPosition(text, state.chars);
-    return { position, progress: arrivedMs === null ? position / words.length : 1, arrivedMs, eliminatedMs, typed: state.typed, errors: state.errors, missed: state.missed };
+    return { position, progress: arrivedMs === null ? position / text.words.length : 1, arrivedMs, eliminatedMs, typed: state.typed, errors: state.errors, missed: state.missed, words: text.words };
   };
   for (let tick = 1; tick <= ticks; tick++) {
-    state = botStep(text, state, bot, botJitter(bot.seed, tick));
+    ({ text, state } = botBonusTick(text, state, bot, tick, bonuses));
     if (state.out) return run(null, tick * BOT_TICK_MS);
     if (botArrived(text, state)) return run(tick * BOT_TICK_MS, null);
   }
