@@ -16,7 +16,8 @@ import { DurationSchema, MAX_DURATION } from "../rooms/settings";
 import { CODE_PATTERN } from "../rooms/access";
 import { raceClock } from "../rooms/race-clock";
 import { effectiveComposition } from "../rooms/text";
-import { MAX_HUMAN_WPM } from "../realtime/referee";
+import { charsAt, CLOCK_TOLERANCE_MS, MAX_HUMAN_WPM, SLACK_CHARS } from "../realtime/referee";
+import { marksOf, netWpm, type LaunchCourse } from "./bot-course";
 import { players, raceConfigs, raceResults, races, raceSamples, roomMembers, rooms, user, type RaceOther } from "../../db/schema";
 import { readGuestSession } from "./guest";
 import { memberKey } from "./rooms";
@@ -190,7 +191,47 @@ const sameName = (a: string, b: string | null | undefined) => !!b && a.toLowerCa
 /** COURSE-07 : abandoned, l'expéditeur a abandonné (vu par le serveur, jamais par le corps). */
 /** COURSE-10 : roomId, le salon de la course (races.room_id) ; departed, les abandons partis du salon, ajoutés s'ils manquent au corps. */
 /** `content` (BONUS-04) : le texte de ce membre changé par un bonus, gardé par le serveur temps réel ; absent : aucun. */
-export type ServerRace = { startedAt: Date; finished: boolean; abandoned?: boolean; standings?: Map<string, ServerStanding>; bots?: Set<string>; roomId?: number; departed?: { name: string; progress: number }[]; content?: string };
+/** `course` (COURSE-06) : le texte tiré par le serveur et son horloge, pour le temps et le MPM de chaque coureur (serverMeasures). */
+export type ServerRace = { startedAt: Date; finished: boolean; abandoned?: boolean; standings?: Map<string, ServerStanding>; bots?: Set<string>; roomId?: number; departed?: { name: string; progress: number }[]; content?: string; course?: LaunchCourse | null };
+
+/**
+ * COURSE-06 : marge sur les caractères validés vus par le serveur, avant de remplacer le MPM envoyé : celle de l'arbitre
+ * temps réel (SLACK_CHARS, deux mots validés dans le même paquet), qui couvre aussi le mot en cours et un texte changé
+ * par un bonus que le serveur n'a plus (coureur parti). Avec CLOCK_TOLERANCE_MS (la page a fini jusqu'à 1 s avant que
+ * le serveur ne reçoive l'arrivée), c'est la tolérance du MPM.
+ */
+export const SERVER_WPM_SLACK_CHARS = SLACK_CHARS;
+
+/**
+ * COURSE-06 : le temps et le MPM d'un coureur, tels que le serveur les connaît.
+ * - Bot dont le serveur a calculé la course : son temps et son MPM calculés, jamais ceux du corps.
+ * - Humain connu du serveur : temps = arrivée vue par le serveur − départ ; sinon abandon − départ ; sinon temps écoulé
+ *   côté serveur (au plus la fin de la course). Seule exception : une élimination, en mode fatal seulement, que le serveur ne voit
+ *   pas : le temps du corps, déjà borné par le temps écoulé (claimServerRace).
+ *   MPM : celui du corps tant qu'il ne dépasse pas ce que permettent les caractères validés par le serveur sur le texte
+ *   du coureur (BONUS-04 : son texte changé, sinon celui de la course), marge et horloge comprises ; au-delà, le MPM du
+ *   serveur (caractères validés ÷ 5 ÷ minutes). Un MPM plus bas que celui du serveur est gardé : les fautes laissées
+ *   (mode libre) et les lettres justes que seule la page voit le baissent honnêtement.
+ * - Précision et MPM brut : le serveur ne voit pas les frappes ; ceux du corps restent, bornés par le schéma (précision
+ *   de 0 à 100) et rendus cohérents (MPM brut jamais sous le MPM net).
+ * Un coureur inconnu du serveur garde les mesures du corps ; sans texte (salon lancé avant CONF-03), seul le temps change.
+ */
+export function serverMeasures<T extends { name: string; bot: boolean; wpm: number; raw: number; seconds: number; eliminated: boolean }>(result: T, standing: ServerStanding | undefined, course: LaunchCourse | null | undefined): T {
+  const consistent = (r: T): T => ({ ...r, raw: Math.max(r.raw, r.wpm) });
+  if (!standing || !course) return consistent(result);
+  if (result.bot) return standing.wpm === undefined || standing.seconds === undefined ? consistent(result) : consistent({ ...result, seconds: standing.seconds, wpm: standing.wpm });
+  const { startsAt, endsAt, now } = course;
+  const elapsed = Math.max(0, Math.min(now, endsAt ?? Infinity) - startsAt) / 1000;
+  const since = (at: Date) => Math.min(elapsed, Math.max(0, (at.getTime() - startsAt) / 1000));
+  const abandoned = standing.abandonedAt && standing.abandonedAt.getTime() >= startsAt ? standing.abandonedAt : null;
+  const seconds = standing.finishedAt ? since(standing.finishedAt) : abandoned ? since(abandoned) : result.eliminated && course.mistakes === "fatal" ? Math.min(result.seconds, elapsed) : elapsed;
+  const words = standing.words?.length ? standing.words : course.words;
+  if (!words.length) return consistent({ ...result, seconds });
+  const marks = marksOf(words);
+  const chars = standing.finishedAt ? marks.at(-1)! : charsAt(marks, standing.progress);
+  const allowed = netWpm(chars + SERVER_WPM_SLACK_CHARS, Math.max(seconds - CLOCK_TOLERANCE_MS / 1000, 1.3));
+  return consistent({ ...result, seconds, wpm: result.wpm > allowed ? netWpm(chars, seconds) : result.wpm });
+}
 
 // COURSE-10 : la règle du classement final vit dans ranking.ts (partagée avec le reclassement en fin de course)
 export { rankByServer, type ServerStanding };
@@ -216,7 +257,8 @@ export async function recordRace(db: Db, parsed: ParsedRace, requester: Requeste
     // COURSE-10 : l'arrivée d'un humain connu du serveur est celle qu'il a vue, comme son rang
     // BOT-05 : celle d'un bot aussi, quand le serveur a calculé sa course (src/server/bot-course.ts)
     const standing = server?.standings?.get(r.name.toLowerCase());
-    return { ...r, abandoned, finished: (standing ? !!standing.finishedAt : r.finished) && !abandoned };
+    const measured = server ? serverMeasures(r, standing, server.course) : r;
+    return { ...measured, abandoned, finished: (standing ? !!standing.finishedAt : r.finished) && !abandoned };
   });
   const race = server?.standings ? { ...parsed, results: rankByServer(results, server.standings, serverBots) } : { ...parsed, results };
   const [account] = requester.playerId
@@ -292,7 +334,7 @@ export async function claimServerRace(db: Db, race: ParsedRace, key: string | nu
   const claimed = await db.update(roomMembers).set({ raceRecorded: true }).where(and(member, eq(roomMembers.raceRecorded, false))).returning({ key: roomMembers.memberKey });
   if (!claimed.length) throw new DuplicateRace("Race already recorded");
   // COURSE-10 : les coureurs présents, et ceux partis depuis (abandons et départs gardés par le salon), à leur progression
-  const { runners, humanNames, standings, absent } = await launchStandings(db, row.roomId);
+  const { runners, humanNames, standings, absent, course } = await launchStandings(db, row.roomId, true);
   // les bots du salon : ses membres bots, puis ceux de sa liste (CONF-10) qui ont une place, comme la page salle
   // (seatsOf) ; jamais un nom porté par un membre humain, jamais un nom de la liste fermée absent de celle du salon
   const seatBots = seatedBots({ guests: row.guests, bots: row.bots, botList: row.botList }, runners.length + absent.length).map((bot) => bot.name);
@@ -304,6 +346,7 @@ export async function claimServerRace(db: Db, race: ParsedRace, key: string | nu
     abandoned: row.abandonedAt !== null,
     standings,
     departed: absent,
+    course,
     bots,
     // BONUS-04 : le texte que ce membre a couru, quand un bonus l'a changé : celui du serveur, pas celui du corps
     ...(row.bonusWords?.length ? { content: row.bonusWords.join(" ").slice(0, 10_000) } : {}),
@@ -315,7 +358,7 @@ export async function claimServerRace(db: Db, race: ParsedRace, key: string | nu
  * POST /api/races : refusé sans session (compte ou invité signé) ; le compte est celui de la session.
  * Chaque course porte un identifiant unique tiré par le navigateur : le même envoi rejoué est refusé (409).
  * COURSE-06 : la course doit venir d'un salon lancé par le serveur (claimServerRace) ; un seul envoi par membre et par lancement.
- * Limite : le MPM et le rang restent ceux du navigateur, bornés par le serveur (durée de la course, MPM humain).
+ * Le temps et le MPM de chaque coureur sont ceux que le serveur connaît (serverMeasures) ; précision et MPM brut restent du navigateur, bornés.
  */
 export async function handleRace(req: Request, db: Db, auth: Auth, secret = guestSecret()): Promise<Response> {
   if (req.method !== "POST") return Response.json({ error: "method_not_allowed" }, { status: 405 });
