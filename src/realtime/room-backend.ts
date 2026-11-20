@@ -5,10 +5,11 @@
 import { eq } from "drizzle-orm";
 import type { Db } from "../../db/client";
 import { roomMembers, rooms } from "../../db/schema";
+import type { BonusKind } from "../rooms/bonus-effects";
 import { botProfile, botSeed, type BotBonus } from "../rooms/bot-engine";
 import { botRunnerId, seatedBots } from "../rooms/bots";
 import { courseWords, textFingerprint } from "../rooms/course-words";
-import { eliminateRunner, keepBonusText, keepBotBonus, keepCheckpoints, keepProgress, leaveAfterDisconnect, readRoom, recordProgress, refreshRoom, RoomRefused, roomIdByCode, roomView, type Identity, type RoomView } from "../server/rooms";
+import { eliminateRunner, keepBonusText, keepBotBonus, keepCheckpoints, keepProgress, keepReceivedBonus, leaveAfterDisconnect, readRoom, recordProgress, refreshRoom, RoomRefused, roomIdByCode, roomView, type Identity, type RoomView } from "../server/rooms";
 import type { Player } from "./protocol";
 import type { RaceCourse } from "./referee";
 
@@ -48,6 +49,11 @@ export type RoomBackend = {
   botBonus?(code: string, startsAt: number, bonus: BotBonus): Promise<void>;
   /** BONUS-01 : garde le nombre de points de contrôle franchis de la course partie à `startsAt`, relu à la reprise. */
   checkpoints?(code: string, startsAt: number, passed: number): Promise<void>;
+  /**
+   * HIST-02 : garde un bonus reçu par ce coureur humain pendant la course partie à `startsAt`, avec son type (null : sans
+   * effet), pour l'enregistrement de la course et son réaffichage depuis l'historique (RES-02, colonne Bonus).
+   */
+  bonusReceived?(code: string, startsAt: number, key: string, kind: BonusKind | null): Promise<void>;
 };
 
 /**
@@ -170,5 +176,6 @@ export function createRoomBackend(db: Db, changes: Changes): RoomBackend {
     eliminated: (code, startsAt, key, progress) => eliminateRunner(db, code, startsAt, key, progress),
     botBonus: (code, startsAt, bonus) => keepBotBonus(db, code, startsAt, bonus),
     checkpoints: (code, startsAt, passed) => keepCheckpoints(db, code, startsAt, passed),
+    bonusReceived: (code, startsAt, key, kind) => keepReceivedBonus(db, code, startsAt, key, kind),
   };
 }

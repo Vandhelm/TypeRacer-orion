@@ -451,3 +451,33 @@ describe("BONUS-04 — the server counts every runner on the text he really runs
     expect(progressOf(b, "g:alpha")).toBeCloseTo(31 / 103, 6);
   });
 });
+
+describe("HIST-02 — every bonus a human receives is kept for the room, with its type", () => {
+  const WORDS = Array.from({ length: 100 }, (_, i) => `w${String(i).padStart(3, "0")}`);
+  const kept = (fake: ReturnType<typeof fakeRace>) => {
+    const calls: { code: string; startsAt: number; key: string; kind: string | null }[] = [];
+    fake.backend.bonusReceived = async (code, startsAt, key, kind) => void calls.push({ code, startsAt, key, kind });
+    return calls;
+  };
+
+  test("a bonus received by the last runner is kept for him, with the type the server picked", async () => {
+    const { fake, tabs } = await race({ catchUpBonus: true, seed: 3, words: WORDS, marks: WORDS.map((_, i) => i * 5).concat(500) });
+    const calls = kept(fake);
+    const [a, b, c] = tabs as [Tab, Tab, Tab];
+    await step(b, 0.1);
+    await step(c, 0.05);
+    await step(a, 0.3);
+    await a.until(() => calls.length > 0);
+    expect(calls).toEqual([{ code: ROOM, startsAt: fake.state.course.startsAt, key: "g:charlie", kind: "fewer_words" }]);
+  });
+
+  test("without a known text, the bonus is kept with the type the server picked (fog)", async () => {
+    const { fake, tabs } = await race({ catchUpBonus: true });
+    const calls = kept(fake);
+    const [a, b] = tabs as [Tab, Tab, Tab];
+    await step(b, 0.1);
+    await step(a, 0.3);
+    await a.until(() => calls.length > 0);
+    expect(calls).toEqual([{ code: ROOM, startsAt: fake.state.course.startsAt, key: "g:charlie", kind: "fog" }]);
+  });
+});

@@ -7,6 +7,8 @@
 // - chaque coureur en retard reçoit un bonus par point de contrôle, au plus 3 par course.
 // L'effet du bonus (BONUS-02) et son annonce (BONUS-03) se branchent sur les attributions renvoyées ici.
 
+import type { BonusKind } from "./bonus-effects";
+
 /** Les points de contrôle, en progression du meneur (annexe A : caractères validés ÷ longueur du texte). */
 export const CHECKPOINTS = [0.25, 0.5, 0.75] as const;
 /** Au-delà de cet écart de progression avec le meneur (strictement), un coureur est en retard. */
@@ -20,6 +22,15 @@ export type BonusRunner = { playerId: string; progress: number; finished: boolea
 export type BonusTally = { checkpoints: number; received: Map<string, number> };
 /** Un bonus attribué : à qui, à quel point de contrôle (1 à 3), et son total de bonus dans la course après celui-ci. */
 export type BonusAward = { playerId: string; checkpoint: number; count: number };
+
+/** RES-02 / HIST-02 : les bonus reçus par un coureur dans une course (au plus MAX_BONUSES) et leurs types connus (BONUS-02). */
+export type ReceivedBonuses = { count: number; kinds: BonusKind[] };
+
+/** HIST-02 : les bonus reçus, d'après la liste de leurs types gardée par le serveur (null : un bonus sans effet). */
+export function receivedOf(kinds: readonly (BonusKind | null)[]): ReceivedBonuses {
+  const kept = kinds.slice(0, MAX_BONUSES);
+  return { count: kept.length, kinds: kept.filter((kind): kind is BonusKind => kind !== null) };
+}
 
 export const newTally = (): BonusTally => ({ checkpoints: 0, received: new Map() });
 

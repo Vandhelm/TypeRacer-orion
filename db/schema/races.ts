@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import { boolean, check, foreignKey, index, integer, jsonb, pgTable, primaryKey, real, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
+import type { ReceivedBonuses } from "../../src/rooms/bonus";
 import { players } from "./players";
 import { raceConfigs, rooms } from "./rooms";
 import { corpusTexts } from "./texts";
@@ -22,6 +23,8 @@ export type RaceOther = {
   eliminated: boolean;
   /** COURSE-07 : absent d'une course gardée avant l'abandon. */
   abandoned?: boolean;
+  /** HIST-02 : les bonus reçus, d'après le serveur ; absent : bonus désactivés, ou coureur dont le serveur ne sait rien. */
+  bonuses?: ReceivedBonuses;
   wpmSeries: number[];
   rawSeries: number[];
   errorSeries: number[];
@@ -73,6 +76,8 @@ export const raceResults = pgTable(
     /** COURSE-10 : la progression d'un bot (0 à 1) envoyée par le navigateur, pour le reclasser à la fin de la course ; null sinon. */
     progress: real("progress"),
     sessionSeconds: integer("session_seconds").notNull().default(0),
+    /** HIST-02 : les bonus reçus, d'après le serveur (temps réel, ou rooms.bot_bonuses pour un bot) ; null : désactivés ou inconnus. */
+    bonuses: jsonb("bonuses").$type<ReceivedBonuses>(),
     /** caractère → [frappes, fautes] */
     keys: jsonb("keys").$type<Record<string, [number, number]>>().notNull().default({}),
   },

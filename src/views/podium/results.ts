@@ -36,7 +36,7 @@ export type PlayerResult = {
   errorSeries: number[];
   /** Frappes et fautes par touche (heatmap du clavier). */
   keys: KeyCounts;
-  /** RES-02 : bonus reçus ; absent si les bonus sont désactivés ou inconnus (une course de l'historique ne les garde pas). */
+  /** RES-02 : bonus reçus ; absent si les bonus sont désactivés ou inconnus (HIST-02 : une course de l'historique les garde depuis 0037). */
   bonuses?: ReceivedBonuses;
 };
 export type RaceSummary = Pick<Room, "textType" | "language" | "duration" | "level" | "punctuation" | "numbers" | "specials" | "accents" | "excluded" | "mistakes" | "botSpeed" | "botAccuracy" | "length"> & {

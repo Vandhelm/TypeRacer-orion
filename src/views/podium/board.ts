@@ -2,13 +2,13 @@
 // d'erreurs, les lignes sans mesure (un autre humain en direct) et les bonus reçus, lus sur le serveur temps réel.
 import type { RealtimeState } from "../../realtime/client";
 import { BONUS_KINDS, type BonusKind } from "../../rooms/bonus-effects";
-import { MAX_BONUSES } from "../../rooms/bonus";
+import { MAX_BONUSES, type ReceivedBonuses } from "../../rooms/bonus";
 import type { BotBonus } from "../../rooms/bot-engine";
 import { laneOfRunner, realtimeMemberKey, type RaceLanes } from "../game/track";
 import type { PlayerResult } from "./results";
 
-/** Les bonus de remontée reçus (BONUS-01) et leurs types connus (BONUS-02) ; un bonus sans effet n'a pas de type. */
-export type ReceivedBonuses = { count: number; kinds: BonusKind[] };
+/** Les bonus de remontée reçus (BONUS-01) et leurs types connus (BONUS-02) ; un bonus sans effet n'a pas de type. HIST-02 : le même type est gardé avec la course. */
+export type { ReceivedBonuses };
 
 export type PlayerStatus = "finished" | "timeout" | "abandoned" | "eliminated";
 

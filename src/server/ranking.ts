@@ -5,13 +5,15 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import type { Db } from "../../db/client";
 import { players, raceConfigs, raceResults, races, roomMembers, rooms } from "../../db/schema";
 import { raceClock } from "../rooms/race-clock";
+import { receivedOf, type ReceivedBonuses } from "../rooms/bonus";
 import { launchBots } from "./bot-course";
 
 /** COURSE-06 : la place d'un membre participant au classement du serveur (temps réel, room_members). */
 /** COURSE-07 : abandonedAt, l'abandon de ce membre ; progress est alors celle validée au moment de l'abandon. */
 /** COURSE-10 : seat, sa place dans le salon, qui départage deux humains à égalité. */
 /** COURSE-06 : words, le texte de ce membre changé par un bonus (room_members.bonus_words) ; eliminatedAt, son élimination datée par le serveur (mode fatal) ; seconds et wpm, ceux de la course calculée d'un bot. */
-export type ServerStanding = { finishedAt: Date | null; progress: number; abandonedAt?: Date | null; seat?: number | null; words?: string[] | null; eliminatedAt?: Date | null; seconds?: number; wpm?: number };
+/** HIST-02 : bonuses, les bonus reçus d'après le serveur (room_members.received_bonuses, rooms.bot_bonuses) ; absent : inconnus. */
+export type ServerStanding = { finishedAt: Date | null; progress: number; abandonedAt?: Date | null; seat?: number | null; words?: string[] | null; eliminatedAt?: Date | null; seconds?: number; wpm?: number; bonuses?: ReceivedBonuses };
 
 /**
  * COURSE-10 : le classement final, refait d'après le serveur (COURSE-06). `bots` : les bots du salon, décidés par le
@@ -62,14 +64,14 @@ export function rankByServer<T extends { name: string; rank: number; finished?: 
  */
 export async function launchStandings(db: Db, roomId: number, withText = false) {
   const runners = await db
-    .select({ name: sql<string>`coalesce(${players.name}, ${roomMembers.guestName})`, isBot: sql<boolean>`coalesce(${players.isBot}, false)`, finishedAt: roomMembers.finishedAt, progress: roomMembers.progress, abandonedAt: roomMembers.abandonedAt, seat: roomMembers.seat, words: roomMembers.bonusWords, eliminatedAt: roomMembers.eliminatedAt })
+    .select({ name: sql<string>`coalesce(${players.name}, ${roomMembers.guestName})`, isBot: sql<boolean>`coalesce(${players.isBot}, false)`, finishedAt: roomMembers.finishedAt, progress: roomMembers.progress, abandonedAt: roomMembers.abandonedAt, seat: roomMembers.seat, words: roomMembers.bonusWords, eliminatedAt: roomMembers.eliminatedAt, received: roomMembers.receivedBonuses })
     .from(roomMembers)
     .leftJoin(players, eq(players.id, roomMembers.playerId))
     .where(and(eq(roomMembers.roomId, roomId), eq(roomMembers.role, "player")));
   const [room] = await db.select({ abandons: rooms.abandons, departed: rooms.departed }).from(rooms).where(eq(rooms.id, roomId));
   const humans = runners.filter((r) => !r.isBot);
   const humanNames = new Set(humans.map((r) => r.name.toLowerCase()));
-  const standings = new Map<string, ServerStanding>(humans.map((r) => [r.name.toLowerCase(), { finishedAt: r.finishedAt, progress: r.progress, abandonedAt: r.abandonedAt, seat: r.seat, words: r.words, eliminatedAt: r.eliminatedAt }]));
+  const standings = new Map<string, ServerStanding>(humans.map((r) => [r.name.toLowerCase(), { finishedAt: r.finishedAt, progress: r.progress, abandonedAt: r.abandonedAt, seat: r.seat, words: r.words, eliminatedAt: r.eliminatedAt, bonuses: receivedOf(r.received) }]));
   const absent: { name: string; progress: number }[] = [];
   const gone = [
     ...(room?.abandons ?? []).map((a) => ({ ...a, standing: { finishedAt: null, progress: a.progress, abandonedAt: new Date(0), seat: a.seat } })),
@@ -110,7 +112,7 @@ export async function rerankLaunch(db: Db, roomId: number): Promise<void> {
   const { standings } = await launchStandings(db, roomId);
   for (const race of recorded) {
     const rows = await db
-      .select({ id: raceResults.playerId, rank: raceResults.rank, finished: raceResults.finished, progress: raceResults.progress, name: players.name, isBot: players.isBot })
+      .select({ id: raceResults.playerId, rank: raceResults.rank, finished: raceResults.finished, progress: raceResults.progress, bonuses: raceResults.bonuses, name: players.name, isBot: players.isBot })
       .from(raceResults)
       .innerJoin(players, eq(players.id, raceResults.playerId))
       .where(eq(raceResults.raceId, race.id));
@@ -126,14 +128,20 @@ export async function rerankLaunch(db: Db, roomId: number): Promise<void> {
       if (!s) return {};
       return bots.has(name.toLowerCase()) ? { finished: !!s.finishedAt } : { abandoned: !!s.abandonedAt, finished: !!s.finishedAt && !s.abandonedAt };
     };
+    // HIST-02 : les bonus reçus depuis l'enregistrement (un coureur encore en course) ; jamais pour une course
+    // enregistrée sans bonus (désactivés), jamais en recul (un coureur parti n'a plus ses bonus dans room_members)
+    const bonusesOf = (name: string, kept: ReceivedBonuses | null | undefined) => {
+      const now = standings.get(name.toLowerCase())?.bonuses;
+      return kept && now && now.count >= kept.count ? { bonuses: now } : {};
+    };
     // deux lignes qui échangent leur rang violeraient race_results_race_rank_unique (vérifiée ligne par ligne) : les
     // rangs passent d'abord hors de portée (au-dessus de RANK_SHIFT, la contrainte rank >= 1 interdit les négatifs)
     const moved = ranked.filter((e) => e.row >= 0 && e.rank !== rows.find((r) => r.id === e.row)!.rank).map((e) => e.row);
     if (moved.length) await db.update(raceResults).set({ rank: sql`${raceResults.rank} + ${RANK_SHIFT}` }).where(and(eq(raceResults.raceId, race.id), inArray(raceResults.playerId, moved)));
     for (const entry of ranked) {
-      if (entry.row >= 0) await db.update(raceResults).set({ rank: entry.rank, ...statusOf(entry.name) }).where(and(eq(raceResults.raceId, race.id), eq(raceResults.playerId, entry.row)));
+      if (entry.row >= 0) await db.update(raceResults).set({ rank: entry.rank, ...statusOf(entry.name), ...bonusesOf(entry.name, rows.find((r) => r.id === entry.row)!.bonuses) }).where(and(eq(raceResults.raceId, race.id), eq(raceResults.playerId, entry.row)));
     }
-    const others = race.others.map((o, index) => ({ ...o, rank: ranked.find((e) => e.other === index)!.rank, ...statusOf(o.name) }));
+    const others = race.others.map((o, index) => ({ ...o, rank: ranked.find((e) => e.other === index)!.rank, ...statusOf(o.name), ...bonusesOf(o.name, o.bonuses) }));
     await db.update(races).set({ others }).where(eq(races.id, race.id));
   }
 }

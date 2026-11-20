@@ -198,7 +198,8 @@ const sameName = (a: string, b: string | null | undefined) => !!b && a.toLowerCa
 /** COURSE-10 : roomId, le salon de la course (races.room_id) ; departed, les abandons partis du salon, ajoutés s'ils manquent au corps. */
 /** `content` (BONUS-04) : le texte de ce membre changé par un bonus, gardé par le serveur temps réel ; absent : aucun. */
 /** `course` (COURSE-06) : le texte tiré par le serveur et son horloge, pour le temps et le MPM de chaque coureur (serverMeasures). */
-export type ServerRace = { startedAt: Date; finished: boolean; abandoned?: boolean; standings?: Map<string, ServerStanding>; bots?: Set<string>; roomId?: number; departed?: { name: string; progress: number }[]; content?: string; course?: LaunchCourse | null };
+/** `bonuses` (HIST-02) : les bonus de remontée étaient activés pour ce lancement (CONF-09). */
+export type ServerRace = { startedAt: Date; finished: boolean; abandoned?: boolean; standings?: Map<string, ServerStanding>; bots?: Set<string>; roomId?: number; departed?: { name: string; progress: number }[]; content?: string; course?: LaunchCourse | null; bonuses?: boolean };
 
 /**
  * COURSE-06 : tolérance du MPM envoyé, une seule à la fois. Coureur arrivé : les caractères exacts de son texte, avec
@@ -273,7 +274,9 @@ export async function recordRace(db: Db, parsed: ParsedRace, requester: Requeste
     const measured = server ? serverMeasures(r, standing, server.course) : r;
     // RES-05 : l'élimination d'un coureur connu du serveur est celle qu'il a datée (mode fatal), jamais le corps
     const eliminated = standing ? !!standing.eliminatedAt : r.eliminated;
-    return { ...measured, abandoned, eliminated, finished: (standing ? !!standing.finishedAt : r.finished) && !abandoned };
+    // HIST-02 : les bonus reçus, ceux que le serveur a gardés (jamais le corps) ; aucun si les bonus sont désactivés
+    const bonuses = server?.bonuses && standing?.bonuses ? { bonuses: standing.bonuses } : {};
+    return { ...measured, abandoned, eliminated, ...bonuses, finished: (standing ? !!standing.finishedAt : r.finished) && !abandoned };
   });
   const race = server?.standings ? { ...parsed, results: rankByServer(results, server.standings, serverBots) } : { ...parsed, results };
   const [account] = requester.playerId
@@ -339,7 +342,7 @@ export const ELAPSED_TOLERANCE_SECONDS = 2;
 export async function claimServerRace(db: Db, race: ParsedRace, key: string | null): Promise<ServerRace & { release: () => Promise<void> }> {
   if (!race.room || !key) throw new RaceRefused("race_not_launched");
   const [row] = await db
-    .select({ roomId: rooms.id, launchedAt: rooms.launchedAt, duration: raceConfigs.duration, progress: roomMembers.progress, abandonedAt: roomMembers.abandonedAt, bonusWords: roomMembers.bonusWords, bots: rooms.bots, botList: rooms.botList, guests: rooms.guests })
+    .select({ roomId: rooms.id, launchedAt: rooms.launchedAt, duration: raceConfigs.duration, progress: roomMembers.progress, abandonedAt: roomMembers.abandonedAt, bonusWords: roomMembers.bonusWords, bots: rooms.bots, botList: rooms.botList, guests: rooms.guests, catchUpBonus: raceConfigs.catchUpBonus })
     .from(rooms)
     .innerJoin(raceConfigs, eq(raceConfigs.id, rooms.configId))
     .innerJoin(roomMembers, and(eq(roomMembers.roomId, rooms.id), eq(roomMembers.memberKey, key)))
@@ -366,6 +369,7 @@ export async function claimServerRace(db: Db, race: ParsedRace, key: string | nu
     departed: absent,
     course,
     bots,
+    bonuses: row.catchUpBonus,
     // BONUS-04 : le texte que ce membre a couru, quand un bonus l'a changé : celui du serveur, pas celui du corps
     ...(row.bonusWords?.length ? { content: row.bonusWords.join(" ").slice(0, 10_000) } : {}),
     release: async () => void (await db.update(roomMembers).set({ raceRecorded: false }).where(member)),

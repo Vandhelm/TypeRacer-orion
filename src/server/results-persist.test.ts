@@ -10,7 +10,11 @@ import { createAuth } from "./auth";
 import { launchBots } from "./bot-course";
 import { handleRace, MAX_RAW_WPM } from "./races";
 import { launchedRoomFor, withoutBotCourse } from "./races.fixture";
-import { abandonRace, memberKey, recordProgress } from "./rooms";
+import { abandonRace, keepReceivedBonus, memberKey, recordProgress } from "./rooms";
+import { raceDetail } from "./history";
+import { botRunnerId } from "../rooms/bots";
+import { COUNTDOWN_MS } from "../rooms/race-clock";
+import { toResults } from "../views/podium/results";
 
 process.env.BETTER_AUTH_SECRET ??= "test-secret-test-secret-test-secret";
 process.env.BETTER_AUTH_URL ??= "http://localhost:3000";
@@ -139,5 +143,89 @@ describe("RES-05 — a full room (SALLE-05, MAX_GUESTS participants) is recorded
     const { code } = await launchedRoomFor(db, auth, me.cookie, GUEST_SECRET, 10_000);
     const res = await post({ room: code, summary: SUMMARY, players: Array.from({ length: MAX_GUESTS + 1 }, (_, i) => result(i ? `Trop_${i}` : "Trop_Moi")) }, me.cookie);
     expect(res.status).toBe(400);
+  });
+});
+
+describe("HIST-02 — the bonuses each runner received are recorded and shown again from the history", () => {
+  /** Un compte et un invité dans un salon lancé, bonus activés ou non ; renvoie aussi le départ et les bots assis. */
+  const launched = async (prefix: string, catchUpBonus: boolean) => {
+    const me = await signUp(`${prefix}_Moi`);
+    const rival = { kind: "guest" as const, name: `${prefix}_Autre`, sessionId: crypto.randomUUID() };
+    const { code, who } = await launchedRoomFor(db, auth, me.cookie, GUEST_SECRET, 10_000, [rival]);
+    const [room] = await db.select({ id: rooms.id, configId: rooms.configId, launchedAt: rooms.launchedAt, botList: rooms.botList }).from(rooms).where(eq(rooms.code, code));
+    await db.update(raceConfigs).set({ catchUpBonus }).where(eq(raceConfigs.id, room!.configId));
+    const startsAt = room!.launchedAt!.getTime() + COUNTDOWN_MS;
+    const [first, second] = room!.botList.map((bot) => bot.name);
+    return { me, who, rival, code, roomId: room!.id, startsAt, bots: [first!, second!] as [string, string] };
+  };
+  const body = (t: Awaited<ReturnType<typeof launched>>) => [
+    // le corps se donne 3 bonus : jamais lu
+    result(t.who.name, { bonuses: { count: 3, kinds: ["fog", "fog", "fog"] } }),
+    result(t.rival.name),
+    ...t.bots.map((name) => ({ ...result(name), bot: true })),
+  ];
+
+  test("humans get the bonuses the realtime server kept, bots those of rooms.bot_bonuses; the history and the podium read them back", async () => {
+    const t = await launched("Bonus_On", true);
+    await keepReceivedBonus(db, t.code, t.startsAt, memberKey(t.who), "fog");
+    await keepReceivedBonus(db, t.code, t.startsAt, memberKey(t.rival), null);
+    await keepReceivedBonus(db, t.code, t.startsAt, memberKey(t.rival), "fewer_words");
+    const fog = { kind: "fog" as const, target: "x", durationMs: 1000 };
+    // un effet sur le premier bot (sans from) ne compte pas : seul celui qu'il a reçu (from)
+    await db.update(rooms).set({ botBonuses: [{ at: 1, seq: 0, effect: { ...fog, target: botRunnerId(t.bots[0]) } }, { at: 2, seq: 1, from: botRunnerId(t.bots[0]), effect: fog }] }).where(eq(rooms.id, t.roomId));
+    const res = await post({ room: t.code, summary: SUMMARY, players: body(t) }, t.me.cookie);
+    expect(res.status).toBe(201);
+    const raceId = await raceIdOf(res);
+    const rows = await db.select({ name: players.name, bonuses: raceResults.bonuses }).from(raceResults).innerJoin(players, eq(players.id, raceResults.playerId)).where(eq(raceResults.raceId, raceId));
+    const of = (name: string) => rows.find((r) => r.name === name)!.bonuses;
+    expect(of(t.who.name)).toEqual({ count: 1, kinds: ["fog"] });
+    expect(of(t.bots[0])).toEqual({ count: 1, kinds: ["fog"] });
+    expect(of(t.bots[1])).toEqual({ count: 0, kinds: [] });
+    const [race] = await db.select({ others: races.others }).from(races).where(eq(races.id, raceId));
+    expect(race!.others.find((o) => o.name === t.rival.name)!.bonuses).toEqual({ count: 2, kinds: ["fewer_words"] });
+    // /podium?race=N : le détail de l'historique, puis le tableau du podium (toResults)
+    const detail = await raceDetail(db, t.me.playerId, raceId);
+    const shown = toResults(detail)!.players;
+    expect(Object.fromEntries(shown.map((p) => [p.name, p.bonuses as unknown]))).toEqual({
+      [t.who.name]: { count: 1, kinds: ["fog"] },
+      [t.rival.name]: { count: 2, kinds: ["fewer_words"] },
+      [t.bots[0]]: { count: 1, kinds: ["fog"] },
+      [t.bots[1]]: { count: 0, kinds: [] },
+    });
+  });
+
+  test("a bonus received after the race was recorded (a rival still racing) is counted when the room reaches the results", async () => {
+    const t = await launched("Bonus_Tard", true);
+    await withoutBotCourse(db, t.code);
+    await recordProgress(db, t.code, memberKey(t.who), 1);
+    const res = await post({ room: t.code, summary: SUMMARY, players: [result(t.who.name, { finished: true }), result(t.rival.name)] }, t.me.cookie);
+    expect(res.status).toBe(201);
+    const raceId = await raceIdOf(res);
+    await keepReceivedBonus(db, t.code, t.startsAt, memberKey(t.rival), "extra_words");
+    await recordProgress(db, t.code, memberKey(t.rival), 1); // le dernier arrive : le salon passe aux résultats
+    const [race] = await db.select({ others: races.others }).from(races).where(eq(races.id, raceId));
+    expect(race!.others[0]!.bonuses).toEqual({ count: 1, kinds: ["extra_words"] });
+  });
+
+  test("with bonuses off, nothing is recorded: the column stays empty, whatever the body says", async () => {
+    const t = await launched("Bonus_Off", false);
+    const res = await post({ room: t.code, summary: SUMMARY, players: body(t) }, t.me.cookie);
+    expect(res.status).toBe(201);
+    const raceId = await raceIdOf(res);
+    const rows = await db.select({ bonuses: raceResults.bonuses }).from(raceResults).where(eq(raceResults.raceId, raceId));
+    expect(rows.every((r) => r.bonuses === null)).toBe(true);
+    const [race] = await db.select({ others: races.others }).from(races).where(eq(races.id, raceId));
+    expect(race!.others[0]).not.toHaveProperty("bonuses");
+    expect(toResults(await raceDetail(db, t.me.playerId, raceId))!.players.every((p) => p.bonuses === undefined)).toBe(true);
+  });
+
+  test("a bonus kept for another launch, or beyond the 3 a race gives, is not counted", async () => {
+    const t = await launched("Bonus_Borne", true);
+    await keepReceivedBonus(db, t.code, t.startsAt - 1000, memberKey(t.who), "fog");
+    for (let i = 0; i < 5; i++) await keepReceivedBonus(db, t.code, t.startsAt, memberKey(t.rival), "fog");
+    const [rival] = await db.select({ received: roomMembers.receivedBonuses }).from(roomMembers).where(and(eq(roomMembers.roomId, t.roomId), eq(roomMembers.memberKey, memberKey(t.rival))));
+    expect(rival!.received).toEqual(["fog", "fog", "fog"]);
+    const [mine] = await db.select({ received: roomMembers.receivedBonuses }).from(roomMembers).where(and(eq(roomMembers.roomId, t.roomId), eq(roomMembers.memberKey, memberKey(t.who))));
+    expect(mine!.received).toEqual([]);
   });
 });
