@@ -1,8 +1,8 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
 import { advanceBots, createCourse, createRace, type Race } from "../game/race";
-import type { Player } from "../room/room";
+import type { Player, Room } from "../room/room";
 import { parseRace } from "../../server/races";
-import { backToRoomHref, buildResults, parseResults, raceBody, rememberSubmit, submitFailed, submitRace, type RaceSummary } from "./results";
+import { backToRoomHref, buildResults, buildSummary, parseResults, raceBody, rememberSubmit, submitFailed, submitRace, type RaceSummary } from "./results";
 
 const PLAYERS: Player[] = [
   { name: "me", color: "red", me: true },
@@ -172,5 +172,27 @@ describe("HIST-01 — the podium learns that the race was refused", () => {
     expect(submitFailed()).toBe(true);
     rememberSubmit("saved");
     expect(submitFailed()).toBe(false);
+  });
+});
+
+describe("CONF-07 — the race summary keeps only the options that changed the text", () => {
+  const ROOM = {
+    textType: "coherent", language: "fr", duration: 60, level: "common", punctuation: true, numbers: true, specials: true, capitals: true, accents: true,
+    excluded: "e", mistakes: "fix", botSpeed: "medium", botAccuracy: "high", length: "short",
+  } as Room;
+  const effects = (s: Pick<RaceSummary, "punctuation" | "numbers" | "specials" | "excluded">) => [s.punctuation, s.numbers, s.specials, s.excluded];
+
+  test("options left on from random words are recorded off for a coherent race or a quote", () => {
+    for (const textType of ["coherent", "quote"] as const) expect(effects(buildSummary(finished({}), { ...ROOM, textType }, 90))).toEqual([false, false, false, ""]);
+  });
+
+  test("random words keep them", () => {
+    expect(effects(buildSummary(finished({}), { ...ROOM, textType: "words" }, 90))).toEqual([true, true, true, "e"]);
+  });
+
+  test("the server records them off too, whatever the client sends for a coherent race", () => {
+    const summary = { ...buildSummary(finished({}), { ...ROOM, textType: "words" }, 90), textType: "coherent" as const };
+    const body = raceBody({ players: buildResults(finished({}), PLAYERS), summary }, "le riz attend");
+    expect(effects(parseRace(JSON.parse(JSON.stringify(body))).config)).toEqual([false, false, false, ""]);
   });
 });

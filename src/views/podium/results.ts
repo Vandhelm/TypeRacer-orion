@@ -3,6 +3,7 @@ import { CHARS_PER_WORD, laneElapsedMs, laneProgress, laneWpm, myAccuracy, type 
 import { parseKeys, roundKeys, type KeyCounts } from "../../players/keys";
 import type { TFunction } from "i18next";
 import { isRoomCode } from "../../rooms/access";
+import { effectiveComposition } from "../../rooms/text";
 import type { Player, Room } from "../room/room";
 import { formatNumber } from "../../i18n/format";
 
@@ -109,7 +110,8 @@ export function buildResults(race: Race, players: Player[]): PlayerResult[] {
 
 export function buildSummary(race: Race, room: Room, sessionSeconds: number): RaceSummary {
   const { textType, language, duration, level, punctuation, numbers, specials, capitals, accents, excluded, mistakes, botSpeed, botAccuracy, length } = room;
-  return { textType, language, duration, level, punctuation, numbers, specials, capitals, accents, excluded, mistakes, botSpeed, botAccuracy, length, wordCount: race.course.words.length, sessionSeconds };
+  // CONF-07 : une option restée cochée sans effet (chiffres en cohérent…) n'est pas enregistrée
+  return effectiveComposition({ textType, language, duration, level, punctuation, numbers, specials, capitals, accents, excluded, mistakes, botSpeed, botAccuracy, length, wordCount: race.course.words.length, sessionSeconds });
 }
 
 const numbersOf = (value: unknown) => (Array.isArray(value) ? value.map(Number) : []);

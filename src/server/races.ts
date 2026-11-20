@@ -14,6 +14,7 @@ import { KeysSchema, type KeyCounts } from "../players/keys";
 import { DurationSchema, MAX_DURATION } from "../rooms/settings";
 import { CODE_PATTERN } from "../rooms/access";
 import { raceClock } from "../rooms/race-clock";
+import { effectiveComposition } from "../rooms/text";
 import { MAX_HUMAN_WPM } from "../realtime/referee";
 import { players, raceConfigs, raceResults, races, raceSamples, roomMembers, rooms, user, type RaceOther } from "../../db/schema";
 import { readGuestSession } from "./guest";
@@ -146,7 +147,8 @@ export function parseRace(body: unknown) {
   const parsed = RaceSchema.safeParse(body);
   if (!parsed.success) return fail(fieldOf(parsed.error.issues[0]?.path ?? []));
   const { id, room, summary, content, players: list } = parsed.data;
-  const { sessionSeconds, ...config } = summary;
+  // CONF-07 : le résumé vient du navigateur ; une option sans effet sur ce type de texte est enregistrée « non »
+  const { sessionSeconds, ...config } = effectiveComposition(summary);
   const results = list.map(({ chars: [correctChars, wrongChars, extraChars, missedChars], ...player }, index) => ({
     ...player,
     rank: index + 1,
