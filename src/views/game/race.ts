@@ -1,6 +1,7 @@
 // Déroulé d'une course. COURSE-05 : seuls les bots du salon sont simulés ; un adversaire humain avance avec la progression
 // qu'il envoie en temps réel (applyRemote). Progression déclarée par le client : le serveur autoritaire reste à faire (COURSE-06).
 import { countKey, type KeyCounts } from "../../players/keys";
+import { transition, type RaceEvent, type RaceState } from "../../rooms/race-state";
 import type { BotAccuracy, BotSpeed, MistakeMode, Player } from "../room/room";
 
 const BOT_WPM: Record<BotSpeed, [number, number]> = { slow: [25, 40], medium: [40, 65], fast: [65, 100], mixed: [25, 100] };
@@ -16,9 +17,10 @@ export type Bot = { lane: number; wpm: number; accuracy: number; words: number; 
 export type Remote = { lane: number; progress: number; wpm: number; finishedAt: number };
 /** Cumuls de fin de seconde : caractères validés, caractères tapés, fautes. */
 export type Sample = { chars: number; typed: number; errors: number };
+export type Phase = "countdown" | "racing" | "done";
 export type Race = {
   course: Course;
-  phase: "countdown" | "racing" | "done";
+  phase: Phase;
   count: number | null;
   myLane: number;
   startedAt: number;
@@ -42,6 +44,31 @@ export type Race = {
   /** Une mesure par seconde et par couloir. */
   samples: Sample[][];
 };
+
+/** COURSE-01 : chaque phase de la page est un état du salon (src/rooms/race-state.ts). */
+export const PHASE_STATE: Record<Phase, RaceState> = { countdown: "countdown", racing: "racing", done: "results" };
+const STATE_PHASE: Partial<Record<RaceState, Phase>> = { countdown: "countdown", racing: "racing", results: "done" };
+
+/** COURSE-01 : la phase après `event`, par la machine du serveur ; une transition hors du schéma ne change rien. */
+function nextPhase(phase: Phase, event: RaceEvent): Phase | null {
+  try {
+    return STATE_PHASE[transition(PHASE_STATE[phase], event)] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** COURSE-01 : fin du décompte (DÉCOMPTE → EN_COURSE). Sans effet hors du décompte. */
+export function startRace(race: Race, now: number): Race {
+  const phase = nextPhase(race.phase, "start");
+  return phase ? { ...race, phase, count: null, startedAt: now, now } : race;
+}
+
+/** COURSE-01 : fin de la course (EN_COURSE → RÉSULTATS). Sans effet hors de la course. */
+export function endRace(race: Race): Race {
+  const phase = nextPhase(race.phase, "finish");
+  return phase ? { ...race, phase } : race;
+}
 
 export function createCourse(words: string[], durationSeconds: number | null, mistakes: MistakeMode): Course {
   const marks = [0];
@@ -186,7 +213,8 @@ export function advanceBots(race: Race, now: number, jitters: number[]): Race {
     arrivals.push(bot.lane);
     return { ...moved, finishedAt: now };
   });
-  const moved: Race = { ...race, bots, arrivals, now, phase: durationMs !== null && now - race.startedAt >= durationMs ? "done" : "racing" };
+  const ticked: Race = { ...race, bots, arrivals, now };
+  const moved = durationMs !== null && now - race.startedAt >= durationMs ? endRace(ticked) : ticked;
   return { ...moved, samples: recordSamples(moved) };
 }
 

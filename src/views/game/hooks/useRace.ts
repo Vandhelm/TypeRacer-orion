@@ -2,7 +2,7 @@ import { useEffect, useMemo, useReducer, useState } from "react";
 import type { Player, Room } from "../../room/room";
 import { seededRandom } from "../../../rooms/text";
 import { buildWords } from "../course";
-import { advanceBots, applyInput, applyRemote, createCourse, createRace, everyoneDone, TICK_MS, type Race } from "../race";
+import { advanceBots, applyInput, applyRemote, createCourse, createRace, endRace, everyoneDone, startRace, TICK_MS, type Race } from "../race";
 
 export const COUNT_STEP_MS = 800;
 export const GO_MS = 500;
@@ -22,7 +22,7 @@ function reduce(race: Race, action: Action): Race {
     case "count":
       return { ...race, count: action.value };
     case "start":
-      return { ...race, phase: "racing", count: null, startedAt: action.now, now: action.now };
+      return startRace(race, action.now);
     case "input":
       return applyInput(race, action.value, action.now);
     case "tick":
@@ -30,7 +30,7 @@ function reduce(race: Race, action: Action): Race {
     case "remote":
       return race.phase === "racing" ? action.updates.reduce((next, { lane, ...update }) => applyRemote(next, lane, update, action.now), race) : race;
     case "finish":
-      return { ...race, phase: "done" };
+      return endRace(race);
   }
 }
 
