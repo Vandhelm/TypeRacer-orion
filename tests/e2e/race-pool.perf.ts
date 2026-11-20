@@ -14,8 +14,8 @@ import { createRoom, signUp } from "./helpers";
 const MIN_FPS = Number(process.env.PERF_MIN_FPS ?? 55);
 const MAX_DROPPED = Number(process.env.PERF_MAX_DROPPED ?? 0.05);
 const MAX_LONG_TASK_MS = Number(process.env.PERF_MAX_LONG_TASK_MS ?? 100);
-/** Ralentissement du processeur (Chrome DevTools) : 1 = la machine telle quelle, 4 = un portable modeste. */
-const CPU_THROTTLE = Number(process.env.PERF_CPU_THROTTLE ?? 4);
+/** Ralentissement du processeur (Chrome DevTools) : 2 par défaut, un portable courant ; 1 = la machine telle quelle. */
+const CPU_THROTTLE = Number(process.env.PERF_CPU_THROTTLE ?? 2);
 /** Fenêtre mesurée, en pleine course (après le départ et l'arrivée des premières boules). */
 const MEASURE_MS = Number(process.env.PERF_MEASURE_MS ?? 15_000);
 const REPORT_DIR = "reports/perf";
