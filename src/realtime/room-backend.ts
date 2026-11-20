@@ -47,10 +47,16 @@ export function raceCourseOf(view: RoomView): RaceCourse | null {
     marks = [0];
     for (const word of words) marks.push(marks.at(-1)! + word.length + 1);
   }
-  return { startsAt: view.startsAt, endsAt: view.endsAt, marks, runners: view.members.filter((m) => m.role === "player").map((m) => m.key), abandoned: view.members.filter((m) => m.abandoned).map((m) => m.key) };
+  return { startsAt: view.startsAt, endsAt: view.endsAt, marks, runners: view.members.filter((m) => m.role === "player").map((m) => m.key), ...abandonedOf(view) };
 }
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** COURSE-07 : les coureurs qui ont abandonné, seulement s'il y en a. */
+function abandonedOf(view: RoomView): { abandoned?: string[] } {
+  const keys = view.members.filter((m) => m.abandoned).map((m) => m.key);
+  return keys.length ? { abandoned: keys } : {};
+}
+
+const UUID =/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** L'identité de salon d'un joueur de ticket (realtime-ticket.ts) : `u:<playerId>` ou `g:<id de session invitée>`. */
 export function identityOf(player: Player): Identity | null {
