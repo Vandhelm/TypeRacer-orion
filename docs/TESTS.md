@@ -5,6 +5,7 @@
 | `bun test` | tests unitaires et de régression (`*.test.ts`) | PGlite en mémoire, sans Docker |
 | `bun run test:smoke` | l'application démarre et répond (`tests/smoke/app.smoke.ts`) | `<base>_smoke` jetable |
 | `bun run test:e2e` | parcours de bout en bout dans Chromium, avec Playwright (TEST-02) | `<base>_e2e` jetable |
+| `bun run lighthouse [url]` | Lighthouse sur l'accueil, mobile et desktop, seuil 90 par catégorie (PERF-01) ; hors de `bun test` | celle du serveur mesuré |
 
 ## Tests de bout en bout (TEST-02, TEST-03)
 
@@ -61,3 +62,39 @@ Tous les tests viennent de la même IP : la limite de débit de Better Auth sur 
 ### Résultats
 
 `test-results/` (traces et captures des échecs) et `playwright-report/` (rapport HTML, en CI) sont ignorés par git. Revoir un échec : `bunx playwright show-trace test-results/<test>/trace.zip`.
+
+## Lighthouse sur la page d'accueil (PERF-01)
+
+`scripts/lighthouse.ts` mesure les quatre catégories (performance, accessibilité, bonnes pratiques, SEO) de la page d'accueil en mobile (profil par défaut de Lighthouse : écran de 412 px, réseau 4G lent et processeur ralenti 4 fois, simulés) puis en desktop (`--preset=desktop`). Chaque profil est mesuré trois fois et garde la médiane de chaque catégorie, comme le conseille Lighthouse : le score de performance varie de quelques points selon la charge de la machine. Le script sort en erreur si une médiane est sous 90. Il ne fait pas partie de `bun test` ni de la CI : il lui faut un build de production qui tourne et un Chrome.
+
+```bash
+bun run next:build                              # build de production : jamais `next dev` (non minifié, et cassé sous Bun par sharp)
+PORT=3200 bun run next:start                    # avec DATABASE_URL et BETTER_AUTH_SECRET, comme pour les tests e2e
+bun run lighthouse http://localhost:3200/       # options : --threshold=90 --runs=3
+```
+
+- Chrome : celui de Playwright (`bunx playwright install chromium`), ou celui donné par `CHROME_PATH`.
+- Base : n'importe quelle base migrée et peuplée ; un Postgres jetable comme ci-dessus suffit (`NODE_ENV=test bun db/cli.ts reset` avec la bonne `DATABASE_URL`).
+- Rapports JSON : `reports/lighthouse/home-<mobile|desktop>-<n>.json`, ignorés par git. Les ouvrir dans <https://googlechrome.github.io/lighthouse/viewer/> pour le détail.
+- Mesurer un déploiement : `bun run lighthouse https://<preview>.vercel.app/`.
+
+### Scores
+
+Mesurés le 20/11/2026 sur un MacBook (Apple M4) chargé, build de production, base de démo, médiane de 3 mesures (performance, accessibilité, bonnes pratiques, SEO) :
+
+| Profil | Avant (`dev`, 7a29df8) | Après (`feature/home/perf-01`) |
+|---|---|---|
+| Mobile | 70 · 96 · 100 · 90 | 96 · 100 · 100 · 100 |
+| Desktop | 96 · 96 · 100 · 90 | 100 · 100 · 100 · 100 |
+
+Sur `dev`, une première mesure isolée donnait 60 et 84 en performance (mobile et desktop). Sur la branche, la performance mobile va de 85 à 100 d'une mesure à l'autre sur cette machine chargée, d'où la médiane.
+
+Ce qui faisait perdre des points, et ce qui a changé :
+
+- **Temps de blocage (TBT, mobile 9,5 s)** : la crème glacée 3D du décor déformait toutes les boules fondues à chaque image (environ 2 800 sommets et leurs normales chacune) et construisait les 12 assiettes dans la tâche qui hydrate la page. Désormais chaque boule à l'écran est déformée une image sur six, à tour de rôle (le mouvement a une période de 10 s au moins, l'œil ne voit pas la différence), les boules hors écran ne le sont pas, la sphère de base est calculée une seule fois, et les assiettes se construisent une par tâche après le premier rendu. Three.js (plus de 600 Ko) est chargé à part, à ce moment-là seulement (`src/views/home/scene/createScene.ts`, `scene-quality.ts`).
+- **Sans carte graphique** (WebGL logiciel : SwiftShader, llvmpipe), la 3D coûtait des dizaines de millisecondes par image : le contexte est demandé avec `failIfMajorPerformanceCaveat`, et en cas de refus les assiettes passent au dessin 2D de secours, qui existait déjà mais ne s'affichait jamais.
+- **Planche des têtes de poisson** : 104 Ko de base64 dans le JavaScript de la page, devenus une image à part (`src/assets/home/fish-sheet.webp`).
+- **Accessibilité** : les textes secondaires (navigation, onglets, libellés des champs, surtitre) utilisaient la couleur des traits `line-soft` (contraste 3:1 sur le noir) ; ils passent à `muted` (6,6:1), le jeton des textes secondaires. Les onglets FR / EN ont un nom accessible qui commence par le texte visible (« EN, English »).
+- **SEO** : meta description de l'accueil, traduite (`home.metaDescription`).
+
+Les tests `src/views/home/home-lighthouse.test.tsx`, `src/views/home/scene/scene-quality.test.ts` et `scripts/lighthouse.test.ts` (`bun test -t PERF-01`) gardent ces corrections sans navigateur.
