@@ -44,7 +44,7 @@ describe("CONF-10 — the host adds and removes bots one by one, each with its l
 
   test("a bot beyond the capacity is refused (409 full) and the list does not change", async () => {
     const { room, host } = await t.open("Conf10_Plein", { bots: false, guests: 3 });
-    const two = [{ name: "Wasabi99", level: "slow" }, { name: "Ebi_Fry", level: "fast" }];
+    const two: RoomBot[] = [{ name: "Wasabi99", level: "slow" }, { name: "Ebi_Fry", level: "fast" }];
     expect((await patch(t, room.code, host.cookie, { botList: two })).status).toBe(200);
     const res = await patch(t, room.code, host.cookie, { botList: [...two, { name: "Uni_Kun", level: "medium" }] });
     expect(res.status).toBe(409);

@@ -2,7 +2,7 @@
 import { cleanRoomCode, isRoomCode, joinByCodeHref, type Visibility } from "../../rooms/access";
 import { MAX_GUESTS, MIN_GUESTS, MAX_TEXT_LENGTH, type Role, type RoomSettings } from "../../rooms/settings";
 import type { MemberView, RoomView } from "../../server/rooms";
-import { BOT_NAMES } from "../../players/bots";
+import { defaultBots, nextBotName, seatedBots, type BotLevel, type RoomBot } from "../../rooms/bots";
 import { seatColor } from "../../rooms/seats";
 import { launchBlocker } from "../../rooms/launch";
 import { additionsApply } from "../../rooms/text";
@@ -34,8 +34,8 @@ export function durationChoice(duration: number | null, typing: boolean): Durati
   return DURATION_PRESETS.includes(duration) ? duration : "other";
 }
 
-/** image (COURSE-05) : la photo du compte, telle que l'envoie le serveur ; absente pour un invité ou un bot. */
-export type Player = { name: string; color: string; host?: boolean; me?: boolean; bot?: boolean; image?: string };
+/** image (COURSE-05) : la photo du compte, telle que l'envoie le serveur ; absente pour un invité ou un bot. level (CONF-10) : le niveau d'un bot. */
+export type Player = { name: string; color: string; host?: boolean; me?: boolean; bot?: boolean; level?: BotLevel; image?: string };
 export type Seat = Player | { free: true };
 export type SavedText = { name: string; text: string };
 
@@ -141,26 +141,44 @@ export function roomOf(view: RoomView): Room {
   return { ...view.settings, code: view.code };
 }
 
-/** La liste des places : les participants à leur place, puis des bots ou des places libres. Les spectateurs n'en ont pas. */
-export function seatsOf(room: Pick<Room, "guests" | "bots">, members: MemberView[], you: string): Seat[] {
+/**
+ * La liste des places : les participants à leur place, puis les bots de la liste du salon (CONF-10), chacun avec son
+ * niveau, tant qu'il reste une place, puis des places libres. Les spectateurs n'en ont pas. Sans liste (ancien
+ * réglage), un bot par place libre.
+ */
+export function seatsOf(room: Pick<Room, "guests" | "bots"> & { botList?: readonly RoomBot[] }, members: MemberView[], you: string): Seat[] {
   const seats: Seat[] = members
     .filter((m) => m.role === "player" && m.seat !== null)
     .sort((a, b) => a.seat! - b.seat!)
     .map((m) => ({ name: m.name, color: m.color ?? seatColor(m.seat!), host: m.host || undefined, me: m.key === you || undefined, ...(m.image ? { image: m.image } : {}) }));
-  let bot = 0;
-  while (seats.length < room.guests) {
-    // SALLE-05 : un bot par nom de la liste fermée (le serveur ne reconnaît qu'elle) ; au-delà, des places libres
-    const name = room.bots ? BOT_NAMES[bot++] : undefined;
-    seats.push(name ? { name, color: seatColor(seats.length), bot: true } : { free: true });
+  // SALLE-05 : un bot par nom de la liste fermée (le serveur ne reconnaît qu'elle) ; au-delà, des places libres
+  const humans = seats.length;
+  for (const bot of seatedBots({ ...room, botList: room.botList ?? defaultBots(room.guests - humans, "medium") }, humans)) {
+    seats.push({ name: bot.name, color: seatColor(seats.length), bot: true, ...(room.botList ? { level: bot.level } : {}) });
   }
+  while (seats.length < room.guests) seats.push({ free: true });
   return seats;
+}
+
+/** CONF-10 : un bot de plus, au premier nom libre de la liste fermée, au niveau moyen ; la même liste si tous sont pris. */
+export function withBotAdded(list: RoomBot[]): RoomBot[] {
+  const name = nextBotName(list);
+  return name ? [...list, { name, level: "medium" }] : list;
+}
+/** CONF-10 : la liste sans ce bot. */
+export function withoutBot(list: RoomBot[], name: RoomBot["name"]): RoomBot[] {
+  return list.filter((bot) => bot.name !== name);
+}
+/** CONF-10 : la liste où seul ce bot change de niveau. */
+export function withBotLevel(list: RoomBot[], name: RoomBot["name"], level: BotLevel): RoomBot[] {
+  return list.map((bot) => (bot.name === name ? { ...bot, level } : bot));
 }
 
 /**
  * COURSE-02 : pourquoi le bouton Lancer est grisé (clé de traduction), d'après la règle que le serveur applique au
  * lancement ; null : la course peut partir.
  */
-export function launchHint(room: Pick<Room, "guests" | "bots">, members: Pick<MemberView, "role">[]): "room.notEnough" | "room.noHuman" | null {
+export function launchHint(room: Pick<Room, "guests" | "bots"> & { botList?: readonly RoomBot[] }, members: Pick<MemberView, "role">[]): "room.notEnough" | "room.noHuman" | null {
   const blocker = launchBlocker(room, members);
   return blocker === "no_human" ? "room.noHuman" : blocker === "too_few" ? "room.notEnough" : null;
 }

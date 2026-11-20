@@ -206,7 +206,7 @@ export function useRoom(page: "room" | "game" = "room") {
     return reply.ok;
   }, [code, answer]);
 
-  const seats = useMemo(() => seatsOf({ guests: room.guests, bots: room.bots }, view.members, you), [room.guests, room.bots, view.members, you]);
+  const seats = useMemo(() => seatsOf({ guests: room.guests, bots: room.bots, botList: room.botList }, view.members, you), [room.guests, room.bots, room.botList, view.members, you]);
   const players = useMemo(() => seats.filter(isPlayer), [seats]);
   const me = view.members.find((m) => m.key === you);
 
