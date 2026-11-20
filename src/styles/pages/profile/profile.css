@@ -2,40 +2,9 @@
 
 .hanging-button.profile-back{ position: relative; top: auto; left: auto; animation: none; }
 
-/* Heatmap du clavier : la couleur d'une touche suit son taux d'erreur (--heat, de 0 à 100 %).
-   Le clavier se range en rangées décalées ; les lettres changent avec une petite animation. */
-.keymap-head .view-tabs{ gap: 8px; border: 0; animation: none; }
-.keymap-head .view-tab{ height: 32px; min-height: 32px; padding: 0 18px; border: 1px solid var(--color-line); font-size: 11px; letter-spacing: .2em; }
-.keymap-head .view-tab + .view-tab{ border-left: 1px solid var(--color-line); }
-.keymap-key{
-    flex: 1 1 0;
-    min-width: 0;
-    aspect-ratio: 1;
-    max-height: 44px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid var(--color-line-faint);
-    background: color-mix(in srgb, var(--color-red-solid) var(--heat, 0%), var(--color-face-front-b));
-    color: #fff;
-    font: 400 clamp(9px, 1.6vw, 13px)/1 var(--font-mono);
-    transition: background .35s ease, color .35s ease;
-}
-.keymap-cap{ display: inline-block; animation: keymap-swap .34s calc(var(--i, 0) * 12ms) cubic-bezier(.2,.8,.2,1) both; }
-@keyframes keymap-swap{
-    from{ opacity: 0; transform: translateY(-45%) scale(.7); }
-}
-.keymap-key.is-wide{ flex: 0 0 50%; aspect-ratio: auto; height: clamp(22px, 4vw, 36px); }
-.keymap-key.is-empty{ color: var(--color-line-faint); background: transparent; }
-
 /* Son propre profil (depuis la navbar) : onglets Compte / Stats, même pièce que AZERTY / QWERTY */
 .profile-tabs .view-tabs{ width: fit-content; gap: 8px; border: 0; animation: none; }
 .profile-tabs .view-tab{ flex: none; height: 36px; min-height: 36px; padding: 0 22px; border: 1px solid var(--color-line); font-size: 11px; letter-spacing: .22em; text-transform: uppercase; transition: none; }
 .profile-tabs .view-tab + .view-tab{ border-left: 1px solid var(--color-line); }
 /* Changement d'onglet : le contenu arrive en fondu et monte légèrement */
 @keyframes tab-enter{ from{ opacity: 0; transform: translateY(8px); } }
-
-@media (prefers-reduced-motion: reduce){
-    .keymap-key{ transition: none; }
-    .keymap-cap{ animation: none; }
-}

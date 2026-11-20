@@ -5,7 +5,8 @@ import type { KeyCounts } from "../../players/keys";
 import { formatNumber } from "../../i18n/format";
 import { heatOf, LAYOUTS, MIN_TYPED, RATE_MAX, rowsOf, weakest, type Layout } from "./keyboard";
 
-type Props = { keys: KeyCounts; layout: Layout; onLayout: (layout: Layout) => void };
+/** title, empty : RES-03, the podium names its own map (one race) and its own empty state; the profile keeps its texts. */
+type Props = { keys: KeyCounts; layout: Layout; onLayout: (layout: Layout) => void; title?: string; empty?: string };
 
 /** La teinte d'une touche, de 0 (aucune faute) à 1 (RATE_MAX ou plus). */
 const levelOf = (rate: number) => Math.min(1, rate / RATE_MAX);
@@ -20,7 +21,7 @@ const MINI_KEY =
   "inline-flex h-[26px] min-w-[26px] items-center justify-center border border-line-faint px-1.5 font-mono leading-none font-normal text-white " +
   "bg-[color-mix(in_srgb,var(--color-red-solid)_var(--heat,0%),var(--color-face-front-b))]";
 
-export function KeyboardHeatmap({ keys, layout, onLayout }: Props) {
+export function KeyboardHeatmap({ keys, layout, onLayout, title, empty }: Props) {
   const { t, i18n } = useTranslation();
   const heat = useMemo(() => heatOf(layout, keys), [layout, keys]);
   const worst = useMemo(() => weakest(heat), [heat]);
@@ -32,7 +33,7 @@ export function KeyboardHeatmap({ keys, layout, onLayout }: Props) {
       <div className="keymap-head mb-7 flex flex-wrap items-center justify-between gap-x-5 gap-y-3">
         <h3 className="inline-flex items-center gap-2 font-mono text-[max(11px,1.2vh)] leading-none font-normal tracking-[.08em] text-muted">
           <i className="inline-block size-2.5 border border-line-faint bg-[linear-gradient(135deg,var(--color-face-front-b),var(--color-red-solid))]" />
-          {t("profile.keys.title")}</h3>
+          {title ?? t("profile.keys.title")}</h3>
         <ViewTabs
           options={LAYOUTS.map((value) => ({ value, label: value.toUpperCase() }))}
           value={layout}
@@ -85,7 +86,7 @@ export function KeyboardHeatmap({ keys, layout, onLayout }: Props) {
           </ul>
         </div>
       ) : (
-        <p className={WORST}>{t(heat.size ? "profile.keys.clean" : "profile.keys.none")}</p>
+        <p className={WORST}>{heat.size ? t("profile.keys.clean") : (empty ?? t("profile.keys.none"))}</p>
       )}
     </div>
   );
