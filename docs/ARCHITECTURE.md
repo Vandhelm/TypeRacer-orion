@@ -104,7 +104,7 @@ Serveur vers client (validés par `ServerMessage` côté client) :
 
 ## Serveur autoritaire (COURSE-06)
 
-**Le serveur temps réel est obligatoire en production.** C'est lui qui arbitre la course ; sans lui, aucune arrivée n'est validée, aucune course ne se termine avant son échéance et les courses enregistrées sont toutes marquées non finies. Il n'y a pas de repli côté navigateur. Le site démarre quand même (le dev local n'est pas bloqué), mais l'absence se voit : avertissement au démarrage de Next.js (`instrumentation.ts`) et champ `realtime: { required, configured, missing }` dans `GET /api/health`, dès que `REALTIME_PUBLIC_URL` ou `REALTIME_SECRET` manque en production (`NODE_ENV` ou `VERCEL_ENV` à `production`, `src/server/realtime-config.ts`).
+**Le serveur temps réel est obligatoire en production.** C'est lui qui arbitre la course ; sans lui, aucune arrivée n'est validée, aucune course ne se termine avant son échéance et les courses enregistrées sont toutes marquées non finies. Il n'y a pas de repli côté navigateur. Le site démarre quand même (le dev local n'est pas bloqué), mais l'absence se voit : avertissement au démarrage de Next.js (`instrumentation.ts`) et champ `realtime: { required, configured, missing }` dans `GET /api/health`, dès que `REALTIME_PUBLIC_URL` manque, ou qu'aucun secret de ticket valable n'est défini (`REALTIME_SECRET`, sinon `BETTER_AUTH_SECRET`, 32 caractères minimum, comme la signature des tickets), en production (`NODE_ENV` ou `VERCEL_ENV` à `production`, `src/server/realtime-config.ts`).
 
 Le navigateur tape et compte ; le serveur décide. Qui décide quoi :
 
@@ -137,15 +137,20 @@ Le texte est connu du serveur : il retire les mots comme la page de course, avec
 - `progress_too_fast` (vitesse irréaliste) : plus de `25 × secondes depuis startsAt (+1 s) + 40` caractères validés ;
 - `progress_jump` (saut) : plus de `25 × secondes depuis la dernière progression acceptée + 40` caractères de plus qu'elle.
 
-Un coureur légitime refusé (paquets groupés) n'est pas bloqué : la marge autorisée grandit avec le temps écoulé depuis sa dernière progression acceptée. Le classement est gardé en mémoire tant qu'un joueur est dans la salle ; la dernière progression d'un coureur qui s'en va est écrite en base.
+Un coureur légitime refusé (paquets groupés) n'est pas bloqué : la marge autorisée grandit avec le temps écoulé depuis sa dernière progression acceptée. Le classement est gardé en mémoire tant qu'un joueur est dans la salle ; la dernière progression d'un coureur qui s'en va est écrite en base (`room_members.progress`). Quand toutes les sockets d'une salle sont parties (ou que le serveur redémarre), le classement est relu en base au retour des coureurs : chacun reprend sa progression gardée, et un recul reste refusé.
 
 **Enregistrement d'une course** (`POST /api/races`) : choix retenu, **refuser** ce qui contredit le serveur et **corriger** ce qu'il sait mieux.
 
 - Refusé, 409 `race_not_launched` : pas de `room` dans le corps, salon inconnu ou fermé, expéditeur pas membre, salon jamais lancé.
 - Refusé, 422 `race_contradicted` : un joueur du corps a couru plus longtemps que le temps écoulé depuis le départ serveur (+2 s), ou à plus de 300 MPM.
 - Refusé, 409 `duplicate_race` : ce membre a déjà enregistré ce lancement, même avec un nouvel identifiant (réservation conditionnelle sur `room_members.race_recorded`, remise à faux à chaque lancement).
-- Corrigé : `finished` du compte vient de la progression validée par le temps réel (`room_members.progress = 1`) ; le départ (`races.started_at`) est le départ serveur ; le **rang** des humains est celui du serveur (arrivés par `finished_at`, puis par progression validée), quel que soit l'ordre du corps ; les bots, simulés par le navigateur (BOT-*), gardent leur place (`rankByServer`).
+- Corrigé : `finished` du compte vient de la progression validée par le temps réel (`room_members.progress = 1`) ; le départ (`races.started_at`) est le départ serveur ; le **rang** est refait par le serveur, quel que soit l'ordre du corps (`rankByServer`).
+- **Qui est un bot** : le serveur le décide, jamais le drapeau `bot` du corps. Le compte qui envoie et tout membre humain du salon sont humains ; seuls les bots du salon sont des bots : ses membres bots, puis les places libres remplies par la liste fermée `BOT_NAMES` si le salon a les bots activés (comme `seatsOf`). Les noms de `BOT_NAMES` sont réservés : inscription, changement de nom, compte GitHub ou Discord (nom suffixé) et pseudo d'invité les refusent.
+- **Règle du rang** : d'abord les humains que le serveur a vus arriver (par heure d'arrivée), puis les bots (dans l'ordre du corps), puis les humains non arrivés selon le serveur (par progression validée), puis les humains inconnus du serveur. Un client ne gagne donc rien avec les bots : aucun bot devant un humain arrivé, aucun humain non arrivé devant un bot.
+- **Limite restante** : les bots sont simulés par le navigateur (BOT-*) ; le serveur ne peut pas encore reproduire leur course (graine des bots : BOT-05). Leur ordre entre eux, leurs MPM et leur arrivée viennent du corps, bornés par les refus ci-dessus ; un humain non arrivé mais devant un bot lent dans la vraie course est classé derrière lui.
 - Reste du navigateur : MPM, précision et résultats des bots (bornés par les refus ci-dessus).
+
+**Reste côté pages (COURSE-03, après le merge)** : le décompte, le minuteur, la piste et le podium de la page de course ne suivent pas encore `startsAt`, `endsAt` et `standings` du serveur (exposés par `src/realtime/client.ts`, `state.race`) ; ils gardent leur horloge locale. C'est le décompte synchronisé de COURSE-03.
 
 ## Déployer le serveur temps réel
 
