@@ -1,5 +1,5 @@
 {
-  "id": "652b4be7-ae2f-4fe6-b285-b7572cc96606",
+  "id": "9fd33f36-57d6-41f8-a0cb-ec50f53ac9eb",
   "prevId": "b22cb200-b3bf-42ff-b0ac-af9f91b6be52",
   "version": "7",
   "dialect": "postgresql",
@@ -1217,12 +1217,12 @@
           "primaryKey": false,
           "notNull": false
         },
-        "abandons": {
-          "name": "abandons",
-          "type": "jsonb",
+        "abandoned_names": {
+          "name": "abandoned_names",
+          "type": "text[]",
           "primaryKey": false,
           "notNull": true,
-          "default": "'[]'::jsonb"
+          "default": "'{}'::text[]"
         }
       },
       "indexes": {
