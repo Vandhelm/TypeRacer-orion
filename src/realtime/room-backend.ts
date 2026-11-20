@@ -49,7 +49,15 @@ export function raceCourseOf(view: RoomView): RaceCourse | null {
     marks = [0];
     for (const word of words) marks.push(marks.at(-1)! + word.length + 1);
   }
-  return { startsAt: view.startsAt, endsAt: view.endsAt, marks, runners: view.members.filter((m) => m.role === "player").map((m) => m.key), ...abandonedOf(view), ...(view.settings.catchUpBonus ? { catchUpBonus: true } : {}) };
+  return {
+    startsAt: view.startsAt,
+    endsAt: view.endsAt,
+    marks,
+    runners: view.members.filter((m) => m.role === "player").map((m) => m.key),
+    ...abandonedOf(view),
+    // BONUS-02 : avec les bonus, le texte arbitré (le bonus +3 mots y puise) et la graine qui choisit leur type
+    ...(view.settings.catchUpBonus ? { catchUpBonus: true, ...(marks && words ? { words } : {}), ...(view.seed !== null ? { seed: view.seed } : {}) } : {}),
+  };
 }
 
 /** COURSE-07 : les coureurs qui ont abandonné, seulement s'il y en a. */

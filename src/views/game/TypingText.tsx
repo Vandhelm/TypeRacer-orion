@@ -3,8 +3,11 @@ import { memo, useLayoutEffect, useRef } from "react";
 // The cursor (.game-cursor) blinks with a keyframe: it stays in styles/pages/game/typing.css.
 const WORD = "game-word mr-[1ch] inline-block whitespace-pre";
 
-const PastOrNextWord = memo(function PastOrNextWord({ text, status }: { text: string; status: "next" | "done" | "missed" }) {
-  const classes = { next: WORD, done: `${WORD} text-white`, missed: `${WORD} text-red-text underline decoration-1 underline-offset-[.25em]` }[status];
+// BONUS-02 : le brouillard rend flous les mots après celui en cours
+const FOG = `${WORD} blur-[.22em] transition-[filter] duration-300 motion-reduce:transition-none`;
+
+const PastOrNextWord = memo(function PastOrNextWord({ text, status }: { text: string; status: "next" | "fog" | "done" | "missed" }) {
+  const classes = { next: WORD, fog: FOG, done: `${WORD} text-white`, missed: `${WORD} text-red-text underline decoration-1 underline-offset-[.25em]` }[status];
   return <span className={classes}>{text}</span>;
 });
 
@@ -22,9 +25,9 @@ function CurrentWord({ text, typed }: { text: string; typed: string }) {
   );
 }
 
-type TypingTextProps = { words: string[]; wordIndex: number; typed: string; missed: ReadonlySet<number>; active: boolean; lang: string };
+type TypingTextProps = { words: string[]; wordIndex: number; typed: string; missed: ReadonlySet<number>; active: boolean; lang: string; /** BONUS-02 */ fog?: boolean };
 
-export function TypingText({ words, wordIndex, typed, missed, active, lang }: TypingTextProps) {
+export function TypingText({ words, wordIndex, typed, missed, active, lang, fog = false }: TypingTextProps) {
   const box = useRef<HTMLParagraphElement>(null);
 
   // le texte peut être long : la ligne du mot en cours reste visible
@@ -41,7 +44,7 @@ export function TypingText({ words, wordIndex, typed, missed, active, lang }: Ty
     >
       {words.map((word, i) => {
         if (i === wordIndex && active) return <CurrentWord key={i} text={word} typed={typed} />;
-        return <PastOrNextWord key={i} text={word} status={i >= wordIndex ? "next" : missed.has(i) ? "missed" : "done"} />;
+        return <PastOrNextWord key={i} text={word} status={i > wordIndex && fog ? "fog" : i >= wordIndex ? "next" : missed.has(i) ? "missed" : "done"} />;
       })}
     </p>
   );

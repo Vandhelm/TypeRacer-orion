@@ -155,3 +155,35 @@ describe("COURSE-06 — the client exposes the server start, end and ranking", (
     refereed.stop(true);
   });
 });
+
+describe("BONUS-02 — the client keeps the bonuses announced by the server, with their effect", () => {
+  test("the race page reads each bonus and its effect from the client state, in order", async () => {
+    const people = [player("Alpha_70"), player("Bravo_71")];
+    const startsAt = Date.now() - 20_000;
+    const course = { startsAt, endsAt: startsAt + 60_000, marks: Array.from({ length: 101 }, (_, i) => i * 6), runners: people.map((p) => p.id), catchUpBonus: true, seed: 5 };
+    const members = new Set<string>();
+    const refereed = createRealtimeServer({
+      port: 0,
+      secret: SECRET,
+      rooms: {
+        enter: async (p, code) => ({ key: p.id, room: { code, members: [...members.add(p.id)].map((key) => ({ key })) } }),
+        view: async (code) => ({ code, members: [...members].map((key) => ({ key })) }),
+        refresh: async () => false,
+        leave: async () => false,
+        changes: () => () => undefined,
+        course: async () => course,
+      },
+    });
+    const target = `ws://localhost:${refereed.port}`;
+    const a: RealtimeState[] = [];
+    const ca = connectRealtime({ room: "CXNT24", getTicket: async () => ({ ticket: signTicket(people[0]!, SECRET), url: target }), onChange: (s) => a.push(s) });
+    const cb = connectRealtime({ room: "CXNT24", getTicket: async () => ({ ticket: signTicket(people[1]!, SECRET), url: target }), onChange: () => undefined });
+    await until(a, (s) => s.race?.standings.length === 2);
+    cb.sendProgress(0.3, 50);
+    const state = await until(a, (s) => (s.bonuses?.length ?? 0) > 0);
+    expect(state.bonuses).toEqual([{ type: "bonus", room: "CXNT24", playerId: "g:alpha_70", checkpoint: 1, count: 1, effect: { kind: "fog", target: "g:bravo_71", durationMs: 5000 } }]);
+    ca.close();
+    cb.close();
+    refereed.stop(true);
+  });
+});

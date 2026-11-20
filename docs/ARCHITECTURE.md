@@ -119,7 +119,8 @@ Le navigateur tape et compte ; le serveur décide. Qui décide quoi :
 | Classement | Le serveur : arrivés par heure d'arrivée serveur, puis les autres par progression | `standings` dans `referee.ts` |
 | Enregistrement (`POST /api/races`) | Le serveur refuse ou corrige : voir plus bas | `claimServerRace` dans `src/server/races.ts` |
 | Attribution des bonus (BONUS-01) | Le serveur, après chaque progression acceptée : voir « Bonus de remontée » plus bas | `src/rooms/bonus.ts`, `awardCatchUp` dans `src/realtime/server.ts` |
-| Effet et annonce des bonus (BONUS-02 à 04) | Pas codés. Ils se branchent sur le message `bonus` et sur `standings.players[].bonuses` ; un bonus qui ajoute ou retire des mots devra modifier `course.marks` de la salle (longueur du texte, annexe A) pour que l'arbitre continue de compter juste | — |
+| Type et effet des bonus (BONUS-02) | Le serveur choisit le type à l'attribution (graine du salon) et change le texte arbitré de la cible ; la page de course applique l'effet reçu : voir « Types de bonus » plus bas | `src/rooms/bonus-effects.ts`, `bonusEffect` dans `src/realtime/server.ts`, `src/views/game/bonus.ts` |
+| Annonce et MPM des bonus (BONUS-03, BONUS-04) | Pas codés. L'annonce se branche sur `RealtimeState.bonuses` (client) ; le MPM fin sur `race.mine` (page) et `texts` (serveur) | — |
 
 Le texte est connu du serveur : il retire les mots comme la page de course, avec les mêmes réglages, la même graine et le même passage (CONF-03, `raceCourseOf` dans `src/realtime/room-backend.ts`). Il compte donc lui-même les caractères validés (espaces comprises, annexe A) à chaque progression. Sans graine (salon lancé avant CONF-03), seules les règles d'horloge et de recul s'appliquent.
 
@@ -308,3 +309,25 @@ Les tests `CONF-05` (`src/views/game/complexity.test.ts`, `bun test -t CONF-05`)
 **Bots :** le texte dit « un joueur » ; BOT-04 veut aussi les bots soumis aux bonus. Mais un bot est simulé par la page de course (`src/views/game/race.ts`, vitesse tirée au hasard dans le navigateur), le serveur ne connaît pas sa progression. Choix retenu : l'attribution, décidée par le serveur, ne porte que sur les coureurs qu'il arbitre (les humains, comptes et invités) ; un bot ne reçoit pas de bonus et ne compte ni comme meneur ni comme dernier. La règle pure (`awardBonuses`) ne distingue pas les bots : le jour où le serveur arbitrera leur progression, il suffira de les ajouter à la liste des coureurs.
 
 **Exposition** (pour BONUS-02 à 04) : message `bonus { room, playerId, checkpoint, count }` à toute la salle à chaque attribution, et `bonuses` (bonus reçus) sur chaque ligne de `standings`, pour une page qui se reconnecte. Le client ne peut pas déclarer un bonus : un message `bonus` envoyé au serveur est refusé (`invalid_message`).
+
+## Types de bonus (BONUS-02)
+
+Trois types (`src/rooms/bonus-effects.ts`), un qui aide le coureur en retard et deux qui ralentissent le meneur :
+
+| Type | Cible | Effet |
+|---|---|---|
+| `fewer_words` (-3 mots) | le coureur en retard qui reçoit le bonus | les **3 derniers mots** de son texte disparaissent ; jamais le mot qu'il tape : au plus `mots restants − 1` |
+| `extra_words` (+3 mots) | le meneur | **3 mots** tirés du texte de la course (au hasard de la graine) s'ajoutent à la **fin de son texte seulement** |
+| `fog` (brouillard) | le meneur | les mots **après celui qu'il tape** sont flous pendant **5 s** ; le texte ne change pas |
+
+**Choix du type**, par le serveur temps réel à l'attribution, jamais par le client : `bonusKind(graine, point, rang)` = `BONUS_KINDS[(graine mod 3 + point − 1 + rang) mod 3]`, où `point` est le point de contrôle (1 à 3) et `rang` l'ordre du coureur parmi ceux servis à ce point. La graine est celle du salon (CONF-03) ; sans graine, le départ serveur (`startsAt`) en tient lieu. Une même graine donne donc les mêmes types ; un coureur servi aux 3 points reçoit chacun des 3 types une fois, et deux coureurs servis au même point n'ont pas le même.
+
+**Le meneur ciblé** : le coureur le plus avancé **encore en course** (pas arrivé, pas abandonné), devant le bénéficiaire ; à égalité, le premier par id. Un meneur déjà arrivé n'est pas ralenti : c'est le suivant encore en course.
+
+**Repli** : si le type tiré ne peut pas s'appliquer, le suivant dans l'ordre `fewer_words → extra_words → fog → fewer_words` est essayé : pas de meneur à ralentir (tous les autres arrivés), plus rien à retirer (dernier mot en cours), ou texte inconnu du serveur (salon sans graine : seul le brouillard s'applique). Si aucun ne s'applique, le message `bonus` part sans `effect`.
+
+**Côté serveur** (`bonusEffect` dans `src/realtime/server.ts`) : un effet sur le texte change le **texte arbitré de la cible** (`texts`, par coureur ; les autres gardent celui de la course). Sa progression acceptée est recalculée sur le nouveau texte (mêmes mots validés, nouvelle longueur : 30 mots faits sur 100 deviennent 30/103 après +3 mots), et ses progressions suivantes sont jugées sur ce texte (caractères comptés sur ses `marks`, annexe A). La même valeur renvoyée par sa page n'est donc pas un recul. Le message `bonus` porte l'effet : `effect { kind: "fewer_words", target, removed } | { kind: "extra_words", target, words } | { kind: "fog", target, durationMs }`, borné par le schéma (au plus 3 mots, 5 s).
+
+**Côté page** (`src/views/game/bonus.ts`) : le client garde les bonus annoncés (`RealtimeState.bonuses`) ; la page de course applique, une fois chacun, ceux dont `effect.target` est son joueur : mon texte devient `race.mine` (les bots et les autres couloirs gardent `race.course`), ma progression (`laneProgress`), mon MPM et la fin de ma course comptent sur ce texte ; le brouillard floute mes prochains mots (`TypingText`, prop `fog`) jusqu'à `fogUntil`. Rien ne s'applique hors course ou une fois arrivé.
+
+**Limites connues** (BONUS-04, COURSE-08) : une progression partie de la page juste avant qu'elle reçoive l'effet est jugée sur le nouveau texte (au pire quelques progressions suivantes refusées en recul, sans conséquence) ; un rechargement de la page en course, ou un serveur redémarré, repart du texte de la course (les textes changés ne sont pas gardés en base). Les bots restent hors bonus (BOT-04 / BOT-05).
