@@ -213,6 +213,11 @@ export function submitFailed() {
   try { return sessionStorage.getItem(SUBMIT_KEY) === "1"; } catch { return false; }
 }
 
+/** DES-06 : a player who watched the race from the mobile notice has no results of their own. */
+export function clearResults() {
+  try { sessionStorage.removeItem(RESULTS_KEY); } catch { /* stockage indisponible */ }
+}
+
 export function readResults() {
   try { return parseResults(sessionStorage.getItem(RESULTS_KEY)); } catch { return null; }
 }

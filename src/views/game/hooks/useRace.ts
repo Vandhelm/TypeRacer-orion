@@ -3,10 +3,10 @@ import type { Player, Room } from "../../room/room";
 import { buildWords } from "../course";
 import { advanceBots, applyInput, createCourse, createRace, everyoneDone, TICK_MS, type Race } from "../race";
 
-const COUNT_STEP_MS = 800;
-const GO_MS = 500;
-const AFTER_LAST_ARRIVAL_MS = 3000; // le temps du dernier repas
-const RESULTS_DELAY_MS = 800;
+export const COUNT_STEP_MS = 800;
+export const GO_MS = 500;
+export const AFTER_LAST_ARRIVAL_MS = 3000; // le temps du dernier repas
+export const RESULTS_DELAY_MS = 800;
 
 type Action =
   | { type: "count"; value: number }

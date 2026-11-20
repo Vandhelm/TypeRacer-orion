@@ -1,26 +1,16 @@
 "use client";
-import { useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import { HangingButton } from "../../components/buttons/HangingButton";
 import { FLOATING_TABS, LanguageSwitcher } from "../../components/tabs/LanguageSwitcher";
+import type { RoomState } from "../room/hooks/useRoom";
+import { useMobileRaceEnd } from "./mobileRace";
 
-/** DES-06 : a phone or a touch tablet (coarse pointer, no hover), or a screen too narrow to race. */
-export const MOBILE_RACE_QUERY = "(hover: none) and (pointer: coarse), (max-width: 480px)";
-
-const subscribe = (change: () => void) => {
-  const list = matchMedia(MOBILE_RACE_QUERY);
-  list.addEventListener("change", change);
-  return () => list.removeEventListener("change", change);
-};
-
-/** True on mobile. The server answers false: the page only shows the room loading there, never the race. */
-export function useMobileRace() {
-  return useSyncExternalStore(subscribe, () => matchMedia(MOBILE_RACE_QUERY).matches, () => false);
-}
-
-/** DES-06 : shown instead of the race on mobile. Leaving leaves the room, like the race's own button. */
-export function KeyboardNotice({ room, onLeave }: { room: string; onLeave: () => void }) {
+/** DES-06 : shown instead of the race on mobile. Leaving leaves the room, like the race's own button; the race's end leads to the podium. */
+export function KeyboardNotice({ state }: { state: Pick<RoomState, "room" | "displayName" | "leave" | "finish"> }) {
   const { t } = useTranslation();
+  useMobileRaceEnd(state.room.code, state.room.duration, state.finish);
+  const room = state.displayName;
+  const onLeave = state.leave;
   return (
     <main className="grid min-h-screen place-content-center justify-items-center gap-6 bg-black px-6 py-24 text-center font-sans text-white">
       <LanguageSwitcher className={FLOATING_TABS} />
