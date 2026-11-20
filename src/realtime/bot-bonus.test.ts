@@ -6,7 +6,7 @@ import type { Server } from "bun";
 import { MAX_BONUSES } from "../rooms/bonus";
 import { botProfile, botSeed, simulateBot, type BotBonus, type BotLevel } from "../rooms/bot-engine";
 import { DEFAULT_SETTINGS } from "../rooms/settings";
-import type { Player, ServerMessage } from "./protocol";
+import { parseServerMessage, type Player, type ServerMessage } from "./protocol";
 import type { RaceCourse } from "./referee";
 import { raceCourseOf, type RoomBackend } from "./room-backend";
 import { createRealtimeServer } from "./server";
@@ -117,6 +117,25 @@ describe("BOT-04 — bots get and suffer the catch-up bonuses like humans", () =
     await Bun.sleep(20);
     expect(kept.map((k) => k.bonus)).toEqual([{ at: first.at!, effect: first.effect! }, { at: second.at!, effect: second.effect! }]);
     expect(kept.every((k) => k.startsAt === course.startsAt)).toBe(true);
+  });
+
+  test("a bot eliminated in fatal mode is out, like an abandon: it is not the last runner and gets nothing", async () => {
+    const seed = botSeed(77, BOT);
+    const bot = { id: BOT_ID, seed, profile: botProfile(seed, "noob", "shaky") };
+    const run = simulateBot({ words: WORDS, durationMs: null, mistakes: "fatal" }, { seed, ...bot.profile }, 30_000);
+    expect(run.eliminatedMs).not.toBeNull();
+    const { tab } = await race({ words: WORDS, bots: [bot], seed: 3, mistakes: "fatal" }, 30_000);
+    await step(tab, 0.3);
+    await Bun.sleep(100);
+    expect(bonuses(tab)).toEqual([]);
+  });
+
+  test("the date of a bot effect is a whole number of ms from the start, never negative", () => {
+    const message = { type: "bonus", room: ROOM, playerId: "g:alpha", checkpoint: 1, count: 1, effect: { kind: "fog", target: BOT_ID, durationMs: 5_000 } };
+    expect(parseServerMessage(JSON.stringify({ ...message, at: 1_200 }))).toMatchObject({ at: 1_200 });
+    expect(parseServerMessage(JSON.stringify({ ...message, at: -1 }))).toBeNull();
+    expect(parseServerMessage(JSON.stringify({ ...message, at: 1.5 }))).toBeNull();
+    expect(parseServerMessage(JSON.stringify({ ...message, at: "1200" }))).toBeNull();
   });
 
   test("a bot never gets more than 3 bonuses in a race", async () => {
