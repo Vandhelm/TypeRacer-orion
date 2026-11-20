@@ -3,6 +3,7 @@
 // createScene démarre le rendu et renvoie de quoi piloter le comptoir et le tapis,
 // ainsi que destroy() pour tout arrêter (appelé quand le composant React est démonté).
 import * as THREE from 'three';
+import { ICE_CREAM_GL_OPTIONS, plateLayer, reshapeThisFrame, spanOnScreen } from './scene-quality';
 
 export type View = 'home' | 'rooms';
 
@@ -762,9 +763,11 @@ export function createScene(
         for (const L of lanterns.filter(l => l.z <= NOREN.z)) drawLantern(L, t);
         ctx.save(); ctx.globalAlpha = COUNTER_SHOW;
         if (COUNTER_SHOW > 0) drawCounter(t);
-        // assiettes et crème glacée : en 3D si possible, sinon dessin 2D de secours
-        if (typeof ICE_CREAM !== 'undefined' && ICE_CREAM){ if (COUNTER_SHOW > 0) ICE_CREAM.render(t); }
-        else if (typeof THREE === 'undefined' && COUNTER_SHOW > 0) drawPlates(t);
+        // assiettes et crème glacée : en 3D si possible, sinon dessin 2D de secours (PERF-01 : sans carte graphique)
+        const gl = typeof ICE_CREAM !== 'undefined' && ICE_CREAM !== null ? 'ready' : typeof GL_PENDING !== 'undefined' && GL_PENDING ? 'pending' : 'none';
+        const layer = plateLayer({ gl, counterShown: COUNTER_SHOW });
+        if (layer === '3d') ICE_CREAM!.render(t);
+        else if (layer === '2d') drawPlates(t);
         ctx.restore();
         ctx = ctxFront;
         ctx.clearRect(0, 0, W, H);
@@ -818,27 +821,6 @@ export function createScene(
     const onResize = () => { resize(); if (reduce) render(0); };
     addEventListener('resize', onResize);
 
-    if (reduce){
-        render(0);
-    } else {
-        let t0: number | null = null;
-        const frame = (now: number): void => {
-            if (t0 === null) t0 = initialView === 'rooms' ? now - DURATION : now + DELAY;
-            const s = (now - t0) / 1000;
-            const k = ease(Math.min(1, Math.max(0, s * 1000 / DURATION)));
-            const idle = Math.max(0, s - DURATION / 1000);
-            const settle = Math.min(1, idle / 2);
-            cam.z = START_Z * (1 - k);
-            cam.x = Math.sin(idle * .2) * .35 * settle;
-            cam.y = Math.sin(idle * .14 + 1) * .15 * settle;
-            render(Math.max(0, s));
-            raf(frame);
-        };
-        cam.z = initialView === 'rooms' ? 0 : START_Z;
-        render(0);
-        raf(frame);
-    }
-
     // ================= Assiettes et crème glacée en vraie 3D (Three.js) =================
     // Une couche WebGL transparente est posée sur le décor. Sa caméra reprend
     // exactement celle du décor (même position, même focale), donc les deux
@@ -847,11 +829,15 @@ export function createScene(
     // l'ombre, reflet) avec un contour noir ; celles qui fondent se déforment
     // réellement image par image.
     var ICE_CREAM: { render(t: number): void; resize(): void; dispose(): void } | null = null;
+    // PERF-01 : WebGL fonctionne, mais les assiettes 3D sont encore en construction (une par tâche)
+    var GL_PENDING = false;
+    let disposeGl: (() => void) | null = null;
+    let pendingTask = 0;
     (function(){
         const glCanvas = canvases.iceCream;
         let renderer: THREE.WebGLRenderer;
         try {
-            renderer = new THREE.WebGLRenderer({ canvas: glCanvas, alpha: true, antialias: true });
+            renderer = new THREE.WebGLRenderer({ canvas: glCanvas, ...ICE_CREAM_GL_OPTIONS });
         } catch (e) { return; }
         renderer.setClearColor(0x000000, 0);
 
@@ -1030,9 +1016,11 @@ export function createScene(
         const plateTop = BELT.y + .1;
         const beltZ = (BELT.z0 + BELT.z1) / 2;
         const plates: { g: THREE.Group; i: number }[] = [];
-        const animated: ({ kind: 'puddle'; obj: THREE.Group; seed: number } | { kind: 'scoop'; geo: THREE.BufferGeometry; base: Float32Array; p: ReturnType<typeof scoopParams>; stacked: boolean })[] = [];
+        const animated: ({ kind: 'puddle'; obj: THREE.Group; seed: number } | { kind: 'scoop'; geo: THREE.BufferGeometry; base: Float32Array; p: ReturnType<typeof scoopParams>; stacked: boolean; plate: number })[] = [];
 
-        for (let i = 0; i < PLATES; i++){
+        // PERF-01 : la sphère de base est la même pour toutes les boules, calculée une seule fois
+        const SPHERE = sphereMerged();
+        function buildPlate(i: number){
             const g = new THREE.Group();
             scene.add(g);
             const disc = new THREE.Mesh(plateGeo, plateMat);
@@ -1062,7 +1050,7 @@ export function createScene(
                 const p = params(seed);
                 const stacked = on !== undefined;
 
-                const geo = sphereMerged();
+                const geo = SPHERE.clone();
                 const base = Float32Array.from(geo.attributes.position!.array).map(v => v * 2);   // directions unitaires
                 shapeScoop(geo, base, p, 0, stacked);
                 const mesh = new THREE.Mesh(geo, toonMats[fi]!);
@@ -1105,7 +1093,7 @@ export function createScene(
                 }
                 mesh.position.set(x, y, -z);
                 placed[k] = { x, y, z, size, top: bb.max.y };
-                if (p.kind === 'fondue') animated.push({ kind: 'scoop', geo, base, p, stacked });
+                if (p.kind === 'fondue') animated.push({ kind: 'scoop', geo, base, p, stacked, plate: i });
             }
             plates.push({ g, i });
         }
@@ -1119,25 +1107,68 @@ export function createScene(
             camera.fov = 2 * Math.atan((H / 2) / F) * 180 / Math.PI;
             camera.updateProjectionMatrix();
         }
+        // PERF-01 : seules les boules à l'écran (avec une marge) sont déformées, chacune à son tour
+        let frame3d = 0;
+        const onScreen: boolean[] = [];
+        const PLATE_SPAN = 1.6;
         function render3d(t: number){
             camera.position.set(cam.x, cam.y, -cam.z);
             for (const { g, i } of plates){
                 const x = ((i * GAP + (reduce ? 0 : beltPos(t) + BELT_OFFSET)) % LOOP) - LOOP / 2;
                 g.position.set(x, 0, -beltZ);
                 g.visible = Math.abs(x - cam.x) < 22;
+                onScreen[i] = g.visible && spanOnScreen(P(x - PLATE_SPAN, BELT.y, beltZ)?.[0] ?? null, P(x + PLATE_SPAN, BELT.y, beltZ)?.[0] ?? null, W);
             }
             if (!reduce){
-                for (const a of animated){
-                    if (a.kind === 'scoop') shapeScoop(a.geo, a.base, a.p, t, a.stacked);
-                    else a.obj.scale.setScalar(1 + .12 * (.5 + .5 * Math.sin(t * .3 + a.seed)));
-                }
+                frame3d++;
+                animated.forEach((a, k) => {
+                    if (a.kind === 'puddle') a.obj.scale.setScalar(1 + .12 * (.5 + .5 * Math.sin(t * .3 + a.seed)));
+                    else if (onScreen[a.plate] && reshapeThisFrame(k, frame3d)) shapeScoop(a.geo, a.base, a.p, t, a.stacked);
+                });
             }
             renderer.render(scene, camera);
         }
         resize3d();
-        ICE_CREAM = { render: render3d, resize: resize3d, dispose: () => renderer.dispose() };
-        if (reduce) render(0);
+        // PERF-01 : une assiette par tâche, puis la compilation des shaders, pour ne jamais bloquer le fil principal
+        // au chargement de la page ; le comptoir reste sans assiettes pendant ces quelques images.
+        GL_PENDING = true;
+        const dispose = () => renderer.dispose();
+        const steps = [...Array.from({ length: PLATES }, (_, i) => () => buildPlate(i)), () => renderer.compile(scene, camera)];
+        const next = (k: number) => {
+            pendingTask = window.setTimeout(() => {
+                if (stopped) return;
+                steps[k]!();
+                if (k + 1 < steps.length) return next(k + 1);
+                GL_PENDING = false;
+                ICE_CREAM = { render: render3d, resize: resize3d, dispose };
+                if (reduce) render(0);
+            }, 0);
+        };
+        next(0);
+        disposeGl = dispose;
     })();
+
+    // premier rendu après la couche 3D : sans elle, les assiettes passent en 2D dès la première image
+    if (reduce){
+        render(0);
+    } else {
+        let t0: number | null = null;
+        const frame = (now: number): void => {
+            if (t0 === null) t0 = initialView === 'rooms' ? now - DURATION : now + DELAY;
+            const s = (now - t0) / 1000;
+            const k = ease(Math.min(1, Math.max(0, s * 1000 / DURATION)));
+            const idle = Math.max(0, s - DURATION / 1000);
+            const settle = Math.min(1, idle / 2);
+            cam.z = START_Z * (1 - k);
+            cam.x = Math.sin(idle * .2) * .35 * settle;
+            cam.y = Math.sin(idle * .14 + 1) * .15 * settle;
+            render(Math.max(0, s));
+            raf(frame);
+        };
+        cam.z = initialView === 'rooms' ? 0 : START_Z;
+        render(0);
+        raf(frame);
+    }
 
     return {
         /** Monte (1) ou range (0) le comptoir. */
@@ -1152,7 +1183,8 @@ export function createScene(
         destroy() {
             stopped = true;
             removeEventListener('resize', onResize);
-            ICE_CREAM?.dispose();
+            clearTimeout(pendingTask);
+            disposeGl?.();
         },
     };
 }
