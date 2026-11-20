@@ -410,9 +410,9 @@
     "scope": "site (light)"
   },
   "PERF-03": {
-    "commit": "1fba673",
-    "date": "2026-11-18",
-    "scope": "site (light)"
+    "commit": "0ad1d7c",
+    "date": "2026-11-20",
+    "scope": "critère (feature/game/perf-03)"
   },
   "A11Y-01": {
     "commit": "305b6d1",
