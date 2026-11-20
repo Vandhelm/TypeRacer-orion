@@ -2,7 +2,7 @@
 # Rien n'est déployé par le dépôt : voir docs/ARCHITECTURE.md, « Déployer le serveur temps réel ».
 # L'état des salles est en mémoire : une seule machine (fly deploy --ha=false, fly scale count 1).
 app = "typeracer-orion"
-primary_region = "yul"
+primary_region = "yyz"
 
 [build]
   dockerfile = "Dockerfile.realtime"
