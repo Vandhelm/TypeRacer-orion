@@ -157,7 +157,7 @@ Les statuts viennent des rapports de l'agent `qa` (skill `criteria-check`). Une 
 
 | ID | Statut | Fichiers principaux | Tests associés | Notes et choix |
 |---|---|---|---|---|
-| PERF-01 | partiel | `app/home/page.tsx` | aucun | Lighthouse non mesuré. Vérifié le 2026-11-19 (QA suivi, light). |
+| PERF-01 | complet | `src/views/home/scene/createScene.ts`, `src/views/home/scene/scene-quality.ts`, `app/page.tsx`, `src/components/navigation/Navbar.tsx`, `src/components/tabs/`, `src/components/forms/TextField.tsx`, `scripts/lighthouse.ts` | `scripts/lighthouse.test.ts`, `src/views/home/home-lighthouse.test.tsx`, `src/views/home/scene/scene-quality.test.ts` ; `bun run lighthouse` | Médianes mesurées par la QA, build de prod : mobile 90/100/100/100 sur 3 mesures et 96/100/100/100 sur 5 ; desktop 100 partout. Performance mobile de 84 à 98 selon la mesure (TBT 330-670 ms), proche du seuil. 2D de secours seulement sans WebGL, pas avec SwiftShader. Vérifié le 2026-11-20 (QA critère, branche feature/home/perf-01, commit f617e0b). |
 | PERF-02 | complet | `src/realtime/server.ts`, `src/realtime/client.ts`, `src/realtime/protocol.ts` | `src/realtime/server.test.ts` | 10 envois/s max ; écriture en base en fin de course. Vérifié le 2026-11-18 (QA site, light). |
 | PERF-03 | partiel | `src/views/game/pool/createRacePool.ts` | aucun | Fluidité à 8 couloirs non mesurée. Vérifié le 2026-11-18 (QA site, light). |
 

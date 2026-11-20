@@ -400,9 +400,9 @@
     "scope": "critère (test/e2e/test-02)"
   },
   "PERF-01": {
-    "commit": "2acdffe",
-    "date": "2026-11-19",
-    "scope": "suivi (light)"
+    "commit": "f617e0b",
+    "date": "2026-11-20",
+    "scope": "critère (feature/home/perf-01)"
   },
   "PERF-02": {
     "commit": "1fba673",
