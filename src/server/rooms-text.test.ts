@@ -57,6 +57,29 @@ describe("CONF-03 — the server picks the race text from the corpus when the ro
     }
   });
 
+  test("the next race draws again, with the settings changed in between (language, then random mode)", async () => {
+    const { code, host } = await launch("Text_Again", { textType: "coherent", language: "fr" });
+    expect((await t.call("POST", `/api/rooms/${code}/finish`, host.cookie)).status).toBe(200);
+    expect((await t.call("PATCH", `/api/rooms/${code}`, host.cookie, { settings: { language: "en" } })).status).toBe(200);
+    const second = (await (await t.call("POST", `/api/rooms/${code}/launch`, host.cookie)).json()) as WithPassage;
+    const [en] = await t.db.select({ language: corpusTexts.language }).from(corpusTexts).where(eq(corpusTexts.body, second.room.passage!.body));
+    expect(en!.language).toBe("en");
+    expect((await t.call("POST", `/api/rooms/${code}/finish`, host.cookie)).status).toBe(200);
+    expect((await t.call("PATCH", `/api/rooms/${code}`, host.cookie, { settings: { textType: "words" } })).status).toBe(200);
+    const third = (await (await t.call("POST", `/api/rooms/${code}/launch`, host.cookie)).json()) as WithPassage;
+    expect(third.room.passage).toBeNull();
+  });
+
+  test("a launch refused to a member who is not the host draws nothing", async () => {
+    const { room } = await t.open("Text_Host", { textType: "coherent" });
+    const other = await t.signUp("Text_Other");
+    await t.call("POST", "/api/rooms/join", other.cookie, { code: room.code });
+    const res = await t.call("POST", `/api/rooms/${room.code}/launch`, other.cookie);
+    expect(res.status).toBe(403);
+    const [stored] = await t.db.select({ textId: rooms.textId, status: rooms.status }).from(rooms).where(eq(rooms.code, room.code));
+    expect(stored).toEqual({ textId: null, status: "waiting" });
+  });
+
   test("a passage removed from the corpus leaves the room without one, not broken", async () => {
     const { code, host } = await launch("Text_Gone", { textType: "coherent", language: "fr", level: "common" });
     const [stored] = await t.db.select({ textId: rooms.textId }).from(rooms).where(eq(rooms.code, code));
