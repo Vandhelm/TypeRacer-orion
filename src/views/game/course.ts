@@ -1,10 +1,10 @@
 // Le texte de la partie, d'après les réglages du salon.
 import type { Room } from "../room/room";
+import { wordTarget } from "../../rooms/text";
 import { LEXICON, QUOTES } from "./lexicon";
 
 export type CourseSettings = Pick<Room, "language" | "textType" | "length" | "wordCount" | "level" | "punctuation" | "numbers" | "specials" | "accents" | "excluded" | "text">;
 
-const WORD_TARGETS = { "very-short": 10, short: 25, medium: 50, long: 100 } as const;
 const QUOTE_SIZES = { "very-short": "short", short: "short", medium: "medium", long: "long", other: "medium" } as const;
 
 function withoutAccents(word: string) {
@@ -19,7 +19,7 @@ export function buildWords(settings: CourseSettings, random: () => number = Math
   const pick = <T,>(list: readonly T[]) => list[Math.floor(random() * list.length)]!;
   const excluded = [...settings.excluded];
   const allowed = (word: string) => !excluded.some((c) => word.toLowerCase().includes(c) || withoutAccents(word).toLowerCase().includes(c));
-  const target = settings.length === "other" ? settings.wordCount : WORD_TARGETS[settings.length];
+  const target = wordTarget(settings);
 
   if (settings.textType === "custom") {
     const own = settings.text.trim().split(/\s+/).filter(Boolean);

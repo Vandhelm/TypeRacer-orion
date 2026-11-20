@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import { boolean, check, index, integer, pgTable, primaryKey, text, timestamp, unique } from "drizzle-orm/pg-core";
 import { botAccuracy, botSpeed, language, level, memberRole, mistakeMode, roomStatus, textLength, textType, visibility } from "./enums";
 import { players } from "./players";
+import { corpusTexts } from "./texts";
 import { CODE_PATTERN } from "../../src/rooms/access";
 
 /** Réglages d'une course, immuables : modifier un salon crée une nouvelle ligne, pour que chaque course garde les siens. */
@@ -48,6 +49,8 @@ export const rooms = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     /** SALLE-09 : départ de la course en cours ; elle prend fin d'elle-même à raceDeadlineMs(durée) (src/server/rooms.ts). */
     launchedAt: timestamp("launched_at", { withTimezone: true }),
+    /** CONF-03 : le passage du corpus tiré par le serveur au lancement, en mode cohérent ; null sinon. */
+    textId: integer("text_id").references(() => corpusTexts.id, { onDelete: "set null" }),
   },
   (table) => [index("rooms_lobby").on(table.status, table.visibility), check("rooms_guests_range", sql`${table.guests} between 2 and 30`),
     check("rooms_code_format", sql`${table.code} ~ ${sql.raw(`'${CODE_PATTERN}'`)}`),

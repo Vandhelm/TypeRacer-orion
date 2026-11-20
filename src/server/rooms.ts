@@ -3,9 +3,11 @@
 import { and, asc, desc, eq, gt, inArray, isNull, ne, sql } from "drizzle-orm";
 import type { z } from "zod";
 import type { Db } from "../../db/client";
-import { players, raceConfigs, roomBans, roomMembers, rooms } from "../../db/schema";
+import { corpusTexts, players, raceConfigs, roomBans, roomMembers, rooms } from "../../db/schema";
 import { allows, canJoin, newRoomCode } from "../rooms/access";
 import { seatColor } from "../rooms/seats";
+import { wordTarget } from "../rooms/text";
+import { pickPassage } from "./corpus";
 import { claimInvite, revokeInvitesOf, roomOfInvite } from "./room-invites";
 import { DEFAULT_SETTINGS, type CreateRoomSchema, type Role, type RoomSettings, type UpdateRoomSchema } from "../rooms/settings";
 
@@ -67,6 +69,8 @@ export type RoomView = {
   settings: RoomSettings;
   /** Par ordre d'arrivée. */
   members: MemberView[];
+  /** CONF-03 : le passage tiré par le serveur au lancement (mode cohérent), le même pour tous ; null sinon. */
+  passage: { body: string; source: string | null } | null;
 };
 export type RoomStatus = (typeof rooms.$inferSelect)["status"];
 /** Ce que renvoie une action réussie : l'état du salon, et la clé de celui qui l'a demandée. */
@@ -189,7 +193,12 @@ const roomColumnsOf = (s: RoomSettings) => ({ name: s.autoName ? "" : s.name, au
 
 /** L'état d'un salon tel que le voit `viewer`. Sans lien d'invitation : l'hôte les lit à part (room-invites.ts, SALLE-04). */
 export async function roomView(db: Db, roomId: number, _viewer?: string): Promise<RoomView> {
-  const [row] = await db.select().from(rooms).innerJoin(raceConfigs, eq(raceConfigs.id, rooms.configId)).where(eq(rooms.id, roomId));
+  const [row] = await db
+    .select()
+    .from(rooms)
+    .innerJoin(raceConfigs, eq(raceConfigs.id, rooms.configId))
+    .leftJoin(corpusTexts, eq(corpusTexts.id, rooms.textId))
+    .where(eq(rooms.id, roomId));
   if (!row) throw new RoomRefused("not_found");
   const members = await db
     .select({ key: roomMembers.memberKey, playerId: roomMembers.playerId, guestName: roomMembers.guestName, playerName: players.name, role: roomMembers.role, seat: roomMembers.seat, color: roomMembers.color, finishedAt: roomMembers.finishedAt })
@@ -204,6 +213,7 @@ export async function roomView(db: Db, roomId: number, _viewer?: string): Promis
     host,
     settings: settingsOf(row.rooms, row.race_configs),
     members: members.map((m) => ({ key: m.key, name: m.playerName ?? m.guestName ?? "", guest: m.playerId === null, host: m.key === host, role: m.role, seat: m.seat, color: m.color, finished: m.finishedAt !== null })),
+    passage: row.corpus_texts ? { body: row.corpus_texts.body, source: row.corpus_texts.source } : null,
   };
 }
 
@@ -389,13 +399,16 @@ export async function launchRoom(db: Db, code: string, who: Identity): Promise<R
   const key = memberKey(who);
   await db.transaction(async (tx) => {
     await sweep(tx, id, key);
-    const [room] = await tx.select({ status: rooms.status, hostId: rooms.hostId }).from(rooms).where(eq(rooms.id, id)).for("update");
+    const [room] = await tx.select({ status: rooms.status, hostId: rooms.hostId, configId: rooms.configId }).from(rooms).where(eq(rooms.id, id)).for("update");
     if (!room) throw new RoomRefused("not_found");
     if (!(await membership(tx, id, key))) throw new RoomRefused("not_found"); // SALLE-10 : un non-membre ne sait pas si le salon existe
     if (key !== memberKey({ playerId: room.hostId })) throw new RoomRefused("not_host");
     if (room.status === "closed") throw new RoomRefused("not_found");
     if (!canJoin(room.status)) throw new RoomRefused("in_race");
-    await tx.update(rooms).set({ status: "racing", launchedAt: sql`now()` }).where(eq(rooms.id, id));
+    // CONF-03 : en mode cohérent, le serveur tire le passage du corpus, selon la langue, le niveau et la longueur du salon
+    const [config] = await tx.select().from(raceConfigs).where(eq(raceConfigs.id, room.configId));
+    const passage = config!.textType === "coherent" ? await pickPassage(tx, { language: config!.language, level: config!.level, words: wordTarget(config!) }) : null;
+    await tx.update(rooms).set({ status: "racing", launchedAt: sql`now()`, textId: passage?.id ?? null }).where(eq(rooms.id, id));
     await tx.update(roomMembers).set({ finishedAt: null }).where(eq(roomMembers.roomId, id));
   });
   return { room: await roomView(db, id, key), you: key };
