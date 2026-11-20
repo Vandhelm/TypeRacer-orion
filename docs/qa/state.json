@@ -195,9 +195,9 @@
     "scope": "critère"
   },
   "CONF-05": {
-    "commit": "2acdffe",
+    "commit": "ba152aa",
     "date": "2026-11-19",
-    "scope": "suivi (light)"
+    "scope": "critère feature/game/conf-05 (medium)"
   },
   "CONF-06": {
     "commit": "2acdffe",
