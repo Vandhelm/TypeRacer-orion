@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { ServerBonus } from "../../realtime/client";
 import type { BonusEffect } from "../../rooms/bonus-effects";
 import type { Player } from "../room/room";
-import { activeAnnouncements, ANNOUNCE_MS, announceBonus, EMPTY_FEED, expireAnnouncements, feedBonuses, mergeAnnouncements, newAnnouncements, nextExpiry } from "./announce";
+import { activeAnnouncements, ANNOUNCE_MS, announceBonus, EMPTY_FEED, expireAnnouncements, feedBonuses, latestBatch, mergeAnnouncements, newAnnouncements, nextExpiry } from "./announce";
 import type { RaceLanes } from "./track";
 
 const PLAYERS: Player[] = [
@@ -114,5 +114,30 @@ describe("BONUS-03 — only the bonuses not yet announced are announced, once ea
     const shown = mergeAnnouncements([first!], [first!, second!], 10);
     expect(shown.map((a) => a.key)).toEqual([first!.key, second!.key]);
     expect(mergeAnnouncements([first!], [second!], first!.until).map((a) => a.key)).toEqual([second!.key]);
+  });
+});
+
+describe("BONUS-03 — every bonus of the same checkpoint batch is announced", () => {
+  const announced = (playerId: string, checkpoint: number, effect: BonusEffect) => announceBonus(bonus(playerId, effect, checkpoint), LANES, ME, 1000)!;
+  const words = announced("u:40", 1, { kind: "extra_words", target: ME, words: ["nori", "maki", "wasabi"] });
+  const fog = announced("u:12", 1, { kind: "fog", target: ME, durationMs: 5000 });
+
+  test("two bonuses at the same checkpoint: both are in the latest batch, in the order received", () => {
+    expect(latestBatch([words, fog])).toEqual([words, fog]);
+  });
+
+  test("a bonus from a later checkpoint replaces the earlier batch", () => {
+    const later = announced("u:40", 2, { kind: "fog", target: ME, durationMs: 5000 });
+    expect(latestBatch([words, fog, later])).toEqual([later]);
+  });
+
+  test("an older bonus of the same checkpoint, separated by another checkpoint, is not part of the batch", () => {
+    const later = announced("u:40", 2, { kind: "fog", target: ME, durationMs: 5000 });
+    const slow = announced("u:12", 1, { kind: "fog", target: ME, durationMs: 5000 });
+    expect(latestBatch([words, later, slow])).toEqual([slow]);
+  });
+
+  test("no announcement: an empty batch", () => {
+    expect(latestBatch([])).toEqual([]);
   });
 });
