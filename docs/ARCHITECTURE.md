@@ -181,7 +181,19 @@ Tout est dans le moteur partagé (`src/rooms/bot-engine.ts`) : la page de course
 | Expert (`expert`) | 70–100 | 2 % | 300 ms | 10 %, 350 ms |
 | Impossible (`impossible`) | 140–170 | 0,5 % | 200 ms | 5 %, 250 ms |
 
-- **Vitesse** : chaque bot tire sa vitesse visée uniformément dans la plage (« 140+ » est borné à 170). Sa vitesse de frappe de base est plus haute (`basePace`) : elle compense en moyenne ses hésitations et ses corrections (mode « corriger », taux du niveau), pour que son MPM net mesuré (annexe A) tombe dans la plage sur un texte courant. Mesuré sur 40 graines, 100 mots courants : noob 14,5, débutant 26,7, intermédiaire 46,0, expert 82,6, impossible 151,6 MPM en moyenne (mode « corriger ») ; un texte difficile ou le mode libre (mots faux non comptés) donnent moins.
+- **Vitesse** : chaque bot tire sa vitesse visée uniformément dans la plage (« 140+ » est borné à 170). Sa vitesse de frappe de base est plus haute (`basePace`), calculée sur le texte de la course : elle compense en moyenne, sur tout le texte, le ralentissement de ses mots difficiles, ses hésitations (plus nombreuses avant les mots difficiles) et ses corrections (mode « corriger », taux du niveau, plus de fautes sur les caractères difficiles), pour que son MPM net mesuré (annexe A) tombe dans la plage quel que soit le texte (mots courants, passages du corpus, accents, majuscules). La charge du texte est calculée une fois (`botText`, champ `load`). La compensation est globale : dans un même texte, un mot difficile reste plus lent qu'un mot facile (BOT-02).
+- **Mesures** (MPM net moyen, 40 graines ; corpus : passages cohérents de 50 mots, réglages par défaut, `src/server/bot-levels-corpus.test.ts`) :
+
+  | Niveau | Plage | Corpus fr, correcte, corriger | Corpus en, correcte, corriger | fr, hésitante, corriger | fr, haute, corriger | fr, correcte, libre | fr, hésitante, libre |
+  |---|---|---|---|---|---|---|---|
+  | Noob | 10–20 | 15,3 | 15,2 | 10,9 | 18,1 | 8,9 | 3,8 |
+  | Débutant | 20–35 | 28,1 | 27,8 | 21,9 | 31,6 | 19,6 | 11,0 |
+  | Intermédiaire | 35–60 | 48,0 | 47,4 | 40,9 | 52,5 | 38,5 | 27,2 |
+  | Expert | 70–100 | 85,3 | 84,9 | 78,8 | 88,9 | 78,6 | 67,1 |
+  | Impossible | 140–170 | 154,7 | 154,3 | 151,5 | 156,8 | 151,9 | 146,7 |
+
+  Sur 100 mots courants (mode « corriger », correcte) : 14,7, 27,1, 46,6, 83,7, 153,1. **Choix** : la compensation vise le réglage par défaut (précision correcte, mode « corriger »). La précision hésitante et le mode libre ne sont pas compensés et peuvent sortir de la plage (en dessous) : leurs fautes doivent coûter (BOT-03), et en mode libre les mots laissés faux ne comptent pas dans le MPM net (annexe A). Avec la précision haute, le bot est un peu plus rapide, toujours dans la plage.
+- **Touches** (podium) : chaque caractère dépassé compte une frappe et, en moyenne, la chance de faute du moteur sur ce caractère (`botErrorChance`) ; le total des fautes des touches suit donc les fautes du bot (à quelques % près sur une course), sans être tiré caractère par caractère.
 - **Taux d'erreur** = fautes ÷ frappes (la précision est son complément). Chaque bot tire son taux à ±20 % de celui du niveau ; la précision du salon le multiplie (`BOT_ACCURACY_FACTOR` : hésitante × 2, correcte × 1, haute × 0,5 ; « correcte » par défaut, donc le tableau). Une faute sur un caractère hors a-z (majuscule, accent, chiffre, ponctuation) est 1,5 fois plus probable. La faute tombe sur un caractère donné par la graine et son indice : la même quel que soit le rythme des ticks.
 - **Ancienne vitesse de salon** (`levelOfSpeed`) : un salon qui remplit les places d'un coup ou un bot sans niveau prend lent → débutant, moyen → intermédiaire, rapide → expert ; « mixte » alterne débutant, intermédiaire, expert. La migration `0031_bot_levels` convertit de même les listes enregistrées.
 
