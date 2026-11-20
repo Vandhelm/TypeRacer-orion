@@ -116,6 +116,8 @@ const PlayerSchema = z.object({
   idle: decimal(),
   finished: flag,
   eliminated: flag,
+  // COURSE-10 : la progression vue par le navigateur (0 à 1) ; seule celle d'un bot sert, celle d'un humain vient du serveur
+  progress: z.number().finite().min(0).max(1).optional(),
   wpmSeries: series,
   rawSeries: series,
   errorSeries: series,
@@ -183,27 +185,44 @@ const sameName = (a: string, b: string | null | undefined) => !!b && a.toLowerCa
  */
 /** COURSE-06 : la place d'un membre participant au classement du serveur (temps réel, room_members). */
 /** COURSE-07 : abandonedAt, l'abandon de ce membre ; progress est alors celle validée au moment de l'abandon. */
-export type ServerStanding = { finishedAt: Date | null; progress: number; abandonedAt?: Date | null };
+/** COURSE-10 : seat, sa place dans le salon, qui départage deux humains à égalité. */
+export type ServerStanding = { finishedAt: Date | null; progress: number; abandonedAt?: Date | null; seat?: number | null };
 /** COURSE-06 : ce que le serveur sait de la course : son départ, si l'expéditeur est arrivé, et le classement des humains (par nom en minuscules). */
 /** COURSE-07 : abandoned, l'expéditeur a abandonné (vu par le serveur, jamais par le corps). */
 export type ServerRace = { startedAt: Date; finished: boolean; abandoned?: boolean; standings?: Map<string, ServerStanding>; bots?: Set<string> };
 
 /**
- * COURSE-06 : les rangs du corps refaits d'après le serveur. `bots` : les bots du salon, décidés par le serveur (jamais
- * le drapeau du corps) ; tout le reste est humain. Ordre : les humains que le serveur a vus arriver (par heure
- * d'arrivée), puis les bots (simulés par le navigateur, BOT-* : dans l'ordre du corps, que le serveur ne peut pas encore
- * vérifier), puis les humains non arrivés selon le serveur (par progression validée), puis les humains inconnus du
- * serveur. Ainsi un client ne gagne rien en plaçant les bots : aucun bot devant un humain arrivé, aucun humain non
- * arrivé devant un bot.
+ * COURSE-10 : le classement final, refait d'après le serveur (COURSE-06). `bots` : les bots du salon, décidés par le
+ * serveur (jamais le drapeau du corps) ; tout le reste est humain. Ordre :
+ * 1. les terminés : les humains que le serveur a vus arriver (par heure d'arrivée), puis les bots arrivés selon le
+ *    navigateur (ordre du corps) : un bot, simulé par le navigateur, ne passe jamais devant un humain arrivé ;
+ * 2. les non terminés : humains (progression validée par le serveur) et bots non arrivés (progression du navigateur),
+ *    par progression décroissante ; un bot sans progression dans le corps (client d'avant COURSE-10) se place en tête
+ *    de ce groupe, comme le faisait COURSE-06 ;
+ * 3. les abandons : humains dont le serveur a noté l'abandon, par progression validée au moment de l'abandon ;
+ * 4. les humains inconnus du serveur.
+ * Égalités (heure d'arrivée ou progression) : la place dans le salon (seat) départage les humains ; un humain passe
+ * devant un bot (les couloirs des bots suivent ceux des humains) ; les bots gardent l'ordre du corps.
+ * Limite : l'arrivée et la progression d'un bot viennent du navigateur, que le serveur ne peut pas vérifier.
  */
-export function rankByServer<T extends { name: string; rank: number }>(results: T[], server: Map<string, ServerStanding>, bots: Set<string> = new Set()): T[] {
+export function rankByServer<T extends { name: string; rank: number; finished?: boolean; progress?: number }>(results: T[], server: Map<string, ServerStanding>, bots: Set<string> = new Set()): T[] {
   const isBot = (r: T) => bots.has(r.name.toLowerCase());
   const standing = (r: T) => server.get(r.name.toLowerCase());
+  const seat = (r: T) => standing(r)?.seat ?? Number.MAX_SAFE_INTEGER;
   const humans = results.filter((r) => !isBot(r));
-  const arrived = humans.filter((r) => standing(r)?.finishedAt).sort((a, b) => standing(a)!.finishedAt!.getTime() - standing(b)!.finishedAt!.getTime());
-  const racing = humans.filter((r) => standing(r) && !standing(r)!.finishedAt).sort((a, b) => standing(b)!.progress - standing(a)!.progress);
+  const botRows = results.filter(isBot);
+  const arrived = humans
+    .filter((r) => standing(r)?.finishedAt && !standing(r)!.abandonedAt)
+    .sort((a, b) => standing(a)!.finishedAt!.getTime() - standing(b)!.finishedAt!.getTime() || seat(a) - seat(b));
+  const blindBots = botRows.filter((r) => !r.finished && r.progress === undefined);
+  // humains d'abord, par place, puis les bots dans l'ordre du corps : le tri stable garde cet ordre à progression égale
+  const racing = [
+    ...humans.filter((r) => standing(r) && !standing(r)!.finishedAt && !standing(r)!.abandonedAt).sort((a, b) => seat(a) - seat(b)).map((r) => ({ r, progress: standing(r)!.progress })),
+    ...botRows.filter((r) => !r.finished && r.progress !== undefined).map((r) => ({ r, progress: r.progress! })),
+  ].sort((a, b) => b.progress - a.progress).map(({ r }) => r);
+  const abandoned = humans.filter((r) => standing(r)?.abandonedAt).sort((a, b) => standing(b)!.progress - standing(a)!.progress || seat(a) - seat(b));
   const unknown = humans.filter((r) => !standing(r));
-  return [...arrived, ...results.filter(isBot), ...racing, ...unknown].map((r, index) => ({ ...r, rank: index + 1 }));
+  return [...arrived, ...botRows.filter((r) => r.finished), ...blindBots, ...racing, ...abandoned, ...unknown].map((r, index) => ({ ...r, rank: index + 1 }));
 }
 
 export async function recordRace(db: Db, parsed: ParsedRace, requester: Requester = {}, server?: ServerRace) {
@@ -214,7 +233,9 @@ export async function recordRace(db: Db, parsed: ParsedRace, requester: Requeste
   const abandonedOf = (name: string) => !!server?.standings?.get(name.toLowerCase())?.abandonedAt;
   const results = (serverBots ? parsed.results.map((r) => ({ ...r, bot: serverBots.has(r.name.toLowerCase()) })) : parsed.results).map((r) => {
     const abandoned = !r.bot && abandonedOf(r.name);
-    return { ...r, abandoned, finished: r.finished && !abandoned };
+    // COURSE-10 : l'arrivée d'un humain connu du serveur est celle qu'il a vue, comme son rang
+    const standing = r.bot ? undefined : server?.standings?.get(r.name.toLowerCase());
+    return { ...r, abandoned, finished: (standing ? !!standing.finishedAt : r.finished) && !abandoned };
   });
   const race = server?.standings ? { ...parsed, results: rankByServer(results, server.standings, serverBots) } : { ...parsed, results };
   const [account] = requester.playerId
@@ -234,7 +255,7 @@ export async function recordRace(db: Db, parsed: ParsedRace, requester: Requeste
     } else if (result.bot && !sameName(result.name, requester.guest)) playerId = await botPlayer(db, result.name);
     if (playerId) kept.push({ ...result, playerId });
     else {
-      const { bot: _bot, ...other } = result;
+      const { bot: _bot, progress: _progress, ...other } = result;
       others.push(other);
     }
   }
@@ -251,7 +272,7 @@ export async function recordRace(db: Db, parsed: ParsedRace, requester: Requeste
       .returning({ id: races.id });
     if (!row) throw new DuplicateRace("Race already recorded");
     const raceId = row.id;
-    for (const { playerId, wpmSeries, rawSeries, errorSeries, name: _name, bot: _bot, ...result } of kept) {
+    for (const { playerId, wpmSeries, rawSeries, errorSeries, name: _name, bot: _bot, progress: _progress, ...result } of kept) {
       await tx.insert(raceResults).values({ ...result, raceId, playerId, sessionSeconds: race.sessionSeconds });
       if (wpmSeries.length) {
         await tx.insert(raceSamples).values(wpmSeries.map((wpm, second) => ({ raceId, playerId, second, wpm, raw: rawSeries[second] ?? 0, errors: errorSeries[second] ?? 0 })));
@@ -287,7 +308,7 @@ export async function claimServerRace(db: Db, race: ParsedRace, key: string | nu
   const claimed = await db.update(roomMembers).set({ raceRecorded: true }).where(and(member, eq(roomMembers.raceRecorded, false))).returning({ key: roomMembers.memberKey });
   if (!claimed.length) throw new DuplicateRace("Race already recorded");
   const runners = await db
-    .select({ name: sql<string>`coalesce(${players.name}, ${roomMembers.guestName})`, isBot: sql<boolean>`coalesce(${players.isBot}, false)`, finishedAt: roomMembers.finishedAt, progress: roomMembers.progress, abandonedAt: roomMembers.abandonedAt })
+    .select({ name: sql<string>`coalesce(${players.name}, ${roomMembers.guestName})`, isBot: sql<boolean>`coalesce(${players.isBot}, false)`, finishedAt: roomMembers.finishedAt, progress: roomMembers.progress, abandonedAt: roomMembers.abandonedAt, seat: roomMembers.seat })
     .from(roomMembers)
     .leftJoin(players, eq(players.id, roomMembers.playerId))
     .where(and(eq(roomMembers.roomId, row.roomId), eq(roomMembers.role, "player")));
@@ -301,7 +322,7 @@ export async function claimServerRace(db: Db, race: ParsedRace, key: string | nu
     startedAt: new Date(startsAt),
     finished: row.progress >= 1 && row.abandonedAt === null,
     abandoned: row.abandonedAt !== null,
-    standings: new Map(humans.map((r) => [r.name.toLowerCase(), { finishedAt: r.finishedAt, progress: r.progress, abandonedAt: r.abandonedAt }])),
+    standings: new Map(humans.map((r) => [r.name.toLowerCase(), { finishedAt: r.finishedAt, progress: r.progress, abandonedAt: r.abandonedAt, seat: r.seat }])),
     bots,
     release: async () => void (await db.update(roomMembers).set({ raceRecorded: false }).where(member)),
   };
