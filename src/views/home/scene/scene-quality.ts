@@ -4,23 +4,12 @@
 
 export const ICE_CREAM_GL_OPTIONS = { alpha: true, antialias: true, failIfMajorPerformanceCaveat: true } as const;
 
-type ProbeContext = { getExtension(name: string): { loseContext(): void } | null };
-type ProbeCanvas = { getContext(type: string, attrs?: unknown): ProbeContext | null };
-
 /**
- * Whether WebGL runs on a GPU. Asked on a throwaway canvas, then released: Three.js logs an error in the console
- * when it cannot create its context, so it is only asked when the answer is yes.
+ * The WebGL context of the ice cream canvas, only if it runs on a GPU (null otherwise). Created here, once, then
+ * handed to Three.js: Three.js logs an error in the console when it cannot create its context itself.
  */
-export function hardwareWebGL(createCanvas: () => ProbeCanvas = () => document.createElement("canvas") as unknown as ProbeCanvas): boolean {
-  const canvas = createCanvas();
-  for (const type of ["webgl2", "webgl"]) {
-    const gl = canvas.getContext(type, ICE_CREAM_GL_OPTIONS);
-    if (gl) {
-      gl.getExtension("WEBGL_lose_context")?.loseContext();
-      return true;
-    }
-  }
-  return false;
+export function gpuContext<C>(canvas: { getContext(type: string, attrs?: unknown): C | null }): C | null {
+  return canvas.getContext("webgl2", ICE_CREAM_GL_OPTIONS) ?? canvas.getContext("webgl", ICE_CREAM_GL_OPTIONS);
 }
 
 /**

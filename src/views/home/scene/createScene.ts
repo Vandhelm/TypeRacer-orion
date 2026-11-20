@@ -5,7 +5,7 @@
 // PERF-01 : Three.js (plus de 600 Ko) est chargé à part, seulement quand la couche 3D se prépare
 import type * as THREE from 'three';
 import fishSheetImage from '../../../assets/home/fish-sheet.webp';
-import { hardwareWebGL, ICE_CREAM_GL_OPTIONS, plateLayer, reshapeThisFrame, spanOnScreen } from './scene-quality';
+import { gpuContext, ICE_CREAM_GL_OPTIONS, plateLayer, reshapeThisFrame, spanOnScreen } from './scene-quality';
 
 export type View = 'home' | 'rooms';
 
@@ -842,15 +842,17 @@ export function createScene(
     const noGl = () => { GL_PENDING = false; if (reduce) render(0); };
     pendingTask = window.setTimeout(function(){
         if (stopped) return;
-        if (!hardwareWebGL()) return noGl();   // PERF-01 : sans carte graphique, assiettes en 2D
-        import('three').then(build3d, noGl);
+        // PERF-01 : sans carte graphique, assiettes en 2D ; sinon le contexte sert tel quel à Three.js
+        const context = gpuContext(canvases.iceCream as unknown as { getContext(type: string, attrs?: unknown): WebGLRenderingContext | null });
+        if (!context) return noGl();
+        import('three').then(THREE => build3d(THREE, context), noGl);
     }, 0);
-    function build3d(THREE: typeof import('three')){
+    function build3d(THREE: typeof import('three'), context: WebGLRenderingContext){
         if (stopped) return;
         const glCanvas = canvases.iceCream;
         let renderer: THREE.WebGLRenderer;
         try {
-            renderer = new THREE.WebGLRenderer({ canvas: glCanvas, ...ICE_CREAM_GL_OPTIONS });
+            renderer = new THREE.WebGLRenderer({ canvas: glCanvas, context, ...ICE_CREAM_GL_OPTIONS });
         } catch (e) { return noGl(); }
         renderer.setClearColor(0x000000, 0);
 

@@ -1,32 +1,30 @@
 import { describe, expect, test } from "bun:test";
-import { hardwareWebGL, ICE_CREAM_GL_OPTIONS, plateLayer, RESHAPE_EVERY, reshapeThisFrame, spanOnScreen } from "./scene-quality";
+import { gpuContext, ICE_CREAM_GL_OPTIONS, plateLayer, RESHAPE_EVERY, reshapeThisFrame, spanOnScreen } from "./scene-quality";
 
 describe("PERF-01 — the home scene stays light without a GPU", () => {
   test("the 3D ice cream refuses a software WebGL context (SwiftShader, llvmpipe)", () => {
     expect(ICE_CREAM_GL_OPTIONS.failIfMajorPerformanceCaveat).toBe(true);
   });
 
-  type Probe = Parameters<typeof hardwareWebGL>[0];
-  const probe = (contexts: Record<string, boolean>, seen: unknown[] = []): Probe => () => ({
+  const canvas = (contexts: Record<string, boolean>, seen: unknown[] = []) => ({
     getContext: (type: string, attrs?: unknown) => {
-      seen.push(attrs);
-      return contexts[type] ? { getExtension: () => ({ loseContext: () => seen.push("lost") }) } : null;
+      seen.push(type, attrs);
+      return contexts[type] ? { type } : null;
     },
   });
 
-  test("hardware WebGL is detected silently with a throwaway canvas, which is then released", () => {
+  test("the GPU context is created once, on the ice cream canvas itself, with the performance caveat", () => {
     const seen: unknown[] = [];
-    expect(hardwareWebGL(probe({ webgl2: true }, seen))).toBe(true);
-    expect(seen[0]).toEqual(ICE_CREAM_GL_OPTIONS);
-    expect(seen).toContain("lost");
+    expect(gpuContext(canvas({ webgl2: true }, seen))).toEqual({ type: "webgl2" });
+    expect(seen).toEqual(["webgl2", ICE_CREAM_GL_OPTIONS]);
   });
 
   test("WebGL 1 alone is enough", () => {
-    expect(hardwareWebGL(probe({ webgl: true }))).toBe(true);
+    expect(gpuContext(canvas({ webgl: true }))).toEqual({ type: "webgl" });
   });
 
-  test("no context with the performance caveat: no 3D (and Three.js is never asked, so no console error)", () => {
-    expect(hardwareWebGL(probe({}))).toBe(false);
+  test("no context with the performance caveat: null, and Three.js is never asked (no console error)", () => {
+    expect(gpuContext(canvas({}))).toBeNull();
   });
 
   test("without the 3D layer, the plates are drawn in 2D", () => {
