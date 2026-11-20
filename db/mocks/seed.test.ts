@@ -55,7 +55,9 @@ describe("demo data", () => {
 
   test("fills the corpus, the users and the history", async () => {
     expect(await db.$count(players)).toBe(PLAYERS.length);
-    expect(await db.$count(corpusTexts)).toBe(CORPUS.length);
+    // CONF-03 : les migrations chargent déjà les passages du domaine public ; le seed y ajoute exactement CORPUS
+    const migrated = await (await createEmptyDatabase()).$count(corpusTexts);
+    expect(await db.$count(corpusTexts)).toBe(migrated + CORPUS.length);
     expect(await db.$count(rooms)).toBe(ROOMS.length);
     expect(await db.$count(races)).toBe(RACES.length);
     expect(await db.$count(raceResults)).toBe(entries.length);

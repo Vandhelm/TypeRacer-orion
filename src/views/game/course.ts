@@ -1,21 +1,25 @@
 // Le texte de la partie, d'après les réglages du salon.
 import type { Room } from "../room/room";
+import { wordTarget } from "../../rooms/text";
 import { LEXICON, QUOTES } from "./lexicon";
 
 export type CourseSettings = Pick<Room, "language" | "textType" | "length" | "wordCount" | "level" | "punctuation" | "numbers" | "specials" | "accents" | "excluded" | "text">;
 
-const WORD_TARGETS = { "very-short": 10, short: 25, medium: 50, long: 100 } as const;
 const QUOTE_SIZES = { "very-short": "short", short: "short", medium: "medium", long: "long", other: "medium" } as const;
 
 function withoutAccents(word: string) {
   return word.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/œ/g, "oe").replace(/Œ/g, "Oe").replace(/æ/g, "ae").replace(/Æ/g, "Ae");
 }
 
-export function buildWords(settings: CourseSettings, random: () => number = Math.random): string[] {
+/**
+ * CONF-03 : en mode cohérent, `passage` est le passage du corpus choisi par le serveur au lancement (rooms.text_id),
+ * coupé à la longueur demandée. En mode aléatoire, les mots sont tirés du dictionnaire (LEXICON) de la langue et du niveau.
+ */
+export function buildWords(settings: CourseSettings, random: () => number = Math.random, passage: string | null = null): string[] {
   const pick = <T,>(list: readonly T[]) => list[Math.floor(random() * list.length)]!;
   const excluded = [...settings.excluded];
   const allowed = (word: string) => !excluded.some((c) => word.toLowerCase().includes(c) || withoutAccents(word).toLowerCase().includes(c));
-  const target = settings.length === "other" ? settings.wordCount : WORD_TARGETS[settings.length];
+  const target = wordTarget(settings);
 
   if (settings.textType === "custom") {
     const own = settings.text.trim().split(/\s+/).filter(Boolean);
@@ -25,8 +29,10 @@ export function buildWords(settings: CourseSettings, random: () => number = Math
   let words: string[];
   if (settings.textType === "quote") {
     words = pick(QUOTES[settings.language][QUOTE_SIZES[settings.length]]).split(" ");
+  } else if (settings.textType === "coherent" && passage?.trim()) {
+    words = passage.trim().split(/\s+/).slice(0, target);
   } else if (settings.textType === "coherent" || settings.textType === "custom") {
-    // des phrases qui se suivent jusqu'à atteindre la longueur voulue
+    // sans passage du serveur (salon lancé avant la migration du corpus) : des phrases qui se suivent jusqu'à atteindre la longueur voulue
     const sentences = Object.values(QUOTES[settings.language]).flat().join(" ").split(/(?<=[.!?])\s+/);
     words = [];
     let previous = "";

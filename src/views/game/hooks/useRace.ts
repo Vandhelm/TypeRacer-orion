@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useReducer, useState } from "react";
 import type { Player, Room } from "../../room/room";
+import { seededRandom } from "../../../rooms/text";
 import { buildWords } from "../course";
 import { advanceBots, applyInput, createCourse, createRace, everyoneDone, TICK_MS, type Race } from "../race";
 
@@ -30,10 +31,13 @@ function reduce(race: Race, action: Action): Race {
   }
 }
 
-/** La course de cette page : décompte, adversaires, fin de partie. Le décompte attend `ready` (images du bassin prêtes). */
-export function useRace(room: Room, players: Player[], ready: boolean) {
+/**
+ * La course de cette page : décompte, adversaires, fin de partie. Le décompte attend `ready` (images du bassin prêtes).
+ * CONF-03 : `passage` est le texte tiré par le serveur en mode cohérent, `seed` sa graine : tous les membres tapent le même texte.
+ */
+export function useRace(room: Room, players: Player[], ready: boolean, passage: string | null = null, seed: number | null = null) {
   const [race, dispatch] = useReducer(reduce, null, () =>
-    createRace(createCourse(buildWords(room), room.duration, room.mistakes), players, room.botSpeed, room.botAccuracy),
+    createRace(createCourse(buildWords(room, seed === null ? Math.random : seededRandom(seed), passage), room.duration, room.mistakes), players, room.botSpeed, room.botAccuracy),
   );
   const [showResults, setShowResults] = useState(false);
   const { phase } = race;

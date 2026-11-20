@@ -148,6 +148,27 @@
       "when": 1795132775616,
       "tag": "0020_race_no_time_limit",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1795132870726,
+      "tag": "0021_room_text",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1795132877071,
+      "tag": "0022_public_domain_corpus",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1795134558487,
+      "tag": "0023_room_text_seed",
+      "breakpoints": true
     }
   ]
 }
