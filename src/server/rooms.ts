@@ -722,6 +722,29 @@ export async function abandonRace(db: Db, code: string, who: Identity): Promise<
 }
 
 /**
+ * COURSE-07 : le serveur temps réel garde en base la dernière progression validée de ces coureurs (à l'abandon, à la fin
+ * de la course), abandons compris ; jamais une arrivée (moins de 100 %) ni pour un coureur arrivé, jamais en recul.
+ * Seulement pour la course partie à `startsAt` : une relance entre-temps (progression remise à 0) n'est pas touchée.
+ * Appelée par le temps réel (src/realtime/room-backend.ts), jamais par une route HTTP.
+ */
+export async function keepProgress(db: Db, code: string, startsAt: number, rows: { key: string; progress: number }[]): Promise<void> {
+  const id = await roomIdByCode(db, code);
+  if (id === null || !rows.length) return;
+  await db.transaction(async (tx) => {
+    const [room] = await tx.select({ launchedAt: rooms.launchedAt, status: rooms.status }).from(rooms).where(eq(rooms.id, id)).for("update");
+    if (!room?.launchedAt || (room.status !== "racing" && room.status !== "results")) return;
+    if (room.launchedAt.getTime() + COUNTDOWN_MS !== startsAt) return;
+    for (const { key, progress } of rows) {
+      const value = Math.min(0.9999, Math.max(0, progress));
+      await tx
+        .update(roomMembers)
+        .set({ progress: sql`greatest(${roomMembers.progress}, ${value})` })
+        .where(and(eq(roomMembers.roomId, id), eq(roomMembers.memberKey, key), isNull(roomMembers.finishedAt)));
+    }
+  });
+}
+
+/**
  * SALLE-07 : l'hôte expulse un participant ou un spectateur. Le membre est retiré et noté dans room_bans, sous le
  * verrou du salon : il ne peut plus y entrer (joinRoom), et sa page reçoit « kicked » (readRoom). Pendant une course,
  * le retrait d'un coureur ne la retient pas. Seul l'hôte expulse, jamais lui-même.
