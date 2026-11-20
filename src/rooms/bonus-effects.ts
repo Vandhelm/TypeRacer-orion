@@ -13,6 +13,11 @@ export const BONUS_TARGET: Record<BonusKind, "self" | "leader"> = { fewer_words:
 export const WORDS_CHANGED = 3;
 /** Durée du brouillard, en millisecondes. */
 export const FOG_MS = 5000;
+/**
+ * BONUS-04 : une arrivée sur le texte d'avant le dernier effet, reçue au plus tard ce délai après lui, est celle d'une page
+ * qui a fini avant de recevoir le bonus (message en vol) : elle compte, et l'effet est annulé pour ce coureur.
+ */
+export const LATE_FINISH_MS = 1000;
 
 /** L'effet d'un bonus, sur `target` (id du joueur) ; envoyé tel quel dans le message `bonus`. */
 export type BonusEffect =

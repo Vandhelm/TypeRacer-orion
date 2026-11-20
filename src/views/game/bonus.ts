@@ -3,7 +3,7 @@
 // bots et les autres couloirs gardent celui de la course. BONUS-03 (annonce sur la piste) lira la même liste de bonus.
 import type { ServerBonus } from "../../realtime/client";
 import { editWords, wordsDone, type BonusEffect } from "../../rooms/bonus-effects";
-import { myCourse, type Race } from "./race";
+import { createCourse, myCourse, type Race } from "./race";
 import { realtimeMemberKey, type RaceLanes } from "./track";
 
 /** Les effets à appliquer ici : ceux des bonus annoncés après les `applied` premiers, qui ciblent `me`. */
@@ -31,6 +31,21 @@ export function applyBonus(race: Race, effect: BonusEffect, now: number): Race {
   const missedWords = new Set([...race.missedWords].filter((i) => i < words.length));
   const missedChars = [...missedWords].reduce((sum, i) => sum + words[i]!.length + 1, 0);
   return { ...race, mine, wordIndex: words.length, typed: "", missedWords, missedChars, finishedAt: now, now, arrivals: [...race.arrivals, race.myLane] };
+}
+
+/**
+ * BONUS-04 : mon texte tel que le serveur le garde (message `text`, envoyé quand je rejoins la salle) : une page reprise
+ * sans son instantané (autre onglet, autre appareil) court sur le même texte que l'arbitre. Sans effet hors course, une
+ * fois arrivé, ou si c'est déjà mon texte.
+ */
+export function applyServerText(race: Race, words: readonly string[]): Race {
+  if (race.phase !== "racing" || race.finishedAt || !words.length) return race;
+  const course = myCourse(race);
+  if (course.words.length === words.length && course.words.every((word, i) => word === words[i])) return race;
+  const { durationMs, mistakes } = course;
+  const mine = { ...createCourse([...words], null, mistakes), durationMs };
+  if (race.wordIndex < words.length) return { ...race, mine };
+  return { ...race, mine, wordIndex: words.length, typed: "", finishedAt: race.now, arrivals: [...race.arrivals, race.myLane] };
 }
 
 /**

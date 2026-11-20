@@ -898,10 +898,11 @@ export async function keepBonusText(db: Db, code: string, startsAt: number, key:
     const [room] = await tx.select({ launchedAt: rooms.launchedAt, status: rooms.status }).from(rooms).where(eq(rooms.id, id)).for("update");
     if (!room?.launchedAt || room.status !== "racing" || room.launchedAt.getTime() + COUNTDOWN_MS !== startsAt) return;
     const value = Math.min(0.9999, Math.max(0, progress));
+    // un coureur déjà noté arrivé (arrivée en vol, effet annulé) garde son arrivée : seul son texte change
     await tx
       .update(roomMembers)
-      .set({ bonusWords: words, progress: value })
-      .where(and(eq(roomMembers.roomId, id), eq(roomMembers.memberKey, key), isNull(roomMembers.finishedAt), isNull(roomMembers.abandonedAt)));
+      .set({ bonusWords: words, progress: sql`case when ${roomMembers.finishedAt} is null then ${value} else ${roomMembers.progress} end` })
+      .where(and(eq(roomMembers.roomId, id), eq(roomMembers.memberKey, key), isNull(roomMembers.abandonedAt)));
   });
 }
 

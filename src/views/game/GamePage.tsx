@@ -87,7 +87,7 @@ function GameRace({ state, onHandOver }: { state: RoomState; onHandOver?: (sendi
   const [lanes] = useState(() => raceLanes(state.players, state.members ?? []));
   const { players } = lanes;
   const [images, setImages] = useState<RacePoolImages | null>(null);
-  const { race, onInput, onRemote, onBonus, onResume, onRestore, onSent, stored, arrivedMidRace, showResults } = useRace(room, players, { passage, seed, startsAt, endsAt, clockOffset });
+  const { race, onInput, onRemote, onBonus, onServerText, onResume, onRestore, onSent, stored, arrivedMidRace, showResults } = useRace(room, players, { passage, seed, startsAt, endsAt, clockOffset });
   // COURSE-07 : abandon enregistré par le serveur ; la progression ne part plus et la page passe au podium
   const [abandoned, setAbandoned] = useState(false);
   // COURSE-08 : remontée après un abandon ou après la fin, la page enregistre ce qu'elle gardait, ou va au podium
@@ -109,6 +109,12 @@ function GameRace({ state, onHandOver }: { state: RoomState; onHandOver?: (sendi
   useEffect(() => {
     if (!watching && !abandoned && race.phase !== "countdown") sendProgress(mine, wpm, myWords);
   }, [watching, abandoned, race.phase, mine, wpm, myWords, sendProgress]);
+  // BONUS-04 : mon texte changé par un bonus, renvoyé par le serveur quand je rejoins (avant le classement) : appliqué
+  // avant la reprise ci-dessous, qui se place alors sur lui
+  const serverText = watching ? undefined : live?.text;
+  useEffect(() => {
+    if (serverText) onServerText(serverText);
+  }, [serverText, onServerText]);
   // COURSE-08 : après un rechargement ou une coupure, la page reprend une fois à la progression validée par le serveur ;
   // un abandon par silence (plus de 30 s), dit par le serveur, mène au podium comme un abandon
   const [resumed, setResumed] = useState(false);

@@ -66,6 +66,16 @@ describe("BONUS-04 — the text a bonus changed is kept by the room and recorded
     expect(row.progress).toBeCloseTo(10 / 23, 5);
   });
 
+  test("an effect cancelled after the arrival: the text changes, the arrival stays", async () => {
+    const { code, key, roomId, startsAt } = await launched("Bonus_Annule");
+    await backend.bonusText!(code, startsAt, key, PLUS3, 10 / 23);
+    await backend.progress!(key, code, 1);
+    await backend.bonusText!(code, startsAt, key, TWENTY, 1);
+    const row = await memberRow(roomId, key);
+    expect(row.words).toEqual(TWENTY);
+    expect(row.progress).toBe(1);
+  });
+
   test("a changed text for another launch (other start) is not written", async () => {
     const { code, key, roomId, startsAt } = await launched("Bonus_Autre_Depart");
     await backend.bonusText!(code, startsAt - 5000, key, PLUS3, 0.1);

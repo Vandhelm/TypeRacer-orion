@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { ServerBonus } from "../../realtime/client";
 import { editWords, type BonusEffect } from "../../rooms/bonus-effects";
 import type { Player } from "../room/room";
-import { applyBonus, applyRemoteBonus, bonusesFor, fogged, remoteBonuses } from "./bonus";
+import { applyBonus, applyRemoteBonus, applyServerText, bonusesFor, fogged, remoteBonuses } from "./bonus";
 import { advanceBots, applyInput, applyRemote, createCourse, createRace, laneProgress, laneWpm, myCourse, myWpm, progressReport, raceText, type Race } from "./race";
 import type { RaceLanes } from "./track";
 
@@ -69,7 +69,7 @@ describe("BONUS-02 — the race page applies the bonus effect it receives", () =
 
   // BONUS-04 : la borne est celle du serveur (`removed`, sur ses mots validés), la même des deux côtés ; avant, la page
   // rebornait sur sa propre position et gardait ici tout le texte (voir « BONUS-04 » plus bas, page en avance)
-  test("-3 words never removes the word I am typing: 2 words left, the server removes only the last one", () => {
+  test("-3 words removes exactly the count the server sent (here 1, the server keeping the word being typed)", () => {
     const race = applyBonus(type(racing(), ...WORDS.slice(0, 7).map((w) => `${w} `)), { ...fewer, removed: 1 }, 3000);
     expect(myCourse(race).words).toEqual(WORDS.slice(0, 8));
     expect(race.finishedAt).toBe(0);
@@ -221,6 +221,29 @@ describe("BONUS-04 — progress and speed stay consistent on the text a bonus le
     race = advanceBots(applyRemote(race, 1, { progress: 12 / 23, wpm: 60 }, 1500), 2000);
     // 12 mots de 5 caractères faits : 60 caractères, pas 12/23 des 100 caractères de la course
     expect(race.samples[1]![0]!.chars).toBeCloseTo(60, 6);
+  });
+
+  test("my text sent back by the server on resume replaces the course text: the finish comes after its 103 words, not before", () => {
+    const hundred = Array.from({ length: 100 }, (_, i) => `m${String(i).padStart(3, "0")}`);
+    const mine = [...hundred, ...ADDED];
+    // page rechargée sans instantané : le texte de la course, puis celui que le serveur garde pour moi
+    let race = applyServerText(racing(hundred), mine);
+    expect(myCourse(race).words).toEqual(mine);
+    race = type(race, ...hundred.map((w) => `${w} `));
+    expect(race.finishedAt).toBe(0);
+    expect(progressReport(race)).toEqual({ progress: 100 / 103, words: 103 });
+    race = type(race, "nori ", "maki ", "soja");
+    expect(race.finishedAt).toBe(2000);
+    expect(laneProgress(race, race.myLane)).toBe(1);
+  });
+
+  test("the text sent back by the server: no change when it is already mine, none once I finished or outside the race", () => {
+    const race = applyBonus(racing(TWENTY), plus, 3000);
+    expect(applyServerText(race, [...TWENTY, ...ADDED])).toBe(race);
+    const done = { ...racing(TWENTY), finishedAt: 2000 };
+    expect(applyServerText(done, [...TWENTY, ...ADDED])).toBe(done);
+    const waiting = { ...racing(TWENTY), phase: "countdown" as const };
+    expect(applyServerText(waiting, [...TWENTY, ...ADDED])).toBe(waiting);
   });
 
   test("the progress I send names the length of my text, so the server can tell a progress sent before the bonus", () => {
