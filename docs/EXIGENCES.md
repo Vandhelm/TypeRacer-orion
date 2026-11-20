@@ -113,7 +113,7 @@ Les statuts viennent des rapports de l'agent `qa` (skill `criteria-check`). Une 
 
 | ID | Statut | Fichiers principaux | Tests associés | Notes et choix |
 |---|---|---|---|---|
-| BONUS-01 | non fait | — | aucun | Aucun code de bonus. Vérifié le 2026-11-18 (QA site, light). |
+| BONUS-01 | complet | `src/rooms/bonus.ts`, `src/realtime/server.ts`, `src/realtime/room-backend.ts`, `src/realtime/referee.ts`, `src/realtime/protocol.ts`, `docs/ARCHITECTURE.md` | `src/rooms/bonus.test.ts`, `src/realtime/bonus.test.ts` | Attribution décidée par le serveur temps réel après chaque progression acceptée, si `catchUpBonus` (CONF-09) est activé. Règle retenue : meneur = plus haute progression acceptée ; points de contrôle à 25, 50 et 75 % (atteint ou dépassé), une fois par course ; en retard = pas arrivé et soit dernier (ex æquo compris), soit à strictement plus de 25 points derrière ; au plus 3 bonus ; un abandon n'est ni en retard ni dernier ; à la reprise, les points déjà franchis ne redonnent rien. Bots exclus tant que le serveur ne simule pas leur progression (BOT-05). Mineur : un joueur parti sans abandonner peut encore compter comme dernier. Effet, annonce et MPM : BONUS-02 à 04. Vérifié le 2026-11-20 (QA critère, branche feature/game/bonus-01, commit 742f253). |
 | BONUS-02 | non fait | — | aucun | Aucun code de bonus. Vérifié le 2026-11-18 (QA site, light). |
 | BONUS-03 | non fait | — | aucun | Aucun code de bonus. Vérifié le 2026-11-18 (QA site, light). |
 | BONUS-04 | non fait | — | aucun | Aucun code de bonus. Vérifié le 2026-11-18 (QA site, light). |
