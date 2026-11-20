@@ -66,13 +66,13 @@ export function GameScreen({ state, mobile }: { state: RoomState; mobile: boolea
 /** One lane per player and the shared text. It hands over to the podium at the end. COURSE-05: a spectator watches, without typing panel. */
 function GameRace({ state }: { state: RoomState }) {
   const { t } = useTranslation();
-  const { room, displayName, finish, leave, passage, seed } = state;
+  const { room, displayName, finish, leave, passage, seed, startsAt, endsAt, clockOffset } = state;
   const watching = state.role === "spectator";
   // COURSE-05 : les couloirs sont figés au départ ; un membre qui quitte ensuite ne décale ni noms ni progressions
   const [lanes] = useState(() => raceLanes(state.players, state.members ?? []));
   const { players } = lanes;
   const [images, setImages] = useState<RacePoolImages | null>(null);
-  const { race, onInput, onRemote, showResults } = useRace(room, players, images !== null, passage, seed);
+  const { race, onInput, onRemote, showResults } = useRace(room, players, { passage, seed, startsAt, endsAt, clockOffset });
 
   // TECH-06 : ma progression part dans le salon (10 envois par seconde au plus), celle des autres arrive en direct
   const { state: live, sendProgress } = useRealtimeRoom(room.code || null);
@@ -140,8 +140,9 @@ function GameRace({ state }: { state: RoomState }) {
         <TypingPanel race={race} onInput={onInput} lang={room.language} />
       )}
 
-      {race.count !== null && images && (
-        <div className="fixed inset-0 z-40 flex flex-col items-center justify-center gap-[3vh] bg-[rgba(0,0,0,.82)] p-6" role="status">
+      {/* COURSE-03 : le décompte suit le départ du serveur, images du bassin prêtes ou non ; « partez » laisse voir le texte */}
+      {race.count !== null && (
+        <div className={`fixed inset-0 z-40 flex flex-col items-center justify-center gap-[3vh] p-6 ${race.count > 0 ? "bg-[rgba(0,0,0,.82)]" : "pointer-events-none"}`} role="status">
           <b key={race.count} className={`${COUNT} ${race.count > 0 ? "font-sans text-[26vh] font-extralight" : "font-serif text-[20vh] font-bold text-red-text"}`} lang={race.count > 0 ? undefined : "ja"}>
             {race.count > 0 ? race.count : "始"}
           </b>

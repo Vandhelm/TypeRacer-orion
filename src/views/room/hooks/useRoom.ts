@@ -47,8 +47,12 @@ export function useRoom(page: "room" | "game" = "room") {
     setReady(true);
   }, []);
 
+  /** COURSE-03 : heure du serveur − heure du navigateur, mesurée à chaque réponse HTTP du salon (0 tant qu'aucune). */
+  const [clockOffset, setClockOffset] = useState(0);
+
   const answer = useCallback(
     (reply: Answer) => {
+      if (reply.ok && reply.offset !== undefined) setClockOffset(reply.offset);
       if (reply.ok) apply(reply.result);
       else if (reply.error === "unauthorized") location.replace(inviteDetour(new URLSearchParams(location.search)));
       else {
@@ -198,6 +202,11 @@ export function useRoom(page: "room" | "game" = "room") {
     passage: view.passage?.body ?? null,
     /** CONF-03 : la graine des mots tirés au hasard, la même pour tous les membres. */
     seed: view.seed,
+    /** COURSE-03 / COURSE-06 : départ et fin de la course, heure du serveur (ms epoch) ; null avant le lancement. */
+    startsAt: view.startsAt,
+    endsAt: view.endsAt,
+    /** COURSE-03 : à ajouter à Date.now() pour lire l'heure du serveur. */
+    clockOffset,
     room,
     update,
     host,

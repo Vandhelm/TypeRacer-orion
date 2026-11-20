@@ -1,16 +1,19 @@
-import { useEffect, useMemo, useReducer, useState } from "react";
+import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { Player, Room } from "../../room/room";
+import { COUNTDOWN_MS } from "../../../rooms/race-clock";
 import { seededRandom } from "../../../rooms/text";
+import { countdownAt, GO_MS, nextChangeIn, raceDurationSeconds } from "../countdown";
 import { buildWords } from "../course";
 import { advanceBots, applyInput, applyRemote, createCourse, createRace, endRace, everyoneDone, startRace, TICK_MS, type Race } from "../race";
 
+/** L'ancien décompte local (3 × 800 ms + GO_MS) : seule la page mobile (mobileRace.ts) s'en sert encore pour son échéance. */
 export const COUNT_STEP_MS = 800;
-export const GO_MS = 500;
+export { GO_MS };
 export const AFTER_LAST_ARRIVAL_MS = 3000; // le temps du dernier repas
 export const RESULTS_DELAY_MS = 800;
 
 type Action =
-  | { type: "count"; value: number }
+  | { type: "count"; value: number | null }
   | { type: "start"; now: number }
   | { type: "input"; value: string; now: number }
   | { type: "tick"; now: number; jitters: number[] }
@@ -34,32 +37,71 @@ function reduce(race: Race, action: Action): Race {
   }
 }
 
+/** COURSE-03 : le texte tiré par le serveur (CONF-03) et l'horloge de la course (COURSE-06), lus dans la vue du salon. */
+export type RaceTiming = {
+  /** Le passage tiré par le serveur en mode cohérent. */
+  passage?: string | null;
+  /** La graine des mots : tous les membres tapent le même texte. */
+  seed?: number | null;
+  /** Départ et fin, heure du serveur (ms epoch) ; null sans serveur de salons : décompte local de COUNTDOWN_MS. */
+  startsAt?: number | null;
+  endsAt?: number | null;
+  /** Heure du serveur − heure du navigateur (src/views/game/countdown.ts). */
+  clockOffset?: number;
+};
+
 /**
- * La course de cette page : décompte, adversaires, fin de partie. Le décompte attend `ready` (images du bassin prêtes).
- * CONF-03 : `passage` est le texte tiré par le serveur en mode cohérent, `seed` sa graine : tous les membres tapent le même texte.
+ * La course de cette page : décompte, adversaires, fin de partie.
+ * COURSE-03 : le décompte (3, 2, 1, partez) et l'ouverture de la frappe suivent startsAt du serveur, en heure du serveur
+ * (Date.now() + décalage) : tous les membres partent ensemble, et qui arrive en plein décompte voit le bon chiffre.
+ * Le minuteur et la fin suivent endsAt (durée = endsAt − startsAt). Toute la course compte en heure du serveur.
  */
-export function useRace(room: Room, players: Player[], ready: boolean, passage: string | null = null, seed: number | null = null) {
-  const [race, dispatch] = useReducer(reduce, null, () =>
-    createRace(createCourse(buildWords(room, seed === null ? Math.random : seededRandom(seed), passage), room.duration, room.mistakes), players, room.botSpeed, room.botAccuracy),
-  );
+export function useRace(room: Room, players: Player[], { passage = null, seed = null, startsAt = null, endsAt = null, clockOffset = 0 }: RaceTiming = {}) {
+  const offset = useRef(clockOffset);
+  useEffect(() => {
+    offset.current = clockOffset;
+  }, [clockOffset]);
+  const serverNow = useMemo(() => () => Date.now() + offset.current, []);
+  // le départ est figé au montage : sans serveur de salons, un décompte local de la même durée
+  const [start] = useState(() => startsAt ?? Date.now() + clockOffset + COUNTDOWN_MS);
+  const [race, dispatch] = useReducer(reduce, null, () => {
+    const fresh = createRace(
+      createCourse(buildWords(room, seed === null ? Math.random : seededRandom(seed), passage), raceDurationSeconds(startsAt, endsAt, room.duration), room.mistakes),
+      players,
+      room.botSpeed,
+      room.botAccuracy,
+    );
+    // dès le premier affichage : le bon chiffre pour qui arrive ou recharge en plein décompte, la course pour qui arrive après
+    const now = Date.now() + clockOffset;
+    const { count, started } = countdownAt(start, now);
+    return { ...(started ? { ...startRace(fresh, start), now } : fresh), count };
+  });
   const [showResults, setShowResults] = useState(false);
   const { phase } = race;
   const allDone = everyoneDone(race);
 
   useEffect(() => {
-    if (!ready) return;
-    const timers = [2, 1, 0].map((value, i) => setTimeout(() => dispatch({ type: "count", value }), COUNT_STEP_MS * (i + 1)));
-    timers.push(setTimeout(() => dispatch({ type: "start", now: Date.now() }), COUNT_STEP_MS * 3 + GO_MS));
-    return () => timers.forEach(clearTimeout);
-  }, [ready]);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const step = () => {
+      const now = serverNow();
+      const { count, started } = countdownAt(start, now);
+      // le chrono de chacun part de startsAt, même pour qui arrive après le départ
+      if (started) dispatch({ type: "start", now: start });
+      dispatch({ type: "count", value: count });
+      const wait = nextChangeIn(start, now);
+      if (wait !== null) timer = setTimeout(step, wait);
+    };
+    step();
+    return () => clearTimeout(timer);
+  }, [start, serverNow]);
 
   useEffect(() => {
     if (phase !== "racing") return;
     const loop = setInterval(() => {
-      dispatch({ type: "tick", now: Date.now(), jitters: players.map(() => Math.random()) });
+      dispatch({ type: "tick", now: serverNow(), jitters: players.map(() => Math.random()) });
     }, TICK_MS);
     return () => clearInterval(loop);
-  }, [phase, players]);
+  }, [phase, players, serverNow]);
 
   useEffect(() => {
     if (!allDone || phase !== "racing") return;
@@ -73,10 +115,10 @@ export function useRace(room: Room, players: Player[], ready: boolean, passage: 
     return () => clearTimeout(timer);
   }, [phase]);
 
-  const onInput = useMemo(() => (value: string) => dispatch({ type: "input", value, now: Date.now() }), []);
+  const onInput = useMemo(() => (value: string) => dispatch({ type: "input", value, now: serverNow() }), [serverNow]);
   /** COURSE-05 : les progressions reçues en temps réel des autres humains du salon. */
   const onRemote = useMemo(() => (updates: { lane: number; progress: number; wpm: number }[]) => {
-    if (updates.length) dispatch({ type: "remote", updates, now: Date.now() });
-  }, []);
+    if (updates.length) dispatch({ type: "remote", updates, now: serverNow() });
+  }, [serverNow]);
   return { race, onInput, onRemote, showResults };
 }
