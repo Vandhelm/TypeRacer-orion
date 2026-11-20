@@ -8,5 +8,5 @@ export const CORPUS: CorpusEntry[] = [
   { language: "fr", type: "quote", level: "rich", body: "La terre est bleue comme une orange.", source: "Paul Éluard" },
   { language: "en", type: "quote", level: "common", body: "To be, or not to be, that is the question.", source: "William Shakespeare" },
   { language: "en", type: "quote", level: "rich", body: "It was the best of times, it was the worst of times.", source: "Charles Dickens" },
-  { language: "en", type: "quote", level: "rich", body: "Not all those who wander are lost.", source: "J. R. R. Tolkien" },
+  { language: "en", type: "quote", level: "rich", body: "Brevity is the soul of wit.", source: "William Shakespeare" },
 ];
