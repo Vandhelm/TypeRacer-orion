@@ -21,6 +21,7 @@ import { players, raceConfigs, raceResults, races, raceSamples, roomMembers, roo
 import { readGuestSession } from "./guest";
 import { memberKey } from "./rooms";
 import { launchStandings, rankByServer, rerankLaunch, type ServerStanding } from "./ranking";
+import { personalRecord } from "./records";
 
 const LANGUAGES = ["fr", "en"] as const;
 const BOT_SPEEDS = ["slow", "medium", "fast", "mixed"] as const;
@@ -333,7 +334,9 @@ export async function handleRace(req: Request, db: Db, auth: Auth, secret = gues
       await release();
       throw error;
     }
-    return Response.json({ raceId }, { status: raceId ? 201 : 200 });
+    // RES-04 : un compte apprend s'il a battu son record (null : première course, rien de battu) ; un invité garde le sien localement
+    const record = playerId ? { record: raceId ? await personalRecord(db, playerId, raceId) : null } : {};
+    return Response.json({ raceId, ...record }, { status: raceId ? 201 : 200 });
   } catch (error) {
     if (error instanceof RaceRefused) return Response.json({ error: error.reason }, { status: error.reason === "race_contradicted" ? 422 : 409 });
     if (error instanceof BodyTooLarge) return Response.json({ error: "payload_too_large" }, { status: 413 });
