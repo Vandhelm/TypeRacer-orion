@@ -1,8 +1,9 @@
-// Inline SVG icons. They take the current text color.
+// Inline SVG icons. They take the current text color. A11Y-03 : all decorative (aria-hidden), the button or link
+// around them carries the name.
 
-export function ArrowIcon(props: { "aria-hidden"?: boolean }) {
+export function ArrowIcon() {
   return (
-    <svg width="24" height="14" viewBox="0 0 24 14" {...props}>
+    <svg width="24" height="14" viewBox="0 0 24 14" aria-hidden="true">
       <path d="M0 7h22M16 1l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="2" />
     </svg>
   );
@@ -85,7 +86,7 @@ export function CheckIcon() {
 
 export function ChevronIcon({ direction }: { direction: "up" | "down" }) {
   return (
-    <svg viewBox="0 0 12 12">
+    <svg viewBox="0 0 12 12" aria-hidden="true">
       <path d={direction === "up" ? "M2 7l4-4 4 4" : "M2 5l4 4 4-4"} fill="none" stroke="currentColor" strokeWidth="1.4" />
     </svg>
   );
