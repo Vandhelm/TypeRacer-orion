@@ -306,6 +306,11 @@
     "keyboard": {
       "title": "Grab a physical keyboard",
       "body": "The race is played on a keyboard. On a phone or a touch tablet, the on-screen keyboard hides the text and skews the score: come back on a computer, or plug in a keyboard."
+    },
+    "track": {
+      "label": "Track: every participant, their rank and live speed",
+      "stats": "{{rank}} · {{wpm}} WPM",
+      "watching": "You are watching the race: spectator, no typing area."
     }
   },
   "podium": {

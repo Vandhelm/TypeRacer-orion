@@ -16,7 +16,7 @@ export function ProfileAvatar({ name, src }: { name: string; src?: string | null
   );
 }
 
-function GeneratedAvatar({ name }: { name: string }) {
+export function GeneratedAvatar({ name }: { name: string }) {
   const { initial, hue, angle } = generatedAvatar(name);
   return (
     <svg className="block size-full" viewBox="0 0 64 64" focusable="false">
