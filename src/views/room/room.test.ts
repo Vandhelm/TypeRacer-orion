@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import type { TFunction } from "i18next";
-import { arrivalOf, DURATION_PRESETS, durationChoice, launchHint, raceHref, readSession, roomHrefOutsideRace, seatsOf } from "./room";
+import { createI18n } from "../../i18n";
+import { arrivalOf, DURATION_PRESETS, durationChoice, launchHint, raceHref, readSession, roomHrefOutsideRace, seatSpoken, seatsOf } from "./room";
 
 const t = ((key: string) => key) as unknown as TFunction;
 
@@ -201,5 +202,21 @@ describe("COURSE-02 — the Launch button is greyed out with the reason, by the 
       expect(room.noHuman).toBeTruthy();
       expect(room.errors.not_enough_players).toBeTruthy();
     }
+  });
+});
+
+describe("BOT-04 — the spoken list of players says which ones are bots", () => {
+  const fr = createI18n("fr").t;
+  const en = createI18n("en").t;
+
+  test("a bot is read with a full word, in French and in English", () => {
+    const bot = { name: "Thon_Rouge", color: "green", bot: true };
+    expect(seatSpoken(fr, bot)).toBe("Thon_Rouge, bot, joueur automatique");
+    expect(seatSpoken(en, bot)).toBe("Thon_Rouge, bot, computer player");
+  });
+
+  test("a human is never read as a bot", () => {
+    expect(seatSpoken(fr, { name: "Maki_Test", color: "blue" })).toBe("Maki_Test");
+    expect(seatSpoken(fr, { name: "Corail_418", color: "red", host: true, me: true })).toBe("Corail_418, Hôte, TOI");
   });
 });

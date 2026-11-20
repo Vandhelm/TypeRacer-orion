@@ -5,6 +5,7 @@ import type { MemberView, RoomView } from "../../server/rooms";
 import { BOT_NAMES } from "../../players/bots";
 import { seatColor } from "../../rooms/seats";
 import { launchBlocker } from "../../rooms/launch";
+import type { TFunction } from "i18next";
 
 const TEXTS_KEY = "orion-texts";
 
@@ -141,6 +142,11 @@ export function launchHint(room: Pick<Room, "guests" | "bots">, members: Pick<Me
 
 export function isPlayer(seat: Seat): seat is Player {
   return !("free" in seat);
+}
+
+/** BOT-04 : ce que lit un lecteur d'écran pour un joueur assis ; un bot est dit en toutes lettres, pas par le seul badge « BOT ». */
+export function seatSpoken(t: TFunction, seat: Player) {
+  return [seat.name, seat.host ? t("room.host") : "", seat.me ? t("room.you") : "", seat.bot ? t("room.botLabel") : ""].filter(Boolean).join(", ");
 }
 
 export function readSavedTexts(): SavedText[] {

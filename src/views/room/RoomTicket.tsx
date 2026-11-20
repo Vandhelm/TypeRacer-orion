@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { BotTag } from "../../players/BotTag";
 import type { RoomState } from "./hooks/useRoom";
 import { isPlayer } from "./room";
 import { TEXT_TYPE_KEY, useRoomLabels } from "./useRoomLabels";
@@ -52,12 +53,14 @@ export function RoomTicket({ state }: { state: RoomState }) {
               if (!isPlayer(seat)) {
                 return <li key={i} className={`${SEAT} font-normal text-[rgba(255,255,255,.35)]`}><i className={`${DIAMOND} border-[rgba(255,255,255,.35)]`} /><span className={NAME}>{t("room.freeSeat")}</span></li>;
               }
-              const tag = [seat.host ? t("room.host").toUpperCase() : "", seat.me ? t("room.you") : "", seat.bot ? t("room.bot") : ""].filter(Boolean).join(" · ");
+              const tag = [seat.host ? t("room.host").toUpperCase() : "", seat.me ? t("room.you") : ""].filter(Boolean).join(" · ");
               return (
                 <li key={i} className={`${SEAT} ${seat.me ? "font-medium text-white" : "font-normal text-[rgba(255,255,255,.75)]"}`}>
                   <i className={`${DIAMOND} border-white`} style={{ background: seat.color }} />
                   <span className={NAME}>{seat.name}</span>
                   {tag && <span className={`ml-auto flex-none text-[10px] tracking-[.06em] ${seat.host ? "text-red-text" : "text-muted"}`}>{tag}</span>}
+                  {/* BOT-04 : le même marqueur que sur la piste et le podium */}
+                  {seat.bot && <BotTag className="ml-auto text-[10px]" />}
                 </li>
               );
             })}
