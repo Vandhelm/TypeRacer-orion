@@ -43,4 +43,30 @@ describe("TECH-06 — real-time server configuration", () => {
       proc.kill();
     }
   });
+
+  test("an unreachable database does not stop the server: it keeps answering without room follow-up", async () => {
+    const proc = Bun.spawn(["bun", "run", "realtime"], {
+      cwd: `${import.meta.dir}/../..`,
+      env: { ...process.env, REALTIME_SECRET: SECRET, REALTIME_PORT: "0", DATABASE_URL: "postgres://nobody:nothing@127.0.0.1:1/none" },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    try {
+      const reader = proc.stdout.getReader();
+      let out = "";
+      while (!/:(\d+)/.test(out)) {
+        const { value, done } = await reader.read();
+        if (done) throw new Error(`server exited: ${await new Response(proc.stderr).text()}`);
+        out += new TextDecoder().decode(value);
+      }
+      const port = out.match(/:(\d+)/)![1];
+      // Laisse le temps à la connexion d'écoute d'échouer.
+      await Bun.sleep(1500);
+      expect(proc.exitCode).toBeNull();
+      const res = await fetch(`http://localhost:${port}/health`);
+      expect(res.status).toBe(200);
+    } finally {
+      proc.kill();
+    }
+  });
 });
