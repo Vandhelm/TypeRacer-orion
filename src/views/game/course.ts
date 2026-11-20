@@ -91,6 +91,9 @@ function randomWords(
   const usable = all.filter(allowed);
   const source = usable.length ? usable : all;
   const sentenceLength = () => 6 + Math.floor(random() * 7);
+  // CONF-07 : la ponctuation ajoutée respecte aussi les caractères exclus ; sans marque permise, le mot reste nu
+  const ends = [".", ".", ".", "?", "!"].filter(allowed);
+  const pauses = [",", ",", ";", ":"].filter(allowed);
   const words: string[] = [];
   let inSentence = 0;
   let length = sentenceLength();
@@ -101,11 +104,11 @@ function randomWords(
       if (inSentence === 0) word = word.charAt(0).toUpperCase() + word.slice(1);
       inSentence += 1;
       if (i === target - 1 || inSentence >= length) {
-        word += pick([".", ".", ".", "?", "!"]);
+        if (ends.length) word += pick(ends);
         inSentence = 0;
         length = sentenceLength();
-      } else if (inSentence > 1 && random() < 0.12) {
-        word += pick([",", ",", ";", ":"]);
+      } else if (inSentence > 1 && random() < 0.12 && pauses.length) {
+        word += pick(pauses);
       }
     }
     words.push(word);

@@ -113,6 +113,20 @@ describe("CONF-04 — random words: exactly the requested number of words", () =
     }
   });
 
+  test("CONF-07: excluded punctuation is not added at the end of words, and the count stays exact", () => {
+    for (let seed = 0; seed < 30; seed++) {
+      const words = buildWords(settings({ textType: "words", length: "long", punctuation: true, excluded: ".,!?;:" }), seededRandom(seed));
+      expect(words).toHaveLength(100);
+      expect(words.filter((word) => /[.,!?;:]/.test(word))).toEqual([]);
+    }
+  });
+
+  test("CONF-07: punctuation that is not excluded is still added", () => {
+    const words = buildWords(settings({ textType: "words", length: "long", punctuation: true, excluded: ".!?" }), seededRandom(9));
+    expect(words.some((word) => /[,;:]$/.test(word))).toBe(true);
+    expect(words.some((word) => /[.!?]/.test(word))).toBe(false);
+  });
+
   test("excluding every letter keeps the length (the exclusion cannot be honoured, the count is)", () => {
     const words = buildWords(settings({ textType: "words", length: "short", excluded: "aeiouyst" }), seededRandom(3));
     expect(words).toHaveLength(25);
@@ -154,6 +168,18 @@ describe("CONF-04 — quote: one whole quote, the closest to the requested lengt
         }
       });
     }
+  }
+
+  for (const language of ["fr", "en"] as const) {
+    test(`${language} long: a quote of 90 to 110 words, never the medium one`, () => {
+      for (let seed = 0; seed < 20; seed++) {
+        const long = buildWords(settings({ textType: "quote", language, length: "long" }), seededRandom(seed));
+        const medium = buildWords(settings({ textType: "quote", language, length: "medium" }), seededRandom(seed));
+        expect(long.length).toBeGreaterThanOrEqual(90);
+        expect(long.length).toBeLessThanOrEqual(110);
+        expect(long.join(" ")).not.toBe(medium.join(" "));
+      }
+    });
   }
 
   test("a longer length never gives a shorter quote", () => {
