@@ -1,6 +1,9 @@
 import { beforeAll, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { corpusTexts, rooms } from "../../db/schema";
+import { DEFAULT_SETTINGS, type RoomSettings } from "../rooms/settings";
+import { seededRandom } from "../rooms/text";
+import { buildWords } from "../views/game/course";
 import { roomsFixture, type Joined } from "./rooms.fixture";
 
 type Passage = { body: string; source: string | null } | null;
@@ -113,4 +116,59 @@ describe("CONF-03 — the server picks the race text from the corpus when the ro
     expect(res.status).toBe(200);
     expect(((await res.json()) as WithPassage).room.passage).toBeNull();
   });
+});
+
+describe("CONF-04 — the text launched by the server has exactly the requested word count", () => {
+  let t: Awaited<ReturnType<typeof roomsFixture>>;
+  beforeAll(async () => {
+    t = await roomsFixture();
+  });
+
+  type Settings = { room: { settings: RoomSettings } };
+  const settingsOf = async (code: string, cookie: string) => ((await (await t.call("GET", `/api/rooms/${code}`, cookie)).json()) as Settings).room.settings;
+
+  test("a quote has no free length: a direct PATCH quote + other is brought back to a preset length", async () => {
+    const { room, host } = await t.open("Len_QuotePatch", { textType: "coherent" });
+    const res = await t.call("PATCH", `/api/rooms/${room.code}`, host.cookie, { settings: { textType: "quote", length: "other", wordCount: 300 } });
+    expect(res.status).toBe(200);
+    expect((await settingsOf(room.code, host.cookie)).length).toBe("medium");
+  });
+
+  test("switching only the length to other on a quote room is brought back too", async () => {
+    const { room, host } = await t.open("Len_QuoteOther", { textType: "quote", length: "long" });
+    expect((await t.call("PATCH", `/api/rooms/${room.code}`, host.cookie, { settings: { length: "other", wordCount: 300 } })).status).toBe(200);
+    expect((await settingsOf(room.code, host.cookie)).length).toBe("medium");
+  });
+
+  test("a room created as quote + other is brought back to a preset length", async () => {
+    const { room, host } = await t.open("Len_QuoteNew", { textType: "quote", length: "other", wordCount: 300 });
+    expect((await settingsOf(room.code, host.cookie)).length).toBe("medium");
+  });
+
+  test("other stays allowed for random words", async () => {
+    const { room, host } = await t.open("Len_WordsOther", { textType: "words", length: "other", wordCount: 300 });
+    expect(await settingsOf(room.code, host.cookie)).toMatchObject({ length: "other", wordCount: 300 });
+  });
+
+  const cases: [Partial<RoomSettings>, number][] = [
+    [{ length: "very-short" }, 10],
+    [{ length: "short" }, 25],
+    [{ length: "medium" }, 50],
+    [{ length: "long" }, 100],
+    [{ length: "other", wordCount: 1 }, 1],
+    [{ length: "other", wordCount: 1000 }, 1000],
+  ];
+  for (const [i, [length, expected]] of cases.entries()) {
+    for (const textType of ["coherent", "words"] as const) {
+      test(`${textType} ${JSON.stringify(length)}: the launched text has ${expected} words, excluded characters set`, async () => {
+        const settings = { ...DEFAULT_SETTINGS, textType, ...length, excluded: "ea", numbers: true };
+        const { room, host } = await t.open(`Len_${textType.slice(0, 3)}${i}`, settings);
+        const launched = (await (await t.call("POST", `/api/rooms/${room.code}/launch`, host.cookie)).json()) as WithPassage;
+        expect(Number.isInteger(launched.room.seed)).toBe(true);
+        if (textType === "coherent") expect(launched.room.passage).not.toBeNull();
+        const words = buildWords({ ...settings, text: "" }, seededRandom(launched.room.seed!), launched.room.passage?.body ?? null);
+        expect(words).toHaveLength(expected);
+      });
+    }
+  }
 });

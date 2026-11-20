@@ -11,7 +11,7 @@ import { seatColor } from "../rooms/seats";
 import { wordTarget } from "../rooms/text";
 import { composePassage, pickPassage } from "./corpus";
 import { claimInvite, revokeInvitesOf, roomOfInvite } from "./room-invites";
-import { DEFAULT_SETTINGS, type CreateRoomSchema, type Role, type RoomSettings, type UpdateRoomSchema } from "../rooms/settings";
+import { DEFAULT_SETTINGS, normalizeSettings, type CreateRoomSchema, type Role, type RoomSettings, type UpdateRoomSchema } from "../rooms/settings";
 
 export type CreateRoomInput = z.infer<typeof CreateRoomSchema>;
 export type UpdateRoomInput = z.infer<typeof UpdateRoomSchema>;
@@ -245,7 +245,7 @@ async function membership(db: Db, roomId: number, key: string) {
  * Seul un compte (playerId) peut créer : la route refuse avant d'arriver ici un invité ou une requête sans session.
  */
 export async function createRoom(db: Db, host: { playerId: number; ip?: string | null }, input: CreateRoomInput, draw: () => string = newRoomCode): Promise<RoomResult> {
-  const settings = { ...DEFAULT_SETTINGS, ...input.settings };
+  const settings = normalizeSettings({ ...DEFAULT_SETTINGS, ...input.settings });
   const key = memberKey({ playerId: host.playerId });
   // SALLE-06 : déjà membre d'un salon, on ne crée pas le deuxième ; la page propose de quitter le premier
   await settleCurrentRoom(db, key);
@@ -306,7 +306,7 @@ export async function updateRoom(db: Db, code: string, who: Identity, input: Upd
     let capacity = room.guests;
     if (input.settings) {
       const [config] = await tx.select().from(raceConfigs).where(eq(raceConfigs.id, room.configId));
-      const settings = { ...settingsOf(room, config!), ...input.settings };
+      const settings = normalizeSettings({ ...settingsOf(room, config!), ...input.settings });
       // SALLE-05 : la capacité ne descend pas sous le nombre de participants déjà assis
       if (settings.guests < taken.filter((seat) => seat !== null).length) throw new RoomRefused("full");
       capacity = settings.guests;

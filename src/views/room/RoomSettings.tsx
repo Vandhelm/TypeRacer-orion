@@ -7,6 +7,7 @@ import { TextChoice } from "../../components/forms/TextChoice";
 import { InfoTip } from "../../components/InfoTip";
 import { SectionTabs } from "../../components/tabs/SectionTabs";
 import { DEFAULT_DURATION, MAX_DURATION, MIN_DURATION, ROLES } from "../../rooms/settings";
+import { excludedApplies } from "../../rooms/text";
 import type { RoomState } from "./hooks/useRoom";
 import { cleanExcluded, countWords, DURATION_PRESETS, durationChoice, type Room, type TextLength } from "./room";
 import { LENGTH_KEY, useRoomLabels } from "./useRoomLabels";
@@ -51,10 +52,14 @@ function Row({ id, label, help, role = "radiogroup", inactive, children }: RowPr
 function ExcludedRow({ room, host, update }: Pick<RoomState, "room" | "host" | "update">) {
   const { t } = useTranslation();
   const [draft, setDraft] = useState(room.excluded);
-  const inactive = room.textType === "custom";
+  // CONF-07 : seulement pour les mots aléatoires ; un passage ou une citation reste entier (CONF-04)
+  const inactive = !excludedApplies(room.textType);
   return (
     <div className={ROW}>
-      <label className={`${LABEL} self-center`} htmlFor="room-excluded">{t("room.excluded")}</label>
+      <span className="inline-flex items-center gap-2.5">
+        <label className={LABEL} htmlFor="room-excluded">{t("room.excluded")}</label>
+        <InfoTip text={t("room.helpExcluded")} />
+      </span>
       <div className={inactive ? `${CHOICES} opacity-35` : CHOICES}>
         <input
           className={`${SHORT_INPUT} ${inactive ? "opacity-35" : ""}`.trim()}
