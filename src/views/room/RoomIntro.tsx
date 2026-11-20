@@ -86,7 +86,7 @@ export function RoomIntro({ state }: { state: RoomState }) {
         <label className={LABEL} htmlFor="room-name">{t("room.roomName")}</label>
         <div className={host ? `${NAME_BOX} border-b-line-soft ${NAME_LINE}` : `${NAME_BOX} border-b-transparent after:hidden`}>
           <input
-            className={`unset h-[52px] min-w-0 flex-1 font-sans text-[clamp(22px,3.4vh,32px)] leading-[1.1] font-light text-white caret-red-text placeholder:text-[rgba(255,255,255,.3)] ${host ? "" : "cursor-default"}`}
+            className={`unset h-[52px] min-w-0 flex-1 font-sans text-[clamp(22px,3.4vh,32px)] leading-[1.1] font-light text-white caret-red-text placeholder:text-muted ${host ? "" : "cursor-default"}`}
             id="room-name"
             name="name"
             type="text"

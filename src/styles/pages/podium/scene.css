@@ -100,7 +100,7 @@
     padding: 1.4vh .6vw 0;
     background: linear-gradient(90deg, var(--color-face-front-a) 0%, var(--color-face-front-b) 100%);
     border: 1px solid var(--color-line);
-    color: var(--color-line-soft);
+    color: var(--color-muted);
     font: 300 1.2vw/1 var(--font-mono);
     text-align: center;
     pointer-events: auto;
@@ -125,7 +125,7 @@
 .podium-block:hover{ border-color: #fff; }
 .podium-block:hover .podium-name{ text-decoration: underline; text-underline-offset: .2em; }
 .podium-name:focus-visible{ outline: 1px solid #fff; outline-offset: 2px; }
-.podium-speed{ color: var(--color-line-soft); font: 300 .8vw/1 var(--font-mono); }
+.podium-speed{ color: var(--color-muted); font: 300 .8vw/1 var(--font-mono); }
 .podium-block--1 .podium-name{ text-decoration: none; }
 .podium-name::before{ content: ''; position: absolute; inset: 0; z-index: 3; }   /* the whole block opens the profile */
 .podium-block:hover{ border-color: #fff; }

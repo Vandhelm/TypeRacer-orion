@@ -35,7 +35,7 @@ export function LastRace({ player, summary, title }: { player: PlayerResult; sum
     <section className={SECTION} aria-labelledby="last-race-title">
       <h2 id="last-race-title" className={SECTION_TITLE}>{title ?? t("profile.lastRace")}</h2>
       <p className="mb-4 flex flex-wrap items-baseline justify-between gap-x-8 gap-y-1.5 font-mono text-[max(12px,1.4vh)] leading-[1.6] font-normal text-muted">
-        <span className="min-w-0 [&_i]:mr-[.5em] [&_i]:text-line-soft [&_i]:not-italic">
+        <span className="min-w-0 [&_i]:mr-[.5em] [&_i]:not-italic">
           {settings.map((setting, i) => (
             <Fragment key={i}>{i > 0 && <>{NBSP}<i>·</i> </>}{keep(setting)}</Fragment>
           ))}

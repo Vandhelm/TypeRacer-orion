@@ -31,7 +31,7 @@ const CHOICES = "flex flex-wrap items-center gap-x-4 gap-y-0.5 pt-0.5 narrow:gap
 const PANEL = `${SHADE} grid gap-y-1 narrow:gap-y-[18px]`;
 const SHORT_INPUT =
   "unset box-border h-[34px] w-[9em] border-b border-b-line-soft [border-bottom-style:dashed] font-mono text-[max(15px,1.9vh)] leading-none font-normal tracking-[.3em] text-white caret-red-text " +
-  "focus:border-b-white focus:[border-bottom-style:solid] placeholder:tracking-[.04em] placeholder:text-[rgba(255,255,255,.35)]";
+  "focus:border-b-white focus:[border-bottom-style:solid] placeholder:tracking-[.04em] placeholder:text-muted";
 
 /** One setting: its name on the left, its choices on the right. */
 function Row({ id, label, help, role = "radiogroup", inactive, children }: RowProps) {
@@ -194,9 +194,9 @@ export function RoomSettings({ state, onEditText, action }: RoomSettingsProps) {
           {host && <SmallButton onClick={() => setBots(withBotAdded(room.botList))} disabled={!canAddBot(room, humans)}>{t("room.addBot")}</SmallButton>}
         </Row>
         {room.botList.map((bot) => (
-          <Row key={bot.name} id={`label-bot-${bot.name}`} label={bot.name} help={t("room.helpBotLevels")} inactive={!seated.has(bot.name)}>
+          <Row key={bot.name} id={`label-bot-${bot.name}`} label={bot.name} help={t("room.helpBotLevels")}>
             {BOT_LEVELS.map((level) => (
-              <TextChoice key={level} type="radio" name={`bot-level-${bot.name}`} value={level} label={t(`room.level_${level}`)} checked={bot.level === level} disabled={!host} hidden={!host && bot.level !== level} onChange={() => setBots(withBotLevel(room.botList, bot.name, level))} />
+              <TextChoice key={level} type="radio" name={`bot-level-${bot.name}`} value={level} label={t(`room.level_${level}`)} checked={bot.level === level} disabled={!host} inactive={!seated.has(bot.name)} hidden={!host && bot.level !== level} onChange={() => setBots(withBotLevel(room.botList, bot.name, level))} />
             ))}
             {!seated.has(bot.name) && <span className={PLAIN_VALUE}>{t("room.botWaiting")}</span>}
             {host && <SmallButton aria-label={t("room.removeBotLabel", { name: bot.name })} onClick={() => setBots(withoutBot(room.botList, bot.name))}>{t("room.removeBot")}</SmallButton>}

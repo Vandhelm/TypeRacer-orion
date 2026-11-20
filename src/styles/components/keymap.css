@@ -23,7 +23,7 @@
     from{ opacity: 0; transform: translateY(-45%) scale(.7); }
 }
 .keymap-key.is-wide{ flex: 0 0 50%; aspect-ratio: auto; height: clamp(22px, 4vw, 36px); }
-.keymap-key.is-empty{ color: var(--color-line-faint); background: transparent; }
+.keymap-key.is-empty{ color: var(--color-muted); background: transparent; }
 
 @media (prefers-reduced-motion: reduce){
     .keymap-key{ transition: none; }

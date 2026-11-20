@@ -45,7 +45,7 @@ export function SectionTabs<T extends string>({ options, value, onChange, ariaLa
             onClick={() => onChange(option.value)}
             onKeyDown={(e) => onKeyDown(e, i)}
           >
-            {option.num && <span className="font-mono tracking-[0] opacity-70">{option.num}</span>}
+            {option.num && <span className="font-mono tracking-[0] opacity-90">{option.num}</span>}
             <span>{option.label}</span>
           </button>
         );

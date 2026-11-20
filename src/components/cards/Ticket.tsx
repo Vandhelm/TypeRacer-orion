@@ -33,7 +33,7 @@ const NUMBER_BOX =
 export function TicketStub({ label, actionLabel, actionAriaLabel, actionDisabled, onAction, className = "", style, ref }: TicketStubProps) {
   return (
     <div ref={ref} className={`flex flex-col gap-[calc(5*var(--u))] pt-[calc(2*var(--u))] pb-[calc(10*var(--u))] ${className}`.trim()} style={style}>
-      <div className="flex items-center justify-between font-mono text-[max(9px,calc(3.2*var(--u)))] leading-none font-normal tracking-[.24em] text-line-soft">
+      <div className="flex items-center justify-between font-mono text-[max(9px,calc(3.2*var(--u)))] leading-none font-normal tracking-[.24em] text-muted">
         <span>{label}</span>
         <span className="size-[calc(3*var(--u))] bg-red-solid [transform:rotate(45deg)]" aria-hidden="true" />
       </div>
@@ -72,7 +72,7 @@ export function Ticket({ header, number, title, serial, rows, stampLabel, stub, 
         <span className="ticket-stamp" aria-hidden="true">
           <span>{stampLabel}</span>
         </span>
-        <div className="pl-[.26em] text-center font-mono text-[max(9px,calc(3.6*var(--u)))] leading-none font-medium tracking-[.26em] text-line-soft">{header}</div>
+        <div className="pl-[.26em] text-center font-mono text-[max(9px,calc(3.6*var(--u)))] leading-none font-medium tracking-[.26em] text-muted">{header}</div>
         <div className={NUMBER_BOX}>
           <span className="font-sans text-[length:calc(26*var(--u))] leading-none font-extralight tracking-[.02em] text-white" aria-hidden="true">{number}</span>
           <span className="pl-[.34em] font-sans text-[length:calc(4.6*var(--u))] leading-none font-medium tracking-[.34em]">{title}</span>
