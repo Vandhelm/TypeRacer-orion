@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { Player } from "../room/room";
-import { clockOffset, countdownAt, createClockSync, GO_MS, nextChangeIn, raceDurationSeconds, SAMPLE_MAX_AGE_MS } from "./countdown";
+import { clockOffset, countdownAt, createClockSync, GO_MS, nextChangeIn, raceDurationSeconds, READY, SAMPLE_MAX_AGE_MS } from "./countdown";
 import { advanceBots, createCourse, createRace, secondsLeft, startRace } from "./race";
 
 const STARTS = 1_000_000;
@@ -46,8 +46,9 @@ describe("COURSE-03 — the countdown follows the server start, corrected by the
     expect(countdownAt(STARTS, STARTS + 10_000)).toEqual({ count: null, started: true });
   });
 
-  test("a clock far behind never shows more than 3", () => {
-    expect(countdownAt(STARTS, STARTS - 60_000).count).toBe(3);
+  test("before the 3, the preparation shows « get ready » (READY), however early", () => {
+    expect(countdownAt(STARTS, STARTS - 3_001)).toEqual({ count: READY, started: false });
+    expect(countdownAt(STARTS, STARTS - 60_000).count).toBe(READY);
   });
 
   test("the next change is at the next second boundary, then at the end of « go »", () => {

@@ -1,8 +1,14 @@
 // COURSE-06 : le départ et la fin d'une course, décidés par le serveur depuis rooms.launched_at (horloge de la base).
 // Partagé par la vue du salon (src/server/rooms.ts), le serveur temps réel et l'enregistrement des courses.
 
-/** COURSE-03 : le décompte (3, 2, 1) entre le lancement et le départ. */
-export const COUNTDOWN_MS = 3000;
+/**
+ * COURSE-03 : la préparation avant le « 3 ». Le temps pour chaque membre d'arriver sur /game après le lancement :
+ * tampon du salon (800 ms), rechargement de la page, lecture du salon, voire un sondage HTTP. Sans elle, des membres
+ * arrivaient après le départ et ne voyaient aucun chiffre. La page de course y affiche « Prêts ? ».
+ */
+export const READY_MS = 2000;
+/** COURSE-03 : le décompte entre le lancement et le départ (état DÉCOMPTE de COURSE-01) : préparation, puis 3, 2, 1. */
+export const COUNTDOWN_MS = READY_MS + 3000;
 
 /** Le départ (lancement + décompte) et la fin (départ + durée, null sans limite), en ms epoch ; null avant tout lancement. */
 export function raceClock(launchedAt: Date | null, durationSeconds: number | null): { startsAt: number | null; endsAt: number | null } {

@@ -58,13 +58,17 @@ export function createClockSync(storage: SampleStorage | null, now: () => number
   };
 }
 
+/** La préparation (READY_MS, race-clock.ts) avant le « 3 » : la page affiche « Prêts ? ». */
+export const READY = 4;
+
 /**
- * Le chiffre affiché à l'heure serveur `now` : 3, 2, 1 (une seconde chacun) avant `startsAt`, 0 (« partez ») pendant
- * GO_MS après, puis rien. `started` : la frappe est ouverte (dès startsAt).
+ * Le chiffre affiché à l'heure serveur `now` : READY pendant la préparation, 3, 2, 1 (une seconde chacun) avant
+ * `startsAt`, 0 (« partez ») pendant GO_MS après, puis rien. `started` : la frappe est ouverte (dès startsAt).
  */
 export function countdownAt(startsAt: number, now: number): { count: number | null; started: boolean } {
   const left = startsAt - now;
-  if (left > 0) return { count: Math.min(3, Math.ceil(left / STEP_MS)), started: false };
+  if (left > 3 * STEP_MS) return { count: READY, started: false };
+  if (left > 0) return { count: Math.ceil(left / STEP_MS), started: false };
   return { count: -left < GO_MS ? 0 : null, started: true };
 }
 

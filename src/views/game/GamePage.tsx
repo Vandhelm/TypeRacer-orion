@@ -9,6 +9,7 @@ import { roomHrefOutsideRace } from "../room/room";
 import { rememberGuestRace } from "../profile/stats";
 import { useRealtimeRoom } from "../../realtime/useRealtimeRoom";
 import { LiveList } from "../room/LiveList";
+import { READY } from "./countdown";
 import { useRace } from "./hooks/useRace";
 import { KeyboardNotice } from "./KeyboardNotice";
 import { useMobileRace } from "./mobileRace";
@@ -143,9 +144,14 @@ function GameRace({ state }: { state: RoomState }) {
       {/* COURSE-03 : le décompte suit le départ du serveur, images du bassin prêtes ou non ; « partez » laisse voir le texte */}
       {race.count !== null && (
         <div className={`fixed inset-0 z-40 flex flex-col items-center justify-center gap-[3vh] p-6 ${race.count > 0 ? "bg-[rgba(0,0,0,.82)]" : "pointer-events-none"}`} role="status">
-          <b key={race.count} className={`${COUNT} ${race.count > 0 ? "font-sans text-[26vh] font-extralight" : "font-serif text-[20vh] font-bold text-red-text"}`} lang={race.count > 0 ? undefined : "ja"}>
-            {race.count > 0 ? race.count : "始"}
-          </b>
+          {race.count === READY ? (
+            // COURSE-03 : la préparation, le temps que chacun arrive sur la page avant le « 3 »
+            <b className="font-sans text-[8vh] leading-none font-extralight tracking-[.14em] uppercase">{t("game.ready")}</b>
+          ) : (
+            <b key={race.count} className={`${COUNT} ${race.count > 0 ? "font-sans text-[26vh] font-extralight" : "font-serif text-[20vh] font-bold text-red-text"}`} lang={race.count > 0 ? undefined : "ja"}>
+              {race.count > 0 ? race.count : "始"}
+            </b>
+          )}
           {race.count <= 0 && <p className="font-mono text-[max(11px,1.4vh)] leading-none font-normal tracking-[.3em] text-muted">{t("game.go")}</p>}
         </div>
       )}

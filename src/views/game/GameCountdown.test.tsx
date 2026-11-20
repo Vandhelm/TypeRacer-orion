@@ -6,6 +6,7 @@ import { createI18n } from "../../i18n";
 import { DEFAULT_SETTINGS } from "../../rooms/settings";
 import type { RoomState } from "../room/hooks/useRoom";
 import type { Player } from "../room/room";
+import { COUNTDOWN_MS } from "../../rooms/race-clock";
 import { GameScreen } from "./GamePage";
 
 const PLAYERS: Player[] = [
@@ -41,7 +42,11 @@ describe("COURSE-03 — the race page shows the countdown of the server start", 
     expect(digit(render(state({ startsAt: Date.now() + 10_000 + 400, clockOffset: 10_000 })))).toBe("1");
   });
 
-  test("right after the launch, « 3 »", () => {
+  test("right after the launch, the preparation: « get ready », the 3 comes 3 s before the start", () => {
+    expect(digit(render(state({ startsAt: Date.now() + COUNTDOWN_MS - 100 })))).toBe("Prêts ?");
+  });
+
+  test("three seconds before the start, « 3 »", () => {
     expect(digit(render(state({ startsAt: Date.now() + 2_900 })))).toBe("3");
   });
 

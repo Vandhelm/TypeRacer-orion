@@ -2,6 +2,7 @@
 import { beforeAll, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { corpusTexts, rooms } from "../../db/schema";
+import { COUNTDOWN_MS, READY_MS } from "../rooms/race-clock";
 import { roomsFixture } from "./rooms.fixture";
 
 type Fixture = Awaited<ReturnType<typeof roomsFixture>>;
@@ -74,13 +75,16 @@ describe("COURSE-03 — the room view gives the server clock", () => {
     expect(Math.abs(serverNow - (before + after) / 2)).toBeLessThan(60);
   });
 
-  test("right after the launch, the start is about one countdown after serverNow", async () => {
+  test("right after the launch, the start is a preparation plus 3, 2, 1 after serverNow", async () => {
+    // la préparation laisse à chaque membre le temps d'ouvrir /game (tampon, rechargement, lecture) avant le « 3 »
+    expect(READY_MS).toBeGreaterThanOrEqual(2000);
+    expect(COUNTDOWN_MS).toBe(READY_MS + 3000);
     const { room, host } = await t.open("Count_Start", {});
     const res = await t.call("POST", `/api/rooms/${room.code}/launch`, host.cookie);
     const launched = ((await res.json()) as { room: TextView }).room;
     const left = launched.startsAt! - launched.serverNow;
-    expect(left).toBeGreaterThan(2500);
-    expect(left).toBeLessThanOrEqual(3000);
+    expect(left).toBeGreaterThan(COUNTDOWN_MS - 500);
+    expect(left).toBeLessThanOrEqual(COUNTDOWN_MS);
   });
 });
 
