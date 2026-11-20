@@ -29,7 +29,8 @@ export function LastRace({ player, summary, title }: { player: PlayerResult; sum
     summary.punctuation && t("profile.punctuation"),
     summary.numbers && t("profile.numbers"),
     summary.specials && t("profile.specials"),
-    !summary.accents && t("profile.noAccents"),
+    // CONF-06 : l'option accents ne concerne que le français
+    summary.language === "fr" && !summary.accents && t("profile.noAccents"),
     summary.excluded && t("profile.without", { chars: summary.excluded }),
     t(`profile.mistakes.${summary.mistakes}`),
   ].filter((setting): setting is string => !!setting);
