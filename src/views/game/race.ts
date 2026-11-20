@@ -77,7 +77,6 @@ export function createCourse(words: string[], durationSeconds: number | null, mi
 }
 
 export function createRace(course: Course, players: Player[], botSpeed: BotSpeed, botAccuracy: BotAccuracy, random: () => number = Math.random): Race {
-  const [low, high] = BOT_WPM[botSpeed];
   const [worst, best] = BOT_ACCURACY[botAccuracy];
   const bots: Bot[] = [];
   const remotes: Remote[] = [];
@@ -87,6 +86,8 @@ export function createRace(course: Course, players: Player[], botSpeed: BotSpeed
       remotes.push({ lane, progress: 0, wpm: 0, finishedAt: 0 });
       return;
     }
+    // CONF-10 : chaque bot à son niveau ; sans niveau, la vitesse du salon
+    const [low, high] = BOT_WPM[player.level ?? botSpeed];
     bots.push({ lane, wpm: Math.round(low + random() * (high - low)), accuracy: worst + random() * (best - worst), words: 0, typed: 0, errors: 0, keys: {}, finishedAt: 0 });
   });
   return {

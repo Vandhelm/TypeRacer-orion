@@ -1,9 +1,10 @@
 import { sql } from "drizzle-orm";
-import { boolean, check, index, integer, pgTable, primaryKey, real, text, timestamp, unique } from "drizzle-orm/pg-core";
+import { boolean, check, index, integer, jsonb, pgTable, primaryKey, real, text, timestamp, unique } from "drizzle-orm/pg-core";
 import { botAccuracy, botSpeed, language, level, memberRole, mistakeMode, roomStatus, textLength, textType, visibility } from "./enums";
 import { players } from "./players";
 import { corpusTexts } from "./texts";
 import { CODE_PATTERN } from "../../src/rooms/access";
+import type { RoomBot } from "../../src/rooms/bots";
 
 /** Réglages d'une course, immuables : modifier un salon crée une nouvelle ligne, pour que chaque course garde les siens. */
 export const raceConfigs = pgTable(
@@ -48,6 +49,8 @@ export const rooms = pgTable(
     visibility: visibility("visibility").notNull(),
     guests: integer("guests").notNull(),
     bots: boolean("bots").notNull(),
+    /** CONF-10 : les bots du salon (nom de la liste fermée, niveau), dans l'ordre des places ; validés par BotListSchema. */
+    botList: jsonb("bot_list").$type<RoomBot[]>().notNull().default([]),
     status: roomStatus("status").notNull().default("waiting"),
     hostId: integer("host_id").notNull().references(() => players.id),
     configId: integer("config_id").notNull().references(() => raceConfigs.id),
@@ -62,6 +65,7 @@ export const rooms = pgTable(
     textHash: text("text_hash"),
   },
   (table) => [index("rooms_lobby").on(table.status, table.visibility), check("rooms_guests_range", sql`${table.guests} between 2 and 30`),
+    check("rooms_bot_list_array", sql`jsonb_typeof(${table.botList}) = 'array' and jsonb_array_length(${table.botList}) <= 30`),
     check("rooms_code_format", sql`${table.code} ~ ${sql.raw(`'${CODE_PATTERN}'`)}`),
   ],
 );

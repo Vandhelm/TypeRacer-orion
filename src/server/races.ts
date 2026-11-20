@@ -9,7 +9,8 @@ import type { Db } from "../../db/client";
 import type { Auth } from "./auth";
 import { guestSecret } from "./guest";
 import { storedAvatar } from "../players/avatar";
-import { BOT_NAMES, isBotName } from "../players/bots";
+import { isBotName } from "../players/bots";
+import { seatedBots } from "../rooms/bots";
 import { KeysSchema, type KeyCounts } from "../players/keys";
 import { DurationSchema, MAX_DURATION } from "../rooms/settings";
 import { CODE_PATTERN } from "../rooms/access";
@@ -274,7 +275,7 @@ export const ELAPSED_TOLERANCE_SECONDS = 2;
 export async function claimServerRace(db: Db, race: ParsedRace, key: string | null): Promise<ServerRace & { release: () => Promise<void> }> {
   if (!race.room || !key) throw new RaceRefused("race_not_launched");
   const [row] = await db
-    .select({ roomId: rooms.id, launchedAt: rooms.launchedAt, duration: raceConfigs.duration, progress: roomMembers.progress, abandonedAt: roomMembers.abandonedAt, bots: rooms.bots, guests: rooms.guests })
+    .select({ roomId: rooms.id, launchedAt: rooms.launchedAt, duration: raceConfigs.duration, progress: roomMembers.progress, abandonedAt: roomMembers.abandonedAt, bots: rooms.bots, botList: rooms.botList, guests: rooms.guests })
     .from(rooms)
     .innerJoin(raceConfigs, eq(raceConfigs.id, rooms.configId))
     .innerJoin(roomMembers, and(eq(roomMembers.roomId, rooms.id), eq(roomMembers.memberKey, key)))
@@ -291,11 +292,11 @@ export async function claimServerRace(db: Db, race: ParsedRace, key: string | nu
     .from(roomMembers)
     .leftJoin(players, eq(players.id, roomMembers.playerId))
     .where(and(eq(roomMembers.roomId, row.roomId), eq(roomMembers.role, "player")));
-  // les bots du salon : ses membres bots, puis les places libres remplies par la liste fermée, comme la page salle
-  // (seatsOf) ; jamais un nom porté par un membre humain
+  // les bots du salon : ses membres bots, puis ceux de sa liste (CONF-10) qui ont une place, comme la page salle
+  // (seatsOf) ; jamais un nom porté par un membre humain, jamais un nom de la liste fermée absent de celle du salon
   const humans = runners.filter((r) => !r.isBot);
   const humanNames = new Set(humans.map((r) => r.name.toLowerCase()));
-  const seatBots = row.bots ? BOT_NAMES.slice(0, Math.max(0, row.guests - runners.length)) : [];
+  const seatBots = seatedBots({ guests: row.guests, bots: row.bots, botList: row.botList }, runners.length).map((bot) => bot.name);
   const bots = new Set([...runners.filter((r) => r.isBot).map((r) => r.name), ...seatBots].map((name) => name.toLowerCase()).filter((name) => !humanNames.has(name)));
   return {
     startedAt: new Date(startsAt),

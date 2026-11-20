@@ -2,7 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import type { TFunction } from "i18next";
 import { createI18n } from "../../i18n";
-import { arrivalOf, compositionOptions, DURATION_PRESETS, durationChoice, guestComposition, launchHint, raceHref, readSession, roomHrefOutsideRace, seatSpoken, seatsOf, type Player } from "./room";
+import { BOT_NAMES } from "../../players/bots";
+import { arrivalOf, compositionOptions, DURATION_PRESETS, durationChoice, guestComposition, launchHint, raceHref, readSession, roomHrefOutsideRace, seatSpoken, seatsOf, withBotAdded, withBotLevel, withoutBot, type Player } from "./room";
 
 const t = ((key: string) => key) as unknown as TFunction;
 
@@ -289,5 +290,50 @@ describe("BOT-04 — the spoken list of players says which ones are bots", () =>
   test("a human is never read as a bot", () => {
     expect(seatSpoken(fr, { name: "Maki_Test", color: "blue" })).toBe("Maki_Test");
     expect(seatSpoken(fr, { name: "Corail_418", color: "red", host: true, me: true })).toBe("Corail_418, Hôte, TOI");
+  });
+});
+
+describe("CONF-10 — the seats show the bots of the room's list, each with its level", () => {
+  const member = (key: string, seat: number) => ({ key, name: key, guest: false, host: seat === 0, role: "player" as const, seat, color: `c${seat}`, finished: false });
+  const botList = [{ name: "Ebi_Fry", level: "fast" }, { name: "Wasabi99", level: "slow" }] as const;
+
+  test("the bots follow the list, with their level, after the humans", () => {
+    const seats = seatsOf({ guests: 4, bots: true, botList: [...botList] }, [member("player:1", 0)], "player:1");
+    expect(seats.slice(1)).toEqual([
+      { name: "Ebi_Fry", color: expect.any(String), bot: true, level: "fast" },
+      { name: "Wasabi99", color: expect.any(String), bot: true, level: "slow" },
+      { free: true },
+    ]);
+  });
+
+  test("a bot without a seat (a human came in after it) does not race", () => {
+    const seats = seatsOf({ guests: 2, bots: true, botList: [...botList] }, [member("player:1", 0)], "player:1");
+    expect(seats.filter((s) => "bot" in s && s.bot).map((s) => ("name" in s ? s.name : ""))).toEqual(["Ebi_Fry"]);
+  });
+
+  test("the launch hint counts the bots of the list", () => {
+    expect(launchHint({ guests: 4, bots: true, botList: [] }, [{ role: "player" }])).toBe("room.notEnough");
+    expect(launchHint({ guests: 4, bots: true, botList: [botList[0]] }, [{ role: "player" }])).toBeNull();
+  });
+});
+
+describe("CONF-10 — the host edits the bot list one bot at a time", () => {
+  const list = [{ name: "Thon_Rouge", level: "slow" }, { name: "Saba_Sensei", level: "fast" }] as const;
+
+  test("adding a bot takes the next free name, at the medium level", () => {
+    expect(withBotAdded([...list])).toEqual([...list, { name: "Wasabi99", level: "medium" }]);
+  });
+
+  test("adding when every name is taken changes nothing", () => {
+    const full = BOT_NAMES.map((name) => ({ name, level: "slow" as const }));
+    expect(withBotAdded(full)).toBe(full);
+  });
+
+  test("removing a bot keeps the others in order", () => {
+    expect(withoutBot([...list], "Thon_Rouge")).toEqual([list[1]]);
+  });
+
+  test("changing one bot's level leaves the other one", () => {
+    expect(withBotLevel([...list], "Saba_Sensei", "medium")).toEqual([list[0], { name: "Saba_Sensei", level: "medium" }]);
   });
 });

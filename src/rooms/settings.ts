@@ -2,6 +2,7 @@
 // et par la page du salon pour ses types et ses valeurs par défaut.
 import { z } from "zod";
 import { isRoomCode, VISIBILITIES } from "./access";
+import { BotListSchema } from "./bots";
 
 export const MIN_GUESTS = 2;
 /** SALLE-05 : capacité en participants (les spectateurs n'y comptent pas) ; rooms_guests_range et les places suivent. */
@@ -32,6 +33,8 @@ export const RoomSettingsSchema = z
     visibility: z.enum(VISIBILITIES),
     guests: z.number().int().min(MIN_GUESTS).max(MAX_GUESTS),
     bots: z.boolean(),
+    /** CONF-10 : les bots du salon, chacun avec son niveau ; « bots » est vrai exactement quand la liste n'est pas vide. */
+    botList: BotListSchema,
     language: z.enum(LANGUAGES),
     botSpeed: z.enum(BOT_SPEEDS),
     botAccuracy: z.enum(BOT_ACCURACIES),
@@ -63,6 +66,7 @@ export const DEFAULT_SETTINGS: RoomSettings = {
   visibility: "private",
   guests: 4,
   bots: true,
+  botList: [],
   language: "fr",
   botSpeed: "medium",
   botAccuracy: "decent",

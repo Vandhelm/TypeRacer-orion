@@ -7,6 +7,7 @@ import type { Db } from "../../db/client";
 import { players, raceConfigs, roomBans, roomMembers, rooms, user } from "../../db/schema";
 import { storedAvatar } from "../players/avatar";
 import { allows, canJoin, isListed, newRoomCode } from "../rooms/access";
+import { resolveBots } from "../rooms/bots";
 import { launchBlocker } from "../rooms/launch";
 import { follow, raceState, storedStatus, type RaceEvent, type RaceState } from "../rooms/race-state";
 import { concealText, textRevealed } from "../rooms/conceal";
@@ -173,6 +174,7 @@ const settingsOf = (room: typeof rooms.$inferSelect, config: typeof raceConfigs.
   visibility: room.visibility,
   guests: room.guests,
   bots: room.bots,
+  botList: room.botList,
   language: config.language,
   botSpeed: config.botSpeed,
   botAccuracy: config.botAccuracy,
@@ -213,7 +215,7 @@ const configOf = (s: RoomSettings) => ({
   catchUpBonus: s.catchUpBonus,
 });
 
-const roomColumnsOf = (s: RoomSettings) => ({ name: s.autoName ? "" : s.name, autoName: s.autoName || !s.name, visibility: s.visibility, guests: s.guests, bots: s.bots });
+const roomColumnsOf = (s: RoomSettings) => ({ name: s.autoName ? "" : s.name, autoName: s.autoName || !s.name, visibility: s.visibility, guests: s.guests, bots: s.bots, botList: s.botList });
 
 /** COURSE-03 : pour chaque vue, l'écart entre l'horloge de la base et celle de ce processus, mesuré à sa lecture. */
 const dbClockSkew = new WeakMap<RoomView, number>();
@@ -287,7 +289,11 @@ async function membership(db: Db, roomId: number, key: string) {
  * Seul un compte (playerId) peut créer : la route refuse avant d'arriver ici un invité ou une requête sans session.
  */
 export async function createRoom(db: Db, host: { playerId: number; ip?: string | null }, input: CreateRoomInput, draw: () => string = newRoomCode): Promise<RoomResult> {
-  const settings = normalizeSettings({ ...DEFAULT_SETTINGS, ...input.settings });
+  const chosen = normalizeSettings({ ...DEFAULT_SETTINGS, ...input.settings });
+  // CONF-10 : la liste envoyée, sinon un bot par place libre si les bots sont activés (réglage par défaut)
+  const bots = resolveBots({ ...chosen, bots: false, botList: [] }, { ...input.settings, bots: chosen.bots }, input.role === "player" ? 1 : 0);
+  if (bots === "full") throw new RoomRefused("full");
+  const settings = { ...chosen, ...bots };
   const key = memberKey({ playerId: host.playerId });
   // SALLE-06 : déjà membre d'un salon, on ne crée pas le deuxième ; la page propose de quitter le premier
   await settleCurrentRoom(db, key);
@@ -348,9 +354,14 @@ export async function updateRoom(db: Db, code: string, who: Identity, input: Upd
     let capacity = room.guests;
     if (input.settings) {
       const [config] = await tx.select().from(raceConfigs).where(eq(raceConfigs.id, room.configId));
-      const settings = normalizeSettings({ ...settingsOf(room, config!), ...input.settings });
+      const current = settingsOf(room, config!);
+      const seated = taken.filter((seat) => seat !== null).length;
+      // CONF-10 : un bot de plus seulement dans une place libre (capacité moins les humains assis et les bots)
+      const bots = resolveBots(current, input.settings, seated);
+      if (bots === "full") throw new RoomRefused("full");
+      const settings = normalizeSettings({ ...current, ...input.settings, ...bots });
       // SALLE-05 : la capacité ne descend pas sous le nombre de participants déjà assis
-      if (settings.guests < taken.filter((seat) => seat !== null).length) throw new RoomRefused("full");
+      if (settings.guests < seated) throw new RoomRefused("full");
       capacity = settings.guests;
       const [next] = await tx.insert(raceConfigs).values(configOf(settings)).returning({ id: raceConfigs.id });
       await tx.update(rooms).set({ ...roomColumnsOf(settings), configId: next!.id }).where(eq(rooms.id, id));
@@ -514,7 +525,7 @@ export async function launchRoom(db: Db, code: string, who: Identity): Promise<R
   const key = memberKey(who);
   await db.transaction(async (tx) => {
     await sweep(tx, id, key);
-    const [room] = await tx.select({ status: rooms.status, hostId: rooms.hostId, configId: rooms.configId, guests: rooms.guests, bots: rooms.bots }).from(rooms).where(eq(rooms.id, id)).for("update");
+    const [room] = await tx.select({ status: rooms.status, hostId: rooms.hostId, configId: rooms.configId, guests: rooms.guests, bots: rooms.bots, botList: rooms.botList }).from(rooms).where(eq(rooms.id, id)).for("update");
     if (!room) throw new RoomRefused("not_found");
     if (!(await membership(tx, id, key))) throw new RoomRefused("not_found"); // SALLE-10 : un non-membre ne sait pas si le salon existe
     if (key !== memberKey({ playerId: room.hostId })) throw new RoomRefused("not_host");

@@ -222,3 +222,21 @@ describe("COURSE-04 — WPM and accuracy move live, as the player types", () => 
     expect(myWpm({ ...race, finishedAt: 61000 })).toBe(2); // 11 caractères : « sushi maki » et l'espace finale
   });
 });
+
+describe("CONF-10 — each bot races at its own level", () => {
+  test("two bots of different levels get speeds in their own ranges", () => {
+    const slow: Player = { name: "Wasabi99", color: "blue", bot: true, level: "slow" };
+    const fast: Player = { name: "Ebi_Fry", color: "green", bot: true, level: "fast" };
+    const race = createRace(createCourse(["le", "riz"], 60, "fix"), [ME, slow, fast], "medium", "high", () => 0.5);
+    const [first, second] = race.bots;
+    expect(first!.wpm).toBeGreaterThanOrEqual(25);
+    expect(first!.wpm).toBeLessThanOrEqual(40);
+    expect(second!.wpm).toBeGreaterThanOrEqual(65);
+    expect(second!.wpm).toBeLessThanOrEqual(100);
+  });
+
+  test("a bot without a level keeps the room speed", () => {
+    const race = createRace(createCourse(["le", "riz"], 60, "fix"), [ME, BOT], "fast", "high", () => 0);
+    expect(race.bots[0]!.wpm).toBe(65);
+  });
+});

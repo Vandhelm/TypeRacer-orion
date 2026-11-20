@@ -76,7 +76,7 @@ describe("BOT-04 — the waiting room marks a bot as such, and only bots", () =>
 
 describe("COURSE-03 — before the launch, a member is told the custom text comes at the launch", () => {
   const settings = (host: boolean, text: string, language: "fr" | "en" = "fr") => {
-    const state = { room: { ...DEFAULT_SETTINGS, textType: "custom", text }, host, update: () => {} } as unknown as RoomState;
+    const state = { room: { ...DEFAULT_SETTINGS, textType: "custom", text }, host, seats: [], update: () => {} } as unknown as RoomState;
     const html = renderToString(createElement(I18nextProvider, { i18n: createI18n(language) }, createElement(RoomSettings, { state, onEditText: () => {}, action: null })));
     return html.match(/id="label-text"[\s\S]*?<\/div>/)?.[0] ?? html;
   };
@@ -89,5 +89,34 @@ describe("COURSE-03 — before the launch, a member is told the custom text come
 
   test("the host still sees the word count of their text", () => {
     expect(settings(true, "le riz attend")).not.toContain("Révélé au lancement");
+  });
+});
+
+describe("CONF-10 — the bots tab lists each bot with its level", () => {
+  const botList = [{ name: "Ebi_Fry", level: "fast" }, { name: "Uni_Kun", level: "slow" }];
+  const seats: Seat[] = [{ name: "Corail_418", color: "red", host: true }, { name: "Ebi_Fry", color: "blue", bot: true, level: "fast" }];
+  const panel = (host: boolean) => {
+    const state = { room: { ...DEFAULT_SETTINGS, guests: 2, bots: true, botList }, host, seats, update: () => {} } as unknown as RoomState;
+    const html = renderToString(createElement(I18nextProvider, { i18n: createI18n("fr") }, createElement(RoomSettings, { state, onEditText: () => {}, action: null })));
+    return html.match(/id="panel-bots"[\s\S]*?id="panel-content"/)?.[0] ?? html;
+  };
+
+  test("the host sees every bot, its level, a remove button each, and no add button once the room is full", () => {
+    const html = panel(true);
+    expect(html).toContain("Ebi_Fry");
+    expect(html).toContain("Uni_Kun");
+    expect(html.match(/Retirer Ebi_Fry|Retirer Uni_Kun/g)).toHaveLength(2);
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Un bot de plus/);
+  });
+
+  test("a bot without a seat is marked as waiting for one", () => {
+    expect(panel(true)).toContain("En attente d&#x27;une place");
+  });
+
+  test("a member sees only each bot's level, without buttons", () => {
+    const html = panel(false);
+    expect(html).toContain("Ebi_Fry");
+    expect(html).not.toContain("Retirer");
+    expect(html).not.toContain("Un bot de plus");
   });
 });
