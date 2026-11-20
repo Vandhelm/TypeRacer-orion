@@ -139,6 +139,19 @@ describe("COURSE-06 — times and speeds are recorded as the server knows them",
     expect(mine.wpm).toBe(Math.round(charsAt(marks, 0.5) / 5 / (20 / 60)));
   });
 
+  test("AUTH-06 — fatal mode: eliminated 1.3 s after the start with nothing validated, 300 MPM is not recorded", async () => {
+    const { code, roomId, host, marks } = await raced("Times_Fatal_Tot", 65_000, null, "fatal");
+    const [row] = await t.db.select({ launchedAt: rooms.launchedAt }).from(rooms).where(eq(rooms.id, roomId));
+    await t.db.update(roomMembers).set({ progress: 0, eliminatedAt: new Date(row!.launchedAt!.getTime() + COUNTDOWN_MS + 1_300) }).where(and(eq(roomMembers.roomId, roomId), eq(roomMembers.memberKey, host.key)));
+    const res = await post({ room: code, summary: { ...SUMMARY, mistakes: "fatal" }, players: [{ ...result("Times_Fatal_Tot", 300, 2), finished: false, eliminated: true }] }, host.cookie);
+    expect(res.status).toBe(201);
+    const mine = await stored(((await res.json()) as { raceId: number }).raceId, "Times_Fatal_Tot");
+    expect(mine.seconds).toBeCloseTo(1.3, 1);
+    // au plus les deux mots suivants (le mot en cours, un paquet en vol), pas 40 caractères en 1,3 s
+    expect(mine.wpm).toBeLessThanOrEqual(Math.round(marks[2]! / 5 / (1.3 / 60)));
+    expect(mine.wpm).toBe(0);
+  });
+
   test("an abandon is recorded at the abandon time seen by the server, at the server's speed", async () => {
     const { code, roomId, host, marks } = await raced("Times_Abandon", 65_000, null);
     const [row] = await t.db.select({ launchedAt: rooms.launchedAt }).from(rooms).where(eq(rooms.id, roomId));
@@ -160,9 +173,20 @@ describe("COURSE-06 — times and speeds are recorded as the server knows them",
   });
 
   test("tolerance, unfinished runner: 40 chars more, no clock margin", () => {
-    // à mi-texte (80 caractères validés) en 60 s : au plus (80 + 40) / 5 = 24 MPM ; au-delà, celui du serveur (16)
-    expect(serverMeasures(runner(24), { finishedAt: null, progress: 0.5 }, COURSE).wpm).toBe(24);
-    expect(serverMeasures(runner(25), { finishedAt: null, progress: 0.5 }, COURSE).wpm).toBe(16);
+    // mots de 25 lettres : les deux mots suivants (52 caractères) dépassent 40, la marge reste 40
+    const long = { ...COURSE, words: Array.from({ length: 6 }, () => "a".repeat(25)) }; // 156 caractères
+    // à mi-texte (78 caractères validés) en 60 s : au plus (78 + 40) / 5 = 23,6 → 24 MPM ; au-delà, celui du serveur (16)
+    expect(serverMeasures(runner(24), { finishedAt: null, progress: 0.5 }, long).wpm).toBe(24);
+    expect(serverMeasures(runner(25), { finishedAt: null, progress: 0.5 }, long).wpm).toBe(16);
+  });
+
+  test("AUTH-06 — tolerance, unfinished runner: never more than the next two words of the text", () => {
+    // mots de 9 lettres : à mi-texte (80 caractères validés) en 60 s, au plus (80 + 2 × 10) / 5 = 20 MPM ; au-delà, 16
+    expect(serverMeasures(runner(20), { finishedAt: null, progress: 0.5 }, COURSE).wpm).toBe(20);
+    expect(serverMeasures(runner(21), { finishedAt: null, progress: 0.5 }, COURSE).wpm).toBe(16);
+    // au dernier mot, seul ce mot reste : (140 + 10) / 5 = 30 MPM
+    expect(serverMeasures(runner(30), { finishedAt: null, progress: 14 / 15 }, COURSE).wpm).toBe(30);
+    expect(serverMeasures(runner(31), { finishedAt: null, progress: 14 / 15 }, COURSE).wpm).toBe(28);
   });
 
   test("another human of the room, kept with the race only, is corrected too", async () => {
