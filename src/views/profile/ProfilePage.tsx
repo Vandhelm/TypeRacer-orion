@@ -2,6 +2,7 @@
 // TECH-01 : rendu côté serveur par app/profile/page.tsx, qui lui passe la session, les paramètres et les stats.
 import { useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import { BotTag } from "../../players/BotTag";
 import { HangingButton } from "../../components/buttons/HangingButton";
 import { FLOATING_TABS, LanguageSwitcher } from "../../components/tabs/LanguageSwitcher";
 import { useRaceResults } from "../podium/hooks/useRaceResults";
@@ -117,6 +118,8 @@ function PlayerView({ session, query, preloaded, results, raceId, error }: ViewP
   }
 
   const { result } = subject;
+  // BOT-04 : le serveur dit si le profil est celui d'un bot ; à défaut (invité), la course de l'onglet
+  const bot = (stats.status === "ready" && !!stats.stats?.bot) || !!result?.bot;
   const place = result ? t("profile.place", { rank: rankLabel(t, result.rank) }) : "";
 
   return (
@@ -125,7 +128,7 @@ function PlayerView({ session, query, preloaded, results, raceId, error }: ViewP
         {subject.fromPodium && <HangingButton className="profile-back" href={back}>{t("profile.back")}</HangingButton>}
         <div className="ml-auto flex min-w-0 items-center gap-4">
           <div className={TITLE}>
-            <h1 id="profile-name" className={NAME}>{subject.name}</h1>
+            <h1 id="profile-name" className={NAME}>{subject.name}{bot && <BotTag className="ml-[.8em] align-middle text-[max(11px,1.3vh)]" />}</h1>
             {result && <p className="mt-2 font-mono text-[max(11px,1.3vh)] leading-none font-normal tracking-[.2em] text-muted uppercase">{result.me ? `${place} · ${t("room.you")}` : place}</p>}
           </div>
           <ProfileAvatar name={subject.name} src={stats.status === "ready" ? stats.stats?.image : null} />

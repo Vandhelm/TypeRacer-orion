@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import type { TFunction } from "i18next";
-import { arrivalOf, DURATION_PRESETS, durationChoice, launchHint, raceHref, readSession, roomHrefOutsideRace, seatsOf } from "./room";
+import { createI18n } from "../../i18n";
+import { arrivalOf, DURATION_PRESETS, durationChoice, launchHint, raceHref, readSession, roomHrefOutsideRace, seatSpoken, seatsOf, type Player } from "./room";
 
 const t = ((key: string) => key) as unknown as TFunction;
 
@@ -201,5 +202,29 @@ describe("COURSE-02 — the Launch button is greyed out with the reason, by the 
       expect(room.noHuman).toBeTruthy();
       expect(room.errors.not_enough_players).toBeTruthy();
     }
+  });
+});
+
+describe("BOT-04 — the spoken list of players says which ones are bots", () => {
+  const fr = createI18n("fr").t;
+  const en = createI18n("en").t;
+
+  test("a bot is read with a full word, in French and in English", () => {
+    const bot = { name: "Thon_Rouge", color: "green", bot: true };
+    expect(seatSpoken(fr, bot)).toBe("Thon_Rouge, bot, joueur automatique");
+    expect(seatSpoken(en, bot)).toBe("Thon_Rouge, bot, computer player");
+  });
+
+  test("a seated human whose nickname is a bot's name is not marked as a bot: the mark comes from the seat, not the name", () => {
+    const member = { key: "guest:abc", name: "Thon_Rouge", guest: true, host: false, role: "player" as const, seat: 0, color: null, finished: false };
+    const [human, bot] = seatsOf({ guests: 2, bots: true }, [member], "player:1");
+    expect(human).not.toHaveProperty("bot");
+    expect(seatSpoken(fr, human as Player)).toBe("Thon_Rouge");
+    expect((bot as Player).bot).toBe(true);
+  });
+
+  test("a human is never read as a bot", () => {
+    expect(seatSpoken(fr, { name: "Maki_Test", color: "blue" })).toBe("Maki_Test");
+    expect(seatSpoken(fr, { name: "Corail_418", color: "red", host: true, me: true })).toBe("Corail_418, Hôte, TOI");
   });
 });

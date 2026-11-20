@@ -137,3 +137,39 @@ describe("COURSE-05 — the local player stands out; a spectator watches without
     expect(render(state("player"))).toMatch(/<(input|textarea)/);
   });
 });
+
+/** Le marqueur bot d'un couloir (data-part="bot"), avec son contenu. */
+const botMark = (row: string) => row.match(/<b [^>]*data-part="bot"[^>]*>[\s\S]*?<\/b>/)?.[0] ?? "";
+
+describe("BOT-04 — a bot is clearly marked on the track, a human is not", () => {
+  test("the bot lane carries the BOT marker; the human lanes do not", () => {
+    const rows = lanes(render(state("player")));
+    expect(botMark(rows[2]!)).toContain("BOT");
+    expect(botMark(rows[0]!)).toBe("");
+    expect(botMark(rows[1]!)).toBe("");
+  });
+
+  test("screen readers hear a word, not only a badge: the marker has a spoken label in French", () => {
+    const mark = botMark(lanes(render(state("player")))[2]!);
+    expect(mark).toMatch(/<span class="sr-only">[^<]*joueur automatique[^<]*<\/span>/);
+  });
+
+  test("in English, the marker and its spoken label are translated", () => {
+    const mark = botMark(lanes(render(state("player"), "en"))[2]!);
+    expect(mark).toContain("BOT");
+    expect(mark).toMatch(/<span class="sr-only">[^<]*computer player[^<]*<\/span>/);
+  });
+
+  test("with 8 lanes, every bot keeps its marker: never hidden, never wrapped, inside the stats line", () => {
+    const eight: Player[] = Array.from({ length: 8 }, (_, i) => ({ name: `Participant_${i}`, color: "#fff", me: i === 0 || undefined, bot: i > 3 || undefined }));
+    const rows = lanes(render(state("player", eight), "en"));
+    rows.forEach((row, i) => {
+      const mark = part(row, "bot");
+      if (i <= 3) return expect(mark).toBe("");
+      expect(mark).toContain("whitespace-nowrap");
+      expect(mark).not.toMatch(/(^|\s)(hidden|[^\s"]*:hidden)(\s|")/);
+      const stats = row.match(/<p [^>]*data-part="stats"[^>]*>[\s\S]*?<\/p>/)?.[0] ?? "";
+      expect(stats).toContain('data-part="bot"');
+    });
+  });
+});

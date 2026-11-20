@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { formatNumber } from "../../i18n/format";
+import { BotTag } from "../../players/BotTag";
 import { profileHref, rankLabel, type PlayerResult } from "./results";
 
 // The board under the podium, with blueprint-style corner marks (keyframe podium-board-arrive in styles/pages/podium/board.css).
@@ -35,7 +36,8 @@ export function PodiumBoard({ players, showPlace, arrived, raceId = null }: { pl
           <li key={player.name}>
             <a className={`${ROW} ${player.me ? "font-medium text-white" : "font-normal text-[rgba(255,255,255,.7)]"}`} href={profileHref(index, raceId)}>
               <span>{rankLabel(t, player.rank)}</span>
-              <span className="truncate">{player.me ? `${player.name} · ${t("room.you")}` : player.name}</span>
+              {/* BOT-04 : le marqueur bot reste hors du nom tronqué */}
+              <span className="flex min-w-0 items-center gap-2"><span className="truncate">{player.me ? `${player.name} · ${t("room.you")}` : player.name}</span>{player.bot && <BotTag className="text-[.8em]" />}</span>
               <span className={VALUE}>{formatNumber(i18n.language, player.wpm)} {wpm}</span>
               <span className={VALUE}>{formatNumber(i18n.language, player.accuracy)} %</span>
             </a>

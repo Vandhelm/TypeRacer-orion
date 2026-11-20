@@ -179,3 +179,18 @@ describe("COURSE-05 — movement is interpolated between updates", () => {
     expect(easeToward(0, 0.8, 5000)).toBe(0.8);
   });
 });
+
+describe("BOT-04 — bots and humans share one lane model, so a future bonus or penalty reaches both", () => {
+  test("a bot lane and a human lane have exactly the same fields; only the bot flag differs", () => {
+    const [me, rival, bot] = trackLanes(racing([ME, RIVAL, BOT]), [ME, RIVAL, BOT]);
+    expect(Object.keys(bot!).sort()).toEqual(Object.keys(rival!).sort());
+    expect(Object.keys(bot!).sort()).toEqual(Object.keys(me!).sort());
+    expect([me!.bot, rival!.bot, bot!.bot]).toEqual([false, false, true]);
+  });
+
+  test("a bot lane is ranked and advances like any lane: nothing skips it", () => {
+    const lanes = trackLanes(advanceBots(racing([ME, RIVAL, BOT]), 5000, [1, 1, 1]), [ME, RIVAL, BOT]);
+    expect(lanes[2]!.progress).toBeGreaterThan(0);
+    expect(lanes[2]!.rank).toBe(1);
+  });
+});

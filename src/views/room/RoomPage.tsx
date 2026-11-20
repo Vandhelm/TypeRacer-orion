@@ -9,7 +9,7 @@ import { useRealtimeRoom } from "../../realtime/useRealtimeRoom";
 import { FishPond } from "./FishPond";
 import { LiveList } from "./LiveList";
 import { useRoom } from "./hooks/useRoom";
-import { isPlayer, launchHint, raceHref } from "./room";
+import { isPlayer, launchHint, raceHref, seatSpoken } from "./room";
 import { RoomIntro } from "./RoomIntro";
 import { RoomSettings } from "./RoomSettings";
 import { RoomTicket } from "./RoomTicket";
@@ -149,9 +149,7 @@ export function RoomPage() {
           <ol>
             {seats.map((seat, i) => (
               <li key={i}>
-                {isPlayer(seat)
-                  ? [seat.name, seat.host ? t("room.host") : "", seat.me ? t("room.you") : "", seat.bot ? t("room.bot") : ""].filter(Boolean).join(", ")
-                  : t("room.freeSeat")}
+                {isPlayer(seat) ? seatSpoken(t, seat) : t("room.freeSeat")}
               </li>
             ))}
           </ol>

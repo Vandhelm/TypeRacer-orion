@@ -108,6 +108,7 @@
     "guest": "Invité",
     "you": "TOI",
     "bot": "BOT",
+    "botLabel": "bot, joueur automatique",
     "freeSeat": "Place libre",
     "roomName": "Nom du salon",
     "defaultName": "La table de Corail",

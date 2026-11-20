@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { I18nextProvider } from "react-i18next";
 import { renderToStaticMarkup } from "react-dom/server";
+import { createI18n } from "../../i18n";
 import { instance } from "../../i18n/test-instance";
 import { PodiumActionsView, type AfterRaceControls } from "./PodiumActions";
 import { PodiumScene } from "./PodiumScene";
@@ -74,5 +75,36 @@ describe("COURSE-11 — on the results screen, only the host relaunches or close
 
   test("a refusal from the server is shown, translated", () => {
     expect(renderView({ error: "not_host" })).toContain(fr("podium.closeErrors.not_host"));
+  });
+});
+
+describe("BOT-04 — the podium scene marks a bot standing on it, and only bots", () => {
+  const botFirst = [{ ...player("Ebi_Fry", 1), me: false, bot: true }, { ...player("Moi", 2), me: true, bot: false }];
+  const scene = (players: PlayerResult[], language: "fr" | "en" = "fr") =>
+    renderToStaticMarkup(<I18nextProvider i18n={createI18n(language)}><PodiumScene players={players} arrived roomHref="/room?code=ABC234" /></I18nextProvider>);
+  const nameLink = (html: string, name: string) => html.match(new RegExp(`<a class="podium-name"[^>]*>${name}[\\s\\S]*?</a>`))?.[0] ?? "";
+  const avatar = (html: string, rank: number) => html.match(new RegExp(`<a class="podium-avatar podium-avatar--${rank}"[^>]*>`))?.[0] ?? "";
+
+  test("a bot in 1st place shows the BOT marker by its name, and its spoken label says bot", () => {
+    const html = scene(botFirst);
+    const link = nameLink(html, "Ebi_Fry");
+    expect(link).toContain('data-part="bot"');
+    expect(link).toContain("BOT");
+    expect(link).toMatch(/aria-label="Voir les stats de Ebi_Fry[^"]*bot, joueur automatique[^"]*"/);
+    expect(avatar(html, 1)).toMatch(/aria-label="[^"]*bot, joueur automatique[^"]*"/);
+  });
+
+  test("in English, the label says bot too", () => {
+    const html = scene(botFirst, "en");
+    expect(nameLink(html, "Ebi_Fry")).toMatch(/aria-label="See stats for Ebi_Fry[^"]*bot, computer player[^"]*"/);
+    expect(avatar(html, 1)).toMatch(/computer player/);
+  });
+
+  test("a human on the podium has no marker and is never called a bot", () => {
+    const html = scene(botFirst);
+    const link = nameLink(html, "Moi");
+    expect(link).not.toContain('data-part="bot"');
+    expect(link).not.toContain("bot");
+    expect(avatar(html, 2)).not.toContain("bot");
   });
 });

@@ -5,8 +5,12 @@ import { renderToString } from "react-dom/server";
 import { I18nextProvider } from "react-i18next";
 import { createI18n } from "../../i18n";
 import { PlayerProvider } from "../../players/PlayerProvider";
+import { DEFAULT_SETTINGS } from "../../rooms/settings";
 import { GamePage } from "../game/GamePage";
+import type { RoomState } from "./hooks/useRoom";
+import type { Seat } from "./room";
 import { RoomPage } from "./RoomPage";
+import { RoomTicket } from "./RoomTicket";
 
 const render = (page: typeof RoomPage) =>
   renderToString(
@@ -41,5 +45,30 @@ describe("TECH-01 — /room et /game rendus côté serveur", () => {
       expect(source).not.toContain("LegacyPage");
       expect(source).toContain("PlayerProvider");
     }
+  });
+});
+
+const SEATS: Seat[] = [
+  { name: "Corail_418", color: "#e05a4a", host: true, me: true },
+  { name: "Maki_Test", color: "#4a7ae0" },
+  { name: "Thon_Rouge", color: "#4ae07a", bot: true },
+];
+const ticket = (language: "fr" | "en") => {
+  const state = { room: { ...DEFAULT_SETTINGS, bots: true }, seats: SEATS, players: SEATS, humans: 2, displayName: "Salon test" } as unknown as RoomState;
+  const html = renderToString(createElement(I18nextProvider, { i18n: createI18n(language) }, createElement(RoomTicket, { state })));
+  return html.match(/<li[\s\S]*?<\/li>/g) ?? [];
+};
+
+describe("BOT-04 — the waiting room marks a bot as such, and only bots", () => {
+  test("on the ticket, the bot seat carries the BOT marker; the human seats do not", () => {
+    const [host, guest, bot] = ticket("fr");
+    expect(bot).toContain('data-part="bot"');
+    expect(bot).toContain("BOT");
+    expect(host).not.toContain('data-part="bot"');
+    expect(guest).not.toContain('data-part="bot"');
+  });
+
+  test("the marker reads the same in English", () => {
+    expect(ticket("en")[2]).toMatch(/data-part="bot"[\s\S]*BOT[\s\S]*computer player/);
   });
 });
