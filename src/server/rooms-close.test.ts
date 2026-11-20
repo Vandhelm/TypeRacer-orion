@@ -34,8 +34,9 @@ describe("COURSE-11 — on the results screen, the host relaunches with the same
     expect((await t.call("POST", `/api/rooms/${code}/launch`, host.cookie)).status).toBe(200);
     expect((await roomRow(t, code)).status).toBe("racing");
     expect(await keysOf(t, code)).toEqual(before);
-    const view = await t.read(host.cookie, code);
-    expect(view.body.room.members.every((m) => !m.finished)).toBe(true);
+    const { id } = await roomRow(t, code);
+    const finished = await t.db.select({ at: roomMembers.finishedAt }).from(roomMembers).where(eq(roomMembers.roomId, id));
+    expect(finished.every((m) => m.at === null)).toBe(true);
   });
 
   test("the host changes the configuration between two races, and the next race uses it", async () => {
