@@ -204,6 +204,8 @@ export function useRoom(page: "room" | "game" = "room") {
     role: me?.role ?? "player",
     /** SALLE-09 : ce membre a déjà fini la course en cours. */
     finished: me?.finished ?? false,
+    /** COURSE-07 : ce membre a abandonné la course en cours, selon le serveur. */
+    abandoned: me?.abandoned ?? false,
     setRole,
     launch,
     kick,

@@ -7,7 +7,7 @@ import { DEFAULT_SETTINGS } from "../../rooms/settings";
 import { PodiumBoard } from "../podium/PodiumBoard";
 import { toResults, type PlayerResult } from "../podium/results";
 import type { RoomState } from "../room/hooks/useRoom";
-import { abandonStep, canAbandon, markAbandoned, requestAbandon, type AbandonStep } from "./abandon";
+import { abandonStep, canAbandon, dialogKey, markAbandoned, raceExit, requestAbandon, type AbandonStep } from "./abandon";
 import { AbandonRaceView } from "./AbandonRace";
 import { GameScreen } from "./GamePage";
 
@@ -111,6 +111,51 @@ describe("COURSE-07 — only a runner can abandon, during the race", () => {
     const html = renderToString(createElement(I18nextProvider, { i18n: createI18n("fr") }, createElement(GameScreen, { state, mobile: false })));
     expect(html).toContain("Corail_418");
     expect(html).not.toContain("Abandonner");
+  });
+});
+
+describe("COURSE-07 — the confirmation keeps the keyboard", () => {
+  // two buttons in the dialog: 0 = confirm, 1 = cancel
+  test("Tab and Shift+Tab stay inside the dialog, wrapping around", () => {
+    expect(dialogKey({ key: "Tab", shift: false, focused: 0, count: 2, inside: true })).toEqual({ type: "focus", index: 1 });
+    expect(dialogKey({ key: "Tab", shift: false, focused: 1, count: 2, inside: true })).toEqual({ type: "focus", index: 0 });
+    expect(dialogKey({ key: "Tab", shift: true, focused: 0, count: 2, inside: true })).toEqual({ type: "focus", index: 1 });
+    expect(dialogKey({ key: "Tab", shift: true, focused: 1, count: 2, inside: true })).toEqual({ type: "focus", index: 0 });
+  });
+
+  test("Tab from outside the dialog (focus lost) comes back into it", () => {
+    expect(dialogKey({ key: "Tab", shift: false, focused: -1, count: 2, inside: false })).toEqual({ type: "focus", index: 0 });
+    expect(dialogKey({ key: "Tab", shift: true, focused: -1, count: 2, inside: false })).toEqual({ type: "focus", index: 1 });
+  });
+
+  test("Escape closes, wherever the focus is", () => {
+    expect(dialogKey({ key: "Escape", shift: false, focused: 1, count: 2, inside: true })).toEqual({ type: "close" });
+    expect(dialogKey({ key: "Escape", shift: false, focused: -1, count: 2, inside: false })).toEqual({ type: "close" });
+  });
+
+  test("typing outside the dialog is blocked: the race does not move during the question", () => {
+    expect(dialogKey({ key: "a", shift: false, focused: -1, count: 2, inside: false })).toEqual({ type: "block" });
+    expect(dialogKey({ key: " ", shift: false, focused: -1, count: 2, inside: false })).toEqual({ type: "block" });
+    expect(dialogKey({ key: "Backspace", shift: false, focused: -1, count: 2, inside: false })).toEqual({ type: "block" });
+  });
+
+  test("Enter or Space on a dialog button still works", () => {
+    expect(dialogKey({ key: "Enter", shift: false, focused: 0, count: 2, inside: true })).toEqual({ type: "pass" });
+    expect(dialogKey({ key: " ", shift: false, focused: 1, count: 2, inside: true })).toEqual({ type: "pass" });
+  });
+});
+
+describe("COURSE-07 — after an abandon, the race page never comes back", () => {
+  test("a member the server says abandoned goes to the podium, even while the room is racing (reload)", () => {
+    expect(raceExit("racing", "ABC234", true)).toBe("/podium");
+  });
+
+  test("a member still racing stays on the race", () => {
+    expect(raceExit("racing", "ABC234", false)).toBeNull();
+  });
+
+  test("outside the race, the usual detour applies", () => {
+    expect(raceExit("waiting", "ABC234", false)).toBe("/room?code=ABC234");
   });
 });
 
