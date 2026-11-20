@@ -11,9 +11,9 @@ import type { Guard } from "./rate-limit";
 import { guestSecret } from "./guest";
 import { createInvite, listInvites } from "./room-invites";
 import { roomIdentity } from "./room-gate";
-import { closeRoom, CodeExhausted, createRoom, finishRoom, joinRoom, kickMember, launchRoom, leaveRoom, listPublicRooms, quickJoin, readRoom, RoomRefused, updateRoom, type RefusalReason, type RoomResult } from "./rooms";
+import { abandonRace, closeRoom, CodeExhausted, createRoom, finishRoom, joinRoom, kickMember, launchRoom, leaveRoom, listPublicRooms, quickJoin, readRoom, RoomRefused, updateRoom, type RefusalReason, type RoomResult } from "./rooms";
 
-const STATUS: Record<RefusalReason, number> = { not_found: 404, not_member: 403, not_host: 403, full: 409, in_race: 409, closed: 410, already_in_room: 409, kicked: 403, invalid_target: 400, unknown_member: 404, invite_taken: 403, invite_limit: 409, not_enough_players: 409, no_room: 404, not_results: 409 };
+const STATUS: Record<RefusalReason, number> = { not_found: 404, not_member: 403, not_host: 403, full: 409, in_race: 409, closed: 410, already_in_room: 409, kicked: 403, invalid_target: 400, unknown_member: 404, invite_taken: 403, invite_limit: 409, not_enough_players: 409, no_room: 404, not_results: 409, not_racing: 409, not_player: 403, already_finished: 409 };
 
 /** Un refus attendu, en réponse HTTP. SALLE-06 : « already_in_room » donne le salon actuel, pour proposer d'en sortir. */
 const refusal = (error: RoomRefused) => json(error.room ? { error: error.reason, room: error.room } : { error: error.reason }, STATUS[error.reason]);
@@ -28,6 +28,8 @@ async function bodyOf(req: Request): Promise<unknown> {
 const QuickRaceSchema = z.object({}).strict();
 /** COURSE-11 : fermer la salle ne prend aucun paramètre (corps vide ou {}) ; l'hôte est lu de la session. */
 const CloseRoomSchema = z.object({}).strict();
+/** COURSE-07 : abandonner ne prend aucun paramètre : la progression gardée est celle validée par le serveur, jamais le corps. */
+const AbandonSchema = z.object({}).strict();
 
 /** Un corps vide vaut {} ; un JSON cassé reste invalide (undefined), pour que le schéma le refuse. */
 async function optionalBodyOf(req: Request): Promise<unknown> {
@@ -145,6 +147,13 @@ export async function handleRoomsApi(req: Request, db: Db, auth: Auth, secret = 
     const input = CloseRoomSchema.safeParse(await optionalBodyOf(req));
     if (!input.success) return json({ error: "invalid_body" }, 400);
     return run(() => closeRoom(db, code, who), 200, () => changed(code));
+  }
+  // POST /api/rooms/:code/abandon — COURSE-07 : un participant abandonne la course en cours
+  if (code && isRoomCode(code) && action === "abandon" && req.method === "POST") {
+    if (!who) return json({ error: "unauthorized" }, 401);
+    const input = AbandonSchema.safeParse(await optionalBodyOf(req));
+    if (!input.success) return json({ error: "invalid_body" }, 400);
+    return run(() => abandonRace(db, code, who), 200, () => changed(code));
   }
   // POST /api/rooms/:code/finish — SALLE-09 : la course est finie, le salon passe aux résultats
   if (code && isRoomCode(code) && action === "finish" && req.method === "POST") {

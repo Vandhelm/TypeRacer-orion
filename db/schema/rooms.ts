@@ -86,6 +86,8 @@ export const roomMembers = pgTable(
     finishedAt: timestamp("finished_at", { withTimezone: true }),
     /** COURSE-06 : la dernière progression validée par le serveur temps réel (0 à 1) ; remise à 0 à chaque lancement. */
     progress: real("progress").notNull().default(0),
+    /** COURSE-07 : ce membre a abandonné la course en cours ; sa progression reste celle validée à ce moment. Remis à null à chaque lancement. */
+    abandonedAt: timestamp("abandoned_at", { withTimezone: true }),
     /** COURSE-06 : le résultat de ce membre pour la course en cours est déjà enregistré (POST /api/races). */
     raceRecorded: boolean("race_recorded").notNull().default(false),
     /** SALLE-08 : dernier signe de vie (lecture du salon, action) ; silencieux trop longtemps, le membre est parti. */
@@ -102,6 +104,8 @@ export const roomMembers = pgTable(
     check("room_members_seat_range", sql`${table.seat} between 0 and 29`),
     check("room_members_identity", sql`(${table.playerId} is null) <> (${table.guestName} is null)`),
     check("room_members_seat_role", sql`(${table.role} = 'player') = (${table.seat} is not null)`),
+    // COURSE-07 : un membre a fini ou abandonné, jamais les deux
+    check("room_members_finished_or_abandoned", sql`${table.finishedAt} is null or ${table.abandonedAt} is null`),
   ],
 );
 
