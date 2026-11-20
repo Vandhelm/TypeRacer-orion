@@ -6,7 +6,7 @@ import { eq, sql } from "drizzle-orm";
 import type { Db } from "../../db/client";
 import { raceConfigs, rooms } from "../../db/schema";
 import { botProfile, botSeed, simulateBot } from "../rooms/bot-engine";
-import { seatedBots } from "../rooms/bots";
+import { botRunnerId, seatedBots } from "../rooms/bots";
 import { courseWords } from "../rooms/course-words";
 import { raceClock } from "../rooms/race-clock";
 import { wordTarget } from "../rooms/text";
@@ -39,7 +39,9 @@ export async function launchBots(db: Db, roomId: number, humans: number): Promis
   let running = false;
   for (const bot of bots) {
     const seed = botSeed(row.rooms.textSeed, bot.name);
-    const run = simulateBot(course, { seed, ...botProfile(seed, bot.level, config.botAccuracy) }, row.now - startsAt);
+    // BOT-04 : avec les bonus qu'il a reçus (rooms.bot_bonuses), rejoués par le moteur comme sur la page
+    const bonuses = row.rooms.botBonuses.filter((bonus) => bonus.effect.target === botRunnerId(bot.name));
+    const run = simulateBot(course, { seed, ...botProfile(seed, bot.level, config.botAccuracy) }, row.now - startsAt, bonuses);
     // un bot éliminé (mode fatal) ne court plus : il ne retient pas la course
     if (run.arrivedMs === null && run.eliminatedMs === null) running = true;
     standings.set(bot.name.toLowerCase(), { finishedAt: run.arrivedMs === null ? null : new Date(startsAt + run.arrivedMs), progress: run.progress, seat: null });

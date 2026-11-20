@@ -10,6 +10,7 @@ import { players } from "./players";
 import { corpusTexts } from "./texts";
 import { CODE_PATTERN } from "../../src/rooms/access";
 import type { RoomBot } from "../../src/rooms/bots";
+import type { BotBonus } from "../../src/rooms/bot-engine";
 
 /** Réglages d'une course, immuables : modifier un salon crée une nouvelle ligne, pour que chaque course garde les siens. */
 export const raceConfigs = pgTable(
@@ -75,6 +76,8 @@ export const rooms = pgTable(
     abandons: jsonb("abandons").$type<RoomAbandon[]>().notNull().default([]),
     /** COURSE-10 : les coureurs partis du salon pendant la dernière course sans abandonner (progression validée, arrivée) ; vidé au lancement. */
     departed: jsonb("departed").$type<RoomDeparture[]>().notNull().default([]),
+    /** BOT-04 : les effets de bonus reçus par les bots pendant la dernière course (datés depuis le départ), dans l'ordre ; vidé au lancement. */
+    botBonuses: jsonb("bot_bonuses").$type<BotBonus[]>().notNull().default([]),
   },
   (table) => [index("rooms_lobby").on(table.status, table.visibility), check("rooms_guests_range", sql`${table.guests} between 2 and 30`),
     check("rooms_bot_list_array", sql`jsonb_typeof(${table.botList}) = 'array' and jsonb_array_length(${table.botList}) <= 30`),

@@ -7,6 +7,7 @@ import type { Db } from "../../db/client";
 import { players, raceConfigs, roomBans, roomMembers, rooms, user } from "../../db/schema";
 import { storedAvatar } from "../players/avatar";
 import { allows, canJoin, isListed, newRoomCode } from "../rooms/access";
+import type { BotBonus } from "../rooms/bot-engine";
 import { resolveBots } from "../rooms/bots";
 import { launchBlocker } from "../rooms/launch";
 import { follow, raceState, storedStatus, type RaceEvent, type RaceState } from "../rooms/race-state";
@@ -97,6 +98,8 @@ export type RoomView = {
   serverNow: number;
   /** COURSE-10 : qui a abandonné la dernière course lancée, et à quelle progression, même parti depuis ; vidé au lancement suivant. */
   abandoned?: { name: string; progress: number }[];
+  /** BOT-04 : les effets de bonus reçus par les bots de la course lancée, datés depuis le départ ; vidé au lancement. */
+  botBonuses?: BotBonus[];
 };
 export type RoomStatus = (typeof rooms.$inferSelect)["status"];
 /** Ce que renvoie une action réussie : l'état du salon, et la clé de celui qui l'a demandée. */
@@ -269,6 +272,8 @@ export async function roomView(db: Db, roomId: number, viewer?: string): Promise
     textHash: revealed ? row.rooms.textHash : null,
     serverNow: Math.round(row.serverNow),
     abandoned: row.rooms.abandons.map(({ name, progress }) => ({ name, progress })),
+    // BOT-04 : une page rechargée rejoue les bonus déjà reçus par les bots
+    ...(revealed ? { botBonuses: row.rooms.botBonuses } : {}),
   };
   const view = viewer === undefined ? full : concealText(full, viewer);
   dbClockSkew.set(view, row.serverNow - readAt);
@@ -546,7 +551,7 @@ export async function launchRoom(db: Db, code: string, who: Identity): Promise<R
     const passage = config!.textType === "coherent" ? await pickPassage(tx, { language: config!.language, words: wordTarget(config!) }) : null;
     const textSeed = crypto.getRandomValues(new Int32Array(1))[0]!;
     // COURSE-01 : une relance repasse par EN_ATTENTE (results → waiting → countdown)
-    await moveRoom(tx, id, from, from === "results" ? ["reopen", "launch"] : ["launch"], { launchedAt: sql`now()`, textId: passage?.id ?? null, textSeed, abandons: [], departed: [] });
+    await moveRoom(tx, id, from, from === "results" ? ["reopen", "launch"] : ["launch"], { launchedAt: sql`now()`, textId: passage?.id ?? null, textSeed, abandons: [], departed: [], botBonuses: [] });
     await tx.update(roomMembers).set({ finishedAt: null, abandonedAt: null, progress: 0, raceRecorded: false, bonusWords: null }).where(eq(roomMembers.roomId, id));
     // COURSE-06 : l'empreinte des mots que la page de course va retirer, vérifiée par le serveur temps réel
     const words = courseWords(await roomView(tx, id));
@@ -903,6 +908,20 @@ export async function keepBonusText(db: Db, code: string, startsAt: number, key:
       .update(roomMembers)
       .set({ bonusWords: words, progress: sql`case when ${roomMembers.finishedAt} is null then ${value} else ${roomMembers.progress} end` })
       .where(and(eq(roomMembers.roomId, id), eq(roomMembers.memberKey, key), isNull(roomMembers.abandonedAt)));
+  });
+}
+
+/**
+ * BOT-04 : ajoute un effet de bonus reçu par un bot à la liste de la course partie à `startsAt` (rooms.bot_bonuses), dans
+ * l'ordre où le serveur temps réel l'a décidé. Relu par la fin de course et le classement (launchBots) et par les pages.
+ */
+export async function keepBotBonus(db: Db, code: string, startsAt: number, bonus: BotBonus): Promise<void> {
+  const id = await roomIdByCode(db, code);
+  if (id === null) return;
+  await db.transaction(async (tx) => {
+    const [room] = await tx.select({ launchedAt: rooms.launchedAt, status: rooms.status }).from(rooms).where(eq(rooms.id, id)).for("update");
+    if (!room?.launchedAt || room.status !== "racing" || room.launchedAt.getTime() + COUNTDOWN_MS !== startsAt) return;
+    await tx.update(rooms).set({ botBonuses: sql`${rooms.botBonuses} || ${JSON.stringify([bonus])}::jsonb` }).where(eq(rooms.id, id));
   });
 }
 

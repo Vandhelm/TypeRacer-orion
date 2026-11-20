@@ -232,6 +232,13 @@
       "when": 1795191643858,
       "tag": "0032_bot_levels",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1795195253153,
+      "tag": "0033_bot_bonuses",
+      "breakpoints": true
     }
   ]
 }
