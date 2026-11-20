@@ -6,10 +6,10 @@ import { I18nextProvider } from "react-i18next";
 import { createI18n } from "../../i18n";
 import type { RoomView } from "../../server/rooms";
 import { createCourse, createRace, type Race } from "../game/race";
-import { markAbandoned } from "../game/abandon";
+import { abandonOver, handOverPlayers, markAbandoned } from "../game/abandon";
 import type { Answer } from "../room/api";
 import type { Player } from "../room/room";
-import { abandonedNames } from "./after-race";
+import { abandonedNames, mergeAbandoned } from "./after-race";
 import { PodiumBoard } from "./PodiumBoard";
 import { buildResults, finalRanking, toResults, type PlayerResult } from "./results";
 
@@ -118,5 +118,76 @@ describe("COURSE-10 — the podium of another member shows who abandoned, from t
   test("a stored progress that is not a number in 0..1 is dropped", () => {
     const stored = toResults({ summary: {}, players: [{ name: "A", progress: "0.5" }, { name: "B", progress: 7 }, { name: "C", progress: 0.4 }] })!;
     expect(stored.players.map((p) => p.progress)).toEqual([undefined, undefined, 0.4]);
+  });
+});
+
+describe("COURSE-10 — an abandon is never forgotten by the podium", () => {
+  const room = (members: { name: string; abandoned?: boolean }[], abandoned?: string[]): Answer => ({
+    ok: true,
+    result: {
+      you: "player:0",
+      room: {
+        code: "ABC234", status: "racing", host: "player:0", passage: null, seed: null, startsAt: null, endsAt: null, textHash: null, settings: {} as RoomView["settings"],
+        members: members.map((m, seat) => ({ key: `player:${seat}`, name: m.name, guest: false, host: seat === 0, role: "player", seat, color: null, finished: false, ...(m.abandoned ? { abandoned: true } : {}) })),
+        ...(abandoned ? { abandoned } : {}),
+      },
+    },
+  });
+
+  test("a member who abandoned then left the room is still read as abandoned (room.abandoned)", () => {
+    expect(abandonedNames(room([{ name: "Moi" }], ["Parti"]))).toEqual(["Parti"]);
+    expect(abandonedNames(room([{ name: "Moi" }, { name: "Parti", abandoned: true }], ["Parti"]))).toEqual(["Parti"]);
+  });
+
+  test("the podium keeps every abandon it saw: a later read without him adds nothing and removes nothing", () => {
+    const seen = mergeAbandoned([], ["Parti"]);
+    expect(mergeAbandoned(seen, [])).toBe(seen);
+    expect(mergeAbandoned(seen, ["Parti"])).toBe(seen);
+    expect(mergeAbandoned(seen, ["Autre"])).toEqual(["Parti", "Autre"]);
+  });
+
+  test("after a reload, the saved ranking keeps the abandon even when the server no longer lists him", () => {
+    const first = finalRanking([player("Parti", { progress: 0.5 }), player("Moi", { me: true, progress: 0.1 })], ["Parti"]);
+    const reloaded = toResults(JSON.parse(JSON.stringify({ summary: {}, players: first })))!;
+    const again = finalRanking(reloaded.players, []);
+    expect(order(again)).toEqual([["Moi", 1], ["Parti", 2]]);
+    expect(again[1]!.abandoned).toBe(true);
+  });
+});
+
+describe("COURSE-10 — the podium of the player who abandons shows the final ranking", () => {
+  const PLAYERS: Player[] = [{ name: "Moi", color: "red", me: true }, { name: "Thon_Rouge", color: "blue", bot: true }];
+  const base = (): Race => {
+    const race = createRace(createCourse(["le", "riz", "attend", "midi"], null, "fix"), PLAYERS, "medium", "high", () => 0.5);
+    return { ...race, phase: "racing", startedAt: 1000, now: 6000, wordIndex: 1 };
+  };
+
+  test("the race page hands over when the race is over: local end, or room at the results once the bots are in", () => {
+    const racing = base();
+    const botIn: Race = { ...racing, bots: racing.bots.map((b) => ({ ...b, words: 4, finishedAt: 5000 })) };
+    expect(abandonOver(racing, "racing")).toBe(false);
+    expect(abandonOver(racing, "results")).toBe(false); // un bot court encore dans cet onglet
+    expect(abandonOver(botIn, "racing")).toBe(false); // d'autres humains courent encore
+    expect(abandonOver(botIn, "results")).toBe(true);
+    expect(abandonOver({ ...racing, phase: "done" }, "racing")).toBe(true);
+  });
+
+  test("my result is the one frozen at the abandon; the others are their final state, and I rank last", () => {
+    const atAbandon = buildResults(base(), PLAYERS).find((p) => p.me)!;
+    const later = base();
+    const end: Race = { ...later, now: 30000, wordIndex: 3, arrivals: [1], bots: later.bots.map((b) => ({ ...b, words: 4, finishedAt: 20000 })) };
+    const final = handOverPlayers(buildResults(end, PLAYERS), true, atAbandon);
+    expect(order(final)).toEqual([["Thon_Rouge", 1], ["Moi", 2]]);
+    expect(final[1]).toMatchObject({ abandoned: true, finished: false, progress: 0.25, seconds: atAbandon.seconds });
+  });
+
+  test("without an abandon, the hand-over is the plain final ranking", () => {
+    const final = handOverPlayers([player("Lent", { progress: 0.2 }), player("Vite", { progress: 0.9 })], false, null);
+    expect(order(final)).toEqual([["Vite", 1], ["Lent", 2]]);
+  });
+
+  test("guest history: the rank of a guest who abandoned at 26 % behind a 0 % runner is 2, not 1", () => {
+    const final = handOverPlayers([player("Moi", { me: true, progress: 0.26 }), player("Immobile", { progress: 0 })], true, null);
+    expect(final.find((p) => p.me)).toMatchObject({ rank: 2, abandoned: true });
   });
 });

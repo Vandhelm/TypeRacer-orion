@@ -2,9 +2,21 @@
 // les autres attendent, puis rejoignent la course relancée, ou repartent à l'accueil si la salle est fermée.
 import type { Answer } from "../room/api";
 
-/** COURSE-10 : les membres dont le serveur a noté l'abandon (members[].abandoned), par nom ; aucun sans réponse. */
+/**
+ * COURSE-10 : les membres dont le serveur a noté l'abandon, par nom : ceux du salon (members[].abandoned) et ceux partis
+ * depuis (room.abandoned, gardé jusqu'au lancement suivant) ; aucun sans réponse.
+ */
 export function abandonedNames(reply: Answer): string[] {
-  return reply.ok ? reply.result.room.members.filter((m) => m.abandoned).map((m) => m.name) : [];
+  if (!reply.ok) return [];
+  const { room } = reply.result;
+  return mergeAbandoned(room.abandoned ?? [], room.members.filter((m) => m.abandoned).map((m) => m.name));
+}
+
+/** COURSE-10 : un abandon vu reste vu (union, sans doublon) ; la même liste si rien de neuf, pour ne pas redessiner. */
+export function mergeAbandoned(current: string[], next: string[]): string[] {
+  const known = new Set(current.map((name) => name.toLowerCase()));
+  const added = next.filter((name) => !known.has(name.toLowerCase()) && known.add(name.toLowerCase()));
+  return added.length ? [...current, ...added] : current;
 }
 
 /** L'accueil, avec le message « la salle a été fermée ». */
