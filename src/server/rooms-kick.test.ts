@@ -1,3 +1,4 @@
+import { finishAsServer } from "./finish.fixture";
 import { beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 import { roomBans, roomInvites, roomMembers, rooms } from "../../db/schema";
@@ -151,7 +152,7 @@ describe("SALLE-07 — the host kicks a participant or a spectator, who can no l
     const cookie = t.guest("Coureur_Expulse");
     const { body } = await t.join(cookie, { code: room.code });
     await t.call("POST", `/api/rooms/${room.code}/launch`, host.cookie);
-    await t.call("POST", `/api/rooms/${room.code}/finish`, host.cookie);
+    await finishAsServer(t.db, t.call, room.code, host.cookie);
     expect((await kick(room.code, host.cookie, { member: body.you })).status).toBe(200);
     expect((await t.read(host.cookie, room.code)).body.room.status).toBe("results");
     expect((await kick(room.code, host.cookie, { member: body.you })).status).toBe(404);

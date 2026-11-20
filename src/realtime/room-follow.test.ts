@@ -1,5 +1,6 @@
 // La page salle suit son salon par le serveur temps réel (follow) : membres, expulsion, départ, échéances.
 // Les routes HTTP (handleRoomsApi) annoncent leurs changements par un émetteur en mémoire, comme NOTIFY en production.
+import { finishAsServer } from "../server/finish.fixture";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import type { Server } from "bun";
 import { eq, sql } from "drizzle-orm";
@@ -192,8 +193,8 @@ describe("SALLE-09 — going from the room to the race never costs a member thei
     await tab.next();
     await tab.close();
     expect((await h.call("POST", `/api/rooms/${code}/launch`, hostCookie)).status).toBe(200);
-    await h.call("POST", `/api/rooms/${code}/finish`, hostCookie);
-    await h.call("POST", `/api/rooms/${code}/finish`, runner);
+    await finishAsServer(h.db, h.call, code, hostCookie);
+    await finishAsServer(h.db, h.call, code, runner);
     await Bun.sleep(AWAY_MS * 3);
     const room = (await (await h.call("GET", `/api/rooms/${code}`, hostCookie)).json()) as { room: { status: string; members: { key: string }[] } };
     expect(room.room.status).toBe("results");

@@ -92,3 +92,37 @@ describe("COURSE-06 — the server finish: progress validated by the realtime se
     expect((await member(t, room.code, host.key)).progress).toBe(0);
   });
 });
+
+describe("COURSE-06 — a client cannot declare itself finished", () => {
+  let t: Fixture;
+  beforeAll(async () => {
+    t = await roomsFixture();
+  });
+
+  test("finish with a server progress of 0, during the countdown, is ignored: not finished, the room keeps racing", async () => {
+    const { room, host } = await t.open("Fin_Declaree", { bots: true, guests: 2 });
+    await launch(t, room.code, host.cookie);
+    const res = await t.call("POST", `/api/rooms/${room.code}/finish`, host.cookie);
+    expect(res.status).toBe(200);
+    expect((await member(t, room.code, host.key)).finishedAt).toBeNull();
+    expect((await t.read(host.cookie, room.code)).body.room.status).toBe("racing");
+  });
+
+  test("finish with a partial server progress is ignored too", async () => {
+    const { room, host } = await t.open("Fin_Part_Decl", { bots: true, guests: 2 });
+    await launch(t, room.code, host.cookie);
+    await recordProgress(t.db, room.code, host.key, 0.99);
+    await t.call("POST", `/api/rooms/${room.code}/finish`, host.cookie);
+    expect((await member(t, room.code, host.key)).finishedAt).toBeNull();
+    expect((await t.read(host.cookie, room.code)).body.room.status).toBe("racing");
+  });
+
+  test("once the server validated 100 %, finish is accepted (no-op, already finished)", async () => {
+    const { room, host } = await t.open("Fin_Validee", { bots: true, guests: 2 });
+    await launch(t, room.code, host.cookie);
+    await recordProgress(t.db, room.code, host.key, 1);
+    await t.call("POST", `/api/rooms/${room.code}/finish`, host.cookie);
+    expect((await member(t, room.code, host.key)).finishedAt).not.toBeNull();
+    expect((await t.read(host.cookie, room.code)).body.room.status).toBe("results");
+  });
+});

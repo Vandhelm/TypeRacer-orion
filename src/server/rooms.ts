@@ -1,6 +1,6 @@
 // Salons, côté serveur (SALLE-01, 02, 03, 09). Indépendant du transport : les routes HTTP (api.ts) et le temps réel
 // (realtime.ts) appellent ces fonctions ; rien ici ne connaît Request, WebSocket ou Next.js.
-import { and, asc, desc, eq, gt, inArray, isNull, ne, notInArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, inArray, isNull, ne, notInArray, sql } from "drizzle-orm";
 import type { z } from "zod";
 import type { Db } from "../../db/client";
 import { players, raceConfigs, roomBans, roomMembers, rooms } from "../../db/schema";
@@ -594,8 +594,8 @@ async function endIfAllFinished(tx: Db, roomId: number) {
 
 /**
  * SALLE-09 : ce membre a fini la course. Le salon passe aux résultats (et accepte de nouveau des arrivants) quand
- * chaque participant humain a fini ou est parti ; les spectateurs ne comptent pas. La course se joue dans chaque
- * navigateur (COURSE-* pas encore côté serveur) : un membre ne peut déclarer fini que lui-même, jamais les autres.
+ * chaque participant humain a fini ou est parti ; les spectateurs ne comptent pas. COURSE-06 : l'arrivée est celle
+ * que le serveur temps réel a validée (recordProgress) ; un membre qui se déclare fini sans 100 % validé est ignoré.
  * Hors course, rien ne change (appel répété sans effet).
  */
 export async function finishRoom(db: Db, code: string, who: Identity): Promise<RoomResult> {
@@ -607,7 +607,8 @@ export async function finishRoom(db: Db, code: string, who: Identity): Promise<R
     if (!room) throw new RoomRefused("not_found");
     if (!(await membership(tx, id, key))) throw new RoomRefused("not_found"); // SALLE-10 : un non-membre ne sait pas si le salon existe
     if (room.status !== "racing") return;
-    await tx.update(roomMembers).set({ finishedAt: sql`now()` }).where(and(eq(roomMembers.roomId, id), eq(roomMembers.memberKey, key), isNull(roomMembers.finishedAt)));
+    // COURSE-06 : seule une arrivée validée par le serveur temps réel (progress = 1) compte ; sinon l'appel est ignoré
+    await tx.update(roomMembers).set({ finishedAt: sql`now()` }).where(and(eq(roomMembers.roomId, id), eq(roomMembers.memberKey, key), isNull(roomMembers.finishedAt), gte(roomMembers.progress, 1)));
     await endIfAllFinished(tx, id);
   });
   return { room: await roomView(db, id, key), you: key };
