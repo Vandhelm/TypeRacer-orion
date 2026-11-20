@@ -627,6 +627,7 @@ async function abandonSilentRunners(tx: Db, roomId: number): Promise<boolean> {
         eq(roomMembers.role, "player"),
         isNull(roomMembers.finishedAt),
         isNull(roomMembers.abandonedAt),
+        isNull(roomMembers.eliminatedAt), // COURSE-06 : un éliminé a fini sa course, il n'abandonne plus
         sql`greatest(${roomMembers.lastSeenAt}, ${startsAt}) < ${until} - ${ABANDON_AFTER_MS} * interval '1 millisecond'`,
       ),
     )
@@ -693,12 +694,13 @@ export async function refreshRoom(db: Db, code: string, present: string[] = []):
 }
 
 /**
- * SALLE-09 / COURSE-09 : plus aucun participant humain en course (fini, abandonné ou parti) et, BOT-05, plus aucun bot
+ * SALLE-09 / COURSE-09 : plus aucun participant humain en course (fini, abandonné, éliminé ou parti) et, BOT-05, plus aucun bot
  * assis en course (arrivé selon le moteur, ou arrêté par la fin de la course) : le salon passe aux résultats. Le dernier
  * bot arrivé, c'est le balayage (sweep) qui l'y fait passer. Sous le verrou. True si le salon est passé aux résultats.
  */
 async function endIfAllFinished(tx: Db, roomId: number): Promise<boolean> {
-  const racing = await tx.$count(roomMembers, and(eq(roomMembers.roomId, roomId), eq(roomMembers.role, "player"), isNull(roomMembers.finishedAt), isNull(roomMembers.abandonedAt)));
+  // COURSE-06 : un coureur éliminé par le serveur (mode fatal) a fini, comme un abandon
+  const racing = await tx.$count(roomMembers, and(eq(roomMembers.roomId, roomId), eq(roomMembers.role, "player"), isNull(roomMembers.finishedAt), isNull(roomMembers.abandonedAt), isNull(roomMembers.eliminatedAt)));
   if (racing) return false;
   // COURSE-01 : pendant le décompte (fin déclarée par le client, COURSE-06 pas encore là), le départ est avancé
   const from = await stateOf(tx, roomId);
@@ -882,7 +884,10 @@ export async function eliminateRunner(db: Db, code: string, startsAt: number, ke
       .set({ eliminatedAt: sql`now()`, progress: sql`greatest(${roomMembers.progress}, ${value})` })
       .where(and(eq(roomMembers.roomId, id), eq(roomMembers.memberKey, key), eq(roomMembers.role, "player"), isNull(roomMembers.finishedAt), isNull(roomMembers.abandonedAt), isNull(roomMembers.eliminatedAt)))
       .returning({ key: roomMembers.memberKey });
-    return noted.length > 0;
+    if (!noted.length) return false;
+    // COURSE-09 : une élimination compte comme une fin ; le dernier coureur termine la course
+    await endIfAllFinished(tx, id);
+    return true;
   });
 }
 

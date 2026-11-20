@@ -468,7 +468,11 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
     const entry = state.entries.get(ws.data.player.id);
     if (entry?.finishedAt) return;
     backend.eliminated(room, state.course.startsAt, key, entry?.progress ?? 0).then(
-      (noted) => void (noted && state.eliminated.add(key)),
+      (noted) => {
+        if (!noted) return;
+        state.eliminated.add(key);
+        void publishRoom(room); // COURSE-09 : la dernière élimination a pu finir la course
+      },
       (error: unknown) => console.error(error),
     );
   }
