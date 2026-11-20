@@ -305,9 +305,9 @@
     "scope": "suivi (light)"
   },
   "BOT-04": {
-    "commit": "2acdffe",
+    "commit": "b217b6e",
     "date": "2026-11-19",
-    "scope": "suivi (light)"
+    "scope": "critère"
   },
   "BOT-05": {
     "commit": "2acdffe",
