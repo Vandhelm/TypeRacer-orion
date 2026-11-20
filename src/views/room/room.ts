@@ -5,6 +5,7 @@ import type { MemberView, RoomView } from "../../server/rooms";
 import { BOT_NAMES } from "../../players/bots";
 import { seatColor } from "../../rooms/seats";
 import { launchBlocker } from "../../rooms/launch";
+import { additionsApply } from "../../rooms/text";
 import type { TFunction } from "i18next";
 
 const TEXTS_KEY = "orion-texts";
@@ -61,14 +62,15 @@ export type CompositionOption = { name: "punctuation" | "numbers" | "specials" |
  * texte ; `inactive` : affichée grisée, sans effet. Les accents ne concernent que le français : absents d'un salon anglais.
  * La ponctuation et les chiffres ne s'ajoutent qu'aux mots aléatoires : un passage cohérent ou une citation garde les
  * siens tels qu'ils sont écrits (« l'année 1866 »), donc ces deux options y sont grisées et verrouillées.
+ * CONF-07 : les caractères spéciaux aussi, sinon ils s'ajouteraient au passage ou à la citation.
  */
 export function compositionOptions(room: Pick<Room, "textType" | "language" | "punctuation">): CompositionOption[] {
   const custom = room.textType === "custom";
-  const random = room.textType === "words";
+  const random = additionsApply(room.textType);
   const options: CompositionOption[] = [
     { name: "punctuation", locked: !random, inactive: !random && !custom },
     { name: "numbers", locked: !random, inactive: !random && !custom },
-    { name: "specials", locked: custom, inactive: false },
+    { name: "specials", locked: !random, inactive: !random && !custom },
     { name: "capitals", locked: custom, inactive: random && !room.punctuation },
   ];
   if (room.language === "fr") options.push({ name: "accents", locked: custom, inactive: false });

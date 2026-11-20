@@ -306,3 +306,47 @@ describe("CONF-06 — punctuation, numbers, capitals and accents (French) on or 
     });
   }
 });
+
+describe("CONF-07 — special characters are added to random words only", () => {
+  const SPECIAL = /[@#&%*+]/;
+  const ALL_ON = { punctuation: true, numbers: true, specials: true };
+
+  test("random words: the specials option still adds special characters", () => {
+    const words = buildWords(settings({ textType: "words", length: "long", specials: true }), seededRandom(4));
+    expect(words.some((word) => SPECIAL.test(word))).toBe(true);
+  });
+
+  test("coherent passage with specials on: nothing is added, the passage is typed as written", () => {
+    for (let seed = 0; seed < 20; seed++) {
+      const words = buildWords(settings({ textType: "coherent", length: "long", ...ALL_ON }), seededRandom(seed), LONG_PASSAGE);
+      expect(words).toEqual(LONG_PASSAGE.split(" ").slice(0, 100));
+    }
+  });
+
+  test("coherent without a server passage, specials on: no special character", () => {
+    for (let seed = 0; seed < 20; seed++) {
+      expect(buildWords(settings({ textType: "coherent", length: "long", ...ALL_ON }), seededRandom(seed), null).some((word) => SPECIAL.test(word))).toBe(false);
+    }
+  });
+
+  test("quote with specials on: a whole quote of the corpus, unchanged", () => {
+    for (const language of ["fr", "en"] as const) {
+      for (let seed = 0; seed < 20; seed++) {
+        const text = buildWords(settings({ textType: "quote", language, length: "medium", ...ALL_ON }), seededRandom(seed)).join(" ");
+        expect(allQuotes(language)).toContain(text);
+      }
+    }
+  });
+
+  for (const [length, expected] of LENGTH_CASES) {
+    test(`coherent ${length.length} (${expected}) with specials on keeps exactly ${expected} words`, () => {
+      expect(buildWords(settings({ textType: "coherent", ...length, ...ALL_ON }), seededRandom(expected), LONG_PASSAGE)).toHaveLength(expected);
+      expect(buildWords(settings({ textType: "coherent", ...length, ...ALL_ON }), seededRandom(expected), null)).toHaveLength(expected);
+    });
+  }
+
+  test("every member gets the same coherent text with specials on (same seed, same passage)", () => {
+    const draw = () => buildWords(settings({ textType: "coherent", length: "medium", specials: true }), seededRandom(9), LONG_PASSAGE).join(" ");
+    expect(draw()).toBe(draw());
+  });
+});

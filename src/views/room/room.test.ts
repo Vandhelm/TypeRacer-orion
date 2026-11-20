@@ -211,6 +211,16 @@ describe("CONF-06 — the composition options shown in the room settings", () =>
     expect(guestComposition({ textType: "coherent", language: "en", ...flags, punctuation: true, numbers: true })).toEqual(["capitals"]);
   });
 
+  test("CONF-07: specials are only chosen for random words, greyed out and locked for a coherent text or a quote", () => {
+    for (const textType of ["coherent", "quote"] as const) expect(option({ textType, language: "fr", punctuation: false }, "specials")).toEqual({ name: "specials", locked: true, inactive: true });
+    expect(option({ textType: "words", language: "fr", punctuation: false }, "specials")).toEqual({ name: "specials", locked: false, inactive: false });
+    expect(option({ textType: "custom", language: "fr", punctuation: false }, "specials")?.locked).toBe(true);
+  });
+
+  test("CONF-07: a guest does not see specials left on from random words once the text is a quote", () => {
+    expect(guestComposition({ textType: "quote", language: "en", ...flags, specials: true })).toEqual(["capitals"]);
+  });
+
   test("the capitals label exists in French and English", () => {
     const label = (lang: "fr" | "en") => (JSON.parse(readFileSync(`src/i18n/locales/${lang}.json`, "utf8")) as { room: Record<string, unknown> }).room.capitals;
     expect(label("fr")).toBe("Majuscules");
