@@ -624,6 +624,18 @@ async function endIfAllFinished(tx: Db, roomId: number) {
 }
 
 /**
+ * COURSE-10 : la progression validée d'un coureur déjà parti (bouton « Quitter ») arrive souvent après son départ : le
+ * temps réel ne l'écrit qu'à la fermeture de sa socket, quand sa ligne room_members n'existe plus. Elle complète alors
+ * son entrée de rooms.departed (jamais en recul, jamais pour un arrivé). Sous le verrou du salon.
+ */
+async function keepDepartedProgress(tx: Db, roomId: number, key: string, progress: number) {
+  const [room] = await tx.select({ departed: rooms.departed }).from(rooms).where(eq(rooms.id, roomId));
+  const entry = room?.departed.find((d) => d.key === key);
+  if (!entry || entry.finishedAt || entry.progress >= progress) return;
+  await tx.update(rooms).set({ departed: room!.departed.map((d) => (d.key === key ? { ...d, progress } : d)) }).where(eq(rooms.id, roomId));
+}
+
+/**
  * COURSE-10 : avant de retirer ces membres, garde dans rooms.departed les coureurs (participants humains, pas les
  * abandons, déjà dans rooms.abandons) qui partent pendant la course ou ses résultats : leur progression validée et leur
  * arrivée, pour les classer parmi les non-terminés (ou les terminés) même après leur départ.
@@ -709,7 +721,8 @@ export async function recordProgress(db: Db, code: string, key: string, progress
     // COURSE-07 : la progression d'un membre qui a abandonné reste celle de l'abandon
     const member = and(eq(roomMembers.roomId, id), eq(roomMembers.memberKey, key), isNull(roomMembers.abandonedAt));
     if (value < 1) {
-      await tx.update(roomMembers).set({ progress: sql`greatest(${roomMembers.progress}, ${value})` }).where(member);
+      const kept = await tx.update(roomMembers).set({ progress: sql`greatest(${roomMembers.progress}, ${value})` }).where(member).returning({ key: roomMembers.memberKey });
+      if (!kept.length) await keepDepartedProgress(tx, id, key, value);
       return false;
     }
     const arrived = await tx.update(roomMembers).set({ progress: 1, finishedAt: sql`now()` }).where(and(member, isNull(roomMembers.finishedAt))).returning({ key: roomMembers.memberKey });
