@@ -167,6 +167,12 @@ export function RoomSettings({ state, onEditText, action }: RoomSettingsProps) {
             <span className={PLAIN_VALUE}>{durationLabel(room.duration)}</span>
           )}
         </Row>
+        {/* CONF-09 : bonus de remontée ; les non-hôtes voient seulement la valeur choisie */}
+        <Row id="label-catch-up" label={t("room.catchUpBonus")} help={t("room.helpCatchUpBonus")}>
+          {[true, false].map((value) => (
+            <TextChoice key={String(value)} type="radio" name="catchUpBonus" value={value ? "yes" : "no"} label={t(value ? "room.yes" : "room.no")} checked={room.catchUpBonus === value} disabled={!host} hidden={!host && room.catchUpBonus !== value} onChange={() => update({ catchUpBonus: value })} />
+          ))}
+        </Row>
       </div>
 
       <div className={PANEL} role="tabpanel" id="panel-bots" aria-labelledby="tab-bots" hidden={section !== "bots"}>

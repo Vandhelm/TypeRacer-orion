@@ -171,6 +171,8 @@
     "tabTyping": "TYPING",
     "tabBots": "BOTS",
     "helpBots": "Bots take any seats left empty.",
+    "catchUpBonus": "Catch-up bonuses",
+    "helpCatchUpBonus": "Players who fall behind get bonuses to get back in the race.",
     "botSpeed": "Speed",
     "slow": "Slow",
     "botMedium": "Medium",
