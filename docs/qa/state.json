@@ -190,9 +190,9 @@
     "scope": "critère feature/game/conf-03"
   },
   "CONF-04": {
-    "commit": "2acdffe",
+    "commit": "bb500b5",
     "date": "2026-11-19",
-    "scope": "suivi (light)"
+    "scope": "critère"
   },
   "CONF-05": {
     "commit": "2acdffe",
@@ -205,9 +205,9 @@
     "scope": "suivi (light)"
   },
   "CONF-07": {
-    "commit": "2acdffe",
+    "commit": "bb500b5",
     "date": "2026-11-19",
-    "scope": "suivi (light)"
+    "scope": "critère"
   },
   "CONF-08": {
     "commit": "2acdffe",
