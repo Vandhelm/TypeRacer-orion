@@ -325,9 +325,9 @@
     "scope": "critère (feature/game/bonus-02)"
   },
   "BONUS-03": {
-    "commit": "8fb678c",
+    "commit": "f91bfa0",
     "date": "2026-11-20",
-    "scope": "rendu (dev)"
+    "scope": "critère et rendu (fix/game/bonus-batch)"
   },
   "BONUS-04": {
     "commit": "c9d0ba1",
