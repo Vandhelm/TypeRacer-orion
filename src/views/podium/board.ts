@@ -3,7 +3,7 @@
 import type { RealtimeState } from "../../realtime/client";
 import { BONUS_KINDS, type BonusKind } from "../../rooms/bonus-effects";
 import { MAX_BONUSES } from "../../rooms/bonus";
-import { realtimeMemberKey, type RaceLanes } from "../game/track";
+import { laneOfRunner, realtimeMemberKey, type RaceLanes } from "../game/track";
 import type { PlayerResult } from "./results";
 
 /** Les bonus de remontée reçus (BONUS-01) et leurs types connus (BONUS-02) ; un bonus sans effet n'a pas de type. */
@@ -32,14 +32,17 @@ export const isMeasured = (player: PlayerResult) => player.me || player.bot || p
 /**
  * Les bonus reçus par chaque couloir, ou undefined quand les bonus sont désactivés (le serveur ne compte alors rien).
  * Le nombre est celui du classement du serveur s'il est plus grand (des messages perdus à une reconnexion) ; les types
- * viennent des messages `bonus`. Un bot ne reçoit jamais de bonus.
+ * viennent des messages `bonus`. BOT-04 : un bot (hors classement du serveur) compte les messages qui le désignent.
  */
 export function laneBonuses(live: Pick<RealtimeState, "bonuses" | "race"> | null | undefined, lanes: RaceLanes): ReceivedBonuses[] | undefined {
   const messages = live?.bonuses ?? [];
   const standings = live?.race?.standings ?? [];
   if (!messages.length && !standings.some((s) => s.bonuses !== undefined)) return undefined;
-  return lanes.keys.map((key) => {
-    if (key === null) return { count: 0, kinds: [] };
+  return lanes.keys.map((key, lane) => {
+    if (key === null) {
+      const got = messages.filter((m) => laneOfRunner(m.playerId, lanes) === lane);
+      return { count: got.length, kinds: got.flatMap((m) => (m.effect ? [m.effect.kind] : [])) };
+    }
     const mine = messages.filter((m) => realtimeMemberKey(m.playerId) === key);
     const counted = standings.find((s) => realtimeMemberKey(s.playerId) === key)?.bonuses ?? 0;
     return { count: Math.max(counted, mine.length), kinds: mine.flatMap((m) => (m.effect ? [m.effect.kind] : [])) };
