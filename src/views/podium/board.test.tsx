@@ -7,7 +7,7 @@ import type { RealtimeState } from "../../realtime/client";
 import { createCourse, createRace, type Race } from "../game/race";
 import type { RaceLanes } from "../game/track";
 import type { Player } from "../room/room";
-import { errorCount, isMeasured, laneBonuses, playerStatus } from "./board";
+import { awaitingMeasures, errorCount, isMeasured, laneBonuses, playerStatus, withMeasures } from "./board";
 import { PodiumBoard } from "./PodiumBoard";
 import { parseRace } from "../../server/races";
 import { buildResults, finalRanking, parseResults, raceBody, type PlayerResult, type RaceSummary } from "./results";
@@ -151,7 +151,7 @@ describe("RES-02 — the podium shows a real, accessible table with every column
     const [me, bot, left, fatal] = rows(render("fr")).map(text);
     expect(me).toMatch(/1re\|Moi_Ssr · TOI\|72\|80\|97,5 %\|5\|38 s\|arrivé\|2 · Brouillard, −3 mots\|/);
     expect(bot).toMatch(/2e\|Nori_Ninja\|BOT\|.*\|60\|66\|93 %\|9\|60 s\|temps écoulé\|0\|/);
-    expect(left).toMatch(/Parti\|20\|—\|inconnu\|—\|inconnu\|—\|inconnu\|0 s\|abandon\|—\|inconnu\|/);
+    expect(left).toMatch(/Parti\|20\|—\|inconnu\|—\|inconnu\|—\|inconnu\|—\|inconnu\|abandon\|—\|inconnu\|/);
     expect(fatal).toMatch(/éliminé/);
   });
 
@@ -167,5 +167,50 @@ describe("RES-02 — the podium shows a real, accessible table with every column
   test("at 360 px the table scrolls inside its own frame, not the page", () => {
     const html = render("fr");
     expect(html).toMatch(/<div[^>]*class="[^"]*overflow-auto[^"]*"[^>]*><table/);
+  });
+});
+
+describe("RES-02 — another human's raw WPM, accuracy and errors come from his own recorded race", () => {
+  const live = player("Autre", { wpm: 48, raw: 0, accuracy: 100, seconds: 40, chars: [0, 0, 0, 0] });
+  const me = player("Moi", { me: true, raw: 70 });
+
+  test("a line still unmeasured is waiting; me, bots and measured lines are not", () => {
+    expect(awaitingMeasures([me, live])).toBe(true);
+    expect(awaitingMeasures([me, player("Bip", { bot: true, raw: 0, chars: [0, 0, 0, 0] })])).toBe(false);
+  });
+
+  test("an abandon rebuilt by the server (no lane, no measure) is not waited for", () => {
+    expect(awaitingMeasures(finalRanking([me], [{ name: "Parti" }]))).toBe(false);
+  });
+
+  test("the recorded measures fill the unmeasured line, matched by name in any case; rank, WPM and status stay", () => {
+    const filled = withMeasures([me, live], [player("AUTRE", { raw: 52, accuracy: 94.5, chars: [180, 7, 1, 2], wpm: 1, rank: 9, finished: false })]);
+    expect(filled[1]).toMatchObject({ name: "Autre", raw: 52, accuracy: 94.5, chars: [180, 7, 1, 2], wpm: 48, rank: 1, finished: true });
+  });
+
+  test("a recorded line still unmeasured, a bot or my own line is never copied over", () => {
+    const players = [me, live];
+    expect(withMeasures(players, [player("Autre", { raw: 0, chars: [0, 0, 0, 0] })])).toBe(players);
+    expect(withMeasures(players, [player("Moi", { raw: 1, chars: [1, 0, 0, 0] })])).toBe(players);
+  });
+
+  test("once filled, the board shows the three columns instead of « — »", () => {
+    const filled = withMeasures([me, live], [player("Autre", { raw: 52, accuracy: 94, chars: [180, 7, 1, 2] })]);
+    const row = rows(render("fr", filled))[1]!.replace(/<[^>]+>/g, "|").replace(/\|+/g, "|");
+    expect(row).toMatch(/Autre\|48\|52\|94 %\|10\|40 s\|/);
+  });
+});
+
+describe("RES-02 — an abandon rebuilt by the server has no time and no speed", () => {
+  test("its WPM and time cells show « — », not 0 and « 0 s »", () => {
+    const ranked = finalRanking([player("Moi", { me: true })], [{ name: "Parti" }]);
+    const row = rows(render("fr", ranked)).find((r) => r.includes("Parti"))!.replace(/<[^>]+>/g, "|").replace(/\|+/g, "|");
+    expect(row).toMatch(/Parti\|—\|inconnu\|—\|inconnu\|—\|inconnu\|—\|inconnu\|—\|inconnu\|abandon\|/);
+    expect(row).not.toContain("0 s");
+  });
+
+  test("a live human who really ran keeps his WPM and time", () => {
+    const row = rows(render("fr", [player("Autre", { wpm: 48, raw: 0, seconds: 40, chars: [0, 0, 0, 0] })]))[0]!.replace(/<[^>]+>/g, "|").replace(/\|+/g, "|");
+    expect(row).toMatch(/Autre\|48\|—\|inconnu\|—\|inconnu\|—\|inconnu\|40 s\|/);
   });
 });

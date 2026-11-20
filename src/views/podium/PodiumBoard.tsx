@@ -4,7 +4,7 @@ import { formatNumber } from "../../i18n/format";
 import { BotTag } from "../../players/BotTag";
 import type { PersonalRecord } from "../../players/records";
 import { WORDS_CHANGED } from "../../rooms/bonus-effects";
-import { errorCount, isMeasured, playerStatus, type PlayerStatus, type ReceivedBonuses } from "./board";
+import { errorCount, hasTime, isBlank, isMeasured, playerStatus, type PlayerStatus, type ReceivedBonuses } from "./board";
 import { RecordBadge } from "./RecordBadge";
 import { profileHref, rankLabel, type PlayerResult } from "./results";
 
@@ -93,11 +93,11 @@ export function PodiumBoard({ players, showPlace, arrived, raceId = null, charts
                     {/* BOT-04 : le marqueur bot reste hors du nom tronqué */}
                     <a className="flex min-w-0 items-center gap-2 text-inherit no-underline hover:text-white focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-white" href={profileHref(index, raceId)}><span className="truncate">{player.me ? `${player.name} · ${t("room.you")}` : player.name}</span>{player.bot && <BotTag className="text-[.8em]" />}</a>
                   </th>
-                  <td className={`${CELL} ${NUMBER}`}>{formatNumber(i18n.language, player.wpm)}</td>
+                  <td className={`${CELL} ${NUMBER}`}>{isBlank(player) ? <Unknown /> : formatNumber(i18n.language, player.wpm)}</td>
                   <td className={`${CELL} ${NUMBER}`}>{measured ? formatNumber(i18n.language, player.raw) : <Unknown />}</td>
                   <td className={`${CELL} ${NUMBER}`}>{measured ? `${formatNumber(i18n.language, player.accuracy)} %` : <Unknown />}</td>
                   <td className={`${CELL} ${NUMBER}`}>{measured ? formatNumber(i18n.language, errorCount(player)) : <Unknown />}</td>
-                  <td className={`${CELL} ${NUMBER}`}>{t("podium.table.seconds", { value: formatNumber(i18n.language, player.seconds) })}</td>
+                  <td className={`${CELL} ${NUMBER}`}>{hasTime(player) ? t("podium.table.seconds", { value: formatNumber(i18n.language, player.seconds) }) : <Unknown />}</td>
                   <td className={CELL}><span className={`${TAG} ${STATUS_TONE[status]}`}>{t(`podium.status.${status}`)}</span></td>
                   <td className={CELL}><BonusCell bonuses={player.bonuses} /></td>
                 </tr>

@@ -55,3 +55,29 @@ export function parseBonuses(value: unknown): ReceivedBonuses | undefined {
   const kinds = Array.isArray(raw.kinds) ? raw.kinds.filter((kind): kind is BonusKind => (BONUS_KINDS as readonly unknown[]).includes(kind)) : [];
   return { count: total, kinds: kinds.slice(0, total) };
 }
+
+/** Un temps connu : une ligne reconstruite par le serveur (un abandon parti avant d'avoir un couloir) n'en a pas. */
+export const hasTime = (player: PlayerResult) => player.seconds > 0;
+
+/** Une ligne sans rien de connu, ni frappe, ni temps, ni MPM relayé : son MPM aussi est inconnu (« — »), pas nul. */
+export const isBlank = (player: PlayerResult) => !isMeasured(player) && !hasTime(player) && !(player.wpm > 0);
+
+/** Un autre humain a couru sans que ses mesures soient connues ici : le podium attend sa course enregistrée. */
+export const awaitingMeasures = (players: PlayerResult[]) => players.some((p) => !p.me && !p.bot && !isMeasured(p) && hasTime(p));
+
+/**
+ * Les lignes sans mesure prennent le MPM brut, la précision et les caractères enregistrés pour ce nom (GET
+ * /api/rooms/:code/results, chacun mesuré par sa propre course) ; rang, MPM, temps et statut restent ceux d'ici.
+ * Rien à copier : le même tableau.
+ */
+export function withMeasures(players: PlayerResult[], recorded: PlayerResult[]): PlayerResult[] {
+  let changed = false;
+  const next = players.map((p) => {
+    if (p.me || p.bot || isMeasured(p)) return p;
+    const known = recorded.find((r) => !r.bot && r.name.toLowerCase() === p.name.toLowerCase() && isMeasured(r));
+    if (!known) return p;
+    changed = true;
+    return { ...p, raw: known.raw, accuracy: known.accuracy, chars: known.chars };
+  });
+  return changed ? next : players;
+}
