@@ -6,12 +6,13 @@
 import { z } from "zod";
 import { countKey, KeysSchema, mergeKeys } from "../../players/keys";
 import type { RealtimeState, RealtimeStatus } from "../../realtime/client";
+import { MAX_TEXT_WORDS } from "../../realtime/protocol";
 import { COUNTDOWN_MS } from "../../rooms/race-clock";
 import { seededRandom } from "../../rooms/text";
 import type { Player, Room } from "../room/room";
 import { countdownAt, raceDurationSeconds } from "./countdown";
 import { buildWords } from "./course";
-import { advanceBots, createCourse, createRace, startRace, TICK_MS, type Phase, type Race } from "./race";
+import { advanceBots, createCourse, createRace, myCourse, startRace, TICK_MS, type Phase, type Race } from "./race";
 
 /**
  * La course telle que la page la monte (useRace) : texte de la graine du serveur, bots de la même graine (BOT-05 : le
@@ -44,6 +45,8 @@ const SnapshotSchema = z.object({
   missedWords: z.array(z.number().int().min(0)).max(10_000),
   missedChars: z.number().int().min(0),
   samples: z.array(z.object({ chars: z.number().min(0), typed: z.number().min(0), errors: z.number().min(0) })).max(3_600),
+  /** BONUS-04 : mon texte, quand un bonus l'a changé (+3 / -3 mots) ; absent : celui de la course. */
+  words: z.array(z.string().max(100)).min(1).max(MAX_TEXT_WORDS).optional(),
 });
 export type RaceSnapshot = z.infer<typeof SnapshotSchema>;
 
@@ -62,6 +65,7 @@ export function saveSnapshot(storage: Storage, code: string, startsAt: number, r
     missedWords: [...race.missedWords],
     missedChars: race.missedChars,
     samples: race.samples[race.myLane] ?? [],
+    ...(race.mine ? { words: race.mine.words } : {}),
   };
   try {
     storage.setItem(snapshotKey(code, startsAt), JSON.stringify(snapshot));
@@ -116,10 +120,18 @@ export function staleResults(plan: "race" | "record" | "podium", sent: boolean):
   return plan === "podium" && !sent;
 }
 
-/** Ma course telle que la page la gardait (position, frappes, fautes), quelle que soit la phase ; sans snapshot, inchangée. */
-export function restoreSnapshot(race: Race, snapshot: RaceSnapshot | null): Race {
-  if (!snapshot || race.myLane < 0) return race;
-  const words = race.course.words;
+/** BONUS-04 : mon texte changé par un bonus, tel que la page le gardait ; sans, la course telle quelle. */
+function withSnapshotText(race: Race, snapshot: RaceSnapshot | null): Race {
+  if (!snapshot?.words || race.myLane < 0) return race;
+  const { durationMs, mistakes } = race.course;
+  return { ...race, mine: { ...createCourse(snapshot.words, null, mistakes), durationMs } };
+}
+
+/** Ma course telle que la page la gardait (position, frappes, fautes, texte changé), quelle que soit la phase ; sans snapshot, inchangée. */
+export function restoreSnapshot(saved: Race, snapshot: RaceSnapshot | null): Race {
+  if (!snapshot || saved.myLane < 0) return saved;
+  const race = withSnapshotText(saved, snapshot);
+  const words = myCourse(race).words;
   const wordIndex = Math.min(snapshot.wordIndex, words.length);
   const missedWords = new Set(snapshot.missedWords.filter((i) => i < wordIndex));
   return {
@@ -164,9 +176,11 @@ export function myStanding(live: RealtimeState | null): ServerStanding | null {
  * sans snapshot) comptent comme tapés justes. La vitesse compte depuis le départ du serveur.
  * Sans effet hors course, ou si la page, déjà en train de taper, est au moins aussi loin (coupure sans rechargement).
  */
-export function resumeRace(race: Race, standing: ServerStanding, startsAt: number, snapshot: RaceSnapshot | null = null): Race {
-  if (race.phase !== "racing" || race.finishedAt || race.myLane < 0) return race;
-  const { words, marks } = race.course;
+export function resumeRace(page: Race, standing: ServerStanding, startsAt: number, snapshot: RaceSnapshot | null = null): Race {
+  if (page.phase !== "racing" || page.finishedAt || page.myLane < 0) return page;
+  // BONUS-04 : la position du serveur compte sur mon texte changé par un bonus, gardé par la page
+  const race = page.mine ? page : withSnapshotText(page, snapshot);
+  const { words, marks } = myCourse(race);
   const progress = Number.isFinite(standing.progress) ? Math.min(1, Math.max(0, standing.progress)) : 0;
   const target = Math.round(progress * words.length);
   const restore = snapshot !== null && snapshot.wordIndex <= words.length;
