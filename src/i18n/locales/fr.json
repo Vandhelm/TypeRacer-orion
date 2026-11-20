@@ -378,6 +378,26 @@
   "podium": {
     "pageTitle": "O.R.I.O.N — Le podium",
     "abandoned": "abandon",
+    "table": {
+      "caption": "Résultats de chaque participant : rang, vitesse, précision, erreurs, temps, statut et bonus reçus",
+      "rank": "Rang",
+      "player": "Participant",
+      "wpm": "MPM",
+      "raw": "MPM brut",
+      "accuracy": "Précision",
+      "errors": "Erreurs",
+      "time": "Temps",
+      "status": "Statut",
+      "bonuses": "Bonus reçus",
+      "unknown": "inconnu",
+      "seconds": "{{value}} s"
+    },
+    "status": {
+      "finished": "arrivé",
+      "timeout": "temps écoulé",
+      "abandoned": "abandon",
+      "eliminated": "éliminé"
+    },
     "record": {
       "title": "Record personnel battu",
       "wpm": "{{current}} {{unit}} · ancien record {{previous}} {{unit}}",
