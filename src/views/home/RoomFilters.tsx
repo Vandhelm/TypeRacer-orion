@@ -52,7 +52,12 @@ export function RoomFilters({ value, onChange }: { value: Filters; onChange: (fi
     ...LEVELS.map((level) => ({ value: level, label: t(`rooms.explorer.levels.${level}`) })),
   ];
   return (
-    <div className="pointer-events-auto mx-[4cqw] mb-[2.6cqw] flex flex-wrap items-center gap-x-6 gap-y-3 narrow:mx-0 narrow:grid narrow:grid-cols-1" role="group" aria-label={t("rooms.explorer.filters")}>
+    // A black panel above the tickets (z-4): their wires (z-3, ticket.css) pass behind it instead of through the labels.
+    <div
+      className="pointer-events-auto relative z-[4] mx-auto mb-[2.6cqw] flex w-fit max-w-full flex-wrap items-center justify-center gap-x-5 gap-y-2 border border-line bg-black px-3 py-2 narrow:grid narrow:w-auto narrow:grid-cols-1 narrow:px-3 narrow:py-3"
+      role="group"
+      aria-label={t("rooms.explorer.filters")}
+    >
       <Choice label={t("rooms.explorer.language")} options={languages} value={value.language} onChange={(language) => onChange({ ...value, language })} />
       <Choice label={t("rooms.explorer.level")} options={levels} value={value.level} onChange={(level) => onChange({ ...value, level })} />
     </div>

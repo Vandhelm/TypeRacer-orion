@@ -85,7 +85,9 @@
         "results": "RESULTS",
         "closed": "CLOSED"
       },
-      "noMatch": "No public room matches these filters. Change them, or create yours."
+      "noMatch": "No public room matches these filters. Change them, or create yours.",
+      "failed": "Could not load the rooms. Trying again in a few seconds.",
+      "inRaceLabel": "Table {{n}}: race in progress, it cannot be joined"
     }
   },
   "nav": {

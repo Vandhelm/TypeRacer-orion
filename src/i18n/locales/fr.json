@@ -85,7 +85,9 @@
         "results": "RÉSULTATS",
         "closed": "FERMÉ"
       },
-      "noMatch": "Aucun salon public ne correspond à ces filtres. Change-les, ou crée le tien."
+      "noMatch": "Aucun salon public ne correspond à ces filtres. Change-les, ou crée le tien.",
+      "failed": "Impossible de charger les salons. Nouvel essai dans quelques secondes.",
+      "inRaceLabel": "Table {{n}} : course en cours, on ne peut pas la rejoindre"
     }
   },
   "nav": {
