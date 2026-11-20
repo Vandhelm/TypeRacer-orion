@@ -50,7 +50,8 @@ export default defineConfig({
     env: {
       DATABASE_URL: databaseUrl,
       // SALLE-04 : un lien d'invitation est lié à l'IP de l'invité. `next start` n'en donne aucune sans proxy déclaré ;
-      // ici Next.js est le seul relais et ajoute lui-même l'IP de la socket à x-forwarded-for.
+      // Next.js pose x-forwarded-for à l'IP de la socket seulement si l'en-tête manque : un client peut donc fournir le
+      // sien et choisir son IP. Acceptable ici seulement : serveur de test local, jamais un déploiement.
       TRUST_PROXY: "1",
       PORT: String(E2E_PORT),
       BETTER_AUTH_URL: E2E_BASE_URL,
