@@ -22,7 +22,8 @@ export function LastRace({ player, summary, title }: { player: PlayerResult; sum
   const settings = [
     t(`profile.textTypes.${summary.textType}`),
     t("profile.words", { words: formatNumber(i18n.language, summary.wordCount) }),
-    t("profile.seconds", { duration: formatNumber(i18n.language, summary.duration) }),
+    // CONF-01 : une course sans temps maximal
+    summary.duration === null ? t("profile.noTimeLimit") : t("profile.seconds", { duration: formatNumber(i18n.language, summary.duration) }),
     t(`profile.languages.${summary.language}`),
     summary.textType === "words" && t(`profile.levels.${summary.level}`),
     summary.punctuation && t("profile.punctuation"),

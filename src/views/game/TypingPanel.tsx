@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { formatNumber } from "../../i18n/format";
-import { myAccuracy, myWpm, secondsLeft, type Race } from "./race";
+import { elapsedMs, myAccuracy, myWpm, secondsLeft, type Race } from "./race";
 import { TypingText } from "./TypingText";
 
 const LOCKED_KEYS = ["Enter", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"];
@@ -20,7 +20,10 @@ export function TypingPanel({ race, onInput, lang }: { race: Race; onInput: (val
   const input = useRef<HTMLInputElement>(null);
   const racing = race.phase === "racing";
   const disabled = !racing || race.finishedAt > 0;
-  const seconds = secondsLeft(race);
+  // CONF-01 : sans temps maximal, le chrono compte le temps écoulé au lieu du temps restant
+  const left = secondsLeft(race);
+  const unlimited = left === null;
+  const seconds = left ?? Math.floor(elapsedMs(race) / 1000);
   const target = race.course.words[race.wordIndex] ?? "";
   const wrong = race.typed.length > 0 && !target.startsWith(race.typed);
   const timerPrefix = race.eliminated ? `${t("game.out")} · ` : race.finishedAt ? `${t("game.done")} · ` : "";
@@ -47,7 +50,7 @@ export function TypingPanel({ race, onInput, lang }: { race: Race; onInput: (val
         <p className={STAT}><span className={STAT_LABEL}>{t("game.wpm")}</span><b className={STAT_VALUE}>{formatNumber(i18n.language, myWpm(race))}</b></p>
         <p className={STAT}><span className={STAT_LABEL}>{t("game.accuracy")}</span><b className={STAT_VALUE}>{formatNumber(i18n.language, myAccuracy(race))} %</b></p>
       </div>
-      <p className="col-start-1 row-start-1 font-mono text-[max(18px,2.6vh)] leading-none font-normal text-red-text tabular-nums" role="timer" aria-label={`${t("game.time")} ${seconds} s`}>{timerPrefix}{seconds}</p>
+      <p className="col-start-1 row-start-1 font-mono text-[max(18px,2.6vh)] leading-none font-normal text-red-text tabular-nums" role="timer" aria-label={`${t(unlimited ? "game.elapsed" : "game.time")} ${seconds} s`}>{timerPrefix}{seconds}</p>
       <TypingText words={race.course.words} wordIndex={race.wordIndex} typed={race.typed} missed={race.missedWords} active={racing} lang={lang} />
       <div className="absolute inset-0 z-2">
         <label htmlFor="game-input" className="sr-only">{t("game.typeHere")}</label>

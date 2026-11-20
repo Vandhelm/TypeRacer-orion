@@ -20,6 +20,17 @@ export type MistakeMode = RoomSettings["mistakes"];
 /** Les réglages du salon et son code. Les liens d'invitation se lisent à part (SALLE-04, hooks/useInvites). */
 export type Room = RoomSettings & { code: string };
 
+/** CONF-01 : les temps maximaux proposés d'un clic ; null = aucun. « Autre » ouvre un champ de 30 à 600 s. */
+export const DURATION_PRESETS: readonly (number | null)[] = [null, 60, 120, 180];
+export type DurationChoice = number | "none" | "other";
+
+/** Le bouton coché : « autre » pendant la saisie d'une valeur, ou pour une valeur hors des préréglages. */
+export function durationChoice(duration: number | null, typing: boolean): DurationChoice {
+  if (typing) return "other";
+  if (duration === null) return "none";
+  return DURATION_PRESETS.includes(duration) ? duration : "other";
+}
+
 export type Player = { name: string; color: string; host?: boolean; me?: boolean; bot?: boolean };
 export type Seat = Player | { free: true };
 export type SavedText = { name: string; text: string };

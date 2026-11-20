@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { MistakeMode, Player } from "../room/room";
-import { advanceBots, applyInput, createCourse, createRace, everyoneDone, laneProgress, myAccuracy, myWpm, secondsLeft, type Race } from "./race";
+import { advanceBots, applyInput, createCourse, createRace, elapsedMs, everyoneDone, laneProgress, myAccuracy, myWpm, secondsLeft, type Race } from "./race";
 
 const ME: Player = { name: "me", color: "red", me: true };
 const BOT: Player = { name: "bot", color: "blue", bot: true };
@@ -129,5 +129,27 @@ describe("keys", () => {
     const keys = race.bots[0]!.keys;
     expect(Object.keys(keys).sort()).toEqual([" ", ",", "e", "i", "l", "r", "z"]);
     expect(keys[","]![1] / keys[","]![0]).toBeGreaterThan(keys.r![1] / keys.r![0]);
+  });
+});
+
+describe("CONF-01 — a race with no time limit never ends on time", () => {
+  const unlimited = (): Race => ({ ...racing("fix"), course: createCourse(["le", "riz", "attend"], null, "fix") });
+
+  test("past one hour the race is still running", () => {
+    expect(advanceBots(unlimited(), 1000 + 3_600_000, [0]).phase).toBe("racing");
+  });
+
+  test("there is no countdown: no seconds left, and the elapsed time is not capped", () => {
+    const race = { ...unlimited(), now: 1000 + 900_000 };
+    expect(secondsLeft(race)).toBeNull();
+    expect(elapsedMs(race)).toBe(900_000);
+  });
+
+  test("samples keep coming past 10 minutes", () => {
+    expect(advanceBots(unlimited(), 1000 + 660_000, [0]).samples[0]).toHaveLength(660);
+  });
+
+  test("a timed race still ends at its duration", () => {
+    expect(advanceBots(racing("fix"), 1000 + 60_000, [0]).phase).toBe("done");
   });
 });
