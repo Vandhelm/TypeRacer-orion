@@ -5,6 +5,7 @@ import { players, raceConfigs, raceResults, races, raceSamples, roomMembers, roo
 import { createMockDatabase } from "../../db/mocks/test-database";
 import { placeholderEmail } from "../accounts/username";
 import { MAX_HUMAN_WPM } from "../realtime/referee";
+import { MAX_GUESTS } from "../rooms/settings";
 import { createAuth } from "./auth";
 import { launchBots } from "./bot-course";
 import { handleRace, MAX_RAW_WPM } from "./races";
@@ -116,5 +117,27 @@ describe("RES-05 — the WPM series are bounded like the measures they chart", (
     expect(res.status).toBe(201);
     const samples = await db.select({ wpm: raceSamples.wpm, raw: raceSamples.raw }).from(raceSamples).where(and(eq(raceSamples.raceId, await raceIdOf(res)), eq(raceSamples.playerId, me.playerId))).orderBy(raceSamples.second);
     expect(samples).toEqual([{ wpm: 40, raw: 45 }, { wpm: MAX_HUMAN_WPM, raw: MAX_RAW_WPM }]);
+  });
+});
+
+describe("RES-05 — a full room (SALLE-05, MAX_GUESTS participants) is recorded whole", () => {
+  test("30 participants with 10-minute series are all recorded: the account's row and 29 others", async () => {
+    const me = await signUp("Plein_Moi");
+    const { code } = await launchedRoomFor(db, auth, me.cookie, GUEST_SECRET, 10_000);
+    const series = { wpmSeries: Array(600).fill(99), rawSeries: Array(600).fill(99), errorSeries: Array(600).fill(9) };
+    const rivals = Array.from({ length: MAX_GUESTS - 1 }, (_, i) => result(`Plein_${i}`, series));
+    const res = await post({ room: code, summary: SUMMARY, players: [result("Plein_Moi"), ...rivals] }, me.cookie);
+    expect(res.status).toBe(201);
+    const raceId = await raceIdOf(res);
+    const [race] = await db.select({ others: races.others }).from(races).where(eq(races.id, raceId));
+    expect(race!.others.length).toBe(MAX_GUESTS - 1);
+    expect(await db.$count(raceResults, eq(raceResults.raceId, raceId))).toBe(1);
+  });
+
+  test("one participant more than a room holds is refused (400)", async () => {
+    const me = await signUp("Trop_Moi");
+    const { code } = await launchedRoomFor(db, auth, me.cookie, GUEST_SECRET, 10_000);
+    const res = await post({ room: code, summary: SUMMARY, players: Array.from({ length: MAX_GUESTS + 1 }, (_, i) => result(i ? `Trop_${i}` : "Trop_Moi")) }, me.cookie);
+    expect(res.status).toBe(400);
   });
 });

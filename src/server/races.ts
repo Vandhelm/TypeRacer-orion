@@ -12,7 +12,7 @@ import { storedAvatar } from "../players/avatar";
 import { isBotName } from "../players/bots";
 import { seatedBots } from "../rooms/bots";
 import { KeysSchema, type KeyCounts } from "../players/keys";
-import { DurationSchema, MAX_DURATION } from "../rooms/settings";
+import { DurationSchema, MAX_DURATION, MAX_GUESTS } from "../rooms/settings";
 import { CODE_PATTERN } from "../rooms/access";
 import { raceClock } from "../rooms/race-clock";
 import { effectiveComposition } from "../rooms/text";
@@ -33,17 +33,18 @@ const LEVELS = ["common", "rich", "expert"] as const;
 const MISTAKE_MODES = ["fix", "carry-on", "fatal"] as const;
 /**
  * CONF-01 : sans limite de temps, une course reçue peut durer jusqu'à une heure (garde-fou de taille du corps :
- * 8 joueurs × 3 séries de 3 600 points restent sous MAX_BODY_BYTES). Une course chronométrée, jusqu'à MAX_DURATION.
+ * MAX_GUESTS joueurs × 3 séries de 3 600 points restent sous MAX_BODY_BYTES). Une course chronométrée, jusqu'à MAX_DURATION.
  */
 const UNLIMITED_SECONDS = 3600;
 /** Points du graphique de progression : les dernières courses. */
 export const PROGRESS_LIMIT = 50;
 
 /**
- * Taille maximale du corps de POST /api/races, en octets. Un corps réel : 8 joueurs, 3 séries de 600 points (~3 Ko chacune)
- * et 200 touches (~6 Ko) soit ~120 Ko, plus le texte (10 Ko). 512 Ko laisse une marge large ; au-delà : 413, avant tout parse.
+ * Taille maximale du corps de POST /api/races, en octets. RES-05 : un salon plein (MAX_GUESTS = 30 coureurs, SALLE-05),
+ * 3 séries de 3 600 points (~18 Ko chacune au pire) et 200 touches (~6 Ko) par coureur, soit ~1,8 Mo, plus le texte
+ * (10 Ko). 2 Mo ; au-delà : 413, avant tout parse.
  */
-export const MAX_BODY_BYTES = 512 * 1024;
+export const MAX_BODY_BYTES = 2 * 1024 * 1024;
 
 class BodyTooLarge extends Error {}
 
@@ -139,7 +140,8 @@ const RaceSchema = z.object({
   room: z.string().regex(new RegExp(CODE_PATTERN)).optional(),
   summary: SummarySchema,
   content: z.string().default("").transform((value) => value.slice(0, 10_000)),
-  players: z.array(PlayerSchema).min(1).max(8),
+  // RES-05 : tous les coureurs d'un salon plein (humains et bots, SALLE-05), aucun de plus
+  players: z.array(PlayerSchema).min(1).max(MAX_GUESTS),
 }).superRefine(({ summary, players: list }, ctx) => {
   // CONF-01 : une course chronométrée ne dure pas plus que la durée maximale ; seule une course sans limite va au-delà
   const limit = summary.duration === null ? UNLIMITED_SECONDS : MAX_DURATION;

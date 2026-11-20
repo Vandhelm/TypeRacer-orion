@@ -9,7 +9,8 @@ import { BOT_START } from "../rooms/bot-engine";
 import { createCourse, createRace } from "../views/game/race";
 import { buildResults, buildSummary, raceBody } from "../views/podium/results";
 import type { Room } from "../views/room/room";
-import { handleRace, InvalidRace, parseRace, playerStats, recordRace } from "./races";
+import { handleRace, InvalidRace, MAX_BODY_BYTES, parseRace, playerStats, recordRace } from "./races";
+import { MAX_GUESTS } from "../rooms/settings";
 import { arrivedAtWpm, launchedRoomFor } from "./races.fixture";
 import { memberKey } from "./rooms";
 
@@ -284,8 +285,8 @@ describe("TECH-07 — the body of /api/races is checked by a schema", () => {
     expect((await post(race([{ ...result("Ebi_Fry", true, 50), wpmSeries: Array(601).fill(1) }]))).status).toBe(400);
   });
 
-  test("nine players are refused with 400", async () => {
-    expect((await post(race(Array.from({ length: 9 }, () => result("Ebi_Fry", true, 50))))).status).toBe(400);
+  test("more players than a room holds (MAX_GUESTS + 1) are refused with 400", async () => {
+    expect((await post(race(Array.from({ length: MAX_GUESTS + 1 }, () => result("Ebi_Fry", true, 50))))).status).toBe(400);
   });
 
   test("a field the schema does not know is ignored, never stored", async () => {
@@ -304,14 +305,22 @@ describe("TECH-07 — the body of /api/races is checked by a schema", () => {
   });
 
   test("a body above the size limit is refused with 413 before it is parsed", async () => {
-    const res = await send(JSON.stringify({ id: crypto.randomUUID(), content: "x".repeat(600_000) }));
+    const res = await send(JSON.stringify({ id: crypto.randomUUID(), content: "x".repeat(MAX_BODY_BYTES + 1) }));
     expect(res.status).toBe(413);
   });
 
   test("a body above the size limit is refused even when content-length lies", async () => {
-    const big = JSON.stringify({ content: "x".repeat(600_000) });
+    const big = JSON.stringify({ content: "x".repeat(MAX_BODY_BYTES + 1) });
     const res = await handleRace(new Request("http://localhost/api/races", { method: "POST", headers: { "content-type": "application/json", cookie, "content-length": "10" }, body: big }), db, auth, GUEST_SECRET);
     expect(res.status).toBe(413);
+  });
+
+  test("RES-05 — a full room of 30 runners, one hour of series each at their bounds, stays under the size limit", () => {
+    const series = (value: number) => Array.from({ length: 3600 }, () => value);
+    const keys = Object.fromEntries(Array.from({ length: 200 }, (_, i) => [String.fromCodePoint(0x4e00 + i), [99999.9, 99999.9]]));
+    const players = Array.from({ length: MAX_GUESTS }, (_, i) => ({ ...result(`Coureur_${i}`, false, 50), wpmSeries: series(300), rawSeries: series(1000), errorSeries: series(9999), keys }));
+    const body = JSON.stringify({ ...race(players, { ...SUMMARY, duration: null }), content: "x".repeat(10_000) });
+    expect(new TextEncoder().encode(body).byteLength).toBeLessThan(MAX_BODY_BYTES);
   });
 
   test("a realistic body of 8 players stays under the size limit", async () => {
