@@ -220,6 +220,16 @@ describe("CONF-06 — punctuation, numbers, capitals and accents (French) on or 
     for (let seed = 0; seed < 20; seed++) expect(random({ numbers: false }, seed).some((word) => /\d/.test(word))).toBe(false);
   });
 
+  test("numbers are for random words only: a coherent passage and a quote are typed with their own numbers, none added", () => {
+    for (let seed = 0; seed < 20; seed++) {
+      for (const numbers of [true, false]) {
+        expect(buildWords(settings({ textType: "coherent", length: "long", numbers }), seededRandom(seed), LONG_PASSAGE.replace(/\d/g, "x"))).toEqual(LONG_PASSAGE.replace(/\d/g, "x").split(" ").slice(0, 100));
+        expect(buildWords(settings({ textType: "coherent", length: "other", wordCount: 3, numbers }), seededRandom(seed), "en l'année 1866")).toEqual(["en", "l'année", "1866"]);
+        expect(buildWords(settings({ textType: "quote", numbers }), seededRandom(seed)).join(" ")).toBe(buildWords(settings({ textType: "quote", numbers: false }), seededRandom(seed)).join(" "));
+      }
+    }
+  });
+
   test("capitals off: no word carries a capital, in random, coherent and quote texts", () => {
     for (let seed = 0; seed < 20; seed++) {
       expect(random({ punctuation: true, capitals: false }, seed).some((word) => UPPER.test(word))).toBe(false);

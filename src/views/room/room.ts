@@ -58,18 +58,24 @@ export type CompositionOption = { name: "punctuation" | "numbers" | "specials" |
 /**
  * CONF-06 : les options de composition proposées dans le salon. `locked` : l'hôte ne peut pas la changer pour ce type de
  * texte ; `inactive` : affichée grisée, sans effet. Les accents ne concernent que le français : absents d'un salon anglais.
+ * La ponctuation et les chiffres ne s'ajoutent qu'aux mots aléatoires : un passage cohérent ou une citation garde les
+ * siens tels qu'ils sont écrits (« l'année 1866 »), donc ces deux options y sont grisées et verrouillées.
  */
 export function compositionOptions(room: Pick<Room, "textType" | "language" | "punctuation">): CompositionOption[] {
   const custom = room.textType === "custom";
   const random = room.textType === "words";
   const options: CompositionOption[] = [
     { name: "punctuation", locked: !random, inactive: !random && !custom },
-    { name: "numbers", locked: custom, inactive: false },
+    { name: "numbers", locked: !random, inactive: !random && !custom },
     { name: "specials", locked: custom, inactive: false },
     { name: "capitals", locked: custom, inactive: random && !room.punctuation },
   ];
   if (room.language === "fr") options.push({ name: "accents", locked: custom, inactive: false });
   return options;
+}
+/** CONF-06 : ce qu'un membre qui n'est pas l'hôte voit, en lecture seule : les options cochées qui ont un effet. */
+export function guestComposition(room: Pick<Room, "textType" | "language" | CompositionOption["name"]>): CompositionOption["name"][] {
+  return compositionOptions(room).filter(({ name, inactive }) => room[name] && !inactive).map(({ name }) => name);
 }
 export function countWords(text: string) {
   const trimmed = text.trim();

@@ -9,7 +9,7 @@ import { SectionTabs } from "../../components/tabs/SectionTabs";
 import { DEFAULT_DURATION, MAX_DURATION, MIN_DURATION, ROLES } from "../../rooms/settings";
 import { excludedApplies } from "../../rooms/text";
 import type { RoomState } from "./hooks/useRoom";
-import { cleanExcluded, compositionOptions, countWords, DURATION_PRESETS, durationChoice, type CompositionOption, type Room, type TextLength } from "./room";
+import { cleanExcluded, compositionOptions, countWords, DURATION_PRESETS, durationChoice, guestComposition, type CompositionOption, type Room, type TextLength } from "./room";
 import { LENGTH_KEY, useRoomLabels } from "./useRoomLabels";
 import { DASHED_TOP, LABEL, PLAIN_VALUE, SHADE } from "./styles";
 
@@ -100,10 +100,11 @@ export function RoomSettings({ state, onEditText, action }: RoomSettingsProps) {
       <TextChoice key={String(value)} type="radio" name={name} value={String(value)} label={t(`room.${key}`)} checked={room[name] === value} disabled={disabled} hidden={!host && room[name] !== value} onChange={() => pick(value)} />
     ));
   }
-  // CONF-06 : l'hôte coche ou décoche ; les autres membres ne voient que les options actives, en lecture seule
+  // CONF-06 : l'hôte coche ou décoche ; les autres membres ne voient que les options cochées qui ont un effet, en lecture seule
   const composition = compositionOptions(room);
+  const shown = guestComposition(room);
   const checkbox = ({ name, locked, inactive }: CompositionOption) => (
-    <TextChoice key={name} type="checkbox" name={name} label={t(`room.${name}`)} checked={room[name]} disabled={!host || locked} inactive={inactive} hidden={!host && !room[name]} onChange={(e) => update({ [name]: e.target.checked })} />
+    <TextChoice key={name} type="checkbox" name={name} label={t(`room.${name}`)} checked={room[name]} disabled={!host || locked} inactive={inactive} hidden={!host && !shown.includes(name)} onChange={(e) => update({ [name]: e.target.checked })} />
   );
 
   function pickTextType(textType: Room["textType"]) {
@@ -202,7 +203,7 @@ export function RoomSettings({ state, onEditText, action }: RoomSettingsProps) {
         </Row>
         <Row id="label-composition" label={t("room.composition")} role="group" inactive={isCustom}>
           {composition.map(checkbox)}
-          <span className={PLAIN_VALUE} hidden={host || composition.some(({ name }) => room[name])}>{t("room.noOption")}</span>
+          <span className={PLAIN_VALUE} hidden={host || shown.length > 0}>{t("room.noOption")}</span>
         </Row>
         <Row id="label-text" label={t("room.text")} role="group">
           <span className={PLAIN_VALUE}>{countWords(room.text) ? words : t("room.noText")}</span>

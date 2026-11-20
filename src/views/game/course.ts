@@ -58,10 +58,13 @@ export function buildWords(settings: CourseSettings, random: () => number = Math
   }
 
   // composition : chiffres et caractères spéciaux glissés dans le texte, à la place d'un mot (le compte ne change pas) ;
-  // un ajout qui contient un caractère exclu est abandonné, le mot reste
-  if (settings.numbers || settings.specials) {
+  // un ajout qui contient un caractère exclu est abandonné, le mot reste.
+  // CONF-06 : comme la ponctuation, les chiffres ne s'ajoutent qu'aux mots aléatoires ; un passage cohérent ou une
+  // citation se tape tel qu'il est écrit, avec ses propres nombres (« l'année 1866 »), et l'option y est verrouillée
+  const numbers = settings.numbers && settings.textType === "words";
+  if (numbers || settings.specials) {
     words = words.map((word) => {
-      if (settings.numbers && random() < 0.1) {
+      if (numbers && random() < 0.1) {
         const number = String(1 + Math.floor(random() * 9999));
         return allowed(number) ? number : word;
       }
