@@ -80,9 +80,9 @@
     "scope": "suivi (light)"
   },
   "AUTH-01": {
-    "commit": "2acdffe",
+    "commit": "bfdcb34",
     "date": "2026-11-19",
-    "scope": "suivi (light)"
+    "scope": "critère feature/home/auth-01"
   },
   "AUTH-02": {
     "commit": "2acdffe",
