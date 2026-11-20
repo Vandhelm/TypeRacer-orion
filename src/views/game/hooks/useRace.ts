@@ -1,11 +1,9 @@
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { Player, Room } from "../../room/room";
 import { COUNTDOWN_MS } from "../../../rooms/race-clock";
-import { seededRandom } from "../../../rooms/text";
-import { countdownAt, GO_MS, nextChangeIn, raceDurationSeconds } from "../countdown";
-import { buildWords } from "../course";
-import { advanceBots, applyInput, applyRemote, createCourse, createRace, endRace, everyoneDone, startRace, TICK_MS, type Race } from "../race";
-import { resumeRace, type ServerStanding } from "../resume";
+import { countdownAt, GO_MS, nextChangeIn } from "../countdown";
+import { advanceBots, applyInput, applyRemote, endRace, everyoneDone, startRace, TICK_MS, type Race } from "../race";
+import { keepsSnapshot, loadSnapshot, mountRace, resumeRace, saveSnapshot, type RaceSnapshot, type ServerStanding } from "../resume";
 
 /** L'ancien décompte local (3 × 800 ms + GO_MS) : seule la page mobile (mobileRace.ts) s'en sert encore pour son échéance. */
 export const COUNT_STEP_MS = 800;
@@ -19,7 +17,7 @@ type Action =
   | { type: "input"; value: string; now: number }
   | { type: "tick"; now: number; jitters: number[] }
   | { type: "remote"; updates: { lane: number; progress: number; wpm: number }[]; now: number }
-  | { type: "resume"; standing: ServerStanding; startsAt: number }
+  | { type: "resume"; standing: ServerStanding; startsAt: number; snapshot: RaceSnapshot | null }
   | { type: "finish" };
 
 function reduce(race: Race, action: Action): Race {
@@ -37,7 +35,7 @@ function reduce(race: Race, action: Action): Race {
     case "finish":
       return endRace(race);
     case "resume":
-      return resumeRace(race, action.standing, action.startsAt);
+      return resumeRace(race, action.standing, action.startsAt, action.snapshot);
   }
 }
 
@@ -68,18 +66,9 @@ export function useRace(room: Room, players: Player[], { passage = null, seed = 
   const serverNow = useMemo(() => () => Date.now() + offset.current, []);
   // le départ est figé au montage : sans serveur de salons, un décompte local de la même durée
   const [start] = useState(() => startsAt ?? Date.now() + clockOffset + COUNTDOWN_MS);
-  const [race, dispatch] = useReducer(reduce, null, () => {
-    const fresh = createRace(
-      createCourse(buildWords(room, seed === null ? Math.random : seededRandom(seed), passage), raceDurationSeconds(startsAt, endsAt, room.duration), room.mistakes),
-      players,
-      room.botSpeed,
-      room.botAccuracy,
-    );
-    // dès le premier affichage : le bon chiffre pour qui arrive ou recharge en plein décompte, la course pour qui arrive après
-    const now = Date.now() + clockOffset;
-    const { count, started } = countdownAt(start, now);
-    return { ...(started ? { ...startRace(fresh, start), now } : fresh), count };
-  });
+  // dès le premier affichage : le bon chiffre pour qui arrive ou recharge en plein décompte, la course pour qui arrive après
+  // COURSE-08 : bots de la graine de la course, avancés jusqu'à maintenant (src/views/game/resume.ts)
+  const [race, dispatch] = useReducer(reduce, null, () => mountRace(room, players, { passage, seed, startsAt, endsAt, start, now: Date.now() + clockOffset }));
   const [showResults, setShowResults] = useState(false);
   const { phase } = race;
   const allDone = everyoneDone(race);
@@ -124,9 +113,33 @@ export function useRace(room: Room, players: Player[], { passage = null, seed = 
   const onRemote = useMemo(() => (updates: { lane: number; progress: number; wpm: number }[]) => {
     if (updates.length) dispatch({ type: "remote", updates, now: serverNow() });
   }, [serverNow]);
-  /** COURSE-08 : après un rechargement, la page reprend à la progression validée par le serveur (jamais en arrière). */
-  const onResume = useMemo(() => (standing: ServerStanding) => dispatch({ type: "resume", standing, startsAt: start }), [start]);
+  // COURSE-08 : mes frappes et fautes de cette course restent dans l'onglet (sessionStorage), pour la reprise
+  const { code } = room;
+  const { keystrokes, wordIndex, samples } = race;
+  const latest = useRef(race);
+  useEffect(() => {
+    latest.current = race;
+  });
   /** COURSE-08 : la course avait déjà commencé quand cette page s'est ouverte (rechargement, retour, arrivée tardive). */
   const [arrivedMidRace] = useState(() => countdownAt(start, Date.now() + clockOffset).started);
+  // une page rechargée n'écrase pas ce qu'elle gardait avant d'avoir repris (onResume le relit)
+  const [resumed, setResumed] = useState(false);
+  useEffect(() => {
+    if (keepsSnapshot({ phase, code, arrivedMidRace, resumed })) saveSnapshot(sessionStorage, code, start, latest.current);
+  }, [phase, code, start, keystrokes, wordIndex, samples, resumed, arrivedMidRace]);
+  /** COURSE-08 : après un rechargement, la page reprend à la progression validée par le serveur (jamais en arrière). */
+  const onResume = useMemo(
+    () => (standing: ServerStanding) => {
+      let snapshot: RaceSnapshot | null = null;
+      try {
+        snapshot = code ? loadSnapshot(sessionStorage, code, start) : null;
+      } catch {
+        snapshot = null; // stockage refusé : les mots repris comptent comme justes
+      }
+      dispatch({ type: "resume", standing, startsAt: start, snapshot });
+      setResumed(true);
+    },
+    [code, start],
+  );
   return { race, onInput, onRemote, onResume, arrivedMidRace, showResults };
 }

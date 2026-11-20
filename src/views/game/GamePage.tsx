@@ -18,7 +18,7 @@ import { loadRacePoolImages, type RacePoolImages } from "./pool/createRacePool";
 import { laneProgress, myWpm } from "./race";
 import { RacePool } from "./RacePool";
 import { RaceTrack } from "./RaceTrack";
-import { myStanding, resumeNotice } from "./resume";
+import { myStanding, resumeNotice, resumeStep, timeoutAbandon } from "./resume";
 import { raceLanes, remoteUpdates, trackLanes } from "./track";
 import { TypingPanel } from "./TypingPanel";
 
@@ -93,14 +93,16 @@ function GameRace({ state, onHandOver }: { state: RoomState; onHandOver?: (sendi
   // un abandon par silence (plus de 30 s), dit par le serveur, mène au podium comme un abandon
   const [resumed, setResumed] = useState(false);
   const standing = myStanding(live);
+  const toResume = resumeStep({ resumed, standing, phase: race.phase });
   useEffect(() => {
-    if (resumed || !standing || race.phase === "countdown") return;
-    onResume(standing);
+    if (!toResume) return;
+    onResume(toResume);
     setResumed(true);
-  }, [resumed, standing, race.phase, onResume]);
+  }, [toResume, onResume]);
+  const timedOut = timeoutAbandon(live, watching);
   useEffect(() => {
-    if (live?.abandoned && !watching) setAbandoned(true);
-  }, [live?.abandoned, watching]);
+    if (timedOut) setAbandoned(true);
+  }, [timedOut]);
   // COURSE-05 : les autres humains avancent dans leur couloir avec ce qu'ils envoient
   useEffect(() => {
     if (race.phase === "racing") onRemote(remoteUpdates(live, lanes));
