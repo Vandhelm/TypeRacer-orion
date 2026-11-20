@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { ServerBonus } from "../../realtime/client";
 import type { BonusEffect } from "../../rooms/bonus-effects";
 import type { Player } from "../room/room";
-import { activeAnnouncements, ANNOUNCE_MS, announceBonus, newAnnouncements } from "./announce";
+import { activeAnnouncements, ANNOUNCE_MS, announceBonus, mergeAnnouncements, newAnnouncements } from "./announce";
 import type { RaceLanes } from "./track";
 
 const PLAYERS: Player[] = [
@@ -77,5 +77,12 @@ describe("BONUS-03 — only the bonuses not yet announced are announced, once ea
   test("each announcement has its own key, so the same bonus is never shown twice", () => {
     const keys = newAnnouncements(list, 0, LANES, ME, 0).map((a) => a.key);
     expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  test("the same bonus received twice (new connection) is shown once; finished announcements leave", () => {
+    const [first, second] = newAnnouncements(list, 0, LANES, ME, 0);
+    const shown = mergeAnnouncements([first!], [first!, second!], 10);
+    expect(shown.map((a) => a.key)).toEqual([first!.key, second!.key]);
+    expect(mergeAnnouncements([first!], [second!], first!.until).map((a) => a.key)).toEqual([second!.key]);
   });
 });

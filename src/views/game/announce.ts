@@ -59,3 +59,9 @@ export function newAnnouncements(bonuses: readonly ServerBonus[] | undefined, se
 
 /** Les annonces encore affichées à `now`. */
 export const activeAnnouncements = (list: readonly BonusAnnouncement[], now: number) => list.filter((a) => a.until > now);
+
+/** Les annonces encore affichées, puis les nouvelles ; un bonus déjà annoncé (même clé) ne l'est pas deux fois. */
+export function mergeAnnouncements(previous: readonly BonusAnnouncement[], fresh: readonly BonusAnnouncement[], now: number): BonusAnnouncement[] {
+  const shown = new Set(previous.map((a) => a.key));
+  return [...activeAnnouncements(previous, now), ...fresh.filter((a) => !shown.has(a.key))];
+}

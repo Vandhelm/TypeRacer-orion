@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { ServerBonus } from "../../../realtime/client";
-import { activeAnnouncements, newAnnouncements, type BonusAnnouncement } from "../announce";
+import { activeAnnouncements, mergeAnnouncements, newAnnouncements, type BonusAnnouncement } from "../announce";
 import type { RaceLanes } from "../track";
 
 /**
@@ -19,10 +19,7 @@ export function useBonusAnnouncements(bonuses: readonly ServerBonus[] | undefine
     const now = Date.now();
     const fresh = newAnnouncements(bonuses, from, lanes, you, now);
     if (!fresh.length) return;
-    setList((previous) => {
-      const shown = new Set(previous.map((a) => a.key));
-      return [...activeAnnouncements(previous, now), ...fresh.filter((a) => !shown.has(a.key))];
-    });
+    setList((previous) => mergeAnnouncements(previous, fresh, now));
   }, [bonuses, lanes, you]);
 
   useEffect(() => {
