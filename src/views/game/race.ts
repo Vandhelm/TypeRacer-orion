@@ -14,7 +14,15 @@ export type Course = { words: string[]; /** Caractères cumulés (espaces compri
 /** typed et errors : frappes et fautes cumulées, comme pour moi. keys : les mêmes, touche par touche. */
 export type Bot = { lane: number; wpm: number; accuracy: number; words: number; typed: number; errors: number; keys: KeyCounts; finishedAt: number };
 /** COURSE-05 : un adversaire humain, tel qu'il se déclare en temps réel (progression de 0 à 1, MPM courant). */
-export type Remote = { lane: number; progress: number; wpm: number; finishedAt: number };
+export type Remote = {
+  lane: number;
+  progress: number;
+  wpm: number;
+  finishedAt: number;
+  /** BONUS-03 : les mots de son texte, quand un bonus l'a changé (src/views/game/bonus.ts), et sa progression d'avant. */
+  words?: number;
+  stale?: number;
+};
 /** Cumuls de fin de seconde : caractères validés, caractères tapés, fautes. */
 export type Sample = { chars: number; typed: number; errors: number };
 export type Phase = "countdown" | "racing" | "done";
@@ -183,11 +191,12 @@ const unit = (value: number) => (Number.isFinite(value) ? Math.min(1, Math.max(0
 /**
  * COURSE-05 : la progression qu'un adversaire humain vient d'envoyer. Elle ne recule jamais (un message en retard ne
  * ramène pas son poisson en arrière) ; à 1, il arrive, une seule fois. Mon couloir et ceux des bots ne bougent pas ici.
+ * BONUS-03 : la progression d'avant un bonus sur son texte (`stale`), relayée de nouveau, ne le refait pas avancer.
  */
 export function applyRemote(race: Race, lane: number, update: { progress: number; wpm: number }, now: number): Race {
   const remote = race.remotes.find((candidate) => candidate.lane === lane);
   if (!remote || remote.finishedAt) return race;
-  const progress = Math.max(remote.progress, unit(update.progress));
+  const progress = update.progress === remote.stale ? remote.progress : Math.max(remote.progress, unit(update.progress));
   const wpm = Number.isFinite(update.wpm) ? Math.max(0, Math.round(update.wpm)) : remote.wpm;
   if (progress === remote.progress && wpm === remote.wpm) return race;
   const arrived = progress >= 1;

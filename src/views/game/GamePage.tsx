@@ -13,7 +13,7 @@ import { LiveList } from "../room/LiveList";
 import { READY } from "./countdown";
 import { useRace } from "./hooks/useRace";
 import { AbandonRace } from "./AbandonRace";
-import { bonusesFor } from "./bonus";
+import { bonusesFor, remoteBonuses } from "./bonus";
 import { abandonOver, canAbandon, handOverPlayers, raceExit } from "./abandon";
 import { KeyboardNotice } from "./KeyboardNotice";
 import { useMobileRace } from "./mobileRace";
@@ -130,10 +130,12 @@ function GameRace({ state, onHandOver }: { state: RoomState; onHandOver?: (sendi
     const announced = live?.bonuses?.length ?? 0;
     // une connexion neuve repart d'une liste vide
     const from = announced < appliedBonuses.current ? 0 : appliedBonuses.current;
-    const effects = watching ? [] : bonusesFor(live?.bonuses, from, live?.you?.id ?? null);
+    const you = live?.you?.id ?? null;
+    const effects = watching ? [] : bonusesFor(live?.bonuses, from, you);
     appliedBonuses.current = announced;
-    onBonus(effects);
-  }, [live, watching, onBonus]);
+    // BONUS-03 : la piste suit aussi le texte changé d'un autre humain (le meneur à +3 mots recule)
+    onBonus(effects, remoteBonuses(live?.bonuses, from, lanes, watching ? null : you));
+  }, [live, watching, onBonus, lanes]);
 
   useEffect(markSessionStart, []);
 

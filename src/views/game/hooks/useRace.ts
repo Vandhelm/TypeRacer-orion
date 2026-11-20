@@ -3,7 +3,7 @@ import type { Player, Room } from "../../room/room";
 import { COUNTDOWN_MS } from "../../../rooms/race-clock";
 import { countdownAt, GO_MS, nextChangeIn } from "../countdown";
 import type { BonusEffect } from "../../../rooms/bonus-effects";
-import { applyBonus } from "../bonus";
+import { applyBonus, applyRemoteBonus } from "../bonus";
 import { advanceBots, applyInput, applyRemote, endRace, everyoneDone, startRace, TICK_MS, type Race } from "../race";
 import { keepsSnapshot, loadSnapshot, markSent, mountRace, restoreSnapshot, resumeRace, saveSnapshot, wasSent, type RaceSnapshot, type ServerStanding } from "../resume";
 
@@ -13,6 +13,8 @@ export { GO_MS };
 export const AFTER_LAST_ARRIVAL_MS = 3000; // le temps du dernier repas
 export const RESULTS_DELAY_MS = 800;
 
+type RemoteBonus = { lane: number; effect: BonusEffect };
+
 type Action =
   | { type: "count"; value: number | null }
   | { type: "start"; now: number }
@@ -21,7 +23,7 @@ type Action =
   | { type: "remote"; updates: { lane: number; progress: number; wpm: number }[]; now: number }
   | { type: "resume"; standing: ServerStanding; startsAt: number; snapshot: RaceSnapshot | null }
   | { type: "restore"; snapshot: RaceSnapshot | null }
-  | { type: "bonus"; effects: BonusEffect[]; now: number }
+  | { type: "bonus"; effects: BonusEffect[]; remote: RemoteBonus[]; now: number }
   | { type: "finish" };
 
 function reduce(race: Race, action: Action): Race {
@@ -37,7 +39,10 @@ function reduce(race: Race, action: Action): Race {
     case "remote":
       return race.phase === "racing" ? action.updates.reduce((next, { lane, ...update }) => applyRemote(next, lane, update, action.now), race) : race;
     case "bonus":
-      return action.effects.reduce((next, effect) => applyBonus(next, effect, action.now), race);
+      return action.remote.reduce(
+        (next, { lane, effect }) => (next.phase === "racing" ? applyRemoteBonus(next, lane, effect) : next),
+        action.effects.reduce((next, effect) => applyBonus(next, effect, action.now), race),
+      );
     case "finish":
       return endRace(race);
     case "resume":
@@ -121,9 +126,9 @@ export function useRace(room: Room, players: Player[], { passage = null, seed = 
   const onRemote = useMemo(() => (updates: { lane: number; progress: number; wpm: number }[]) => {
     if (updates.length) dispatch({ type: "remote", updates, now: serverNow() });
   }, [serverNow]);
-  /** BONUS-02 : les effets des bonus qui me ciblent (src/views/game/bonus.ts). */
-  const onBonus = useMemo(() => (effects: BonusEffect[]) => {
-    if (effects.length) dispatch({ type: "bonus", effects, now: serverNow() });
+  /** BONUS-02 : les effets des bonus qui me ciblent ; BONUS-03 : ceux qui changent le texte des autres humains (src/views/game/bonus.ts). */
+  const onBonus = useMemo(() => (effects: BonusEffect[], remote: RemoteBonus[] = []) => {
+    if (effects.length || remote.length) dispatch({ type: "bonus", effects, remote, now: serverNow() });
   }, [serverNow]);
   // COURSE-08 : mes frappes et fautes de cette course restent dans l'onglet (sessionStorage), pour la reprise
   const { code } = room;

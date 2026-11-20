@@ -89,3 +89,6 @@ export function easeToward(shown: number, target: number, dtMs: number): number 
   const next = target - (target - shown) * 0.5 ** (Math.max(0, dtMs) / HALF_LIFE_MS);
   return target - next < 1e-4 ? target : next;
 }
+
+/** BONUS-03 : la progression affichée à l'image suivante ; une cible plus basse (un bonus a rallongé le texte) est rejointe d'un coup. */
+export const laneFrame = (shown: number, target: number, dtMs: number) => (target < shown ? target : easeToward(shown, target, dtMs));

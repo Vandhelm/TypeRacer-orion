@@ -2,7 +2,7 @@ import { useEffect, useRef, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import { BotTag } from "../../players/BotTag";
 import { GeneratedAvatar } from "../profile/ProfileAvatar";
-import { easeToward, type TrackLane } from "./track";
+import { laneFrame, type TrackLane } from "./track";
 
 // Tout tient dans son couloir, de 2 à 8 couloirs : le nom passe à la ligne (deux lignes au plus), rang et MPM aussi.
 // L'avatar ne disparaît jamais : sous 96 px de couloir, il rapetisse (16 px) et passe au-dessus du nom.
@@ -31,7 +31,7 @@ export function RaceTrack({ lanes }: { lanes: TrackLane[] }) {
       const dt = still ? Infinity : now - last;
       last = now;
       targets.current.forEach((target, lane) => {
-        const next = easeToward(shown.current[lane] ?? 0, target, dt);
+        const next = laneFrame(shown.current[lane] ?? 0, target, dt);
         if (next !== shown.current[lane]) items.current[lane]?.style.setProperty("--progress", String(next));
         shown.current[lane] = next;
       });
