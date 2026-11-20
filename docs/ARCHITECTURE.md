@@ -53,6 +53,7 @@ L'identité vient d'un **ticket** : le serveur temps réel est sur un autre doma
 | `src/server/realtime-ticket.ts` | `POST /api/realtime/ticket` : ticket pour la session courante, et l'adresse du serveur |
 | `src/realtime/server.ts` | Serveur : connexion, salles en mémoire, présence, arbitrage et diffusion limitée de la progression, classement |
 | `src/realtime/referee.ts` | COURSE-06 : règles pures de l'arbitre (seuils, verdict, classement) |
+| `src/rooms/bonus.ts` | BONUS-01 : règles pures de l'attribution des bonus de remontée (qui est en retard, points de contrôle, plafond) |
 | `src/rooms/race-clock.ts` | COURSE-06 : départ et fin d'une course depuis `launched_at` |
 | `src/realtime/main.ts` | Lancement (`bun run realtime`) et configuration par variables d'environnement |
 | `src/realtime/client.ts` | Client sans React : ticket, connexion, salle, reconnexion, envoi limité |
@@ -91,7 +92,8 @@ Serveur vers client (validés par `ServerMessage` côté client) :
 | `welcome` | `you` : `{ id, name, guest }` | À l'ouverture |
 | `presence` | `room`, `players` | À chaque arrivée ou départ dans la salle |
 | `progress` | `playerId`, `progress`, `wpm` | Progression acceptée d'un autre joueur |
-| `standings` | `room`, `startsAt`, `endsAt` (ms epoch, null sans limite), `players` : `{ playerId, rank, progress, wpm, finishedMs }` | COURSE-06 : à l'entrée dans une salle en course, puis au plus 10 fois par seconde, à toute la salle |
+| `standings` | `room`, `startsAt`, `endsAt` (ms epoch, null sans limite), `players` : `{ playerId, rank, progress, wpm, finishedMs, bonuses? }` (`bonuses` : bonus reçus, seulement quand les bonus sont activés, BONUS-01) | COURSE-06 : à l'entrée dans une salle en course, puis au plus 10 fois par seconde, à toute la salle |
+| `bonus` | `room`, `playerId`, `checkpoint` (1 à 3), `count` (ses bonus dans la course, celui-ci compris, 3 au plus) | BONUS-01 : un bonus de remontée attribué par le serveur, à toute la salle |
 | `error` | `code` : `invalid_message`, `not_in_room`, `not_member`, `not_a_runner`, `race_not_started`, `race_over`, `progress_backward`, `progress_jump`, `progress_too_fast` | Message rejeté ; rien n'est diffusé |
 
 ### Règles du serveur
@@ -116,7 +118,8 @@ Le navigateur tape et compte ; le serveur décide. Qui décide quoi :
 | Progression | Le client la déclare (mots validés ÷ mots du texte) ; le serveur l'accepte ou la refuse, garde la dernière acceptée par coureur, et ne relaie que celle-là | `judge` dans `src/realtime/referee.ts` |
 | Classement | Le serveur : arrivés par heure d'arrivée serveur, puis les autres par progression | `standings` dans `referee.ts` |
 | Enregistrement (`POST /api/races`) | Le serveur refuse ou corrige : voir plus bas | `claimServerRace` dans `src/server/races.ts` |
-| Bonus (BONUS-01 à 04) | Pas codés. Point d'application prévu : le serveur temps réel, dans `referee` (`src/realtime/server.ts`) ; un bonus qui ajoute ou retire des mots devra modifier `course.marks` de la salle (longueur du texte, annexe A) pour que l'arbitre continue de compter juste | — |
+| Attribution des bonus (BONUS-01) | Le serveur, après chaque progression acceptée : voir « Bonus de remontée » plus bas | `src/rooms/bonus.ts`, `awardCatchUp` dans `src/realtime/server.ts` |
+| Effet et annonce des bonus (BONUS-02 à 04) | Pas codés. Ils se branchent sur le message `bonus` et sur `standings.players[].bonuses` ; un bonus qui ajoute ou retire des mots devra modifier `course.marks` de la salle (longueur du texte, annexe A) pour que l'arbitre continue de compter juste | — |
 
 Le texte est connu du serveur : il retire les mots comme la page de course, avec les mêmes réglages, la même graine et le même passage (CONF-03, `raceCourseOf` dans `src/realtime/room-backend.ts`). Il compte donc lui-même les caractères validés (espaces comprises, annexe A) à chaque progression. Sans graine (salon lancé avant CONF-03), seules les règles d'horloge et de recul s'appliquent.
 
@@ -285,3 +288,23 @@ Mesure du dictionnaire au 2026-11-19 :
 | en difficile | 11,5 | 8–28 | 82,4 % | 0 % | 25,5 % |
 
 Les tests `CONF-05` (`src/views/game/complexity.test.ts`, `bun test -t CONF-05`) refont cette mesure à chaque lancement : un mot ajouté qui fait sortir un niveau de ses seuils, ou qui casse l'ordre des niveaux, fait échouer la suite.
+
+## Bonus de remontée (BONUS-01)
+
+**Activation :** le réglage du salon `catchUpBonus` (CONF-09), lu par le serveur temps réel avec la course (`raceCourseOf`, champ `catchUpBonus` de `RaceCourse`). Bonus coupés : rien n'est attribué et `standings` ne porte pas de `bonuses`.
+
+**Règle exacte** (`src/rooms/bonus.ts`, décidée par le serveur temps réel, jamais par le client) :
+
+- **Meneur** : le coureur à la plus haute progression acceptée par l'arbitre (annexe A, 0 à 1). Un coureur arrivé compte à 100 %.
+- **Points de contrôle** : la progression du meneur atteint **25 %**, **50 %**, puis **75 %** (valeur atteinte ou dépassée). Chaque point ne sert qu'**une fois par course** : un changement de meneur à la même hauteur ne le redéclenche pas. Un meneur qui en franchit deux d'un coup (paquets groupés) déclenche les deux, dans l'ordre.
+- **En retard**, jugé à l'instant où le point est franchi : un coureur pas encore arrivé, moins avancé que le meneur, et **soit en dernière position** (la plus basse progression des coureurs pas arrivés ; des ex æquo sont tous derniers), **soit à strictement plus de 25 points de progression** derrière le meneur (exactement 25 ne suffit pas).
+- **Attribution** : chaque coureur en retard reçoit **un bonus par point de contrôle**, donc **au plus 3 par course** ; le plafond est aussi vérifié à part (`MAX_BONUSES`).
+- Seul en course, ou tous à égalité : personne n'est en retard, aucun bonus.
+- Un coureur qui a **abandonné** (COURSE-07) n'est ni en retard ni compté comme dernier : le dernier encore en course reçoit le bonus.
+- Une progression **refusée** par l'arbitre (trop rapide, saut, recul) ne fait franchir aucun point.
+- **Nouvelle course** : tout repart de zéro (l'état vit avec le classement de la course, remis à neuf à chaque départ).
+- **Reprise** (serveur redémarré, salle vidée) : les points déjà franchis par la progression relue en base sont marqués franchis sans redonner de bonus. Les bonus déjà reçus ne sont pas gardés en base : leur compte repart de 0 pour cette course (au pire un coureur peut en recevoir de nouveau aux points suivants, jamais plus d'un par point restant).
+
+**Bots :** le texte dit « un joueur » ; BOT-04 veut aussi les bots soumis aux bonus. Mais un bot est simulé par la page de course (`src/views/game/race.ts`, vitesse tirée au hasard dans le navigateur), le serveur ne connaît pas sa progression. Choix retenu : l'attribution, décidée par le serveur, ne porte que sur les coureurs qu'il arbitre (les humains, comptes et invités) ; un bot ne reçoit pas de bonus et ne compte ni comme meneur ni comme dernier. La règle pure (`awardBonuses`) ne distingue pas les bots : le jour où le serveur arbitrera leur progression, il suffira de les ajouter à la liste des coureurs.
+
+**Exposition** (pour BONUS-02 à 04) : message `bonus { room, playerId, checkpoint, count }` à toute la salle à chaque attribution, et `bonuses` (bonus reçus) sur chaque ligne de `standings`, pour une page qui se reconnecte. Le client ne peut pas déclarer un bonus : un message `bonus` envoyé au serveur est refusé (`invalid_message`).
