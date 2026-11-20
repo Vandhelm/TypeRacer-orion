@@ -250,9 +250,9 @@
     "scope": "suivi (light)"
   },
   "COURSE-04": {
-    "commit": "2acdffe",
+    "commit": "3bd4163",
     "date": "2026-11-19",
-    "scope": "suivi (light)"
+    "scope": "critère (medium)"
   },
   "COURSE-05": {
     "commit": "552231d",
