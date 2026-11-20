@@ -1,5 +1,8 @@
 import { sql } from "drizzle-orm";
-import { boolean, check, index, integer, pgTable, primaryKey, real, text, timestamp, unique } from "drizzle-orm/pg-core";
+import { boolean, check, index, integer, jsonb, pgTable, primaryKey, real, text, timestamp, unique } from "drizzle-orm/pg-core";
+
+/** COURSE-10 : un abandon de la dernière course d'un salon. */
+export type RoomAbandon = { key: string; name: string; progress: number; seat: number | null };
 import { botAccuracy, botSpeed, language, level, memberRole, mistakeMode, roomStatus, textLength, textType, visibility } from "./enums";
 import { players } from "./players";
 import { corpusTexts } from "./texts";
@@ -60,8 +63,11 @@ export const rooms = pgTable(
     textSeed: integer("text_seed"),
     /** COURSE-06 : l'empreinte des mots tirés au lancement (src/rooms/course-words.ts), vérifiée par le serveur temps réel. */
     textHash: text("text_hash"),
-    /** COURSE-10 : les noms des membres qui ont abandonné la dernière course lancée, gardés même s'ils quittent le salon ; vidé au lancement. */
-    abandonedNames: text("abandoned_names").array().notNull().default(sql`'{}'::text[]`),
+    /**
+     * COURSE-10 : les membres qui ont abandonné la dernière course lancée (clé, nom, progression validée gardée, place),
+     * gardés même s'ils quittent le salon (leur ligne room_members est supprimée) ; vidé au lancement.
+     */
+    abandons: jsonb("abandons").$type<RoomAbandon[]>().notNull().default([]),
   },
   (table) => [index("rooms_lobby").on(table.status, table.visibility), check("rooms_guests_range", sql`${table.guests} between 2 and 30`),
     check("rooms_code_format", sql`${table.code} ~ ${sql.raw(`'${CODE_PATTERN}'`)}`),

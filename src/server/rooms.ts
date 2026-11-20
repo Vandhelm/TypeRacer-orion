@@ -1,6 +1,6 @@
 // Salons, côté serveur (SALLE-01, 02, 03, 09). Indépendant du transport : les routes HTTP (api.ts) et le temps réel
 // (realtime.ts) appellent ces fonctions ; rien ici ne connaît Request, WebSocket ou Next.js.
-import { and, asc, desc, eq, gt, gte, inArray, isNull, ne, notInArray, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, inArray, isNotNull, isNull, ne, notInArray, sql, type SQL } from "drizzle-orm";
 import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 import type { z } from "zod";
 import type { Db } from "../../db/client";
@@ -88,8 +88,8 @@ export type RoomView = {
   endsAt: number | null;
   /** COURSE-06 : l'empreinte des mots tirés au lancement (src/rooms/course-words.ts) ; null avant. */
   textHash: string | null;
-  /** COURSE-10 : qui a abandonné la dernière course lancée (noms), même parti depuis ; vidé au lancement suivant. */
-  abandoned?: string[];
+  /** COURSE-10 : qui a abandonné la dernière course lancée, et à quelle progression, même parti depuis ; vidé au lancement suivant. */
+  abandoned?: { name: string; progress: number }[];
 };
 export type RoomStatus = (typeof rooms.$inferSelect)["status"];
 /** Ce que renvoie une action réussie : l'état du salon, et la clé de celui qui l'a demandée. */
@@ -242,7 +242,7 @@ export async function roomView(db: Db, roomId: number, _viewer?: string): Promis
     seed: row.rooms.textSeed,
     ...raceClock(row.rooms.launchedAt, row.race_configs.duration),
     textHash: row.rooms.textHash,
-    abandoned: row.rooms.abandonedNames,
+    abandoned: row.rooms.abandons.map(({ name, progress }) => ({ name, progress })),
   };
 }
 
@@ -508,7 +508,7 @@ export async function launchRoom(db: Db, code: string, who: Identity): Promise<R
     const passage = config!.textType === "coherent" ? await pickPassage(tx, { language: config!.language, words: wordTarget(config!) }) : null;
     const textSeed = crypto.getRandomValues(new Int32Array(1))[0]!;
     // COURSE-01 : une relance repasse par EN_ATTENTE (results → waiting → countdown)
-    await moveRoom(tx, id, from, from === "results" ? ["reopen", "launch"] : ["launch"], { launchedAt: sql`now()`, textId: passage?.id ?? null, textSeed, abandonedNames: [] });
+    await moveRoom(tx, id, from, from === "results" ? ["reopen", "launch"] : ["launch"], { launchedAt: sql`now()`, textId: passage?.id ?? null, textSeed, abandons: [] });
     await tx.update(roomMembers).set({ finishedAt: null, abandonedAt: null, progress: 0, raceRecorded: false }).where(eq(roomMembers.roomId, id));
     // COURSE-06 : l'empreinte des mots que la page de course va retirer, vérifiée par le serveur temps réel
     const words = courseWords(await roomView(tx, id));
@@ -712,19 +712,14 @@ export async function abandonRace(db: Db, code: string, who: Identity): Promise<
       .where(eq(rooms.id, id))
       .for("update");
     if (!room) throw new RoomRefused("not_found");
-    const [member] = await tx
-      .select({ role: roomMembers.role, finishedAt: roomMembers.finishedAt, abandonedAt: roomMembers.abandonedAt, name: sql<string>`coalesce(${players.name}, ${roomMembers.guestName})` })
-      .from(roomMembers)
-      .leftJoin(players, eq(players.id, roomMembers.playerId))
-      .where(and(eq(roomMembers.roomId, id), eq(roomMembers.memberKey, key)));
+    const [member] = await tx.select({ role: roomMembers.role, finishedAt: roomMembers.finishedAt, abandonedAt: roomMembers.abandonedAt }).from(roomMembers).where(and(eq(roomMembers.roomId, id), eq(roomMembers.memberKey, key)));
     if (!member) throw new RoomRefused("not_found"); // SALLE-10 : un non-membre ne sait pas si le salon existe
     if (member.abandonedAt) return;
     if ((await stateOf(tx, id)) !== "racing" || room.timeUp) throw new RoomRefused("not_racing");
     if (member.role !== "player") throw new RoomRefused("not_player");
     if (member.finishedAt) throw new RoomRefused("already_finished");
     await tx.update(roomMembers).set({ abandonedAt: sql`now()` }).where(and(eq(roomMembers.roomId, id), eq(roomMembers.memberKey, key)));
-    // COURSE-10 : gardé par le salon, même si ce membre part ensuite (sa ligne room_members est alors supprimée)
-    await tx.update(rooms).set({ abandonedNames: sql`array_append(${rooms.abandonedNames}, ${member.name}::text)` }).where(eq(rooms.id, id));
+    await keepAbandons(tx, id);
     await endIfAllFinished(tx, id);
   });
   return { room: await roomView(db, id, key), you: key };
@@ -750,7 +745,24 @@ export async function keepProgress(db: Db, code: string, startsAt: number, rows:
         .set({ progress: sql`greatest(${roomMembers.progress}, ${value})` })
         .where(and(eq(roomMembers.roomId, id), eq(roomMembers.memberKey, key), isNull(roomMembers.finishedAt)));
     }
+    await keepAbandons(tx, id); // COURSE-10 : la progression gardée à l'abandon
   });
+}
+
+/**
+ * COURSE-10 : recopie dans rooms.abandons les membres présents qui ont abandonné (nom, progression validée, place) ;
+ * ceux déjà notés et partis depuis y restent. Ainsi l'abandon survit au départ du membre (podium, enregistrement).
+ */
+async function keepAbandons(tx: Db, roomId: number) {
+  const present = await tx
+    .select({ key: roomMembers.memberKey, name: sql<string>`coalesce(${players.name}, ${roomMembers.guestName})`, progress: roomMembers.progress, seat: roomMembers.seat })
+    .from(roomMembers)
+    .leftJoin(players, eq(players.id, roomMembers.playerId))
+    .where(and(eq(roomMembers.roomId, roomId), isNotNull(roomMembers.abandonedAt)));
+  const [room] = await tx.select({ abandons: rooms.abandons }).from(rooms).where(eq(rooms.id, roomId));
+  const known = new Map((room?.abandons ?? []).map((a) => [a.key, a]));
+  for (const row of present) known.set(row.key, row);
+  await tx.update(rooms).set({ abandons: [...known.values()] }).where(eq(rooms.id, roomId));
 }
 
 /**

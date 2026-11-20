@@ -9,9 +9,9 @@ import { createCourse, createRace, type Race } from "../game/race";
 import { abandonOver, handOverPlayers, markAbandoned } from "../game/abandon";
 import type { Answer } from "../room/api";
 import type { Player } from "../room/room";
-import { abandonedNames, mergeAbandoned } from "./after-race";
+import { abandonedNames, knownAbandons, mergeAbandoned } from "./after-race";
 import { PodiumBoard } from "./PodiumBoard";
-import { buildResults, finalRanking, toResults, type PlayerResult } from "./results";
+import { buildResults, finalRanking, toResults, withRoomResults, type PlayerResult, type RaceResults } from "./results";
 
 const player = (name: string, extra: Partial<PlayerResult> = {}): PlayerResult => ({
   name, rank: 0, me: false, bot: false, wpm: 40, raw: 40, accuracy: 90, seconds: 10, chars: [1, 0, 0, 0], consistency: 0, idle: 0, finished: false, eliminated: false, wpmSeries: [], rawSeries: [], errorSeries: [], keys: {}, ...extra,
@@ -129,9 +129,19 @@ describe("COURSE-10 — an abandon is never forgotten by the podium", () => {
       room: {
         code: "ABC234", status: "racing", host: "player:0", passage: null, seed: null, startsAt: null, endsAt: null, textHash: null, settings: {} as RoomView["settings"],
         members: members.map((m, seat) => ({ key: `player:${seat}`, name: m.name, guest: false, host: seat === 0, role: "player", seat, color: null, finished: false, ...(m.abandoned ? { abandoned: true } : {}) })),
-        ...(abandoned ? { abandoned } : {}),
+        ...(abandoned ? { abandoned: abandoned.map((name) => ({ name, progress: 0.5 })) } : {}),
       },
     },
+  });
+
+  test("the room's abandons come with the progress kept by the server, the members' ones without", () => {
+    expect(knownAbandons(room([{ name: "Moi" }, { name: "Reste", abandoned: true }], ["Parti"]))).toEqual([{ name: "Parti", progress: 0.5 }, { name: "Reste" }]);
+  });
+
+  test("4: an abandon missing from my lanes (he left before my page was built) still gets his row, among the abandons by progress", () => {
+    const ranked = finalRanking([player("Moi", { me: true, progress: 0.1 }), player("Autre", { abandoned: true, progress: 0.3 })], [{ name: "Parti", progress: 0.5 }]);
+    expect(order(ranked)).toEqual([["Moi", 1], ["Parti", 2], ["Autre", 3]]);
+    expect(ranked[1]).toMatchObject({ abandoned: true, finished: false, bot: false, me: false, wpm: 0, progress: 0.5 });
   });
 
   test("a member who abandoned then left the room is still read as abandoned (room.abandoned)", () => {
@@ -189,5 +199,36 @@ describe("COURSE-10 — the podium of the player who abandons shows the final ra
   test("guest history: the rank of a guest who abandoned at 26 % behind a 0 % runner is 2, not 1", () => {
     const final = handOverPlayers([player("Moi", { me: true, progress: 0.26 }), player("Immobile", { progress: 0 })], true, null);
     expect(final.find((p) => p.me)).toMatchObject({ rank: 2, abandoned: true });
+  });
+
+  test("10.3d: the hand-over merges the abandons the server knows, so another abandon ranks behind me when I am still racing", () => {
+    const built = [player("Autre", { progress: 0.8 }), player("Moi", { me: true, progress: 0.3 })];
+    const final = handOverPlayers(built, false, null, [{ name: "Autre", progress: 0.8 }]);
+    expect(order(final)).toEqual([["Moi", 1], ["Autre", 2]]);
+    expect(final[1]!.abandoned).toBe(true);
+  });
+
+  test("10.3d: after my abandon, another abandon at higher progress ranks before me, and a runner before both", () => {
+    const built = [player("Autre", { progress: 0.8 }), player("Moi", { me: true, progress: 0.3 }), player("Course", { progress: 0.1 })];
+    const final = handOverPlayers(built, true, null, [{ name: "Autre" }]);
+    expect(order(final)).toEqual([["Course", 1], ["Autre", 2], ["Moi", 3]]);
+  });
+});
+
+describe("COURSE-10 — after a reload, the abandoner's podium reads the final state of the others", () => {
+  test("results saved at the abandon are provisional, and stay so through the session storage", () => {
+    expect(toResults({ summary: {}, players: [{ name: "Moi" }], provisional: true })?.provisional).toBe(true);
+    expect(toResults({ summary: {}, players: [{ name: "Moi" }] })?.provisional).toBeUndefined();
+  });
+
+  test("the race recorded later replaces the snapshot: server order and ranks, my own frozen row in my place", () => {
+    const stored = { summary: {} as RaceResults["summary"], room: "ABC234", provisional: true, players: [player("Moi", { me: true, abandoned: true, progress: 0.3, wpm: 33, rank: 2 }), player("Lent", { progress: 0.2, rank: 1 })] };
+    const recorded = { summary: {} as RaceResults["summary"], players: [player("Lent", { finished: true, rank: 1, wpm: 50 }), player("Thon_Rouge", { bot: true, rank: 2 }), player("Moi", { me: true, abandoned: true, rank: 3, wpm: 12 })] };
+    const merged = withRoomResults(stored, recorded);
+    expect(merged.provisional).toBeUndefined();
+    expect(merged.room).toBe("ABC234");
+    expect(order(finalRanking(merged.players))).toEqual([["Lent", 1], ["Thon_Rouge", 2], ["Moi", 3]]);
+    expect(merged.players[2]).toMatchObject({ me: true, abandoned: true, wpm: 33 });
+    expect(merged.players[0]).toMatchObject({ me: false, wpm: 50 });
   });
 });

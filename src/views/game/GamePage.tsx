@@ -3,7 +3,8 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import { HangingButton } from "../../components/buttons/HangingButton";
 import { FLOATING_TABS, LanguageSwitcher } from "../../components/tabs/LanguageSwitcher";
-import { buildResults, buildSummary, markSessionStart, rememberSubmit, saveResults, sessionSeconds, submitRace, type PlayerResult } from "../podium/results";
+import { knownAbandons } from "../podium/after-race";
+import { buildResults, buildSummary, markSessionStart, rememberSubmit, saveResults, sessionSeconds, submitRace, type PlayerResult, type SubmitOutcome } from "../podium/results";
 import { roomApi } from "../room/api";
 import { useRoom, type RoomState } from "../room/hooks/useRoom";
 import { rememberGuestRace } from "../profile/stats";
@@ -104,14 +105,20 @@ function GameRace({ state, onHandOver }: { state: RoomState; onHandOver?: (sendi
   }, []);
 
   // COURSE-10 : mon résultat figé à l'abandon ; la page suit ensuite la course jusqu'à sa fin pour le classement final.
-  // Gardé aussitôt : un rechargement entre-temps mène au podium (raceExit), qui trouve ce classement provisoire.
+  // Gardé aussitôt (provisoire) : un rechargement entre-temps mène au podium (raceExit), qui relit ensuite l'état final.
+  // COURSE-07 : la course part au serveur dès l'abandon ; elle reste enregistrée si le joueur part ou recharge.
   const atAbandon = useRef<PlayerResult | null>(null);
+  const abandonSent = useRef<Promise<SubmitOutcome> | null>(null);
   useEffect(() => {
     if (!abandoned || atAbandon.current) return;
     const built = buildResults(race, players);
     atAbandon.current = built.find((player) => player.me) ?? null;
-    saveResults({ players: handOverPlayers(built, true, atAbandon.current), summary: buildSummary(race, room, sessionSeconds()), room: room.code });
-  }, [abandoned, race, players, room]);
+    const results = { players: handOverPlayers(built, true, atAbandon.current), summary: buildSummary(race, room, sessionSeconds()), room: room.code };
+    saveResults({ ...results, provisional: true });
+    abandonSent.current = submitRace(results, race.course.words.join(" "));
+    void abandonSent.current.then(rememberSubmit);
+    finish();
+  }, [abandoned, race, players, room, finish]);
   // /game ne suit pas le salon (useRoom) : après l'abandon, la page relit son état pour voir la course finir
   const [roomStatus, setRoomStatus] = useState(state.status);
   useEffect(() => {
@@ -135,22 +142,28 @@ function GameRace({ state, onHandOver }: { state: RoomState; onHandOver?: (sendi
     // une seule fois : une frappe ou un salon mis à jour pendant l'envoi relancerait l'effet
     if (!over || submitted.current) return;
     submitted.current = true;
-    const results = { players: handOverPlayers(buildResults(race, players), abandoned, atAbandon.current), summary: buildSummary(race, room, sessionSeconds()), room: room.code };
-    saveResults(results);
-    // un spectateur n'a ni course à enregistrer ni salon à terminer : il voit seulement le podium
-    if (watching) {
-      location.replace("/podium");
-      return;
-    }
-    const me = results.players.find((player) => player.me);
-    if (me) rememberGuestRace({ at: new Date().toISOString(), wpm: me.wpm, accuracy: me.accuracy, rank: me.rank, keys: me.keys, ...(me.abandoned ? { abandoned: true } : {}) });
-    const sent = submitRace(results, race.course.words.join(" "));
-    finish(); // SALLE-09 : le salon passe aux résultats et accepte de nouveau des arrivants
-    // le retour arrière ne relance pas une course ; la page attend la réponse (un instant en keepalive), un refus est dit au podium
-    void sent.then((outcome) => {
-      rememberSubmit(outcome);
-      location.replace("/podium");
-    });
+    const built = buildResults(race, players);
+    void (async () => {
+      // COURSE-10 : les abandons notés par le serveur (même partis du salon), fusionnés comme sur le podium
+      const known = room.code ? knownAbandons(await roomApi.read(room.code)) : [];
+      const results = { players: handOverPlayers(built, abandoned, atAbandon.current, known), summary: buildSummary(race, room, sessionSeconds()), room: room.code };
+      saveResults(results);
+      // un spectateur n'a ni course à enregistrer ni salon à terminer : il voit seulement le podium
+      if (watching) {
+        location.replace("/podium");
+        return;
+      }
+      const me = results.players.find((player) => player.me);
+      if (me) rememberGuestRace({ at: new Date().toISOString(), wpm: me.wpm, accuracy: me.accuracy, rank: me.rank, keys: me.keys });
+      // après un abandon, la course est déjà partie (un seul envoi par lancement) : on attend seulement sa réponse
+      const sent = abandonSent.current ?? submitRace(results, race.course.words.join(" "));
+      if (!abandonSent.current) finish(); // SALLE-09 : le salon passe aux résultats et accepte de nouveau des arrivants
+      // le retour arrière ne relance pas une course ; la page attend la réponse (un instant en keepalive), un refus est dit au podium
+      void sent.then((outcome) => {
+        rememberSubmit(outcome);
+        location.replace("/podium");
+      });
+    })();
   }, [over, abandoned, race, players, room, finish, watching]);
 
   return (

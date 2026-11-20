@@ -5,9 +5,10 @@ import { raceResults, races, user } from "../../db/schema";
 import { createMockDatabase } from "../../db/mocks/test-database";
 import { placeholderEmail } from "../accounts/username";
 import { createAuth } from "./auth";
+import { raceDetail } from "./history";
 import { handleRace, rankByServer, type ServerStanding } from "./races";
 import { launchedRoomFor } from "./races.fixture";
-import { abandonRace, memberKey, recordProgress } from "./rooms";
+import { abandonRace, leaveRoom, memberKey, recordProgress } from "./rooms";
 
 process.env.BETTER_AUTH_SECRET ??= "test-secret-test-secret-test-secret";
 process.env.BETTER_AUTH_URL ??= "http://localhost:3000";
@@ -131,6 +132,9 @@ describe("COURSE-10 — the recorded race follows the final ranking", () => {
     const [race] = await db.select({ others: races.others }).from(races).where(eq(races.id, raceId));
     expect(race!.others).toEqual([expect.objectContaining({ name: "Dix_Immobile", rank: 1, abandoned: false })]);
     expect(race!.others[0]).not.toHaveProperty("progress");
+    // /podium?race=N le montre « abandon », comme le podium de la course
+    const detail = await raceDetail(db, me.playerId, raceId);
+    expect(detail.players.map((p) => [p.name, p.rank, !!p.abandoned])).toEqual([["Dix_Immobile", 1, false], ["Dix_Parti", 2, true]]);
   });
 
   test("a finished bot of the room is recorded after the human the server saw finish, before an unfinished one", async () => {
@@ -151,5 +155,39 @@ describe("COURSE-10 — the recorded race follows the final ranking", () => {
     const { code } = await launchedRoomFor(db, auth, me.cookie, GUEST_SECRET, 10_000);
     expect((await post({ room: code, summary: SUMMARY, players: [result("Dix_Borne", { progress: 1.5 })] }, me.cookie)).status).toBe(400);
     expect((await post({ room: code, summary: SUMMARY, players: [result("Dix_Borne", { progress: "0.5" })] }, me.cookie)).status).toBe(400);
+  });
+
+  /** Un compte qui court à 10 % ; Parti abandonne à 60 % puis quitte le salon ; Reste abandonne à 20 % et reste. */
+  const departed = async (prefix: string) => {
+    const me = await signUp(`${prefix}_Moi`);
+    const gone = { kind: "guest" as const, name: `${prefix}_Parti`, sessionId: crypto.randomUUID() };
+    const stays = { kind: "guest" as const, name: `${prefix}_Reste`, sessionId: crypto.randomUUID() };
+    const { code, who } = await launchedRoomFor(db, auth, me.cookie, GUEST_SECRET, 10_000, [gone, stays]);
+    await recordProgress(db, code, memberKey(who), 0.1);
+    await recordProgress(db, code, memberKey(gone), 0.6);
+    await recordProgress(db, code, memberKey(stays), 0.2);
+    await abandonRace(db, code, gone);
+    await abandonRace(db, code, stays);
+    await leaveRoom(db, code, gone);
+    return { me, code };
+  };
+  const recorded = async (raceId: number) => (await db.select({ others: races.others }).from(races).where(eq(races.id, raceId)))[0]!.others;
+
+  test("10.3b: an abandon who left the room keeps his status and his place by progress", async () => {
+    const { me, code } = await departed("Dix_Gone");
+    const res = await post({ room: code, summary: SUMMARY, players: [result("Dix_Gone_Reste"), result("Dix_Gone_Parti"), result("Dix_Gone_Moi")] }, me.cookie);
+    expect(res.status).toBe(201);
+    const others = await recorded(((await res.json()) as { raceId: number }).raceId);
+    expect(others.map((o) => [o.name, o.rank, o.abandoned])).toEqual([["Dix_Gone_Parti", 2, true], ["Dix_Gone_Reste", 3, true]]);
+    const [mine] = await db.select({ rank: raceResults.rank }).from(raceResults).where(eq(raceResults.playerId, me.playerId));
+    expect(mine!.rank).toBe(1);
+  });
+
+  test("an abandon who left and is missing from the body (lanes built after his departure) is still recorded, as abandoned", async () => {
+    const { me, code } = await departed("Dix_Absent");
+    const res = await post({ room: code, summary: SUMMARY, players: [result("Dix_Absent_Moi"), result("Dix_Absent_Reste")] }, me.cookie);
+    expect(res.status).toBe(201);
+    const others = await recorded(((await res.json()) as { raceId: number }).raceId);
+    expect(others.map((o) => [o.name, o.rank, o.abandoned, o.finished])).toEqual([["Dix_Absent_Parti", 2, true, false], ["Dix_Absent_Reste", 3, true, false]]);
   });
 });

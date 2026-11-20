@@ -11,6 +11,7 @@ import type { Guard } from "./rate-limit";
 import { guestSecret } from "./guest";
 import { createInvite, listInvites } from "./room-invites";
 import { roomIdentity } from "./room-gate";
+import { roomRaceResults } from "./history";
 import { abandonRace, closeRoom, CodeExhausted, createRoom, finishRoom, joinRoom, kickMember, launchRoom, leaveRoom, listPublicRooms, quickJoin, readRoom, RoomRefused, updateRoom, type RefusalReason, type RoomResult } from "./rooms";
 
 const STATUS: Record<RefusalReason, number> = { not_found: 404, not_member: 403, not_host: 403, full: 409, in_race: 409, closed: 410, already_in_room: 409, kicked: 403, invalid_target: 400, unknown_member: 404, invite_taken: 403, invite_limit: 409, not_enough_players: 409, no_room: 404, not_results: 409, not_racing: 409, not_player: 403, already_finished: 409 };
@@ -154,6 +155,11 @@ export async function handleRoomsApi(req: Request, db: Db, auth: Auth, secret = 
     const input = AbandonSchema.safeParse(await optionalBodyOf(req));
     if (!input.success) return json({ error: "invalid_body" }, 400);
     return run(() => abandonRace(db, code, who), 200, () => changed(code));
+  }
+  // GET /api/rooms/:code/results — COURSE-10 : la dernière course enregistrée du lancement en cours, pour un membre
+  if (code && isRoomCode(code) && action === "results" && req.method === "GET") {
+    if (!who) return json({ error: "unauthorized" }, 401);
+    return run(() => roomRaceResults(db, code, who));
   }
   // POST /api/rooms/:code/finish — SALLE-09 : la course est finie, le salon passe aux résultats
   if (code && isRoomCode(code) && action === "finish" && req.method === "POST") {

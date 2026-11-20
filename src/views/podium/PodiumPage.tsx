@@ -7,7 +7,10 @@ import { useAfterRace } from "./hooks/useAfterRace";
 import { useRaceResults, type ResultsState } from "./hooks/useRaceResults";
 import { PodiumBoard } from "./PodiumBoard";
 import { PodiumScene } from "./PodiumScene";
-import { backToRoomHref, finalRanking, raceErrorKey, saveResults, submitFailed, type RaceResults } from "./results";
+import { backToRoomHref, fetchRoomResults, finalRanking, raceErrorKey, saveResults, submitFailed, withRoomResults, type RaceResults } from "./results";
+
+/** COURSE-10 : relecture des résultats finaux, après un abandon suivi d'un rechargement. */
+const REFRESH_MS = 3000;
 
 /** Une course de l'historique lue par le serveur : ses résultats, ou le code du refus. */
 export type ServerRace = { raceId: number; results: RaceResults } | { raceId: number; error: string };
@@ -49,7 +52,27 @@ export function PodiumPage({ race }: { race?: ServerRace }) {
   // COURSE-10 : la course jouée dans l'onglet est reclassée (terminés, non terminés, abandons), avec les abandons notés
   // par le serveur ; une course de l'historique garde les rangs enregistrés par le serveur. Le classement est gardé pour
   // que le profil ouvert depuis le tableau (?player=N) montre le même joueur.
-  const tabResults = loaded.status === "ready" && loaded.raceId === null ? loaded.results : null;
+  // Des résultats gardés à l'abandon (provisional, après un rechargement) : une fois la course finie, la dernière course
+  // enregistrée pour ce lancement les remplace (état final des autres).
+  const [refreshed, setRefreshed] = useState<RaceResults | null>(null);
+  const stored = loaded.status === "ready" && loaded.raceId === null ? loaded.results : null;
+  const tabResults = refreshed ?? stored;
+  const provisional = !!tabResults?.provisional && after.over;
+  useEffect(() => {
+    if (!provisional || !stored?.room) return;
+    let live = true;
+    const code = stored.room;
+    const read = async () => {
+      const recorded = await fetchRoomResults(code);
+      if (live && recorded) setRefreshed(withRoomResults(stored, recorded));
+    };
+    void read();
+    const timer = setInterval(() => void read(), REFRESH_MS);
+    return () => {
+      live = false;
+      clearInterval(timer);
+    };
+  }, [provisional, stored]);
   const ranked = useMemo(() => (tabResults ? finalRanking(tabResults.players, after.abandoned) : null), [tabResults, after.abandoned]);
   useEffect(() => {
     if (tabResults && ranked) saveResults({ ...tabResults, players: ranked });

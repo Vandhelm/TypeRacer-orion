@@ -189,7 +189,8 @@ const sameName = (a: string, b: string | null | undefined) => !!b && a.toLowerCa
 export type ServerStanding = { finishedAt: Date | null; progress: number; abandonedAt?: Date | null; seat?: number | null };
 /** COURSE-06 : ce que le serveur sait de la course : son départ, si l'expéditeur est arrivé, et le classement des humains (par nom en minuscules). */
 /** COURSE-07 : abandoned, l'expéditeur a abandonné (vu par le serveur, jamais par le corps). */
-export type ServerRace = { startedAt: Date; finished: boolean; abandoned?: boolean; standings?: Map<string, ServerStanding>; bots?: Set<string> };
+/** COURSE-10 : roomId, le salon de la course (races.room_id) ; departed, les abandons partis du salon, ajoutés s'ils manquent au corps. */
+export type ServerRace = { startedAt: Date; finished: boolean; abandoned?: boolean; standings?: Map<string, ServerStanding>; bots?: Set<string>; roomId?: number; departed?: { name: string; progress: number }[] };
 
 /**
  * COURSE-10 : le classement final, refait d'après le serveur (COURSE-06). `bots` : les bots du salon, décidés par le
@@ -225,13 +226,23 @@ export function rankByServer<T extends { name: string; rank: number; finished?: 
   return [...arrived, ...botRows.filter((r) => r.finished), ...blindBots, ...racing, ...abandoned, ...unknown].map((r, index) => ({ ...r, rank: index + 1 }));
 }
 
+/** COURSE-10 : la ligne d'un joueur absent du corps, sans aucune mesure. */
+const absentResult = (name: string): ParsedRace["results"][number] => ({
+  name, bot: false, rank: 0, wpm: 0, raw: 0, accuracy: 0, seconds: 0, correctChars: 0, wrongChars: 0, extraChars: 0, missedChars: 0,
+  consistency: 0, idle: 0, finished: false, eliminated: false, wpmSeries: [], rawSeries: [], errorSeries: [], keys: {},
+});
+
 export async function recordRace(db: Db, parsed: ParsedRace, requester: Requester = {}, server?: ServerRace) {
   // COURSE-06 : avec le serveur, le statut bot vient de lui (les bots du salon), jamais du corps ; le rang aussi
   const serverBots = server?.bots;
   // COURSE-07 : l'abandon d'un humain est celui que le serveur a noté (room_members.abandoned_at), jamais le corps ;
   // un abandon n'est pas une arrivée
   const abandonedOf = (name: string) => !!server?.standings?.get(name.toLowerCase())?.abandonedAt;
-  const results = (serverBots ? parsed.results.map((r) => ({ ...r, bot: serverBots.has(r.name.toLowerCase()) })) : parsed.results).map((r) => {
+  // COURSE-10 : un abandon parti du salon avant que l'expéditeur n'ouvre sa course n'a pas de couloir chez lui : il est
+  // gardé quand même, sans mesures (le serveur n'en connaît que la progression)
+  const missing = (server?.departed ?? []).filter((d) => !parsed.results.some((r) => sameName(r.name, d.name)));
+  const body = [...parsed.results, ...missing.map((d) => ({ ...absentResult(d.name), progress: d.progress }))];
+  const results = (serverBots ? body.map((r) => ({ ...r, bot: serverBots.has(r.name.toLowerCase()) })) : body).map((r) => {
     const abandoned = !r.bot && abandonedOf(r.name);
     // COURSE-10 : l'arrivée d'un humain connu du serveur est celle qu'il a vue, comme son rang
     const standing = r.bot ? undefined : server?.standings?.get(r.name.toLowerCase());
@@ -267,7 +278,7 @@ export async function recordRace(db: Db, parsed: ParsedRace, requester: Requeste
     const startedAt = server?.startedAt ?? new Date(Date.now() - longest * 1000);
     const [row] = await tx
       .insert(races)
-      .values({ clientId: race.id, configId: config!.id, content: race.content, others, startedAt, finishedAt: new Date() })
+      .values({ clientId: race.id, configId: config!.id, content: race.content, others, startedAt, finishedAt: new Date(), roomId: server?.roomId ?? null })
       .onConflictDoNothing({ target: races.clientId })
       .returning({ id: races.id });
     if (!row) throw new DuplicateRace("Race already recorded");
@@ -295,7 +306,7 @@ export const ELAPSED_TOLERANCE_SECONDS = 2;
 export async function claimServerRace(db: Db, race: ParsedRace, key: string | null): Promise<ServerRace & { release: () => Promise<void> }> {
   if (!race.room || !key) throw new RaceRefused("race_not_launched");
   const [row] = await db
-    .select({ roomId: rooms.id, launchedAt: rooms.launchedAt, duration: raceConfigs.duration, progress: roomMembers.progress, abandonedAt: roomMembers.abandonedAt, bots: rooms.bots, guests: rooms.guests })
+    .select({ roomId: rooms.id, launchedAt: rooms.launchedAt, duration: raceConfigs.duration, progress: roomMembers.progress, abandonedAt: roomMembers.abandonedAt, bots: rooms.bots, guests: rooms.guests, abandons: rooms.abandons })
     .from(rooms)
     .innerJoin(raceConfigs, eq(raceConfigs.id, rooms.configId))
     .innerJoin(roomMembers, and(eq(roomMembers.roomId, rooms.id), eq(roomMembers.memberKey, key)))
@@ -316,13 +327,20 @@ export async function claimServerRace(db: Db, race: ParsedRace, key: string | nu
   // (seatsOf) ; jamais un nom porté par un membre humain
   const humans = runners.filter((r) => !r.isBot);
   const humanNames = new Set(humans.map((r) => r.name.toLowerCase()));
-  const seatBots = row.bots ? BOT_NAMES.slice(0, Math.max(0, row.guests - runners.length)) : [];
+  // COURSE-10 : les abandons partis du salon depuis (rooms.abandons) restent des humains qui ont abandonné, à leur progression
+  const departed = row.abandons.filter((a) => !humanNames.has(a.name.toLowerCase()));
+  for (const a of departed) humanNames.add(a.name.toLowerCase());
+  const seatBots = row.bots ? BOT_NAMES.slice(0, Math.max(0, row.guests - runners.length - departed.length)) : [];
   const bots = new Set([...runners.filter((r) => r.isBot).map((r) => r.name), ...seatBots].map((name) => name.toLowerCase()).filter((name) => !humanNames.has(name)));
+  const standings = new Map<string, ServerStanding>(humans.map((r) => [r.name.toLowerCase(), { finishedAt: r.finishedAt, progress: r.progress, abandonedAt: r.abandonedAt, seat: r.seat }]));
+  for (const a of departed) standings.set(a.name.toLowerCase(), { finishedAt: null, progress: a.progress, abandonedAt: new Date(startsAt), seat: a.seat });
   return {
+    roomId: row.roomId,
     startedAt: new Date(startsAt),
     finished: row.progress >= 1 && row.abandonedAt === null,
     abandoned: row.abandonedAt !== null,
-    standings: new Map(humans.map((r) => [r.name.toLowerCase(), { finishedAt: r.finishedAt, progress: r.progress, abandonedAt: r.abandonedAt, seat: r.seat }])),
+    standings,
+    departed: departed.map(({ name, progress }) => ({ name, progress })),
     bots,
     release: async () => void (await db.update(roomMembers).set({ raceRecorded: false }).where(member)),
   };

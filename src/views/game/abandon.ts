@@ -1,7 +1,7 @@
 // COURSE-07 : abandonner la course, après confirmation. Le serveur enregistre l'abandon et gèle la progression
 // (POST /api/rooms/:code/abandon) ; la page suit la course jusqu'à sa fin (COURSE-10), puis passe au podium, où le joueur
 // figure parmi les abandons.
-import { finalRanking, type PlayerResult } from "../podium/results";
+import { finalRanking, type KnownAbandon, type PlayerResult } from "../podium/results";
 import { roomHrefOutsideRace } from "../room/room";
 import type { RoomView } from "../../server/rooms";
 import type { Race } from "./race";
@@ -78,8 +78,10 @@ export function abandonOver(race: Pick<Race, "phase" | "bots">, status: RoomView
 /**
  * COURSE-10 : les résultats confiés au podium, dans l'ordre final (finalRanking). Après un abandon, mon résultat est
  * celui figé au moment de l'abandon (atAbandon : temps, MPM, progression), marqué abandon ; les autres, leur état final.
+ * `known` : les abandons des autres que le serveur a notés (relecture du salon), fusionnés comme sur le podium ; le rang
+ * de l'historique d'un invité vient de ce classement.
  */
-export function handOverPlayers(built: PlayerResult[], abandoned: boolean, atAbandon: PlayerResult | null): PlayerResult[] {
-  if (!abandoned) return finalRanking(built);
-  return finalRanking(markAbandoned(built.map((player) => (player.me && atAbandon ? { ...atAbandon, rank: player.rank } : player))));
+export function handOverPlayers(built: PlayerResult[], abandoned: boolean, atAbandon: PlayerResult | null, known: KnownAbandon[] = []): PlayerResult[] {
+  if (!abandoned) return finalRanking(built, known);
+  return finalRanking(markAbandoned(built.map((player) => (player.me && atAbandon ? { ...atAbandon, rank: player.rank } : player))), known);
 }

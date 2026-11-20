@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { roomApi } from "../../room/api";
-import { abandonedNames, afterRace, mergeAbandoned, ROOM_CLOSED_HREF } from "../after-race";
+import { afterRace, knownAbandons, mergeAbandoned, ROOM_CLOSED_HREF } from "../after-race";
+import type { KnownAbandon } from "../results";
 import type { AfterRaceControls } from "../PodiumActions";
 
 /** Assez vif pour suivre une relance de l'hôte ; chaque relecture est aussi le signe de vie du membre (SALLE-08). */
@@ -11,10 +12,11 @@ const FOLLOW_MS = 3000;
  * quittant le podium ferait sortir le membre). Le serveur dit qui est hôte ; une course relancée emmène à /game,
  * une salle fermée renvoie à l'accueil. code : le salon de la course, ou undefined (rien à suivre).
  */
-export function useAfterRace(code: string | undefined): AfterRaceControls & { abandoned: string[] } {
+export function useAfterRace(code: string | undefined): AfterRaceControls & { abandoned: KnownAbandon[]; over: boolean } {
   const [host, setHost] = useState<boolean | null>(null);
-  // COURSE-10 : qui a abandonné, selon le serveur
-  const [abandoned, setAbandoned] = useState<string[]>([]);
+  // COURSE-10 : qui a abandonné, selon le serveur ; over : le salon n'est plus en course (la course est finie)
+  const [abandoned, setAbandoned] = useState<KnownAbandon[]>([]);
+  const [over, setOver] = useState(false);
   const ended = useRef(false);
 
   useEffect(() => {
@@ -24,7 +26,8 @@ export function useAfterRace(code: string | undefined): AfterRaceControls & { ab
       const reply = await roomApi.read(code);
       if (!live) return;
       // un abandon vu reste vu : le membre parti ensuite, ou une relecture ratée, ne l'efface pas
-      setAbandoned((current) => mergeAbandoned(current, abandonedNames(reply)));
+      setAbandoned((current) => mergeAbandoned(current, knownAbandons(reply)));
+      if (reply.ok && reply.result.room.status !== "racing") setOver(true);
       const next = afterRace(reply, ended.current);
       ended.current = next.ended;
       if (next.go) {
@@ -55,5 +58,5 @@ export function useAfterRace(code: string | undefined): AfterRaceControls & { ab
     void roomApi.leave(code).then(() => location.assign("/home#rooms"));
   }, [code]);
 
-  return { host, close, leave, abandoned };
+  return { host, close, leave, abandoned, over };
 }
