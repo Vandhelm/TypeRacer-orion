@@ -9,6 +9,7 @@ import { createCourse, createRace } from "../views/game/race";
 import { buildResults, buildSummary, raceBody } from "../views/podium/results";
 import type { Room } from "../views/room/room";
 import { handleRace, InvalidRace, parseRace, playerStats, recordRace } from "./races";
+import { launchedRoomFor } from "./races.fixture";
 
 process.env.BETTER_AUTH_SECRET ??= "test-secret-test-secret-test-secret";
 process.env.BETTER_AUTH_URL ??= "http://localhost:3000";
@@ -25,6 +26,10 @@ const result = (name: string, bot: boolean, wpm: number) => ({
 
 /** Chaque envoi de course porte l'identifiant unique de sa course (AUTH-06.6), sauf si le test en donne un. */
 const withId = (body: unknown) => (body && typeof body === "object" && !("id" in body) ? { id: crypto.randomUUID(), ...body } : body);
+type Db = Awaited<ReturnType<typeof createMockDatabase>>;
+/** COURSE-06 : une course n'est enregistrée que si le serveur l'a lancée ; chaque envoi part d'un salon lancé, dont la session est membre. */
+const withRoom = async (db: Db, auth: ReturnType<typeof createAuth>, body: unknown, cookie?: string) =>
+  cookie && body && typeof body === "object" && !("room" in body) ? { ...body, room: (await launchedRoomFor(db, auth, cookie, GUEST_SECRET).catch(() => null))?.code } : body;
 
 describe("races", () => {
   let db: Awaited<ReturnType<typeof createMockDatabase>>;
@@ -99,8 +104,8 @@ describe("AUTH-06 — a signed-in account keeps its races", () => {
     return headers.get("set-cookie")!.split(";")[0]!;
   };
   const accountPlayer = async (name: string) => (await db.select({ playerId: user.playerId }).from(user).where(eq(user.username, name.toLowerCase())))[0]!.playerId!;
-  const post = (body: unknown, cookie?: string) =>
-    handleRace(new Request("http://localhost/api/races", { method: "POST", headers: { "content-type": "application/json", ...(cookie && { cookie }) }, body: JSON.stringify(withId(body)) }), db, auth, GUEST_SECRET);
+  const post = async (body: unknown, cookie?: string) =>
+    handleRace(new Request("http://localhost/api/races", { method: "POST", headers: { "content-type": "application/json", ...(cookie && { cookie }) }, body: JSON.stringify(await withRoom(db, auth, withId(body), cookie)) }), db, auth, GUEST_SECRET);
   const resultsOf = async (playerId: number) => db.$count(raceResults, eq(raceResults.playerId, playerId));
 
   test("records the race of the player linked to the account", async () => {
@@ -189,8 +194,8 @@ describe("AUTH-03 — the server decides who is a bot, never the body", () => {
     db = await createMockDatabase();
     auth = createAuth(db);
   });
-  const post = (body: unknown, cookie: string) =>
-    handleRace(new Request("http://localhost/api/races", { method: "POST", headers: { "content-type": "application/json", cookie }, body: JSON.stringify(withId(body)) }), db, auth, GUEST_SECRET);
+  const post = async (body: unknown, cookie: string) =>
+    handleRace(new Request("http://localhost/api/races", { method: "POST", headers: { "content-type": "application/json", cookie }, body: JSON.stringify(await withRoom(db, auth, withId(body), cookie)) }), db, auth, GUEST_SECRET);
 
   test("a human account posted as a bot gets no row and no new race", async () => {
     const before = await playerStats(db, "Corail_418");
@@ -226,7 +231,7 @@ describe("TECH-07 — the body of /api/races is checked by a schema", () => {
   /** Envoie le corps tel quel (texte JSON), avec une session d'invité valide. */
   const send = (raw: string) =>
     handleRace(new Request("http://localhost/api/races", { method: "POST", headers: { "content-type": "application/json", cookie }, body: raw }), db, auth, GUEST_SECRET);
-  const post = (body: unknown) => send(JSON.stringify(body));
+  const post = async (body: unknown) => send(JSON.stringify(await withRoom(db, auth, body, cookie)));
   const race = (players: unknown, summary: unknown = SUMMARY) => ({ id: crypto.randomUUID(), summary, players });
   const keyed = (keys: unknown) => ({ ...result("Wasabi_Bot", true, 50), keys });
 
@@ -348,7 +353,7 @@ describe("TECH-07 — the real body of the client is accepted", () => {
     expect(body.players[0].me).toBe(true);
     expect(body.players[0].keys).not.toEqual({});
     expect(body.players[1].keys).toEqual({});
-    const res = await handleRace(new Request("http://localhost/api/races", { method: "POST", headers: { "content-type": "application/json", cookie }, body: JSON.stringify(body) }), db, auth, GUEST_SECRET);
+    const res = await handleRace(new Request("http://localhost/api/races", { method: "POST", headers: { "content-type": "application/json", cookie }, body: JSON.stringify(await withRoom(db, auth, body, cookie)) }), db, auth, GUEST_SECRET);
     expect(res.status).toBe(201);
     const { raceId } = await res.json();
     const rows = await db.select().from(raceResults).where(eq(raceResults.raceId, raceId));
@@ -360,7 +365,7 @@ describe("TECH-07 — the real body of the client is accepted", () => {
 
   test("the same body with a guest cookie is accepted (201, the bot is kept)", async () => {
     const cookie = `${GUEST_COOKIE}=${signGuest("Invite_Client", GUEST_SECRET)}`;
-    const res = await handleRace(new Request("http://localhost/api/races", { method: "POST", headers: { "content-type": "application/json", cookie }, body: JSON.stringify(clientBody()) }), db, auth, GUEST_SECRET);
+    const res = await handleRace(new Request("http://localhost/api/races", { method: "POST", headers: { "content-type": "application/json", cookie }, body: JSON.stringify(await withRoom(db, auth, clientBody(), cookie)) }), db, auth, GUEST_SECRET);
     expect(res.status).toBe(201);
   });
 });
