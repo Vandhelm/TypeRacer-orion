@@ -196,11 +196,26 @@ describe("BOT-02 — a bot's speed varies: accelerations, hesitations, slower on
     expect(wordDifficulty("")).toBe(0);
   });
 
-  test("the same bot types difficult words slower than easy words of the same length", () => {
-    const easy = Array.from({ length: 60 }, () => "makis");
-    const hard = Array.from({ length: 60 }, () => "Ébène");
-    const speeds = (words: string[]) => SEEDS.map((seed) => textChars(words) / finish(words, { ...bot(seed), accuracy: 100 }).arrivedMs!);
-    expect(mean(speeds(hard))).toBeLessThan(mean(speeds(easy)) * 0.85);
+  test("in the same text, the bot spends longer on a difficult word than on an easy word of the same length", () => {
+    // un mot sur deux difficile : le moteur compense le texte entier, pas chaque mot
+    const words = Array.from({ length: 60 }, (_, i) => (i % 2 ? "Ébène" : "makis"));
+    const text = botText(words, "fix");
+    const ticks = { easy: 0, hard: 0 };
+    for (const seed of SEEDS) {
+      for (const state of trace(words, { ...bot(seed), accuracy: 100 }, 400).slice(1)) {
+        if (state.chars >= text.marks.at(-1)!) break;
+        const word = text.marks.findLastIndex((mark) => mark <= state.chars);
+        ticks[word % 2 ? "hard" : "easy"] += 1;
+      }
+    }
+    expect(ticks.hard).toBeGreaterThan(ticks.easy * 1.2);
+  });
+
+  test("a text full of difficult words is compensated as a whole: the bot's mean net WPM stays in its range", () => {
+    const hard = Array.from({ length: 60 }, () => "Ébène,");
+    const wpms = SEEDS.map((seed) => netWpm(hard, finish(hard, bot(seed))));
+    expect(mean(wpms)).toBeGreaterThanOrEqual(35);
+    expect(mean(wpms)).toBeLessThanOrEqual(60);
   });
 });
 

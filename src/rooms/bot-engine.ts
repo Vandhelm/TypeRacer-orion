@@ -9,7 +9,6 @@ import type { RoomSettings } from "./settings";
 import { seededRandom } from "./text";
 
 export const BOT_TICK_MS = 200;
-const CHARS_PER_WORD = 5;
 /** Au-delà de 24 h de course, un bot n'avance plus : garde-fou de la simulation sans limite de temps. */
 const MAX_TICKS = (24 * 3600 * 1000) / BOT_TICK_MS;
 
@@ -100,30 +99,60 @@ const HARD_CHAR_ERRORS = 1.5;
 /** Mode libre : la faute n'est pas corrigée, le bot marque seulement un temps (un tiers de sa correction). */
 const FALTER_SHARE = 1 / 3;
 
-/**
- * La vitesse de frappe de base (caractères par seconde) d'un bot : plus rapide que sa vitesse visée, pour que ses
- * hésitations et ses corrections (mode « corriger », taux de son niveau) le ramènent en moyenne à elle sur un texte
- * courant (mots de 5 lettres, sans difficulté). Temps par caractère visé 12 / MPM s ; il se partage entre la frappe
- * (1 + 2p frappes de 1 / v, p = r / (1 - r) fautes par caractère), la réaction aux fautes (p × correction) et les
- * hésitations (chance × durée, par mot de 6 caractères). 0,992 : la moyenne de 1 / rythme sur 0,8–1,25.
- */
-function basePace(profile: BotProfile): number {
-  const spec = BOT_LEVEL_SPECS[profile.level];
-  const r = spec.errorRate;
-  const p = r / (1 - r);
-  const perChar = 12 / Math.max(1, profile.wpm) - (p * spec.correctionMs) / 1000 - (spec.hesitation.chance * spec.hesitation.ms) / 1000 / (CHARS_PER_WORD + 1);
-  return (0.992 + 2 * p) / Math.max(perChar, 0.001);
-}
-
 export type BotMode = RoomSettings["mistakes"];
 
-/** Le texte d'une course pour le moteur : ses mots, les caractères cumulés après chaque mot (espaces comprises), le mode. */
-export type BotText = { words: readonly string[]; marks: number[]; difficulty: number[]; mistakes: BotMode };
+/**
+ * Le texte d'une course pour le moteur : ses mots, les caractères cumulés après chaque mot (espaces comprises), la
+ * difficulté de chaque mot, le mode d'erreur, et sa charge (ce qui ralentit un bot sur ce texte, pour basePace) :
+ * caractères pondérés par le ralentissement de leur mot, caractères faciles et difficiles (fautes), hésitations
+ * attendues (somme de 1 + difficulté sur les mots après le premier).
+ */
+export type BotText = {
+  words: readonly string[];
+  marks: number[];
+  difficulty: number[];
+  mistakes: BotMode;
+  load: { slowed: number; easy: number; hard: number; hesitations: number };
+};
 
 export function botText(words: readonly string[], mistakes: BotMode): BotText {
   const marks = [0];
   words.forEach((word, i) => marks.push(marks[i]! + word.length + 1));
-  return { words, marks, difficulty: words.map(wordDifficulty), mistakes };
+  const difficulty = words.map(wordDifficulty);
+  const load = { slowed: 0, easy: 0, hard: 0, hesitations: 0 };
+  words.forEach((word, i) => {
+    load.slowed += (word.length + 1) / (1 - HARD_SLOWDOWN * difficulty[i]!);
+    for (const char of word + " ") load[easyChar(char) ? "easy" : "hard"] += 1;
+    if (i > 0) load.hesitations += 1 + difficulty[i]!;
+  });
+  return { words, marks, difficulty, mistakes, load };
+}
+
+/**
+ * La vitesse de frappe de base (caractères par seconde) d'un bot sur ce texte : plus rapide que sa vitesse visée, pour
+ * que le temps moyen du texte, en mode « corriger » au taux de son niveau, soit celui de sa vitesse visée
+ * (caractères × 12 / MPM s), quelle que soit la difficulté du texte. Temps attendu = A / v + B, avec
+ * A = 0,992 × caractères pondérés par le ralentissement de leur mot (0,992 : moyenne de 1 / rythme sur 0,8–1,25)
+ *   + 2 × fautes attendues (effacer et retaper), fautes = p × (faciles + 1,5 × difficiles), p = r / (1 - r) ;
+ * B = fautes × réaction + hésitations attendues × chance × durée moyenne.
+ */
+function basePace(profile: BotProfile, text: BotText): number {
+  const spec = BOT_LEVEL_SPECS[profile.level];
+  const total = text.marks.at(-1)!;
+  if (!total) return 1;
+  const p = spec.errorRate / (1 - spec.errorRate);
+  const { slowed, easy, hard, hesitations } = text.load;
+  const errors = p * (easy + HARD_CHAR_ERRORS * hard);
+  const a = 0.992 * slowed + 2 * errors;
+  const b = (errors * spec.correctionMs + hesitations * spec.hesitation.chance * spec.hesitation.ms) / 1000;
+  const target = (total * 12) / Math.max(1, profile.wpm);
+  return a / Math.max(target - b, total * 0.001);
+}
+
+/** BOT-03 : la chance qu'une frappe de ce caractère soit fausse, selon la précision du bot et le mode d'erreur. */
+export function botErrorChance(bot: Pick<BotProfile, "accuracy">, mistakes: BotMode, char: string): number {
+  const rate = Math.min(0.9, Math.max(0, (100 - bot.accuracy) / 100));
+  return (mistakes === "fix" ? rate / (1 - rate) : rate) * (easyChar(char) ? 1 : HARD_CHAR_ERRORS);
 }
 
 /**
@@ -166,9 +195,7 @@ export function botStep(text: BotText, state: BotState, bot: BotProfile & { seed
   const { marks, words, difficulty, mistakes } = text;
   const total = marks.at(-1)!;
   const spec = BOT_LEVEL_SPECS[bot.level];
-  const pace = basePace(bot);
-  const rate = Math.min(0.9, Math.max(0, (100 - bot.accuracy) / 100));
-  const errorChance = mistakes === "fix" ? rate / (1 - rate) : rate;
+  const pace = basePace(bot, text);
   const s = { ...state };
   let time = BOT_TICK_MS;
   const wait = () => {
@@ -193,7 +220,7 @@ export function botStep(text: BotText, state: BotState, bot: BotProfile & { seed
     const key = next - 1;
     const char = words[word]![key - marks[word]!] ?? " ";
     s.typed += 1;
-    if (draw(bot.seed, ERROR_SALT, key) < errorChance * (easyChar(char) ? 1 : HARD_CHAR_ERRORS)) {
+    if (draw(bot.seed, ERROR_SALT, key) < botErrorChance(bot, mistakes, char)) {
       s.errors += 1;
       if (mistakes === "fatal") {
         s.chars = key;
