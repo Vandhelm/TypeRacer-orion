@@ -11,7 +11,7 @@ import type { Guard } from "./rate-limit";
 import { guestSecret } from "./guest";
 import { createInvite, listInvites } from "./room-invites";
 import { roomIdentity } from "./room-gate";
-import { CodeExhausted, createRoom, finishRoom, joinRoom, kickMember, launchRoom, leaveRoom, listPublicRooms, quickJoin, readRoom, RoomRefused, updateRoom, type RefusalReason, type RoomResult } from "./rooms";
+import { closeRoom, CodeExhausted, createRoom, finishRoom, joinRoom, kickMember, launchRoom, leaveRoom, listPublicRooms, quickJoin, readRoom, RoomRefused, updateRoom, type RefusalReason, type RoomResult } from "./rooms";
 
 const STATUS: Record<RefusalReason, number> = { not_found: 404, not_member: 403, not_host: 403, full: 409, in_race: 409, closed: 410, already_in_room: 409, kicked: 403, invalid_target: 400, unknown_member: 404, invite_taken: 403, invite_limit: 409, not_enough_players: 409, no_room: 404 };
 
@@ -26,6 +26,8 @@ async function bodyOf(req: Request): Promise<unknown> {
 
 /** JOIN-03 : « Faire une course » ne prend aucun paramètre : ni salon imposé, ni rôle (on y entre comme participant). */
 const QuickRaceSchema = z.object({}).strict();
+/** COURSE-11 : fermer la salle ne prend aucun paramètre (corps vide ou {}) ; l'hôte est lu de la session. */
+const CloseRoomSchema = z.object({}).strict();
 
 /** Un corps vide vaut {} ; un JSON cassé reste invalide (undefined), pour que le schéma le refuse. */
 async function optionalBodyOf(req: Request): Promise<unknown> {
@@ -136,6 +138,13 @@ export async function handleRoomsApi(req: Request, db: Db, auth: Auth, secret = 
   if (code && isRoomCode(code) && action === "launch" && req.method === "POST") {
     if (!who) return json({ error: "unauthorized" }, 401);
     return run(() => launchRoom(db, code, who), 200, () => changed(code));
+  }
+  // POST /api/rooms/:code/close — COURSE-11 : l'hôte ferme la salle ; tous les membres en sortent
+  if (code && isRoomCode(code) && action === "close" && req.method === "POST") {
+    if (!who) return json({ error: "unauthorized" }, 401);
+    const input = CloseRoomSchema.safeParse(await optionalBodyOf(req));
+    if (!input.success) return json({ error: "invalid_body" }, 400);
+    return run(() => closeRoom(db, code, who), 200, () => changed(code));
   }
   // POST /api/rooms/:code/finish — SALLE-09 : la course est finie, le salon passe aux résultats
   if (code && isRoomCode(code) && action === "finish" && req.method === "POST") {
