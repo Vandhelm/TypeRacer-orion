@@ -156,7 +156,8 @@ describe("SMOKE — API", () => {
       headers: { "content-type": "application/json", cookie },
       body: JSON.stringify({ id: crypto.randomUUID(), summary, players: [player] }),
     });
-    expect(res.status).toBeLessThan(300);
+    // COURSE-06 : sans salon lancé par le serveur, la course est refusée ; le faux bot n'a donc pas d'historique
+    expect(res.status).toBe(409);
     expect((await fetch(`${base}/api/players/Smoke_Faux_Bot/stats`)).status).toBe(404);
   });
 

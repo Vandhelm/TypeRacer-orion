@@ -93,9 +93,10 @@ describe("SALLE-09 — the podium leads back to the same room, never to a new on
     expect(backToRoomHref(undefined)).toBe("/home");
   });
 
-  test("the room code is not sent with the race to /api/races", () => {
+  // COURSE-06 : le code part désormais avec la course : /api/races vérifie que le serveur a lancé ce salon (contrat inversé)
+  test("COURSE-06 — the room code is sent with the race to /api/races, so the server checks its launch", () => {
     const body = raceBody({ players: [], summary: {}, room: "ABC234" } as unknown as Parameters<typeof raceBody>[0], "le riz");
-    expect(body).not.toHaveProperty("room");
+    expect(body.room).toBe("ABC234");
   });
 });
 
