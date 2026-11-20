@@ -26,14 +26,26 @@ export function useMobileRace() {
 /** Where the notice sends the player: nowhere while the room races, the podium once it has left the race. */
 export const mobileRaceHref = (status: RoomView["status"]) => (status === "racing" ? null : "/podium");
 
-/** The race seen from the notice: countdown, race time, the last arrival, then the results, as on the race page. */
+/** Without a server start (no rooms database): a local countdown, the race time, the last arrival, then the results. */
 export const mobileRaceDeadlineMs = (durationSeconds: number) => COUNT_STEP_MS * 3 + GO_MS + durationSeconds * 1000 + AFTER_LAST_ARRIVAL_MS + RESULTS_DELAY_MS;
+
+/**
+ * COURSE-03: how long the notice waits, from the server time `serverNow`: until the server end (endsAt), then the
+ * last arrival and the results delays, as on the race page. Null without time limit (only the server ends the race).
+ */
+export function mobileRaceDelayMs({ startsAt, endsAt, durationSeconds, serverNow }: { startsAt: number | null; endsAt: number | null; durationSeconds: number | null; serverNow: number }): number | null {
+  if (startsAt === null) return durationSeconds === null ? null : mobileRaceDeadlineMs(durationSeconds);
+  if (endsAt === null) return null;
+  return Math.max(0, endsAt - serverNow) + AFTER_LAST_ARRIVAL_MS + RESULTS_DELAY_MS;
+}
+
+type RaceClock = { startsAt: number | null; endsAt: number | null; durationSeconds: number | null; clockOffset: number };
 
 /**
  * The notice follows the room and leaves for the podium when the race ends (results passed by the server).
  * Without news (every human on mobile), it ends the race itself at the deadline, as the race page would.
  */
-export function useMobileRaceEnd(code: string, durationSeconds: number | null, finish: () => void) {
+export function useMobileRaceEnd(code: string, { startsAt, endsAt, durationSeconds, clockOffset }: RaceClock, finish: () => void) {
   useEffect(() => {
     if (!code) return;
     let gone = false;
@@ -44,14 +56,15 @@ export function useMobileRaceEnd(code: string, durationSeconds: number | null, f
       location.replace("/podium");
     };
     const stop = watchRoom(code, (view) => { if (mobileRaceHref(view.status)) go(); }, () => {});
-    // CONF-01 : sans limite de temps (null), pas d'échéance ; seul le serveur annonce la fin.
-    const timer = durationSeconds === null ? undefined : setTimeout(() => {
+    // CONF-01 : sans limite de temps (null), pas d'échéance ; seul le serveur annonce la fin. COURSE-03 : sinon endsAt.
+    const delay = mobileRaceDelayMs({ startsAt, endsAt, durationSeconds, serverNow: Date.now() + clockOffset });
+    const timer = delay === null ? undefined : setTimeout(() => {
       finish();
       go();
-    }, mobileRaceDeadlineMs(durationSeconds));
+    }, delay);
     return () => {
       stop();
       if (timer) clearTimeout(timer);
     };
-  }, [code, durationSeconds, finish]);
+  }, [code, startsAt, endsAt, durationSeconds, clockOffset, finish]);
 }

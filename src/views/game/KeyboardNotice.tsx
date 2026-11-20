@@ -6,9 +6,11 @@ import type { RoomState } from "../room/hooks/useRoom";
 import { useMobileRaceEnd } from "./mobileRace";
 
 /** DES-06 : shown instead of the race on mobile. Leaving leaves the room, like the race's own button; the race's end leads to the podium. */
-export function KeyboardNotice({ state }: { state: Pick<RoomState, "room" | "displayName" | "leave" | "finish"> }) {
+export function KeyboardNotice({ state }: { state: Pick<RoomState, "room" | "displayName" | "leave" | "finish" | "startsAt" | "endsAt" | "clockOffset"> }) {
   const { t } = useTranslation();
-  useMobileRaceEnd(state.room.code, state.room.duration, state.finish);
+  // COURSE-03 : l'échéance suit la fin du serveur (endsAt), en heure du serveur
+  const clock = { startsAt: state.startsAt ?? null, endsAt: state.endsAt ?? null, durationSeconds: state.room.duration, clockOffset: state.clockOffset ?? 0 };
+  useMobileRaceEnd(state.room.code, clock, state.finish);
   const room = state.displayName;
   const onLeave = state.leave;
   return (
