@@ -350,9 +350,9 @@
     "scope": "critère (feature/profile/res-03 + fix/podium/res-03-scroll)"
   },
   "RES-04": {
-    "commit": "1fba673",
-    "date": "2026-11-18",
-    "scope": "site (light)"
+    "commit": "c095102",
+    "date": "2026-11-20",
+    "scope": "critère (feature/podium/res-04)"
   },
   "RES-05": {
     "commit": "2acdffe",
