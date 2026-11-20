@@ -76,6 +76,26 @@ describe("TECH-06 — real-time client", () => {
     client.close();
   });
 
+  test("COURSE-06 — an elimination is sent once, after the last progress still waiting", async () => {
+    const sent: string[] = [];
+    const states: RealtimeState[] = [];
+    const Socket = class extends WebSocket {
+      override send(data: string) {
+        if (data.includes('"progress"') || data.includes('"eliminated"')) sent.push(data);
+        super.send(data);
+      }
+    };
+    const client = connectRealtime({ room: "CXNT26", getTicket: ticketOf(player("Alpha_45")), onChange: (s) => states.push(s), WebSocket: Socket });
+    await until(states, (s) => s.players.length === 1);
+    client.sendProgress(0.2, 30);
+    client.sendProgress(0.3, 31); // en attente (10 par seconde au plus)
+    client.sendEliminated();
+    client.sendEliminated();
+    await Bun.sleep(250);
+    expect(sent.map((s) => JSON.parse(s))).toEqual([{ type: "progress", progress: 0.2, wpm: 30 }, { type: "progress", progress: 0.3, wpm: 31 }, { type: "eliminated" }]);
+    client.close();
+  });
+
   test("keeps outgoing values inside the protocol bounds", async () => {
     const sent: string[] = [];
     const states: RealtimeState[] = [];
