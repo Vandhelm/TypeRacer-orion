@@ -17,11 +17,20 @@ export function applyBonus(race: Race, effect: BonusEffect, now: number): Race {
   if (race.phase !== "racing" || race.finishedAt) return race;
   if (effect.kind === "fog") return { ...race, fogUntil: Math.max(race.fogUntil ?? 0, now + effect.durationMs) };
   const course = myCourse(race);
-  const words = editWords(course.words, effect, race.wordIndex);
+  // BONUS-04 : -3 mots retire ce qu'a décidé le serveur (`removed`, borné sur ses mots validés), même si la page est
+  // déjà plus loin : les deux textes restent les mêmes. Le serveur ne valide jamais plus que la page, donc ses mots
+  // validés sont au plus `wordIndex`, et `removed` ne dépasse pas « mots − validés − 1 ».
+  const done = effect.kind === "fewer_words" ? Math.min(race.wordIndex, course.words.length - effect.removed - 1) : race.wordIndex;
+  const words = editWords(course.words, effect, done);
   if (words.length === course.words.length) return race;
   const marks = [0];
   words.forEach((word, i) => marks.push(marks[i]! + word.length + 1));
-  return { ...race, mine: { ...course, words, marks } };
+  const mine = { ...course, words, marks };
+  if (race.wordIndex < words.length) return { ...race, mine };
+  // déjà tapé tout mon nouveau texte : j'arrive, sur ses mots (les fautes des mots retirés ne comptent plus)
+  const missedWords = new Set([...race.missedWords].filter((i) => i < words.length));
+  const missedChars = [...missedWords].reduce((sum, i) => sum + words[i]!.length + 1, 0);
+  return { ...race, mine, wordIndex: words.length, typed: "", missedWords, missedChars, finishedAt: now, now, arrivals: [...race.arrivals, race.myLane] };
 }
 
 /**
