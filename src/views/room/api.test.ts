@@ -41,9 +41,11 @@ describe("COURSE-03 — each room read measures the clock offset with the server
     expect(reply.ok && reply.offset).toBe(5_000);
   });
 
-  test("a reply without serverNow (an older server) gives no offset", async () => {
-    globalThis.fetch = (async () => Response.json({ room: { code: "ABC234" }, you: "player:1" })) as unknown as typeof fetch;
-    const reply = await roomApi.read("ABC234");
-    expect(reply.ok && reply.offset).toBeUndefined();
+  test("a reply without serverNow (an older server), or with a non-number one, gives no offset", async () => {
+    for (const room of [{ code: "ABC234" }, { code: "ABC234", serverNow: "15100" }, { code: "ABC234", serverNow: null }]) {
+      globalThis.fetch = (async () => Response.json({ room, you: "player:1" })) as unknown as typeof fetch;
+      const reply = await roomApi.read("ABC234");
+      expect(reply.ok && reply.offset).toBeUndefined();
+    }
   });
 });
