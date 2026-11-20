@@ -91,15 +91,18 @@ export function SeriesChart({ lines, errors, label }: SeriesProps) {
         </div>
       )}
 
-      <table className="sr-only">
-        <caption>{label}</caption>
-        <thead><tr><th>{labels.second}</th>{lines.map((line) => <th key={line.key}>{nameOf(line)}</th>)}{errors && <th>{labels.errors}</th>}</tr></thead>
-        <tbody>
-          {Array.from({ length: chart.count }, (_, i) => (
-            <tr key={i}><td>{i + 1}</td>{lines.map((line) => <td key={line.key}>{value(line.values, i)}</td>)}{errors && <td>{value(errors, i)}</td>}</tr>
-          ))}
-        </tbody>
-      </table>
+      {/* RES-03 : un tableau ignore width: 1px, d'où un conteneur sr-only qui le masque sans élargir la boîte */}
+      <div className="sr-only">
+        <table>
+          <caption>{label}</caption>
+          <thead><tr><th>{labels.second}</th>{lines.map((line) => <th key={line.key}>{nameOf(line)}</th>)}{errors && <th>{labels.errors}</th>}</tr></thead>
+          <tbody>
+            {Array.from({ length: chart.count }, (_, i) => (
+              <tr key={i}><td>{i + 1}</td>{lines.map((line) => <td key={line.key}>{value(line.values, i)}</td>)}{errors && <td>{value(errors, i)}</td>}</tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
