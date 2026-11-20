@@ -120,7 +120,7 @@ describe("BONUS-02 — the bonus effect read by the client", () => {
 
 describe("BONUS-04 — the runner's own text read by the client", () => {
   test("a text message carries the words of my text, at least one", () => {
-    const message = { type: "text", room: "ABC234", words: ["sushi", "maki"] };
+    const message = { type: "text" as const, room: "ABC234", words: ["sushi", "maki"] };
     expect(parseServerMessage(raw(message))).toEqual(message);
     expect(parseServerMessage(raw({ ...message, words: [] }))).toBeNull();
     expect(parseServerMessage(raw({ ...message, words: "sushi maki" }))).toBeNull();
