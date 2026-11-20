@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import en from "../../i18n/locales/en.json";
+import fr from "../../i18n/locales/fr.json";
 import { LEVELS } from "../../rooms/settings";
 import { COMPLEXITY, LEVEL_METRICS, checkLevel, measureWords } from "./complexity";
 import { LEXICON } from "./lexicon";
@@ -93,4 +95,16 @@ describe("CONF-05 — the levels are ordered: easy < medium < hard", () => {
       expect({ language, shared }).toEqual({ language, shared: [] });
     }
   });
+});
+
+describe("CONF-05 — the interface names the levels easy, medium and hard", () => {
+  const LABELS = { fr: ["facile", "moyen", "difficile"], en: ["easy", "medium", "hard"] };
+  for (const [language, locale] of [["fr", fr], ["en", en]] as const) {
+    test(`${language}: room settings, room explorer and profile use the same three names`, () => {
+      const names = (pick: (level: (typeof LEVELS)[number]) => string) => LEVELS.map((level) => pick(level).toLowerCase());
+      expect(names((level) => locale.room[level])).toEqual(LABELS[language]);
+      expect(names((level) => locale.rooms.explorer.levels[level])).toEqual(LABELS[language]);
+      expect(names((level) => locale.profile.levels[level])).toEqual(LABELS[language]);
+    });
+  }
 });
