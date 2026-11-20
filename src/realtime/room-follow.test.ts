@@ -11,6 +11,7 @@ import { createAuth } from "../server/auth";
 import { GUEST_COOKIE, signGuest } from "../server/guest";
 import { handleRealtimeTicket } from "../server/realtime-ticket";
 import { memoryRoomEvents } from "../server/room-events";
+import { COUNTDOWN_MS } from "../rooms/race-clock";
 import { MEMBER_AWAY_MS, raceDeadlineMs } from "../server/rooms";
 import { handleRoomsApi } from "../server/rooms-api";
 import { createRoomBackend } from "./room-backend";
@@ -394,7 +395,7 @@ describe("COURSE-06 — with the rooms database, the realtime server referees th
     const cookie = `${GUEST_COOKIE}=${signGuest("Coureur_Arbitre", SECRET)}`;
     const { you } = (await (await h.call("POST", "/api/rooms/join", cookie, { code })).json()) as { you: string };
     expect((await h.call("POST", `/api/rooms/${code}/launch`, hostCookie)).status).toBe(200);
-    // le départ a eu lieu il y a 27 s (lancement il y a 30 s, décompte de 3 s)
+    // le départ a eu lieu il y a 30 s moins le décompte (COURSE-03 : préparation puis 3, 2, 1)
     await h.db.update(rooms).set({ launchedAt: sql`now() - interval '30 seconds'` }).where(eq(rooms.code, code));
     const host = await raw(h.server, h.auth, hostCookie);
     const runner = await raw(h.server, h.auth, cookie);
@@ -403,7 +404,7 @@ describe("COURSE-06 — with the rooms database, the realtime server referees th
     const standings = (tab: typeof host) => tab.seen.filter((m) => m.type === "standings") as unknown as { startsAt: number; players: { playerId: string; progress: number; rank: number }[] }[];
     while (standings(runner).at(-1)?.players.length !== 2) await Bun.sleep(10);
     const [launched] = await h.db.select({ at: rooms.launchedAt }).from(rooms).where(eq(rooms.code, code));
-    expect(standings(runner).at(-1)!.startsAt).toBe(launched!.at!.getTime() + 3000);
+    expect(standings(runner).at(-1)!.startsAt).toBe(launched!.at!.getTime() + COUNTDOWN_MS);
 
     // 90 % puis un recul : le recul est refusé
     runner.send({ type: "progress", progress: 0.9, wpm: 50 });
