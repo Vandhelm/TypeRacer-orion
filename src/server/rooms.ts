@@ -9,7 +9,7 @@ import { storedAvatar } from "../players/avatar";
 import { allows, canJoin, isListed, newRoomCode } from "../rooms/access";
 import { launchBlocker } from "../rooms/launch";
 import { follow, raceState, storedStatus, type RaceEvent, type RaceState } from "../rooms/race-state";
-import { raceClock } from "../rooms/race-clock";
+import { COUNTDOWN_MS, raceClock } from "../rooms/race-clock";
 import { courseWords, textFingerprint } from "../rooms/course-words";
 import type { RoomFilters } from "../rooms/explorer";
 import { seatColor } from "../rooms/seats";
@@ -66,9 +66,10 @@ export function memberKey(who: Identity | { playerId: number }): string {
   return `guest:${who.sessionId}`;
 }
 
-/** finished (SALLE-09) : ce membre a fini la course en cours ; son retour au salon ne le renvoie pas courir. */
+/** finished (SALLE-09) : ce membre a fini (ou abandonné) la course en cours ; son retour au salon ne le renvoie pas courir. */
+/** abandoned (COURSE-07) : ce membre a abandonné la course en cours. */
 /** image (COURSE-05) : la photo du compte, réduite par le serveur (AUTH-04) ; null pour un invité ou sans photo. */
-export type MemberView = { key: string; name: string; guest: boolean; host: boolean; role: Role; seat: number | null; color: string | null; finished: boolean; image?: string | null };
+export type MemberView = { key: string; name: string; guest: boolean; host: boolean; role: Role; seat: number | null; color: string | null; finished: boolean; abandoned?: boolean; image?: string | null };
 export type RoomView = {
   code: string;
   status: RoomStatus;
@@ -117,7 +118,7 @@ export class RoomRefused extends Error {
   }
 }
 /** invite_taken : lien déjà lié à une autre IP ou une autre personne (SALLE-04) ; invite_limit : trop de liens dans ce salon. */
-export type RefusalReason = "not_found" | "not_member" | "not_host" | "full" | "in_race" | "closed" | "already_in_room" | "kicked" | "invalid_target" | "unknown_member" | "invite_taken" | "invite_limit" | "not_enough_players" | "no_room" | "not_results";
+export type RefusalReason = "not_found" | "not_member" | "not_host" | "full" | "in_race" | "closed" | "already_in_room" | "kicked" | "invalid_target" | "unknown_member" | "invite_taken" | "invite_limit" | "not_enough_players" | "no_room" | "not_results" | "not_racing" | "not_player" | "already_finished";
 
 /** SALLE-07 : cette personne a été expulsée de ce salon. L'IP compte pour un invité et pour un compte plus récent que le bannissement (voir ipBan). */
 async function isKicked(db: Db, who: Identity, roomId: number, key: string, ip: string | null): Promise<boolean> {
@@ -220,7 +221,7 @@ export async function roomView(db: Db, roomId: number, _viewer?: string): Promis
     .where(eq(rooms.id, roomId));
   if (!row) throw new RoomRefused("not_found");
   const members = await db
-    .select({ key: roomMembers.memberKey, playerId: roomMembers.playerId, guestName: roomMembers.guestName, playerName: players.name, role: roomMembers.role, seat: roomMembers.seat, color: roomMembers.color, finishedAt: roomMembers.finishedAt, image: user.image })
+    .select({ key: roomMembers.memberKey, playerId: roomMembers.playerId, guestName: roomMembers.guestName, playerName: players.name, role: roomMembers.role, seat: roomMembers.seat, color: roomMembers.color, finishedAt: roomMembers.finishedAt, abandonedAt: roomMembers.abandonedAt, image: user.image })
     .from(roomMembers)
     .leftJoin(players, eq(players.id, roomMembers.playerId))
     .leftJoin(user, eq(user.playerId, roomMembers.playerId))
@@ -234,7 +235,7 @@ export async function roomView(db: Db, roomId: number, _viewer?: string): Promis
     status: row.rooms.status,
     host,
     settings: settingsOf(row.rooms, row.race_configs),
-    members: members.map((m) => ({ key: m.key, name: m.playerName ?? m.guestName ?? "", guest: m.playerId === null, host: m.key === host, role: m.role, seat: m.seat, color: m.color, finished: m.finishedAt !== null, image: storedAvatar(m.image) })),
+    members: members.map((m) => ({ key: m.key, name: m.playerName ?? m.guestName ?? "", guest: m.playerId === null, host: m.key === host, role: m.role, seat: m.seat, color: m.color, finished: m.finishedAt !== null || m.abandonedAt !== null, abandoned: m.abandonedAt !== null, image: storedAvatar(m.image) })),
     passage: passage && { body: passage.body, source: passage.source },
     seed: row.rooms.textSeed,
     ...raceClock(row.rooms.launchedAt, row.race_configs.duration),
@@ -505,7 +506,7 @@ export async function launchRoom(db: Db, code: string, who: Identity): Promise<R
     const textSeed = crypto.getRandomValues(new Int32Array(1))[0]!;
     // COURSE-01 : une relance repasse par EN_ATTENTE (results → waiting → countdown)
     await moveRoom(tx, id, from, from === "results" ? ["reopen", "launch"] : ["launch"], { launchedAt: sql`now()`, textId: passage?.id ?? null, textSeed });
-    await tx.update(roomMembers).set({ finishedAt: null, progress: 0, raceRecorded: false }).where(eq(roomMembers.roomId, id));
+    await tx.update(roomMembers).set({ finishedAt: null, abandonedAt: null, progress: 0, raceRecorded: false }).where(eq(roomMembers.roomId, id));
     // COURSE-06 : l'empreinte des mots que la page de course va retirer, vérifiée par le serveur temps réel
     const words = courseWords(await roomView(tx, id));
     await tx.update(rooms).set({ textHash: words && textFingerprint(words) }).where(eq(rooms.id, id));
@@ -602,9 +603,9 @@ export async function refreshRoom(db: Db, code: string, present: string[] = []):
   return id === null ? false : db.transaction((tx) => sweep(tx, id, present));
 }
 
-/** SALLE-09 : plus aucun participant humain en course (fini ou parti) : le salon passe aux résultats. Sous le verrou. */
+/** SALLE-09 / COURSE-09 : plus aucun participant humain en course (fini, abandonné ou parti) : le salon passe aux résultats. Sous le verrou. */
 async function endIfAllFinished(tx: Db, roomId: number) {
-  const racing = await tx.$count(roomMembers, and(eq(roomMembers.roomId, roomId), eq(roomMembers.role, "player"), isNull(roomMembers.finishedAt)));
+  const racing = await tx.$count(roomMembers, and(eq(roomMembers.roomId, roomId), eq(roomMembers.role, "player"), isNull(roomMembers.finishedAt), isNull(roomMembers.abandonedAt)));
   if (racing) return;
   // COURSE-01 : pendant le décompte (fin déclarée par le client, COURSE-06 pas encore là), le départ est avancé
   const from = await stateOf(tx, roomId);
@@ -674,7 +675,8 @@ export async function recordProgress(db: Db, code: string, key: string, progress
     const [room] = await tx.select({ status: rooms.status }).from(rooms).where(eq(rooms.id, id)).for("update");
     if (room?.status !== "racing") return false;
     const value = Math.min(1, Math.max(0, progress));
-    const member = and(eq(roomMembers.roomId, id), eq(roomMembers.memberKey, key));
+    // COURSE-07 : la progression d'un membre qui a abandonné reste celle de l'abandon
+    const member = and(eq(roomMembers.roomId, id), eq(roomMembers.memberKey, key), isNull(roomMembers.abandonedAt));
     if (value < 1) {
       await tx.update(roomMembers).set({ progress: sql`greatest(${roomMembers.progress}, ${value})` }).where(member);
       return false;
@@ -686,6 +688,59 @@ export async function recordProgress(db: Db, code: string, key: string, progress
     }
     await endIfAllFinished(tx, id);
     return true;
+  });
+}
+
+/**
+ * COURSE-07 : ce participant abandonne la course en cours (abandoned_at, heure de la base). Sa progression est celle que
+ * le serveur temps réel a validée : il l'écrit en base dès qu'il apprend l'abandon (keepProgress) ; recordProgress ne la
+ * touche plus ensuite. Refusé hors course : décompte, ou temps écoulé même si la salle n'est pas encore aux résultats
+ * (not_racing) ; pour un spectateur (not_player) ; après l'arrivée (already_finished).
+ * Un second appel ne change rien. COURSE-09 : un abandon compte comme une fin ; le dernier coureur termine la course.
+ */
+export async function abandonRace(db: Db, code: string, who: Identity): Promise<RoomResult> {
+  const { id } = await roomByCode(db, code);
+  const key = memberKey(who);
+  await db.transaction(async (tx) => {
+    await sweep(tx, id, key);
+    const [room] = await tx
+      .select({ timeUp: sql<boolean>`coalesce(${rooms.launchedAt} + ${COUNTDOWN_MS} * interval '1 millisecond' + (select ${raceConfigs.duration} from ${raceConfigs} where ${raceConfigs.id} = ${rooms.configId}) * interval '1 second' <= now(), false)` })
+      .from(rooms)
+      .where(eq(rooms.id, id))
+      .for("update");
+    if (!room) throw new RoomRefused("not_found");
+    const [member] = await tx.select({ role: roomMembers.role, finishedAt: roomMembers.finishedAt, abandonedAt: roomMembers.abandonedAt }).from(roomMembers).where(and(eq(roomMembers.roomId, id), eq(roomMembers.memberKey, key)));
+    if (!member) throw new RoomRefused("not_found"); // SALLE-10 : un non-membre ne sait pas si le salon existe
+    if (member.abandonedAt) return;
+    if ((await stateOf(tx, id)) !== "racing" || room.timeUp) throw new RoomRefused("not_racing");
+    if (member.role !== "player") throw new RoomRefused("not_player");
+    if (member.finishedAt) throw new RoomRefused("already_finished");
+    await tx.update(roomMembers).set({ abandonedAt: sql`now()` }).where(and(eq(roomMembers.roomId, id), eq(roomMembers.memberKey, key)));
+    await endIfAllFinished(tx, id);
+  });
+  return { room: await roomView(db, id, key), you: key };
+}
+
+/**
+ * COURSE-07 : le serveur temps réel garde en base la dernière progression validée de ces coureurs (à l'abandon, à la fin
+ * de la course), abandons compris ; jamais une arrivée (moins de 100 %) ni pour un coureur arrivé, jamais en recul.
+ * Seulement pour la course partie à `startsAt` : une relance entre-temps (progression remise à 0) n'est pas touchée.
+ * Appelée par le temps réel (src/realtime/room-backend.ts), jamais par une route HTTP.
+ */
+export async function keepProgress(db: Db, code: string, startsAt: number, rows: { key: string; progress: number }[]): Promise<void> {
+  const id = await roomIdByCode(db, code);
+  if (id === null || !rows.length) return;
+  await db.transaction(async (tx) => {
+    const [room] = await tx.select({ launchedAt: rooms.launchedAt, status: rooms.status }).from(rooms).where(eq(rooms.id, id)).for("update");
+    if (!room?.launchedAt || (room.status !== "racing" && room.status !== "results")) return;
+    if (room.launchedAt.getTime() + COUNTDOWN_MS !== startsAt) return;
+    for (const { key, progress } of rows) {
+      const value = Math.min(0.9999, Math.max(0, progress));
+      await tx
+        .update(roomMembers)
+        .set({ progress: sql`greatest(${roomMembers.progress}, ${value})` })
+        .where(and(eq(roomMembers.roomId, id), eq(roomMembers.memberKey, key), isNull(roomMembers.finishedAt)));
+    }
   });
 }
 

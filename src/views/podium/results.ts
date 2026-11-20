@@ -25,6 +25,8 @@ export type PlayerResult = {
   idle: number;
   finished: boolean;
   eliminated: boolean;
+  /** COURSE-07 : ce joueur a abandonné la course (jamais « finished ») ; absent d'un résultat gardé avant l'abandon. */
+  abandoned?: boolean;
   wpmSeries: number[];
   rawSeries: number[];
   errorSeries: number[];
@@ -149,6 +151,7 @@ export function toResults(value: unknown): RaceResults | null {
         idle: Number(p.idle) || 0,
         finished: !!p.finished,
         eliminated: !!p.eliminated,
+        ...(p.abandoned ? { abandoned: true } : {}),
         wpmSeries: numbersOf(p.wpmSeries),
         rawSeries: numbersOf(p.rawSeries),
         errorSeries: numbersOf(p.errorSeries),

@@ -39,6 +39,8 @@ export const ERROR_CODES = [
   "progress_backward",
   "progress_jump",
   "progress_too_fast",
+  // COURSE-07 : ce coureur a abandonné la course ; sa progression est gelée
+  "abandoned",
 ] as const;
 
 /** COURSE-06 : la place d'un coureur au classement du serveur ; `finishedMs` : temps d'arrivée depuis le départ serveur. */

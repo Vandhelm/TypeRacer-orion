@@ -37,7 +37,7 @@ export function PodiumBoard({ players, showPlace, arrived, raceId = null }: { pl
             <a className={`${ROW} ${player.me ? "font-medium text-white" : "font-normal text-[rgba(255,255,255,.7)]"}`} href={profileHref(index, raceId)}>
               <span>{rankLabel(t, player.rank)}</span>
               {/* BOT-04 : le marqueur bot reste hors du nom tronqué */}
-              <span className="flex min-w-0 items-center gap-2"><span className="truncate">{player.me ? `${player.name} · ${t("room.you")}` : player.name}</span>{player.bot && <BotTag className="text-[.8em]" />}</span>
+              <span className="flex min-w-0 items-center gap-2"><span className="truncate">{player.me ? `${player.name} · ${t("room.you")}` : player.name}</span>{player.bot && <BotTag className="text-[.8em]" />}{player.abandoned && <span className="flex-none border border-line-soft px-1.5 py-px text-[.75em] tracking-[.12em] text-muted uppercase">{t("podium.abandoned")}</span>}</span>
               <span className={VALUE}>{formatNumber(i18n.language, player.wpm)} {wpm}</span>
               <span className={VALUE}>{formatNumber(i18n.language, player.accuracy)} %</span>
             </a>

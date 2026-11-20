@@ -6,7 +6,7 @@ import { eq } from "drizzle-orm";
 import type { Db } from "../../db/client";
 import { roomMembers } from "../../db/schema";
 import { courseWords, textFingerprint } from "../rooms/course-words";
-import { leaveAfterDisconnect, readRoom, recordProgress, refreshRoom, RoomRefused, roomIdByCode, roomView, type Identity, type RoomView } from "../server/rooms";
+import { keepProgress, leaveAfterDisconnect, readRoom, recordProgress, refreshRoom, RoomRefused, roomIdByCode, roomView, type Identity, type RoomView } from "../server/rooms";
 import type { Player } from "./protocol";
 import type { RaceCourse } from "./referee";
 
@@ -30,6 +30,8 @@ export type RoomBackend = {
   course?(code: string): Promise<RaceCourse | null>;
   /** COURSE-06 : garde la progression validée d'un membre ; vrai si le salon a changé (arrivée, fin de course). */
   progress?(key: string, code: string, progress: number): Promise<boolean>;
+  /** COURSE-07 : garde la dernière progression validée de ces coureurs (abandon, fin de course) pour la course partie à `startsAt`. */
+  keep?(code: string, startsAt: number, rows: { key: string; progress: number }[]): Promise<void>;
 };
 
 /**
@@ -47,10 +49,16 @@ export function raceCourseOf(view: RoomView): RaceCourse | null {
     marks = [0];
     for (const word of words) marks.push(marks.at(-1)! + word.length + 1);
   }
-  return { startsAt: view.startsAt, endsAt: view.endsAt, marks, runners: view.members.filter((m) => m.role === "player").map((m) => m.key) };
+  return { startsAt: view.startsAt, endsAt: view.endsAt, marks, runners: view.members.filter((m) => m.role === "player").map((m) => m.key), ...abandonedOf(view) };
 }
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** COURSE-07 : les coureurs qui ont abandonné, seulement s'il y en a. */
+function abandonedOf(view: RoomView): { abandoned?: string[] } {
+  const keys = view.members.filter((m) => m.abandoned).map((m) => m.key);
+  return keys.length ? { abandoned: keys } : {};
+}
+
+const UUID =/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** L'identité de salon d'un joueur de ticket (realtime-ticket.ts) : `u:<playerId>` ou `g:<id de session invitée>`. */
 export function identityOf(player: Player): Identity | null {
@@ -113,5 +121,6 @@ export function createRoomBackend(db: Db, changes: Changes): RoomBackend {
       }
     },
     progress: (key, code, progress) => recordProgress(db, code, key, progress),
+    keep: (code, startsAt, rows) => keepProgress(db, code, startsAt, rows),
   };
 }

@@ -32,7 +32,7 @@ type Socket = ServerWebSocket<Connection>;
 type Member = { player: Player; connections: number };
 /** COURSE-06 : la course arbitrée d'une salle. `course` : la dernière connue ; `over` : le salon a quitté la course. */
 /** `resumed` : progressions relues en base (par clé de membre), reprises quand le coureur revient. */
-type RaceState = { course: RaceCourse | null; over: boolean; entries: Map<string, Accepted>; resumed: Map<string, Accepted>; lastSent: number; timer: ReturnType<typeof setTimeout> | null };
+type RaceState = { course: RaceCourse | null; over: boolean; entries: Map<string, Accepted>; resumed: Map<string, Accepted>; owners: Map<string, string>; kept: Set<string>; lastSent: number; timer: ReturnType<typeof setTimeout> | null };
 type Throttle = { lastSent: number; pending: { ws: Socket; text: string } | null; timer: ReturnType<typeof setTimeout> | null };
 
 export type RealtimeOptions = {
@@ -194,8 +194,10 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
     }
     const state = races.get(code);
     if (!course) {
+      // COURSE-07 : la course vient de finir (le dernier a peut-être abandonné) : sa progression validée reste en base
+      if (state?.course && !state.over) keepValidated(code, state, null);
       if (state?.course) state.over = true;
-      else if (!state) races.set(code, { course: null, over: false, entries: new Map(), resumed: new Map(), lastSent: -Infinity, timer: null });
+      else if (!state) races.set(code, { course: null, over: false, entries: new Map(), resumed: new Map(), owners: new Map(), kept: new Set(), lastSent: -Infinity, timer: null });
       return;
     }
     if (!state || !state.course || state.course.startsAt !== course.startsAt) {
@@ -207,12 +209,27 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
           .filter((r) => r.progress > 0)
           .map((r) => [r.key, { progress: r.progress, chars: course.marks ? charsAt(course.marks, r.progress) : 0, wpm: 0, at: now, finishedAt: r.finishedAt }] as const),
       );
-      races.set(code, { course, over: false, entries: new Map(), resumed, lastSent: -Infinity, timer: null });
+      races.set(code, { course, over: false, entries: new Map(), resumed, owners: new Map(), kept: new Set(course.abandoned ?? []), lastSent: -Infinity, timer: null });
     } else {
       state.course = course;
       state.over = false;
+      // COURSE-07 : un coureur vient d'abandonner : sa dernière progression validée part en base, une fois
+      const abandoned = (course.abandoned ?? []).filter((key) => !state.kept.has(key));
+      for (const key of abandoned) state.kept.add(key);
+      if (abandoned.length) keepValidated(code, state, abandoned);
     }
     publishStandings(code, true);
+  }
+
+  /** COURSE-07 : écrit en base la dernière progression acceptée de ces coureurs (clés de membre ; null : tous), sauf les arrivés. */
+  function keepValidated(code: string, state: RaceState, keys: string[] | null) {
+    if (!backend?.keep || !state.course) return;
+    const rows: { key: string; progress: number }[] = [];
+    for (const [playerId, entry] of state.entries) {
+      const key = state.owners.get(playerId);
+      if (key && entry.finishedAt === null && (!keys || keys.includes(key))) rows.push({ key, progress: entry.progress });
+    }
+    if (rows.length) backend.keep(code, state.course.startsAt, rows).catch((error: unknown) => console.error(error));
   }
 
   /** Un coureur revenu reprend la progression relue en base pour sa clé de membre. */
@@ -274,6 +291,10 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
       send(ws, { type: "error", code: "not_a_runner" });
       return false;
     }
+    if (state.course.abandoned?.includes(key)) {
+      send(ws, { type: "error", code: "abandoned" });
+      return false;
+    }
     adopt(state, ws);
     const previous = state.entries.get(ws.data.player.id);
     const verdict = judge(state.course, previous, value, wpm, Date.now());
@@ -282,6 +303,7 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
       return false;
     }
     state.entries.set(ws.data.player.id, verdict.entry);
+    state.owners.set(ws.data.player.id, key);
     publishStandings(room);
     if (verdict.entry.finishedAt !== null && !previous?.finishedAt && backend.progress) {
       backend.progress(key, room, 1).then(
@@ -360,8 +382,10 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
       if (member.connections <= 0) {
         members.delete(ws.data.player.id);
         // COURSE-06 : la dernière progression validée d'un coureur qui s'en va reste en base
-        const entry = races.get(room)?.entries.get(ws.data.player.id);
-        if (entry && memberKey && backend?.progress && entry.finishedAt === null) backend.progress(memberKey, room, entry.progress).catch((error: unknown) => console.error(error));
+        // COURSE-07 : sauf pour un coureur qui a abandonné, dont la progression est celle de l'abandon
+        const race = races.get(room);
+        const entry = race?.entries.get(ws.data.player.id);
+        if (entry && memberKey && backend?.progress && entry.finishedAt === null && !race?.course?.abandoned?.includes(memberKey)) backend.progress(memberKey, room, entry.progress).catch((error: unknown) => console.error(error));
         const key = throttleKey(room, ws.data.player.id);
         const throttle = throttles.get(key);
         if (throttle?.timer) clearTimeout(throttle.timer);

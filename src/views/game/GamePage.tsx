@@ -5,11 +5,12 @@ import { HangingButton } from "../../components/buttons/HangingButton";
 import { FLOATING_TABS, LanguageSwitcher } from "../../components/tabs/LanguageSwitcher";
 import { buildResults, buildSummary, markSessionStart, rememberSubmit, saveResults, sessionSeconds, submitRace } from "../podium/results";
 import { useRoom, type RoomState } from "../room/hooks/useRoom";
-import { roomHrefOutsideRace } from "../room/room";
 import { rememberGuestRace } from "../profile/stats";
 import { useRealtimeRoom } from "../../realtime/useRealtimeRoom";
 import { LiveList } from "../room/LiveList";
 import { useRace } from "./hooks/useRace";
+import { AbandonRace } from "./AbandonRace";
+import { canAbandon, markAbandoned, raceExit } from "./abandon";
 import { KeyboardNotice } from "./KeyboardNotice";
 import { useMobileRace } from "./mobileRace";
 import { loadRacePoolImages, type RacePoolImages } from "./pool/createRacePool";
@@ -41,7 +42,10 @@ export function GamePage() {
   }, [t]);
 
   // SALLE-09 : pas de course hors du statut « racing » (salle en attente ou déjà aux résultats)
-  const elsewhere = state.ready ? roomHrefOutsideRace(state.status, state.room.code) : null;
+  // COURSE-07 : un membre qui a abandonné (dit par le serveur, même après un rechargement) ne revient pas dans la course
+  // (handOver : un abandon confirmé ici ; la page garde la course jusqu'à l'envoi des résultats, puis va au podium)
+  const [handOver, setHandOver] = useState(false);
+  const elsewhere = state.ready && !handOver ? raceExit(state.status, state.room.code, state.abandoned) : null;
   useEffect(() => {
     if (elsewhere) location.replace(elsewhere);
   }, [elsewhere]);
@@ -55,16 +59,16 @@ export function GamePage() {
       </div>
     );
   }
-  return <GameScreen state={state} mobile={mobile} />;
+  return <GameScreen state={state} mobile={mobile} onHandOver={setHandOver} />;
 }
 
 /** DES-06 : on mobile the race is never mounted (no pool, no typing field): a notice recommends a physical keyboard. */
-export function GameScreen({ state, mobile }: { state: RoomState; mobile: boolean }) {
-  return mobile ? <KeyboardNotice state={state} /> : <GameRace state={state} />;
+export function GameScreen({ state, mobile, onHandOver }: { state: RoomState; mobile: boolean; onHandOver?: (sending: boolean) => void }) {
+  return mobile ? <KeyboardNotice state={state} /> : <GameRace state={state} onHandOver={onHandOver} />;
 }
 
 /** One lane per player and the shared text. It hands over to the podium at the end. COURSE-05: a spectator watches, without typing panel. */
-function GameRace({ state }: { state: RoomState }) {
+function GameRace({ state, onHandOver }: { state: RoomState; onHandOver?: (sending: boolean) => void }) {
   const { t } = useTranslation();
   const { room, displayName, finish, leave, passage, seed } = state;
   const watching = state.role === "spectator";
@@ -73,14 +77,16 @@ function GameRace({ state }: { state: RoomState }) {
   const { players } = lanes;
   const [images, setImages] = useState<RacePoolImages | null>(null);
   const { race, onInput, onRemote, showResults } = useRace(room, players, images !== null, passage, seed);
+  // COURSE-07 : abandon enregistré par le serveur ; la progression ne part plus et la page passe au podium
+  const [abandoned, setAbandoned] = useState(false);
 
   // TECH-06 : ma progression part dans le salon (10 envois par seconde au plus), celle des autres arrive en direct
   const { state: live, sendProgress } = useRealtimeRoom(room.code || null);
   const mine = laneProgress(race, race.myLane);
   const wpm = myWpm(race);
   useEffect(() => {
-    if (!watching && race.phase !== "countdown") sendProgress(mine, wpm);
-  }, [watching, race.phase, mine, wpm, sendProgress]);
+    if (!watching && !abandoned && race.phase !== "countdown") sendProgress(mine, wpm);
+  }, [watching, abandoned, race.phase, mine, wpm, sendProgress]);
   // COURSE-05 : les autres humains avancent dans leur couloir avec ce qu'ils envoient
   useEffect(() => {
     if (race.phase === "racing") onRemote(remoteUpdates(live, lanes));
@@ -97,9 +103,10 @@ function GameRace({ state }: { state: RoomState }) {
   const submitted = useRef(false);
   useEffect(() => {
     // une seule fois : une frappe ou un salon mis à jour pendant l'envoi relancerait l'effet
-    if (!showResults || submitted.current) return;
+    if (!(showResults || abandoned) || submitted.current) return;
     submitted.current = true;
-    const results = { players: buildResults(race, players), summary: buildSummary(race, room, sessionSeconds()), room: room.code };
+    const built = buildResults(race, players);
+    const results = { players: abandoned ? markAbandoned(built) : built, summary: buildSummary(race, room, sessionSeconds()), room: room.code };
     saveResults(results);
     // un spectateur n'a ni course à enregistrer ni salon à terminer : il voit seulement le podium
     if (watching) {
@@ -116,7 +123,7 @@ function GameRace({ state }: { state: RoomState }) {
       rememberSubmit(outcome);
       location.replace("/podium");
     });
-  }, [showResults, race, players, room, finish, watching]);
+  }, [showResults, abandoned, race, players, room, finish, watching]);
 
   return (
     <div className={ROOT} style={{ "--lanes": players.length } as CSSProperties}>
@@ -124,6 +131,7 @@ function GameRace({ state }: { state: RoomState }) {
       {/* quitter la course quitte le salon ; /room sans code créerait un nouveau salon */}
       <HangingButton className="game-leave" href="/home" onClick={leave}>{t("room.leave")}</HangingButton>
       <header className="relative flex min-h-[42px] items-center justify-end compact:col-start-2 compact:row-start-1">
+        {canAbandon(race, watching) && !abandoned && <AbandonRace code={room.code} onSending={onHandOver} onAbandoned={() => setAbandoned(true)} />}
         <h1 className={TITLE}>{displayName}</h1>
         <LiveList state={live} mine={mine} showMe={false} className="game-live relative z-1 w-[min(320px,45vw)] narrow:w-full" />
       </header>

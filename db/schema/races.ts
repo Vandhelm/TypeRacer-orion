@@ -20,6 +20,8 @@ export type RaceOther = {
   idle: number;
   finished: boolean;
   eliminated: boolean;
+  /** COURSE-07 : absent d'une course gardée avant l'abandon. */
+  abandoned?: boolean;
   wpmSeries: number[];
   rawSeries: number[];
   errorSeries: number[];
@@ -64,6 +66,8 @@ export const raceResults = pgTable(
     idle: real("idle").notNull(),
     finished: boolean("finished").notNull(),
     eliminated: boolean("eliminated").notNull().default(false),
+    /** COURSE-07 : le joueur a abandonné (finished vaut alors false) ; classé par sa progression à l'abandon (COURSE-10). */
+    abandoned: boolean("abandoned").notNull().default(false),
     sessionSeconds: integer("session_seconds").notNull().default(0),
     /** caractère → [frappes, fautes] */
     keys: jsonb("keys").$type<Record<string, [number, number]>>().notNull().default({}),

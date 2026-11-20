@@ -182,9 +182,11 @@ const sameName = (a: string, b: string | null | undefined) => !!b && a.toLowerCa
  * Renvoie l'id de la course, ou null s'il n'y avait rien à garder.
  */
 /** COURSE-06 : la place d'un membre participant au classement du serveur (temps réel, room_members). */
-export type ServerStanding = { finishedAt: Date | null; progress: number };
+/** COURSE-07 : abandonedAt, l'abandon de ce membre ; progress est alors celle validée au moment de l'abandon. */
+export type ServerStanding = { finishedAt: Date | null; progress: number; abandonedAt?: Date | null };
 /** COURSE-06 : ce que le serveur sait de la course : son départ, si l'expéditeur est arrivé, et le classement des humains (par nom en minuscules). */
-export type ServerRace = { startedAt: Date; finished: boolean; standings?: Map<string, ServerStanding>; bots?: Set<string> };
+/** COURSE-07 : abandoned, l'expéditeur a abandonné (vu par le serveur, jamais par le corps). */
+export type ServerRace = { startedAt: Date; finished: boolean; abandoned?: boolean; standings?: Map<string, ServerStanding>; bots?: Set<string> };
 
 /**
  * COURSE-06 : les rangs du corps refaits d'après le serveur. `bots` : les bots du salon, décidés par le serveur (jamais
@@ -207,7 +209,13 @@ export function rankByServer<T extends { name: string; rank: number }>(results: 
 export async function recordRace(db: Db, parsed: ParsedRace, requester: Requester = {}, server?: ServerRace) {
   // COURSE-06 : avec le serveur, le statut bot vient de lui (les bots du salon), jamais du corps ; le rang aussi
   const serverBots = server?.bots;
-  const results = serverBots ? parsed.results.map((r) => ({ ...r, bot: serverBots.has(r.name.toLowerCase()) })) : parsed.results;
+  // COURSE-07 : l'abandon d'un humain est celui que le serveur a noté (room_members.abandoned_at), jamais le corps ;
+  // un abandon n'est pas une arrivée
+  const abandonedOf = (name: string) => !!server?.standings?.get(name.toLowerCase())?.abandonedAt;
+  const results = (serverBots ? parsed.results.map((r) => ({ ...r, bot: serverBots.has(r.name.toLowerCase()) })) : parsed.results).map((r) => {
+    const abandoned = !r.bot && abandonedOf(r.name);
+    return { ...r, abandoned, finished: r.finished && !abandoned };
+  });
   const race = server?.standings ? { ...parsed, results: rankByServer(results, server.standings, serverBots) } : { ...parsed, results };
   const [account] = requester.playerId
     ? await db.select({ id: players.id, name: players.name }).from(players).where(eq(players.id, requester.playerId))
@@ -222,6 +230,7 @@ export async function recordRace(db: Db, parsed: ParsedRace, requester: Requeste
       accountKept = true;
       playerId = account.id;
       if (server) result.finished = server.finished; // COURSE-06 : l'arrivée est celle que le serveur a vue
+      if (server) result.abandoned = !!server.abandoned;
     } else if (result.bot && !sameName(result.name, requester.guest)) playerId = await botPlayer(db, result.name);
     if (playerId) kept.push({ ...result, playerId });
     else {
@@ -265,7 +274,7 @@ export const ELAPSED_TOLERANCE_SECONDS = 2;
 export async function claimServerRace(db: Db, race: ParsedRace, key: string | null): Promise<ServerRace & { release: () => Promise<void> }> {
   if (!race.room || !key) throw new RaceRefused("race_not_launched");
   const [row] = await db
-    .select({ roomId: rooms.id, launchedAt: rooms.launchedAt, duration: raceConfigs.duration, progress: roomMembers.progress, bots: rooms.bots, guests: rooms.guests })
+    .select({ roomId: rooms.id, launchedAt: rooms.launchedAt, duration: raceConfigs.duration, progress: roomMembers.progress, abandonedAt: roomMembers.abandonedAt, bots: rooms.bots, guests: rooms.guests })
     .from(rooms)
     .innerJoin(raceConfigs, eq(raceConfigs.id, rooms.configId))
     .innerJoin(roomMembers, and(eq(roomMembers.roomId, rooms.id), eq(roomMembers.memberKey, key)))
@@ -278,7 +287,7 @@ export async function claimServerRace(db: Db, race: ParsedRace, key: string | nu
   const claimed = await db.update(roomMembers).set({ raceRecorded: true }).where(and(member, eq(roomMembers.raceRecorded, false))).returning({ key: roomMembers.memberKey });
   if (!claimed.length) throw new DuplicateRace("Race already recorded");
   const runners = await db
-    .select({ name: sql<string>`coalesce(${players.name}, ${roomMembers.guestName})`, isBot: sql<boolean>`coalesce(${players.isBot}, false)`, finishedAt: roomMembers.finishedAt, progress: roomMembers.progress })
+    .select({ name: sql<string>`coalesce(${players.name}, ${roomMembers.guestName})`, isBot: sql<boolean>`coalesce(${players.isBot}, false)`, finishedAt: roomMembers.finishedAt, progress: roomMembers.progress, abandonedAt: roomMembers.abandonedAt })
     .from(roomMembers)
     .leftJoin(players, eq(players.id, roomMembers.playerId))
     .where(and(eq(roomMembers.roomId, row.roomId), eq(roomMembers.role, "player")));
@@ -290,8 +299,9 @@ export async function claimServerRace(db: Db, race: ParsedRace, key: string | nu
   const bots = new Set([...runners.filter((r) => r.isBot).map((r) => r.name), ...seatBots].map((name) => name.toLowerCase()).filter((name) => !humanNames.has(name)));
   return {
     startedAt: new Date(startsAt),
-    finished: row.progress >= 1,
-    standings: new Map(humans.map((r) => [r.name.toLowerCase(), { finishedAt: r.finishedAt, progress: r.progress }])),
+    finished: row.progress >= 1 && row.abandonedAt === null,
+    abandoned: row.abandonedAt !== null,
+    standings: new Map(humans.map((r) => [r.name.toLowerCase(), { finishedAt: r.finishedAt, progress: r.progress, abandonedAt: r.abandonedAt }])),
     bots,
     release: async () => void (await db.update(roomMembers).set({ raceRecorded: false }).where(member)),
   };
