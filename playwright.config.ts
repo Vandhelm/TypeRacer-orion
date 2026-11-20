@@ -16,7 +16,8 @@ const databaseUrl = e2eDatabaseUrl(process.env);
 export default defineConfig({
   testDir: "tests/e2e",
   // *.e2e.ts : jamais ramassé par `bun test` (qui cherche *.test.ts, *_test.ts, *.spec.ts et *_spec.ts).
-  testMatch: "**/*.e2e.ts",
+  // PERF-03 : *.perf.ts (mesure de fluidité, `bun run test:perf`) seulement avec PERF=1, jamais avec les parcours.
+  testMatch: process.env.PERF === "1" ? "**/*.perf.ts" : "**/*.e2e.ts",
   // Les parcours partagent une base et un serveur : un seul à la fois. En CI, un échec est rejoué une fois.
   fullyParallel: false,
   workers: 1,

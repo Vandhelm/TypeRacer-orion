@@ -44,6 +44,7 @@
     "test": "bun test",
     "test:smoke": "bun test ./tests/smoke/app.smoke.ts",
     "test:e2e": "playwright test",
+    "test:perf": "PERF=1 playwright test",
     "test:requirements": "bun scripts/requirement-tests.ts",
     "lighthouse": "bun scripts/lighthouse.ts",
     "vercel-build": "if [ \"$VERCEL_ENV\" = production ] || [ \"$VERCEL_ENV\" = preview ]; then bun db/cli.ts migrate; fi && bun --bun next build",
