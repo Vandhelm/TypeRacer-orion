@@ -19,13 +19,29 @@ export async function notifyRoom(db: Db, code: string) {
 
 type Listener = (code: string) => void;
 
-/** Les annonces reçues par LISTEN, pour createRoomBackend ; un code invalide est ignoré (TECH-07). */
-export function roomChanges(listen: (channel: string, onMessage: (payload: string) => void) => unknown) {
+/**
+ * Les annonces reçues par LISTEN, pour createRoomBackend ; un code invalide est ignoré (TECH-07).
+ * Base injoignable au démarrage : on journalise et on réessaie, sans arrêter le serveur temps réel
+ * (présence et progression continuent ; les pages relisent l'état par HTTP en attendant).
+ */
+export function roomChanges(
+  listen: (channel: string, onMessage: (payload: string) => void) => unknown,
+  { retryMs = 5_000, log = console.error }: { retryMs?: number; log?: (...args: unknown[]) => void } = {},
+) {
   const listeners = new Set<Listener>();
-  void listen(ROOM_CHANNEL, (payload) => {
+  const onMessage = (payload: string) => {
     if (!isRoomCode(payload)) return;
     for (const listener of listeners) listener(payload);
-  });
+  };
+  const start = () => {
+    Promise.resolve()
+      .then(() => listen(ROOM_CHANNEL, onMessage))
+      .catch((error: unknown) => {
+        log(`LISTEN ${ROOM_CHANNEL} failed, retrying in ${retryMs} ms:`, error instanceof Error ? error.message : error);
+        setTimeout(start, retryMs).unref?.();
+      });
+  };
+  start();
   return {
     on(listener: Listener) {
       listeners.add(listener);
