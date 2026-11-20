@@ -50,7 +50,7 @@ Pourquoi pas `bun run dev` : sous Bun, `next dev` (Turbopack) ne charge pas `sha
 
 | Variable | Rôle | Défaut |
 |---|---|---|
-| `E2E_DATABASE_URL` | base des tests, remise à zéro à chaque lancement | `DATABASE_URL` suffixée par `_e2e`, sinon `postgres://orion:orion@localhost:5432/orion_e2e` |
+| `E2E_DATABASE_URL` | base des tests, remise à zéro à chaque lancement | `DATABASE_URL` suffixée par `_e2e` (l'une des deux est obligatoire) |
 | `E2E_SKIP_BUILD` | `1` : ne reconstruit pas l'application | vide |
 | `BETTER_AUTH_SECRET` | secret des sessions | celui du `.env`, sinon une valeur de test |
 
