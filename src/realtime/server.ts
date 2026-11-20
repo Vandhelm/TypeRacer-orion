@@ -170,7 +170,8 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
       const latest = await rooms.view(room).catch(failed);
       if (!current()) return undefined;
       if (!latest?.members.some((m) => m.key === entry.key)) return null;
-      entry.room = latest;
+      // COURSE-03 : la vue relue est complète ; ce lecteur n'en reçoit que la sienne
+      entry.room = concealText(latest, entry.key);
     }
     return entry;
   }
@@ -310,7 +311,7 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
     const sockets = followers.get(room) ?? new Set<Socket>();
     followers.set(room, sockets.add(ws));
     refreshTimer ??= setInterval(() => void refreshAll(), refreshMs);
-    send(ws, { type: "room", room: entry.room });
+    send(ws, { type: "room", room: concealText(entry.room, entry.key) }); // COURSE-03 : jamais une vue complète
   }
 
   /** La socket ne suit plus son salon. Si c'était la dernière page salle du membre, il part après le délai. */
