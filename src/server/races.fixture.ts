@@ -5,6 +5,7 @@ import type { Db } from "../../db/client";
 import { players, roomMembers, rooms } from "../../db/schema";
 import { COUNTDOWN_MS } from "../rooms/race-clock";
 import type { Auth } from "./auth";
+import { launchBots, marksOf } from "./bot-course";
 import { readGuestSession } from "./guest";
 import { createRoom, joinRoom, launchRoom, leaveRoom, memberKey, type Identity } from "./rooms";
 
@@ -21,6 +22,18 @@ import { createRoom, joinRoom, launchRoom, leaveRoom, memberKey, type Identity }
 export async function arrivedAfterStart(db: Db, code: string, key: string, ms: number): Promise<void> {
   const [room] = await db.select({ id: rooms.id, launchedAt: rooms.launchedAt }).from(rooms).where(eq(rooms.code, code));
   await db.update(roomMembers).set({ finishedAt: new Date(room!.launchedAt!.getTime() + COUNTDOWN_MS + ms) }).where(and(eq(roomMembers.roomId, room!.id), eq(roomMembers.memberKey, key)));
+}
+
+/**
+ * COURSE-06 : le serveur a vu ce membre finir son texte au rythme de `wpm` (annexe A, caractères du texte tiré par le
+ * serveur) : un envoi honnête à ce MPM est enregistré tel quel. Sans texte ou à 0 MPM, rien ne change.
+ */
+export async function arrivedAtWpm(db: Db, code: string, key: string, wpm: number): Promise<void> {
+  const [room] = await db.select({ id: rooms.id }).from(rooms).where(eq(rooms.code, code));
+  const course = room ? (await launchBots(db, room.id, 0, true)).course : null;
+  if (!course?.words.length || wpm <= 0) return;
+  const ms = (marksOf(course.words).at(-1)! / 5 / wpm) * 60_000;
+  await db.update(roomMembers).set({ progress: 1, finishedAt: new Date(course.startsAt + ms) }).where(and(eq(roomMembers.roomId, room!.id), eq(roomMembers.memberKey, key)));
 }
 
 /**

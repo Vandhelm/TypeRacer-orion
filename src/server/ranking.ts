@@ -10,7 +10,8 @@ import { launchBots } from "./bot-course";
 /** COURSE-06 : la place d'un membre participant au classement du serveur (temps réel, room_members). */
 /** COURSE-07 : abandonedAt, l'abandon de ce membre ; progress est alors celle validée au moment de l'abandon. */
 /** COURSE-10 : seat, sa place dans le salon, qui départage deux humains à égalité. */
-export type ServerStanding = { finishedAt: Date | null; progress: number; abandonedAt?: Date | null; seat?: number | null };
+/** COURSE-06 : words, le texte de ce membre changé par un bonus (room_members.bonus_words) ; eliminatedAt, son élimination datée par le serveur (mode fatal) ; seconds et wpm, ceux de la course calculée d'un bot. */
+export type ServerStanding = { finishedAt: Date | null; progress: number; abandonedAt?: Date | null; seat?: number | null; words?: string[] | null; eliminatedAt?: Date | null; seconds?: number; wpm?: number };
 
 /**
  * COURSE-10 : le classement final, refait d'après le serveur (COURSE-06). `bots` : les bots du salon, décidés par le
@@ -57,17 +58,18 @@ export function rankByServer<T extends { name: string; rank: number; finished?: 
  * (room_members), puis ceux partis depuis, gardés par le salon : les abandons (rooms.abandons) et les coureurs partis
  * sans abandonner (rooms.departed), avec leur progression validée (et leur arrivée). `runners` : les participants
  * présents, bots compris ; `absent` : les humains partis ; `humanNames` : tous les humains, en minuscules.
+ * COURSE-06 : avec `withText`, `course` est le texte tiré par le serveur et son horloge (launchBots).
  */
-export async function launchStandings(db: Db, roomId: number) {
+export async function launchStandings(db: Db, roomId: number, withText = false) {
   const runners = await db
-    .select({ name: sql<string>`coalesce(${players.name}, ${roomMembers.guestName})`, isBot: sql<boolean>`coalesce(${players.isBot}, false)`, finishedAt: roomMembers.finishedAt, progress: roomMembers.progress, abandonedAt: roomMembers.abandonedAt, seat: roomMembers.seat })
+    .select({ name: sql<string>`coalesce(${players.name}, ${roomMembers.guestName})`, isBot: sql<boolean>`coalesce(${players.isBot}, false)`, finishedAt: roomMembers.finishedAt, progress: roomMembers.progress, abandonedAt: roomMembers.abandonedAt, seat: roomMembers.seat, words: roomMembers.bonusWords, eliminatedAt: roomMembers.eliminatedAt })
     .from(roomMembers)
     .leftJoin(players, eq(players.id, roomMembers.playerId))
     .where(and(eq(roomMembers.roomId, roomId), eq(roomMembers.role, "player")));
   const [room] = await db.select({ abandons: rooms.abandons, departed: rooms.departed }).from(rooms).where(eq(rooms.id, roomId));
   const humans = runners.filter((r) => !r.isBot);
   const humanNames = new Set(humans.map((r) => r.name.toLowerCase()));
-  const standings = new Map<string, ServerStanding>(humans.map((r) => [r.name.toLowerCase(), { finishedAt: r.finishedAt, progress: r.progress, abandonedAt: r.abandonedAt, seat: r.seat }]));
+  const standings = new Map<string, ServerStanding>(humans.map((r) => [r.name.toLowerCase(), { finishedAt: r.finishedAt, progress: r.progress, abandonedAt: r.abandonedAt, seat: r.seat, words: r.words, eliminatedAt: r.eliminatedAt }]));
   const absent: { name: string; progress: number }[] = [];
   const gone = [
     ...(room?.abandons ?? []).map((a) => ({ ...a, standing: { finishedAt: null, progress: a.progress, abandonedAt: new Date(0), seat: a.seat } })),
@@ -80,9 +82,9 @@ export async function launchStandings(db: Db, roomId: number) {
     absent.push({ name, progress });
   }
   // BOT-05 : les bots assis, à leur course calculée par le serveur (jamais un nom porté par un humain)
-  const bots = await launchBots(db, roomId, runners.length + absent.length);
+  const bots = await launchBots(db, roomId, runners.length + absent.length, withText);
   for (const [name, standing] of bots.standings) if (!humanNames.has(name)) standings.set(name, standing);
-  return { runners, humanNames, standings, absent, botsRunning: bots.running };
+  return { runners, humanNames, standings, absent, botsRunning: bots.running, course: bots.course };
 }
 
 /**

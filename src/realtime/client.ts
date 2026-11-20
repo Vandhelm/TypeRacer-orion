@@ -45,7 +45,8 @@ export type RealtimeOptions = {
 };
 
 /** BONUS-04 : `words`, le nombre de mots du texte sur lequel compte la progression (un bonus le change). */
-export type RealtimeConnection = { sendProgress: (progress: number, wpm: number, words?: number) => void; close: () => void };
+/** `sendEliminated` (COURSE-06) : en mode fatal, annonce l'élimination de mon coureur, une fois (renvoyée après une reconnexion). */
+export type RealtimeConnection = { sendProgress: (progress: number, wpm: number, words?: number) => void; sendEliminated: () => void; close: () => void };
 type Outgoing = PlayerProgress & { words?: number };
 
 const MAX_RETRY_DELAY_MS = 10_000;
@@ -70,6 +71,8 @@ export function connectRealtime({ room, onChange, getTicket = fetchTicket, WebSo
   let pending: Outgoing | null = null;
   let latest: Outgoing | null = null;
   let sendTimer: ReturnType<typeof setTimeout> | null = null;
+  // COURSE-06 : mon coureur est éliminé (mode fatal) ; null : pas encore annoncé au serveur ouvert
+  let eliminated: "pending" | "sent" | null = null;
 
   const update = (patch: Partial<RealtimeState>) => {
     state = { ...state, ...patch };
@@ -94,6 +97,17 @@ export function connectRealtime({ room, onChange, getTicket = fetchTicket, WebSo
     const wait = lastSent + PROGRESS_INTERVAL_MS - performance.now();
     if (wait <= 0) flush();
     else sendTimer = setTimeout(flush, wait);
+  }
+
+  /** COURSE-06 : la progression encore en attente part d'abord, pour que le serveur garde celle de l'élimination. */
+  function sendEliminated() {
+    if (eliminated === "sent") return;
+    eliminated = "pending";
+    if (state.status !== "open") return;
+    if (sendTimer) clearTimeout(sendTimer);
+    if (pending) flush();
+    send({ type: "eliminated" });
+    eliminated = "sent";
   }
 
   function retry() {
@@ -131,6 +145,11 @@ export function connectRealtime({ room, onChange, getTicket = fetchTicket, WebSo
           update({ status: "open", players: message.players, progress });
           // Après une reconnexion, la salle reçoit à nouveau la dernière progression connue.
           if (!wasOpen && latest) sendProgress(latest.progress, latest.wpm, latest.words);
+          // COURSE-06 : une élimination pas encore annoncée (ou perdue avec la connexion) part à nouveau ; le serveur n'en garde qu'une
+          if (!wasOpen && eliminated) {
+            eliminated = "pending";
+            sendEliminated();
+          }
           return;
         }
         case "progress":
@@ -161,6 +180,7 @@ export function connectRealtime({ room, onChange, getTicket = fetchTicket, WebSo
 
   return {
     sendProgress,
+    sendEliminated,
     close() {
       closed = true;
       if (retryTimer) clearTimeout(retryTimer);

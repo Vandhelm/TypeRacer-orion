@@ -10,7 +10,8 @@ import { createCourse, createRace } from "../views/game/race";
 import { buildResults, buildSummary, raceBody } from "../views/podium/results";
 import type { Room } from "../views/room/room";
 import { handleRace, InvalidRace, parseRace, playerStats, recordRace } from "./races";
-import { launchedRoomFor } from "./races.fixture";
+import { arrivedAtWpm, launchedRoomFor } from "./races.fixture";
+import { memberKey } from "./rooms";
 
 process.env.BETTER_AUTH_SECRET ??= "test-secret-test-secret-test-secret";
 process.env.BETTER_AUTH_URL ??= "http://localhost:3000";
@@ -28,9 +29,17 @@ const result = (name: string, bot: boolean, wpm: number) => ({
 /** Chaque envoi de course porte l'identifiant unique de sa course (AUTH-06.6), sauf si le test en donne un. */
 const withId = (body: unknown) => (body && typeof body === "object" && !("id" in body) ? { id: crypto.randomUUID(), ...body } : body);
 type Db = Awaited<ReturnType<typeof createMockDatabase>>;
-/** COURSE-06 : une course n'est enregistrée que si le serveur l'a lancée ; chaque envoi part d'un salon lancé, dont la session est membre. */
-const withRoom = async (db: Db, auth: ReturnType<typeof createAuth>, body: unknown, cookie?: string) =>
-  cookie && body && typeof body === "object" && !("room" in body) ? { ...body, room: (await launchedRoomFor(db, auth, cookie, GUEST_SECRET).catch(() => null))?.code } : body;
+/**
+ * COURSE-06 : une course n'est enregistrée que si le serveur l'a lancée ; chaque envoi part d'un salon lancé, dont la
+ * session est membre, et le serveur a vu son coureur arriver au MPM envoyé (temps et MPM enregistrés sont les siens).
+ */
+const withRoom = async (db: Db, auth: ReturnType<typeof createAuth>, body: unknown, cookie?: string) => {
+  if (!cookie || !body || typeof body !== "object" || "room" in body) return body;
+  const launched = await launchedRoomFor(db, auth, cookie, GUEST_SECRET).catch(() => null);
+  const mine = (body as { players?: { name?: string; wpm?: number; finished?: boolean }[] }).players?.find((p) => p?.name?.toLowerCase?.() === launched?.who.name.toLowerCase());
+  if (launched && mine?.finished && typeof mine.wpm === "number") await arrivedAtWpm(db, launched.code, memberKey(launched.who), mine.wpm);
+  return { ...body, room: launched?.code };
+};
 
 describe("races", () => {
   let db: Awaited<ReturnType<typeof createMockDatabase>>;
@@ -123,7 +132,8 @@ describe("AUTH-06 — a signed-in account keeps its races", () => {
     const res = await post({ summary: SUMMARY, players: [result("Thon_Rouge", true, 80), result("Compte_Deux", false, 70)] }, cookie);
     expect(res.status).toBe(201);
     const stats = await playerStats(db, "Compte_Deux");
-    expect(stats).toMatchObject({ bot: false, races: 1, wins: 0, bestWpm: 70 });
+    // COURSE-06 : le serveur l'a vu arriver (withRoom), avant la course calculée du bot : il gagne
+    expect(stats).toMatchObject({ bot: false, races: 1, wins: 1, bestWpm: 70 });
   });
 
   test("a race posted without a session is refused and changes nothing", async () => {

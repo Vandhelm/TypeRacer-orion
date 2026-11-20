@@ -18,6 +18,7 @@ import { BonusNotice } from "./BonusNotice";
 import { AbandonRace } from "./AbandonRace";
 import { bonusesFor, remoteBonuses } from "./bonus";
 import { abandonOver, canAbandon, handOverPlayers, raceExit } from "./abandon";
+import { reportsElimination } from "./elimination";
 import { KeyboardNotice } from "./KeyboardNotice";
 import { useMobileRace } from "./mobileRace";
 import { loadRacePoolImages, type RacePoolImages } from "./pool/createRacePool";
@@ -102,7 +103,7 @@ function GameRace({ state, onHandOver }: { state: RoomState; onHandOver?: (sendi
   }, [plan, onRestore, state.abandoned, stored.sent]);
 
   // TECH-06 : ma progression part dans le salon (10 envois par seconde au plus), celle des autres arrive en direct
-  const { state: live, sendProgress } = useRealtimeRoom(room.code || null);
+  const { state: live, sendProgress, sendEliminated } = useRealtimeRoom(room.code || null);
   const mine = laneProgress(race, race.myLane);
   const wpm = myWpm(race);
   // BONUS-04 : avec la longueur de mon texte, pour qu'une progression partie avant un bonus soit recomptée par le serveur
@@ -110,6 +111,10 @@ function GameRace({ state, onHandOver }: { state: RoomState; onHandOver?: (sendi
   useEffect(() => {
     if (!watching && !abandoned && race.phase !== "countdown") sendProgress(mine, wpm, myWords);
   }, [watching, abandoned, race.phase, mine, wpm, myWords, sendProgress]);
+  // COURSE-06 : en mode fatal, mon élimination part au serveur, qui la date (après ma dernière progression)
+  useEffect(() => {
+    if (reportsElimination({ watching, eliminated: race.eliminated })) sendEliminated();
+  }, [watching, race.eliminated, sendEliminated]);
   // BONUS-04 : mon texte changé par un bonus, renvoyé par le serveur quand je rejoins (avant le classement) : appliqué
   // avant la reprise ci-dessous, qui se place alors sur lui
   const serverText = watching ? undefined : live?.text;

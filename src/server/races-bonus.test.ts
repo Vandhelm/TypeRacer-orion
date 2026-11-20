@@ -9,7 +9,7 @@ import { createRoomBackend } from "../realtime/room-backend";
 import { COUNTDOWN_MS } from "../rooms/race-clock";
 import { createAuth } from "./auth";
 import { handleRace } from "./races";
-import { launchedRoomFor } from "./races.fixture";
+import { arrivedAfterStart, launchedRoomFor } from "./races.fixture";
 import { memoryRoomEvents } from "./room-events";
 import { launchRoom, memberKey } from "./rooms";
 
@@ -93,6 +93,8 @@ describe("BONUS-04 — the text a bonus changed is kept by the room and recorded
     const { me, code, key, startsAt } = await launched("Bonus_Plus_Trois");
     await backend.bonusText!(code, startsAt, key, PLUS3, 10 / 23);
     await backend.progress!(key, code, 1);
+    // COURSE-06 : le serveur a vu l'arrivée 30 s après le départ (le temps enregistré est le sien)
+    await arrivedAfterStart(db, code, key, 30_000);
     // 23 mots en 30 s : 46 MPM ; la page, rechargée sans son texte, aurait envoyé celui de la course
     const res = await post({ room: code, summary: SUMMARY, content: TWENTY.join(" "), players: [result("Bonus_Plus_Trois", 46)] }, me.cookie);
     expect(res.status).toBe(201);

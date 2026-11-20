@@ -7,7 +7,8 @@ import { createAuth } from "./auth";
 import { GUEST_COOKIE, signGuest } from "./guest";
 import { listHistory } from "./history";
 import { handleRace, parseRace, recordRace } from "./races";
-import { launchedRoomFor } from "./races.fixture";
+import { arrivedAtWpm, launchedRoomFor } from "./races.fixture";
+import { memberKey } from "./rooms";
 import { personalRecord } from "./records";
 
 process.env.BETTER_AUTH_SECRET ??= "test-secret-test-secret-test-secret";
@@ -38,7 +39,10 @@ async function setup() {
       abandoned ? { startedAt: new Date(), finished: false, abandoned: true } : undefined))!;
   /** POST /api/races depuis un salon lancé par le serveur, comme le jeu. */
   const post = async (cookie: string, body: unknown) => {
-    const { code } = await launchedRoomFor(db, auth, cookie, SECRET);
+    const { code, who } = await launchedRoomFor(db, auth, cookie, SECRET);
+    // COURSE-06 : le serveur a vu l'arrivée au MPM envoyé (temps et MPM enregistrés sont les siens)
+    const mine = (body as { players?: { wpm: number }[] }).players?.[0];
+    if (mine) await arrivedAtWpm(db, code, memberKey(who), mine.wpm);
     const payload = { id: crypto.randomUUID(), room: code, summary: SUMMARY, content: "le riz attend", ...(body as object) };
     return handleRace(new Request("http://localhost/api/races", { method: "POST", headers: { "content-type": "application/json", cookie }, body: JSON.stringify(payload) }), db, auth, SECRET);
   };

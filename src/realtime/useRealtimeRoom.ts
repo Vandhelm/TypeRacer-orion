@@ -21,5 +21,8 @@ export function useRealtimeRoom(room: string | null) {
   /** Progression du joueur local (0 à 1, annexe A) et son MPM ; limitée à 10 envois par seconde. */
   const sendProgress = useCallback((progress: number, wpm: number, words?: number) => connection.current?.sendProgress(progress, wpm, words), []);
 
-  return { state, sendProgress };
+  /** COURSE-06 : en mode fatal, annonce l'élimination du joueur local, une fois. */
+  const sendEliminated = useCallback(() => connection.current?.sendEliminated(), []);
+
+  return { state, sendProgress, sendEliminated };
 }
