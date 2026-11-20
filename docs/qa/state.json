@@ -280,9 +280,9 @@
     "scope": "critère (feature/game/course-09) + BOT-05"
   },
   "COURSE-10": {
-    "commit": "9bf947d",
+    "commit": "c08156f",
     "date": "2026-11-20",
-    "scope": "critère (feature/podium/course-10)"
+    "scope": "critère (dev)"
   },
   "COURSE-11": {
     "commit": "1b42ca7",
