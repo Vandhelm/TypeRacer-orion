@@ -4,7 +4,7 @@ import { players, user } from "../../db/schema";
 import { createMockDatabase } from "../../db/mocks/test-database";
 import { DEMO_PASSWORD } from "../../db/mocks/data";
 import { placeholderEmail } from "../accounts/username";
-import { createAuth } from "./auth";
+import { createAuth, socialProviders, warnMissingProviders } from "./auth";
 
 process.env.BETTER_AUTH_SECRET ??= "test-secret-test-secret-test-secret";
 process.env.BETTER_AUTH_URL ??= "http://localhost:3000";
@@ -246,5 +246,89 @@ describe("AUTH-04 — seule /api/account/avatar écrit la photo", () => {
     const [row] = await db.select({ id: user.id }).from(user).where(eq(user.username, "photo_lien"));
     await ctx.internalAdapter.updateUser(row!.id, { image: "https://avatars.githubusercontent.com/u/1" });
     expect(await image()).toBeNull();
+  });
+});
+
+describe("AUTH-01 — GitHub, Discord et identifiants", () => {
+  const OAUTH = { GITHUB_CLIENT_ID: "gh-id", GITHUB_CLIENT_SECRET: "gh-secret", DISCORD_CLIENT_ID: "dc-id", DISCORD_CLIENT_SECRET: "dc-secret" };
+  let db: Awaited<ReturnType<typeof createMockDatabase>>;
+  beforeAll(async () => {
+    db = await createMockDatabase();
+  });
+
+  const post = (auth: ReturnType<typeof createAuth>, path: string, body: unknown) =>
+    auth.handler(
+      new Request(`http://localhost:3000/api/auth${path}`, {
+        method: "POST",
+        headers: { "content-type": "application/json", origin: "http://localhost:3000" },
+        body: JSON.stringify(body),
+      }),
+    );
+  const startSocial = (auth: ReturnType<typeof createAuth>, provider: string) => post(auth, "/sign-in/social", { provider, callbackURL: "/" });
+  const redirectOf = async (res: Response) => new URL(((await res.json()) as { url: string }).url);
+
+  test("with their variables, both providers are configured", () => {
+    const providers = socialProviders(OAUTH);
+    expect(Object.keys(providers).sort()).toEqual(["discord", "github"]);
+    expect(providers.github?.clientId).toBe("gh-id");
+    expect(providers.discord?.clientId).toBe("dc-id");
+  });
+
+  test("with their variables, GitHub and Discord sign-in redirect to the provider", async () => {
+    const auth = createAuth(db, OAUTH);
+    for (const [provider, host, clientId] of [["github", "github.com", "gh-id"], ["discord", "discord.com", "dc-id"]] as const) {
+      const res = await startSocial(auth, provider);
+      expect(res.status).toBe(200);
+      const url = await redirectOf(res);
+      expect(url.host).toBe(host);
+      expect(url.searchParams.get("client_id")).toBe(clientId);
+      expect(url.searchParams.get("redirect_uri")).toBe(`http://localhost:3000/api/auth/callback/${provider}`);
+    }
+  });
+
+  test("a provider without its id, its secret, or with blank values is not configured", () => {
+    expect(socialProviders({})).toEqual({});
+    expect(Object.keys(socialProviders({ ...OAUTH, GITHUB_CLIENT_SECRET: undefined }))).toEqual(["discord"]);
+    expect(Object.keys(socialProviders({ ...OAUTH, DISCORD_CLIENT_ID: "" }))).toEqual(["github"]);
+    expect(Object.keys(socialProviders({ ...OAUTH, GITHUB_CLIENT_ID: "   " }))).toEqual(["discord"]);
+  });
+
+  test("an unconfigured or unknown provider is refused when the API is called directly", async () => {
+    const auth = createAuth(db, { ...OAUTH, DISCORD_CLIENT_SECRET: undefined });
+    for (const provider of ["discord", "facebook"]) {
+      const res = await startSocial(auth, provider);
+      expect(res.status).toBeGreaterThanOrEqual(400);
+      expect(res.status).toBeLessThan(500);
+      expect(res.headers.get("set-cookie")).toBeNull();
+    }
+  });
+
+  test("in production, a missing provider is reported at startup", () => {
+    const warnings: string[] = [];
+    warnMissingProviders({ NODE_ENV: "production", GITHUB_CLIENT_ID: "gh-id", GITHUB_CLIENT_SECRET: "gh-secret" }, (m) => warnings.push(m));
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("DISCORD_CLIENT_ID");
+    expect(warnings[0]).not.toContain("GITHUB_CLIENT_ID");
+  });
+
+  test("in production with both providers, or in local development, nothing is reported", () => {
+    const warnings: string[] = [];
+    warnMissingProviders({ ...OAUTH, NODE_ENV: "production" }, (m) => warnings.push(m));
+    warnMissingProviders({ NODE_ENV: "development" }, (m) => warnings.push(m));
+    warnMissingProviders({ NODE_ENV: "test" }, (m) => warnings.push(m));
+    expect(warnings).toEqual([]);
+  });
+
+  test("username and password sign-in works over HTTP, also in production", async () => {
+    const auth = createAuth(db, { ...OAUTH, NODE_ENV: "production" });
+    await signUp(auth, "Prod_Thon");
+    const ok = await post(auth, "/sign-in/username", { username: "Prod_Thon", password: "sushi-roll-42" });
+    expect(ok.status).toBe(200);
+    expect(ok.headers.get("set-cookie")).toContain("session_token");
+    const wrong = await post(auth, "/sign-in/username", { username: "Prod_Thon", password: "sushi-roll-43" });
+    expect(wrong.status).toBe(401);
+    expect(wrong.headers.get("set-cookie")).toBeNull();
+    const notText = await post(auth, "/sign-in/username", { username: "Prod_Thon", password: 42 });
+    expect(notText.status).toBe(400);
   });
 });
