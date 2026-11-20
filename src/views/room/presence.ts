@@ -5,6 +5,11 @@ import { isRoomCode } from "../../rooms/access";
 
 /** Bien en deçà du délai du serveur (90 s), même si le navigateur ralentit un onglet en arrière-plan. */
 export const PRESENCE_MS = 15_000;
+/**
+ * COURSE-08 : sur /game, plus souvent : un coureur silencieux depuis RECONNECT_MS (30 s) a abandonné. Au pire, le dernier
+ * signe de vie précède la coupure de ce délai, qui reste petit devant 30 s.
+ */
+export const RACE_PRESENCE_MS = 5_000;
 
 type Get = (path: string) => Promise<unknown>;
 const get: Get = (path) => fetch(path, { credentials: "same-origin" }).catch(() => undefined);

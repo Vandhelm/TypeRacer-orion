@@ -18,6 +18,7 @@ import { loadRacePoolImages, type RacePoolImages } from "./pool/createRacePool";
 import { laneProgress, myWpm } from "./race";
 import { RacePool } from "./RacePool";
 import { RaceTrack } from "./RaceTrack";
+import { myStanding, resumeNotice } from "./resume";
 import { raceLanes, remoteUpdates, trackLanes } from "./track";
 import { TypingPanel } from "./TypingPanel";
 
@@ -77,7 +78,7 @@ function GameRace({ state, onHandOver }: { state: RoomState; onHandOver?: (sendi
   const [lanes] = useState(() => raceLanes(state.players, state.members ?? []));
   const { players } = lanes;
   const [images, setImages] = useState<RacePoolImages | null>(null);
-  const { race, onInput, onRemote, showResults } = useRace(room, players, { passage, seed, startsAt, endsAt, clockOffset });
+  const { race, onInput, onRemote, onResume, arrivedMidRace, showResults } = useRace(room, players, { passage, seed, startsAt, endsAt, clockOffset });
   // COURSE-07 : abandon enregistré par le serveur ; la progression ne part plus et la page passe au podium
   const [abandoned, setAbandoned] = useState(false);
 
@@ -88,6 +89,18 @@ function GameRace({ state, onHandOver }: { state: RoomState; onHandOver?: (sendi
   useEffect(() => {
     if (!watching && !abandoned && race.phase !== "countdown") sendProgress(mine, wpm);
   }, [watching, abandoned, race.phase, mine, wpm, sendProgress]);
+  // COURSE-08 : après un rechargement ou une coupure, la page reprend une fois à la progression validée par le serveur ;
+  // un abandon par silence (plus de 30 s), dit par le serveur, mène au podium comme un abandon
+  const [resumed, setResumed] = useState(false);
+  const standing = myStanding(live);
+  useEffect(() => {
+    if (resumed || !standing || race.phase === "countdown") return;
+    onResume(standing);
+    setResumed(true);
+  }, [resumed, standing, race.phase, onResume]);
+  useEffect(() => {
+    if (live?.abandoned && !watching) setAbandoned(true);
+  }, [live?.abandoned, watching]);
   // COURSE-05 : les autres humains avancent dans leur couloir avec ce qu'ils envoient
   useEffect(() => {
     if (race.phase === "racing") onRemote(remoteUpdates(live, lanes));
@@ -140,6 +153,12 @@ function GameRace({ state, onHandOver }: { state: RoomState; onHandOver?: (sendi
       {images ? <RacePool players={players} images={images} race={race} label={t("game.poolLabel", { count: players.length })} /> : <div className="race-pool" />}
 
       <RaceTrack lanes={trackLanes(race, players)} />
+
+      {!watching && resumeNotice({ arrivedMidRace, resumed, racing: race.phase === "racing", status: live?.status }) && (
+        <p className="pointer-events-none fixed top-[84px] left-1/2 z-30 -translate-x-1/2 font-mono text-[max(11px,1.3vh)] leading-[1.6] tracking-[.12em] text-muted" role="status">
+          {t("game.resuming")}
+        </p>
+      )}
 
       {watching ? (
         <p className="py-[1.4vh] text-center font-mono text-[max(11px,1.3vh)] leading-[1.6] tracking-[.12em] text-muted compact:col-[1/-1]" role="status">

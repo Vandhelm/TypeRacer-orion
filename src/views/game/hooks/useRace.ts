@@ -5,6 +5,7 @@ import { seededRandom } from "../../../rooms/text";
 import { countdownAt, GO_MS, nextChangeIn, raceDurationSeconds } from "../countdown";
 import { buildWords } from "../course";
 import { advanceBots, applyInput, applyRemote, createCourse, createRace, endRace, everyoneDone, startRace, TICK_MS, type Race } from "../race";
+import { resumeRace, type ServerStanding } from "../resume";
 
 /** L'ancien décompte local (3 × 800 ms + GO_MS) : seule la page mobile (mobileRace.ts) s'en sert encore pour son échéance. */
 export const COUNT_STEP_MS = 800;
@@ -18,6 +19,7 @@ type Action =
   | { type: "input"; value: string; now: number }
   | { type: "tick"; now: number; jitters: number[] }
   | { type: "remote"; updates: { lane: number; progress: number; wpm: number }[]; now: number }
+  | { type: "resume"; standing: ServerStanding; startsAt: number }
   | { type: "finish" };
 
 function reduce(race: Race, action: Action): Race {
@@ -34,6 +36,8 @@ function reduce(race: Race, action: Action): Race {
       return race.phase === "racing" ? action.updates.reduce((next, { lane, ...update }) => applyRemote(next, lane, update, action.now), race) : race;
     case "finish":
       return endRace(race);
+    case "resume":
+      return resumeRace(race, action.standing, action.startsAt);
   }
 }
 
@@ -120,5 +124,9 @@ export function useRace(room: Room, players: Player[], { passage = null, seed = 
   const onRemote = useMemo(() => (updates: { lane: number; progress: number; wpm: number }[]) => {
     if (updates.length) dispatch({ type: "remote", updates, now: serverNow() });
   }, [serverNow]);
-  return { race, onInput, onRemote, showResults };
+  /** COURSE-08 : après un rechargement, la page reprend à la progression validée par le serveur (jamais en arrière). */
+  const onResume = useMemo(() => (standing: ServerStanding) => dispatch({ type: "resume", standing, startsAt: start }), [start]);
+  /** COURSE-08 : la course avait déjà commencé quand cette page s'est ouverte (rechargement, retour, arrivée tardive). */
+  const [arrivedMidRace] = useState(() => countdownAt(start, Date.now() + clockOffset).started);
+  return { race, onInput, onRemote, onResume, arrivedMidRace, showResults };
 }
