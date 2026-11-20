@@ -10,9 +10,10 @@ import { createRoom, joinRoom, launchRoom, leaveRoom, memberKey, type Identity }
 /**
  * Un salon lancé il y a `agoMs` (la course a donc commencé depuis agoMs moins le décompte), avec ce membre dedans.
  * Un compte en est l'hôte (bots pour compléter) ; un invité y entre chez un hôte créé pour l'occasion.
+ * `others` : d'autres membres participants, entrés avant le lancement.
  * Un salon neuf à chaque appel : le membre quitte d'abord son salon précédent (SALLE-06 : un seul à la fois).
  */
-export async function launchedRoomFor(db: Db, auth: Auth, cookie: string, guestSecret: string, agoMs = 60_000): Promise<{ code: string; who: Identity }> {
+export async function launchedRoomFor(db: Db, auth: Auth, cookie: string, guestSecret: string, agoMs = 60_000, others: Identity[] = []): Promise<{ code: string; who: Identity }> {
   const headers = new Headers({ cookie });
   const session = await auth.api.getSession({ headers }).catch(() => null);
   const playerId = (session?.user as { playerId?: number | null } | undefined)?.playerId ?? null;
@@ -33,6 +34,7 @@ export async function launchedRoomFor(db: Db, auth: Auth, cookie: string, guestS
   if (current) await leaveRoom(db, current.code, who);
   const { room } = await createRoom(db, { playerId: host.playerId }, { role: "player", settings: { visibility: "public", bots: true, guests: 4 } });
   if (who.kind === "guest") await joinRoom(db, who, { code: room.code });
+  for (const other of others) await joinRoom(db, other, { code: room.code });
   await launchRoom(db, room.code, host);
   await db.update(rooms).set({ launchedAt: sql`now() - ${agoMs} * interval '1 millisecond'` }).where(eq(rooms.code, room.code));
   return { code: room.code, who };

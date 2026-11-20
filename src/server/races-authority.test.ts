@@ -7,7 +7,7 @@ import { placeholderEmail } from "../accounts/username";
 import { COUNTDOWN_MS } from "../rooms/race-clock";
 import { createAuth } from "./auth";
 import { GUEST_COOKIE, signGuest } from "./guest";
-import { handleRace } from "./races";
+import { handleRace, rankByServer } from "./races";
 import { launchedRoomFor } from "./races.fixture";
 import { launchRoom, memberKey, recordProgress } from "./rooms";
 
@@ -150,5 +150,39 @@ describe("COURSE-06 — a race is recorded only as the server ran it", () => {
     await db.update(rooms).set({ launchedAt: sql`now() - interval '1 minute'` }).where(eq(rooms.code, code));
     expect((await post({ room: code, summary: SUMMARY, players: [result("Auto_Relance")] }, me.cookie)).status).toBe(201);
     expect(await resultsOf(me.playerId)).toBe(2);
+  });
+
+  test("the recorded rank of the account is the server's, not the body order (06.2b)", async () => {
+    const me = await signUp("Auto_Rang");
+    const rival = { kind: "guest" as const, name: "Rival_Rang", sessionId: crypto.randomUUID() };
+    const { code } = await launchedRoomFor(db, auth, me.cookie, GUEST_SECRET, 60_000, [rival]);
+    await recordProgress(db, code, memberKey(rival), 1);
+    await recordProgress(db, code, memberKey({ playerId: me.playerId }), 0.4);
+    // le corps se met premier
+    const res = await post({ room: code, summary: SUMMARY, players: [result("Auto_Rang", 90), result("Rival_Rang", 40)] }, me.cookie);
+    expect(res.status).toBe(201);
+    const [row] = await db.select({ rank: raceResults.rank }).from(raceResults).where(eq(raceResults.playerId, me.playerId));
+    expect(row!.rank).toBe(2);
+  });
+});
+
+describe("COURSE-06 — the recorded rank follows the server ranking", () => {
+  const at = (s: number) => new Date(1_000_000 + s * 1000);
+  const row = (name: string) => ({ name, rank: 0 });
+
+  test("humans are ranked by the server (arrivals by time, then progress), whatever the body order", () => {
+    const server = new Map([
+      ["moi", { finishedAt: null, progress: 0.4 }],
+      ["rapide", { finishedAt: at(30), progress: 1 }],
+      ["lent", { finishedAt: at(50), progress: 1 }],
+    ]);
+    const ranked = rankByServer([row("Moi"), row("Lent"), row("Rapide")], server);
+    expect(ranked.map((r) => [r.name, r.rank])).toEqual([["Rapide", 1], ["Lent", 2], ["Moi", 3]]);
+  });
+
+  test("bots (simulated by the browser) keep their place; a human unknown to the server ranks after the known ones", () => {
+    const server = new Map([["moi", { finishedAt: at(20), progress: 1 }], ["autre", { finishedAt: null, progress: 0.8 }]]);
+    const ranked = rankByServer([row("Inconnu"), row("Thon_Rouge"), row("Autre"), row("Moi")], server, new Set(["thon_rouge"]));
+    expect(ranked.map((r) => [r.name, r.rank])).toEqual([["Moi", 1], ["Thon_Rouge", 2], ["Autre", 3], ["Inconnu", 4]]);
   });
 });
