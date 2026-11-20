@@ -334,13 +334,13 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
 
   /**
    * BONUS-01 : après une progression acceptée, franchit les points de contrôle atteints par le meneur et annonce à toute
-   * la salle les bonus attribués aux coureurs en retard (src/rooms/bonus.ts). Un coureur qui a abandonné n'est ni en
-   * retard ni dernier. BOT-04 : les bots comptent aussi, à leur progression calculée par le moteur à cet instant (un bot
+   * la salle les bonus attribués aux coureurs en retard (src/rooms/bonus.ts). Un coureur qui a abandonné, ou qui est
+   * éliminé (COURSE-06, mode fatal), n'est ni en retard, ni dernier, ni la cible d'un malus. BOT-04 : les bots comptent aussi, à leur progression calculée par le moteur à cet instant (un bot
    * éliminé, comme un abandon, ne compte pas) ; un effet sur un bot part daté (`at`, ms depuis le départ).
    */
   function awardCatchUp(code: string, state: RaceState & { course: RaceCourse }) {
     if (!state.course.catchUpBonus) return;
-    const abandoned = new Set(state.course.abandoned ?? []);
+    const out = new Set([...(state.course.abandoned ?? []), ...state.eliminated]);
     const keys = new Map(state.owners);
     for (const ws of joined.get(code) ?? []) if (ws.data.key) keys.set(ws.data.player.id, ws.data.key);
     const now = Date.now();
@@ -348,7 +348,7 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
     const bots = botRunners({ ...state.course, bots: botRace.bots }, botRace.list, now).filter((bot) => !bot.out);
     const botWords = new Map(bots.map((bot) => [bot.playerId, bot.words]));
     const runners = [...raceEntries(code, state)]
-      .filter(([playerId]) => !abandoned.has(keys.get(playerId) ?? ""))
+      .filter(([playerId]) => !out.has(keys.get(playerId) ?? ""))
       .map(([playerId, entry]) => ({ playerId, progress: entry.progress, finished: entry.finishedAt !== null }))
       .concat(bots.map(({ playerId, progress, finished }) => ({ playerId, progress, finished })));
     const served = new Map<number, number>();
