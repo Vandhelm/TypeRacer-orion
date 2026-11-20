@@ -25,6 +25,8 @@ export type RaceCourse = {
   endsAt: number | null;
   marks: number[] | null;
   runners: string[];
+  /** COURSE-07 : clés des coureurs qui ont abandonné ; leur progression est gelée, toute nouvelle est refusée. */
+  abandoned?: string[];
   /** COURSE-06 : la dernière progression gardée en base par coureur (clé de membre), pour reprendre le classement. */
   resume?: { key: string; progress: number; finishedAt: number | null }[];
 };

@@ -47,7 +47,7 @@ export function raceCourseOf(view: RoomView): RaceCourse | null {
     marks = [0];
     for (const word of words) marks.push(marks.at(-1)! + word.length + 1);
   }
-  return { startsAt: view.startsAt, endsAt: view.endsAt, marks, runners: view.members.filter((m) => m.role === "player").map((m) => m.key) };
+  return { startsAt: view.startsAt, endsAt: view.endsAt, marks, runners: view.members.filter((m) => m.role === "player").map((m) => m.key), abandoned: view.members.filter((m) => m.abandoned).map((m) => m.key) };
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

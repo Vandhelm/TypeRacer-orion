@@ -274,6 +274,10 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
       send(ws, { type: "error", code: "not_a_runner" });
       return false;
     }
+    if (state.course.abandoned?.includes(key)) {
+      send(ws, { type: "error", code: "abandoned" });
+      return false;
+    }
     adopt(state, ws);
     const previous = state.entries.get(ws.data.player.id);
     const verdict = judge(state.course, previous, value, wpm, Date.now());
@@ -360,8 +364,10 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
       if (member.connections <= 0) {
         members.delete(ws.data.player.id);
         // COURSE-06 : la dernière progression validée d'un coureur qui s'en va reste en base
-        const entry = races.get(room)?.entries.get(ws.data.player.id);
-        if (entry && memberKey && backend?.progress && entry.finishedAt === null) backend.progress(memberKey, room, entry.progress).catch((error: unknown) => console.error(error));
+        // COURSE-07 : sauf pour un coureur qui a abandonné, dont la progression est celle de l'abandon
+        const race = races.get(room);
+        const entry = race?.entries.get(ws.data.player.id);
+        if (entry && memberKey && backend?.progress && entry.finishedAt === null && !race?.course?.abandoned?.includes(memberKey)) backend.progress(memberKey, room, entry.progress).catch((error: unknown) => console.error(error));
         const key = throttleKey(room, ws.data.player.id);
         const throttle = throttles.get(key);
         if (throttle?.timer) clearTimeout(throttle.timer);
