@@ -1,11 +1,11 @@
 // COURSE-06 / CONF-03 : les mots d'une course lancée, retirés comme la page de course (mêmes réglages, même graine,
 // même passage), et leur empreinte. Le site l'enregistre au lancement (rooms.text_hash) ; le serveur temps réel la
 // recalcule avec son propre code : une autre empreinte veut dire que les deux ne sont pas à la même version.
-import { buildWords } from "../views/game/course";
-import type { RoomSettings } from "./settings";
+import { buildWords, type CourseSettings } from "../views/game/course";
 import { seededRandom } from "./text";
 
-export type DrawnCourse = { settings: RoomSettings; seed: number | null; passage: { body: string } | null };
+/** settings : les réglages du texte (ceux d'un salon, ou une ligne race_configs avec son texte personnalisé). */
+export type DrawnCourse = { settings: CourseSettings; seed: number | null; passage: { body: string } | null };
 
 /** Les mots de la course, ou null sans graine (salon lancé avant CONF-03). */
 export function courseWords(course: DrawnCourse): string[] | null {

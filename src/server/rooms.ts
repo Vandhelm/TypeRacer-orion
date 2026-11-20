@@ -18,7 +18,7 @@ import type { RoomFilters } from "../rooms/explorer";
 import { seatColor } from "../rooms/seats";
 import { wordTarget } from "../rooms/text";
 import { composePassage, pickPassage } from "./corpus";
-import { rerankLaunch } from "./ranking";
+import { launchStandings, rerankLaunch } from "./ranking";
 import { claimInvite, revokeInvitesOf, roomOfInvite } from "./room-invites";
 import { DEFAULT_SETTINGS, normalizeSettings, type CreateRoomSchema, type Role, type RoomSettings, type UpdateRoomSchema } from "../rooms/settings";
 
@@ -588,6 +588,8 @@ async function sweep(tx: Db, roomId: number, actor?: string | string[]): Promise
   if (present.length) await tx.update(roomMembers).set({ lastSeenAt: sql`now()` }).where(and(eq(roomMembers.roomId, roomId), inArray(roomMembers.memberKey, present)));
   const deadline = sql`${rooms.launchedAt} + (select ${raceConfigs.duration} from ${raceConfigs} where ${raceConfigs.id} = ${rooms.configId}) * interval '1 second' + ${RACE_GRACE_MS} * interval '1 millisecond'`;
   const ended = (await stateOf(tx, roomId)) === "racing" ? await moveRoom(tx, roomId, "racing", ["finish"], {}, sql`${deadline} <= now()`) : [];
+  // BOT-05 : les humains déjà tous arrivés, l'arrivée du dernier bot (calculée par le serveur) termine la course
+  const botsDone = !ended.length && (await stateOf(tx, roomId)) === "racing" && (await endIfAllFinished(tx, roomId));
   const silent = sql`${roomMembers.lastSeenAt} < now() - ${MEMBER_AWAY_MS} * interval '1 millisecond'`;
   await keepDeparted(tx, roomId, (await tx.select({ key: roomMembers.memberKey }).from(roomMembers).where(and(eq(roomMembers.roomId, roomId), silent))).map((m) => m.key));
   const gone = await tx
@@ -596,7 +598,7 @@ async function sweep(tx: Db, roomId: number, actor?: string | string[]): Promise
     .returning({ key: roomMembers.memberKey });
   if (gone.length) await afterDeparture(tx, roomId);
   if (ended.length) await rerankLaunch(tx, roomId); // COURSE-10 : la course échue est reclassée
-  return timedOut || ended.length > 0 || gone.length > 0;
+  return timedOut || ended.length > 0 || gone.length > 0 || botsDone;
 }
 
 /**
@@ -686,17 +688,22 @@ export async function refreshRoom(db: Db, code: string, present: string[] = []):
   return id === null ? false : db.transaction((tx) => sweep(tx, id, present));
 }
 
-/** SALLE-09 / COURSE-09 : plus aucun participant humain en course (fini, abandonné ou parti) : le salon passe aux résultats. Sous le verrou. */
-async function endIfAllFinished(tx: Db, roomId: number) {
+/**
+ * SALLE-09 / COURSE-09 : plus aucun participant humain en course (fini, abandonné ou parti) et, BOT-05, plus aucun bot
+ * assis en course (arrivé selon le moteur, ou arrêté par la fin de la course) : le salon passe aux résultats. Le dernier
+ * bot arrivé, c'est le balayage (sweep) qui l'y fait passer. Sous le verrou. True si le salon est passé aux résultats.
+ */
+async function endIfAllFinished(tx: Db, roomId: number): Promise<boolean> {
   const racing = await tx.$count(roomMembers, and(eq(roomMembers.roomId, roomId), eq(roomMembers.role, "player"), isNull(roomMembers.finishedAt), isNull(roomMembers.abandonedAt)));
-  if (racing) return;
+  if (racing) return false;
   // COURSE-01 : pendant le décompte (fin déclarée par le client, COURSE-06 pas encore là), le départ est avancé
   const from = await stateOf(tx, roomId);
-  if (from === "countdown" || from === "racing") {
-    await moveRoom(tx, roomId, from, from === "countdown" ? ["start", "finish"] : ["finish"]);
-    // COURSE-10 : une course envoyée plus tôt (à l'abandon) prend son rang final
-    await rerankLaunch(tx, roomId);
-  }
+  if (from !== "countdown" && from !== "racing") return false;
+  if ((await launchStandings(tx, roomId)).botsRunning) return false;
+  await moveRoom(tx, roomId, from, from === "countdown" ? ["start", "finish"] : ["finish"]);
+  // COURSE-10 : une course envoyée plus tôt (à l'abandon) prend son rang final
+  await rerankLaunch(tx, roomId);
+  return true;
 }
 
 /**

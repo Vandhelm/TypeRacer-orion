@@ -5,6 +5,7 @@ import { and, eq, sql } from "drizzle-orm";
 import type { Db } from "../../db/client";
 import { players, raceConfigs, raceResults, races, roomMembers, rooms } from "../../db/schema";
 import { raceClock } from "../rooms/race-clock";
+import { launchBots } from "./bot-course";
 
 /** COURSE-06 : la place d'un membre participant au classement du serveur (temps réel, room_members). */
 /** COURSE-07 : abandonedAt, l'abandon de ce membre ; progress est alors celle validée au moment de l'abandon. */
@@ -23,21 +24,27 @@ export type ServerStanding = { finishedAt: Date | null; progress: number; abando
  * 4. les humains inconnus du serveur.
  * Égalités (heure d'arrivée ou progression) : la place dans le salon (seat) départage les humains ; un humain passe
  * devant un bot (les couloirs des bots suivent ceux des humains) ; les bots gardent l'ordre du corps.
- * Limite : l'arrivée et la progression d'un bot viennent du navigateur, que le serveur ne peut pas vérifier.
+ * BOT-05 : un bot qui a une place dans `server` (sa course calculée par le serveur, src/server/bot-course.ts) est
+ * classé par elle, parmi les humains : arrivé, par heure d'arrivée (un humain devant à égalité) ; sinon par progression.
+ * Les règles ci-dessus (navigateur) ne restent que pour un bot sans course calculée (salon lancé avant CONF-03).
  */
 export function rankByServer<T extends { name: string; rank: number; finished?: boolean; progress?: number }>(results: T[], server: Map<string, ServerStanding>, bots: Set<string> = new Set()): T[] {
   const isBot = (r: T) => bots.has(r.name.toLowerCase());
   const standing = (r: T) => server.get(r.name.toLowerCase());
   const seat = (r: T) => standing(r)?.seat ?? Number.MAX_SAFE_INTEGER;
   const humans = results.filter((r) => !isBot(r));
-  const botRows = results.filter(isBot);
-  const arrived = humans
+  // BOT-05 : un bot dont le serveur a calculé la course (src/server/bot-course.ts) est classé comme un humain connu
+  const computed = results.filter((r) => isBot(r) && standing(r));
+  const botRows = results.filter((r) => isBot(r) && !standing(r));
+  // à égalité, un humain passe devant un bot (tri stable : humains d'abord)
+  const arrived = [...humans, ...computed]
     .filter((r) => standing(r)?.finishedAt && !standing(r)!.abandonedAt)
-    .sort((a, b) => standing(a)!.finishedAt!.getTime() - standing(b)!.finishedAt!.getTime() || seat(a) - seat(b));
+    .sort((a, b) => standing(a)!.finishedAt!.getTime() - standing(b)!.finishedAt!.getTime() || (isBot(a) ? 1 : 0) - (isBot(b) ? 1 : 0) || seat(a) - seat(b));
   const blindBots = botRows.filter((r) => !r.finished && r.progress === undefined);
   // humains d'abord, par place, puis les bots dans l'ordre du corps : le tri stable garde cet ordre à progression égale
   const racing = [
     ...humans.filter((r) => standing(r) && !standing(r)!.finishedAt && !standing(r)!.abandonedAt).sort((a, b) => seat(a) - seat(b)).map((r) => ({ r, progress: standing(r)!.progress })),
+    ...computed.filter((r) => !standing(r)!.finishedAt).map((r) => ({ r, progress: standing(r)!.progress })),
     ...botRows.filter((r) => !r.finished && r.progress !== undefined).map((r) => ({ r, progress: r.progress! })),
   ].sort((a, b) => b.progress - a.progress).map(({ r }) => r);
   const abandoned = humans.filter((r) => standing(r)?.abandonedAt).sort((a, b) => standing(b)!.progress - standing(a)!.progress || seat(a) - seat(b));
@@ -72,7 +79,10 @@ export async function launchStandings(db: Db, roomId: number) {
     standings.set(name.toLowerCase(), standing);
     absent.push({ name, progress });
   }
-  return { runners, humanNames, standings, absent };
+  // BOT-05 : les bots assis, à leur course calculée par le serveur (jamais un nom porté par un humain)
+  const bots = await launchBots(db, roomId, runners.length + absent.length);
+  for (const [name, standing] of bots.standings) if (!humanNames.has(name)) standings.set(name, standing);
+  return { runners, humanNames, standings, absent, botsRunning: bots.running };
 }
 
 /**
@@ -105,9 +115,11 @@ export async function rerankLaunch(db: Db, roomId: number): Promise<void> {
       ...race.others.map((o, index) => ({ name: o.name, rank: o.rank, finished: o.finished, row: -1, other: index })),
     ].sort((a, b) => a.rank - b.rank);
     const ranked = rankByServer(entries, standings, bots);
+    // BOT-05 : un bot calculé par le serveur prend aussi son arrivée
     const statusOf = (name: string) => {
-      const s = bots.has(name.toLowerCase()) ? undefined : standings.get(name.toLowerCase());
-      return s ? { abandoned: !!s.abandonedAt, finished: !!s.finishedAt && !s.abandonedAt } : {};
+      const s = standings.get(name.toLowerCase());
+      if (!s) return {};
+      return bots.has(name.toLowerCase()) ? { finished: !!s.finishedAt } : { abandoned: !!s.abandonedAt, finished: !!s.finishedAt && !s.abandonedAt };
     };
     for (const entry of ranked) {
       if (entry.row >= 0) await db.update(raceResults).set({ rank: entry.rank, ...statusOf(entry.name) }).where(and(eq(raceResults.raceId, race.id), eq(raceResults.playerId, entry.row)));
