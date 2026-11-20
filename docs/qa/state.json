@@ -75,9 +75,9 @@
     "scope": "suivi (light)"
   },
   "DES-06": {
-    "commit": "2acdffe",
+    "commit": "7494ef2",
     "date": "2026-11-19",
-    "scope": "suivi (light)"
+    "scope": "critère feature/game/des-06 (medium, rendu)"
   },
   "AUTH-01": {
     "commit": "bfdcb34",
