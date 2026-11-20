@@ -82,7 +82,7 @@ Client vers serveur (validés par `ClientMessage`, champs en trop refusés) :
 |---|---|---|
 | `join` | `room` : code SALLE-02 | Quitte la salle précédente, rejoint celle-ci, diffuse la présence |
 | `leave` | — | Quitte la salle, diffuse la présence |
-| `progress` | `progress` : 0 à 1 (annexe A), `wpm` : 0 à 500 | Diffusé aux autres membres de la salle, limité à 10 par seconde par joueur |
+| `progress` | `progress` : 0 à 1 (annexe A), `wpm` : 0 à 300 (MPM humain maximal, COURSE-06) | Diffusé aux autres membres de la salle, limité à 10 par seconde par joueur |
 
 Serveur vers client (validés par `ServerMessage` côté client) :
 
@@ -104,13 +104,15 @@ Serveur vers client (validés par `ServerMessage` côté client) :
 
 ## Serveur autoritaire (COURSE-06)
 
+**Le serveur temps réel est obligatoire en production.** C'est lui qui arbitre la course ; sans lui, aucune arrivée n'est validée, aucune course ne se termine avant son échéance et les courses enregistrées sont toutes marquées non finies. Il n'y a pas de repli côté navigateur. Le site démarre quand même (le dev local n'est pas bloqué), mais l'absence se voit : avertissement au démarrage de Next.js (`instrumentation.ts`) et champ `realtime: { required, configured, missing }` dans `GET /api/health`, dès que `REALTIME_PUBLIC_URL` ou `REALTIME_SECRET` manque en production (`NODE_ENV` ou `VERCEL_ENV` à `production`, `src/server/realtime-config.ts`).
+
 Le navigateur tape et compte ; le serveur décide. Qui décide quoi :
 
 | Quoi | Qui décide | Où |
 |---|---|---|
 | Départ de la course | Le serveur : `startsAt = launched_at + 3 s` (décompte COURSE-03), horloge de la base | `src/rooms/race-clock.ts`, vue du salon (`startsAt`, `endsAt`), message `standings` |
 | Fin par le temps | Le serveur : `endsAt = startsAt + durée` ; toute progression après `endsAt + 1 s` est refusée (`race_over`). Le salon passe aux résultats à l'échéance SALLE-09 (`launched_at + durée + 30 s`) | `referee.ts`, `sweep` dans `src/server/rooms.ts` |
-| Fin quand tous sont arrivés | Le serveur : à 100 % validé, le temps réel note l'arrivée (`room_members.progress = 1`, `finished_at`) ; le dernier coureur humain arrivé passe le salon aux résultats | `recordProgress` (`src/server/rooms.ts`), `endIfAllFinished` |
+| Fin quand tous sont arrivés | Le serveur : à 100 % validé, le temps réel note l'arrivée (`room_members.progress = 1`, `finished_at`) ; le dernier coureur humain arrivé passe le salon aux résultats. `POST /api/rooms/:code/finish` (la page qui se déclare arrivée) est ignoré tant que le serveur n'a pas validé 100 %, décompte compris | `recordProgress`, `finishRoom` (`src/server/rooms.ts`), `endIfAllFinished` |
 | Progression | Le client la déclare (mots validés ÷ mots du texte) ; le serveur l'accepte ou la refuse, garde la dernière acceptée par coureur, et ne relaie que celle-là | `judge` dans `src/realtime/referee.ts` |
 | Classement | Le serveur : arrivés par heure d'arrivée serveur, puis les autres par progression | `standings` dans `referee.ts` |
 | Enregistrement (`POST /api/races`) | Le serveur refuse ou corrige : voir plus bas | `claimServerRace` dans `src/server/races.ts` |
@@ -118,9 +120,11 @@ Le navigateur tape et compte ; le serveur décide. Qui décide quoi :
 
 Le texte est connu du serveur : il retire les mots comme la page de course, avec les mêmes réglages, la même graine et le même passage (CONF-03, `raceCourseOf` dans `src/realtime/room-backend.ts`). Il compte donc lui-même les caractères validés (espaces comprises, annexe A) à chaque progression. Sans graine (salon lancé avant CONF-03), seules les règles d'horloge et de recul s'appliquent.
 
+**Empreinte du texte** : au lancement, le site enregistre l'empreinte des mots tirés (`rooms.text_hash`, FNV-1a sur 32 bits, `src/rooms/course-words.ts`) ; elle figure dans la vue du salon (`textHash`). Le serveur temps réel recalcule l'empreinte avec son propre code. Si elle diffère (site et temps réel déployés à des versions différentes), il refuse d'arbitrer les caractères et l'écrit dans ses journaux (`COURSE-06: text fingerprint mismatch…`) : seules les règles d'horloge et de recul restent, au lieu de refuser à tort des progressions honnêtes sans rien dire.
+
 **Seuils** (`src/realtime/referee.ts`) :
 
-- MPM humain maximal : **300** (record humain soutenu autour de 200 à 250, pointes vers 300), soit **25 caractères par seconde**.
+- MPM humain maximal : **300** (record humain soutenu autour de 200 à 250, pointes vers 300), soit **25 caractères par seconde**. Le même plafond borne le `wpm` d'un message `progress` (au-delà : `invalid_message`), donc le MPM relayé et celui de `standings`.
 - Marge : **40 caractères** (deux mots validés qui arrivent dans le même paquet).
 - Horloges : **1 s** de tolérance entre la base (`launched_at`) et le serveur temps réel.
 
@@ -140,8 +144,8 @@ Un coureur légitime refusé (paquets groupés) n'est pas bloqué : la marge aut
 - Refusé, 409 `race_not_launched` : pas de `room` dans le corps, salon inconnu ou fermé, expéditeur pas membre, salon jamais lancé.
 - Refusé, 422 `race_contradicted` : un joueur du corps a couru plus longtemps que le temps écoulé depuis le départ serveur (+2 s), ou à plus de 300 MPM.
 - Refusé, 409 `duplicate_race` : ce membre a déjà enregistré ce lancement, même avec un nouvel identifiant (réservation conditionnelle sur `room_members.race_recorded`, remise à faux à chaque lancement).
-- Corrigé : `finished` du compte vient de la progression validée par le temps réel (`room_members.progress = 1`) ; le départ (`races.started_at`) est le départ serveur.
-- Reste du navigateur : MPM, précision, rang et résultats des bots (bornés par les refus ci-dessus). Sans serveur temps réel déployé (prod actuelle, TECH-05), aucune arrivée n'est validée : toutes les courses enregistrées sont marquées non finies.
+- Corrigé : `finished` du compte vient de la progression validée par le temps réel (`room_members.progress = 1`) ; le départ (`races.started_at`) est le départ serveur ; le **rang** des humains est celui du serveur (arrivés par `finished_at`, puis par progression validée), quel que soit l'ordre du corps ; les bots, simulés par le navigateur (BOT-*), gardent leur place (`rankByServer`).
+- Reste du navigateur : MPM, précision et résultats des bots (bornés par les refus ci-dessus).
 
 ## Déployer le serveur temps réel
 
