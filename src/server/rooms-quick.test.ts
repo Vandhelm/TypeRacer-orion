@@ -112,7 +112,7 @@ describe("JOIN-03 — quick race picks the public room closest to its capacity",
     await openWith(t, 3, 2);
     const res = await quick(t, mine.host.cookie);
     expect(res.status).toBe(409);
-    expect(res.body).toEqual({ error: "already_in_room", room: mine.room.code });
+    expect(res.body as unknown).toEqual({ error: "already_in_room", room: mine.room.code });
   });
 });
 
@@ -130,14 +130,14 @@ describe("JOIN-03 — no room available", () => {
     const before = await t.db.$count(roomMembers);
     const res = await quick(t, (await t.signUp("Seul_Compte")).cookie);
     expect(res.status).toBe(404);
-    expect(res.body).toEqual({ error: "no_room", canCreate: true });
+    expect(res.body as unknown).toEqual({ error: "no_room", canCreate: true });
     expect(await t.db.$count(roomMembers)).toBe(before);
   });
 
   test("a guest is told no room is available, without an offer to create one", async () => {
     const res = await quick(t, t.guest("Seul_Invite"));
     expect(res.status).toBe(404);
-    expect(res.body).toEqual({ error: "no_room", canCreate: false });
+    expect(res.body as unknown).toEqual({ error: "no_room", canCreate: false });
   });
 
   test("the account then creates a public room with the default settings and hosts it", async () => {
