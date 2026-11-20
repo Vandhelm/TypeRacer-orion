@@ -188,7 +188,8 @@ const sameName = (a: string, b: string | null | undefined) => !!b && a.toLowerCa
 /** COURSE-06 : ce que le serveur sait de la course : son départ, si l'expéditeur est arrivé, et le classement des humains (par nom en minuscules). */
 /** COURSE-07 : abandoned, l'expéditeur a abandonné (vu par le serveur, jamais par le corps). */
 /** COURSE-10 : roomId, le salon de la course (races.room_id) ; departed, les abandons partis du salon, ajoutés s'ils manquent au corps. */
-export type ServerRace = { startedAt: Date; finished: boolean; abandoned?: boolean; standings?: Map<string, ServerStanding>; bots?: Set<string>; roomId?: number; departed?: { name: string; progress: number }[] };
+/** `content` (BONUS-04) : le texte de ce membre changé par un bonus, gardé par le serveur temps réel ; absent : aucun. */
+export type ServerRace = { startedAt: Date; finished: boolean; abandoned?: boolean; standings?: Map<string, ServerStanding>; bots?: Set<string>; roomId?: number; departed?: { name: string; progress: number }[]; content?: string };
 
 // COURSE-10 : la règle du classement final vit dans ranking.ts (partagée avec le reclassement en fin de course)
 export { rankByServer, type ServerStanding };
@@ -246,7 +247,7 @@ export async function recordRace(db: Db, parsed: ParsedRace, requester: Requeste
     const startedAt = server?.startedAt ?? new Date(Date.now() - longest * 1000);
     const [row] = await tx
       .insert(races)
-      .values({ clientId: race.id, configId: config!.id, content: race.content, others, startedAt, finishedAt: new Date(), roomId: server?.roomId ?? null })
+      .values({ clientId: race.id, configId: config!.id, content: server?.content ?? race.content, others, startedAt, finishedAt: new Date(), roomId: server?.roomId ?? null })
       .onConflictDoNothing({ target: races.clientId })
       .returning({ id: races.id });
     if (!row) throw new DuplicateRace("Race already recorded");
@@ -277,7 +278,7 @@ export const ELAPSED_TOLERANCE_SECONDS = 2;
 export async function claimServerRace(db: Db, race: ParsedRace, key: string | null): Promise<ServerRace & { release: () => Promise<void> }> {
   if (!race.room || !key) throw new RaceRefused("race_not_launched");
   const [row] = await db
-    .select({ roomId: rooms.id, launchedAt: rooms.launchedAt, duration: raceConfigs.duration, progress: roomMembers.progress, abandonedAt: roomMembers.abandonedAt, bots: rooms.bots, botList: rooms.botList, guests: rooms.guests })
+    .select({ roomId: rooms.id, launchedAt: rooms.launchedAt, duration: raceConfigs.duration, progress: roomMembers.progress, abandonedAt: roomMembers.abandonedAt, bonusWords: roomMembers.bonusWords, bots: rooms.bots, botList: rooms.botList, guests: rooms.guests })
     .from(rooms)
     .innerJoin(raceConfigs, eq(raceConfigs.id, rooms.configId))
     .innerJoin(roomMembers, and(eq(roomMembers.roomId, rooms.id), eq(roomMembers.memberKey, key)))
@@ -303,6 +304,8 @@ export async function claimServerRace(db: Db, race: ParsedRace, key: string | nu
     standings,
     departed: absent,
     bots,
+    // BONUS-04 : le texte que ce membre a couru, quand un bonus l'a changé : celui du serveur, pas celui du corps
+    ...(row.bonusWords?.length ? { content: row.bonusWords.join(" ").slice(0, 10_000) } : {}),
     release: async () => void (await db.update(roomMembers).set({ raceRecorded: false }).where(member)),
   };
 }

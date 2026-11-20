@@ -218,6 +218,13 @@
       "when": 1795182558912,
       "tag": "0030_room_abandons",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1795188274609,
+      "tag": "0031_room_bonus_words",
+      "breakpoints": true
     }
   ]
 }
