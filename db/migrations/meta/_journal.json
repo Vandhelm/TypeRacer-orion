@@ -190,6 +190,13 @@
       "when": 1795143075349,
       "tag": "0026_room_text_hash",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1795148313693,
+      "tag": "0027_capitals",
+      "breakpoints": true
     }
   ]
 }

@@ -216,6 +216,7 @@
     "punctuation": "Ponctuation",
     "numbers": "Chiffres",
     "specials": "Caractères spéciaux",
+    "capitals": "Majuscules",
     "accents": "Accents",
     "noOption": "Aucune",
     "length": "Longueur",
@@ -404,6 +405,7 @@
     "punctuation": "ponctuation",
     "numbers": "chiffres",
     "specials": "caractères spéciaux",
+    "noCapitals": "sans majuscules",
     "noAccents": "sans accents",
     "without": "sans {{chars}}",
     "mistakes": {

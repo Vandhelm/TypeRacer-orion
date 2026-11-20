@@ -23,6 +23,8 @@ export const raceConfigs = pgTable(
     numbers: boolean("numbers").notNull(),
     specials: boolean("specials").notNull(),
     accents: boolean("accents").notNull(),
+    /** CONF-06 : majuscules gardées (true) ou texte tout en minuscules (false). */
+    capitals: boolean("capitals").notNull().default(true),
     mistakes: mistakeMode("mistakes").notNull(),
     excluded: text("excluded").notNull().default(""),
     customText: text("custom_text").notNull().default(""),
