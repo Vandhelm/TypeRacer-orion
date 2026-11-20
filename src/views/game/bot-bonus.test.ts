@@ -71,6 +71,32 @@ describe("BOT-04 — the page and the server compute the same bot race after a b
   });
 });
 
+describe("BOT-04 — two bot effects at the same time follow the order the server decided (at, seq)", () => {
+  // +3 mots longs puis -3 mots : les mots ajoutés repartent ; dans l'autre ordre, ils restent
+  const FIRST: BotBonus = { at: 4_900, seq: 0, effect: { kind: "extra_words", target: `bot:${BOT}`, words: ["xylophone", "chrysanthème", "kaléidoscope"] } };
+  const SECOND: BotBonus = { at: 4_900, seq: 1, effect: { kind: "fewer_words", target: `bot:${BOT}`, removed: 3 } };
+
+  test("a page reloaded with the effects in another order runs the same bot as the page left open and the server", () => {
+    // l'ordre compte : décidés dans l'autre ordre, l'arrivée change
+    expect(serverArrival([FIRST, SECOND])).not.toBe(serverArrival([{ ...SECOND, seq: 0 }, { ...FIRST, seq: 1 }]));
+    const open = tickTo(applyBotBonus(applyBotBonus(tickTo(fresh(), TICK_MS, 6_000), 1, FIRST), 1, SECOND), 6_200, 120_000);
+    const reloaded = tickTo(withBotBonuses(fresh(), [SECOND, FIRST]), TICK_MS, 120_000);
+    expect(botOf(reloaded).finishedAt).toBe(botOf(open).finishedAt);
+    expect(botOf(open).finishedAt - START).toBe(serverArrival([FIRST, SECOND]));
+  });
+
+  test("received live in another order, the same bot as the server", () => {
+    const late = tickTo(applyBotBonus(applyBotBonus(tickTo(fresh(), TICK_MS, 6_000), 1, SECOND), 1, FIRST), 6_200, 120_000);
+    expect(botOf(late).finishedAt - START).toBe(serverArrival([FIRST, SECOND]));
+  });
+
+  test("the seq of a live effect, sent by the server, reaches the lane", () => {
+    const lanes: RaceLanes = { players: PLAYERS, keys: ["guest:me", null] };
+    const message: ServerBonus = { type: "bonus", room: "RMQWZC", playerId: "g:me", checkpoint: 1, count: 1, effect: FIRST.effect, at: FIRST.at, seq: 0 };
+    expect(botBonusesFor([message], 0, lanes)).toEqual([{ lane: 1, bonus: FIRST }]);
+  });
+});
+
 describe("BOT-04 — the live bonuses aimed at a bot reach its lane", () => {
   const LANES: RaceLanes = { players: PLAYERS, keys: ["guest:me", null] };
   const message = (playerId: string, effect: BonusEffect, at?: number): ServerBonus => ({ type: "bonus", room: "RMQWZC", playerId, checkpoint: 1, count: 1, effect, ...(at === undefined ? {} : { at }) });

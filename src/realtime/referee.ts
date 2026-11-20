@@ -33,6 +33,10 @@ export type RaceCourse = {
   resume?: { key: string; progress: number; finishedAt: number | null; words?: string[] }[];
   /** BONUS-01 : les bonus de remontée sont activés pour cette course (CONF-09) ; absent : non. */
   catchUpBonus?: boolean;
+  /** COURSE-06 : clés des coureurs éliminés gardés en base (mode fatal) ; toute nouvelle progression est refusée. */
+  eliminated?: string[];
+  /** BONUS-01 : les points de contrôle déjà franchis, gardés en base (rooms.bonus_checkpoints) ; absent : aucun. */
+  checkpoints?: number;
   /** BONUS-02 : les mots tirés (avec `marks`), où le bonus +3 mots puise les siens ; absent : texte inconnu. */
   words?: string[];
   /** BONUS-02 : la graine du salon (CONF-03), qui choisit le type de chaque bonus ; absente : le départ en tient lieu. */

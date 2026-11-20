@@ -49,31 +49,47 @@ type Tab = Awaited<ReturnType<typeof connect>>;
 type Bonus = Extract<ServerMessage, { type: "bonus" }>;
 const bonuses = (tab: Tab) => tab.messages.filter((m): m is Bonus => m.type === "bonus");
 
-/** Un humain seul avec un bot ; `kept` : les effets que le serveur garde en base pour les bots. */
-async function race(course: Partial<RaceCourse> & { words: string[] }, sinceStartMs: number) {
+/**
+ * Un humain (Alpha) avec un bot, et `others` d'autres humains ; `kept` : les effets que le serveur garde en base pour
+ * les bots ; `passed` : les points de contrôle franchis gardés ; `eliminated` : les coureurs dont la base a noté
+ * l'élimination. `restart` : un nouveau serveur, même base.
+ */
+async function race(course: Partial<RaceCourse> & { words: string[] }, sinceStartMs: number, others: Player[] = []) {
   const alpha = player("Alpha");
   const kept: { startsAt: number; bonus: BotBonus }[] = [];
+  let passed = 0;
+  const eliminated: string[] = [];
   const listeners: ((code: string) => void)[] = [];
-  const full: RaceCourse = { startsAt: Date.now() - sinceStartMs, endsAt: null, marks: marksOf(course.words), runners: [alpha.id], catchUpBonus: true, mistakes: "fix", ...course };
+  const full: RaceCourse = { startsAt: Date.now() - sinceStartMs, endsAt: null, marks: marksOf(course.words), runners: [alpha.id, ...others.map((o) => o.id)], catchUpBonus: true, mistakes: "fix", ...course };
   const backend: RoomBackend = {
     enter: async (p, code) => ({ key: p.id, room: { code, members: [{ key: p.id }] } }),
-    view: async (code) => ({ code, members: [{ key: alpha.id }] }),
+    view: async (code) => ({ code, members: [alpha, ...others].map((p) => ({ key: p.id })) }),
     refresh: async () => false,
     leave: async () => false,
     changes: (listener) => {
       listeners.push(listener);
       return () => undefined;
     },
-    // relue comme en base : une copie à chaque lecture
-    course: async () => ({ ...full }),
+    // relue comme en base : une copie à chaque lecture, avec les effets gardés pour les bots
+    course: async () => ({ ...full, ...(passed ? { checkpoints: passed } : {}), botBonuses: [...(full.botBonuses ?? []), ...kept.map((k) => k.bonus)] }),
     progress: async () => false,
     botBonus: async (_code, startsAt, bonus) => void kept.push({ startsAt, bonus }),
+    eliminated: async (_code, _startsAt, key) => (eliminated.push(key), true),
+    checkpoints: async (_code, _startsAt, count) => void (passed = Math.max(passed, count)),
   };
   server = createRealtimeServer({ port: 0, hostname: "127.0.0.1", secret: SECRET, rooms: backend });
-  const tab = await connect(alpha);
-  tab.send({ type: "join", room: ROOM });
-  await tab.until(() => tab.messages.some((m) => m.type === "standings"));
-  return { tab, kept, course: full, changed: () => listeners.forEach((listener) => listener(ROOM)) };
+  const enter = async (p: Player) => {
+    const tab = await connect(p);
+    tab.send({ type: "join", room: ROOM });
+    await tab.until(() => tab.messages.some((m) => m.type === "standings"));
+    return tab;
+  };
+  const tab = await enter(alpha);
+  const restart = async () => {
+    server?.stop(true);
+    server = createRealtimeServer({ port: 0, hostname: "127.0.0.1", secret: SECRET, rooms: backend });
+  };
+  return { tab, kept, eliminated, course: full, enter, restart, changed: () => listeners.forEach((listener) => listener(ROOM)) };
 }
 
 async function step(tab: Tab, progress: number) {
@@ -120,7 +136,9 @@ describe("BOT-04 — bots get and suffer the catch-up bonuses like humans", () =
     expect(first.at!).toBeGreaterThanOrEqual(30_000);
     expect(first.at!).toBeLessThan(32_000);
     await Bun.sleep(20);
-    expect(kept.map((k) => k.bonus)).toEqual([{ at: first.at!, effect: first.effect! }, { at: second.at!, effect: second.effect! }]);
+    // à heure égale, le rang (seq) fixe l'ordre du moteur : le même dans le message, en base et sur la page
+    expect([first.seq, second.seq]).toEqual([0, 1]);
+    expect(kept.map((k) => k.bonus)).toEqual([{ at: first.at!, seq: 0, effect: first.effect! }, { at: second.at!, seq: 1, effect: second.effect! }]);
     expect(kept.every((k) => k.startsAt === course.startsAt)).toBe(true);
   });
 
@@ -156,6 +174,14 @@ describe("BOT-04 — bots get and suffer the catch-up bonuses like humans", () =
     expect(parseServerMessage(JSON.stringify({ ...message, at: "1200" }))).toBeNull();
   });
 
+  test("the rank of a bot effect is a whole number from 0", () => {
+    const message = { type: "bonus", room: ROOM, playerId: "g:alpha", checkpoint: 1, count: 1, effect: { kind: "fog", target: BOT_ID, durationMs: 5_000 }, at: 1_200 };
+    expect(parseServerMessage(JSON.stringify({ ...message, seq: 2 }))).toMatchObject({ seq: 2 });
+    expect(parseServerMessage(JSON.stringify({ ...message, seq: -1 }))).toBeNull();
+    expect(parseServerMessage(JSON.stringify({ ...message, seq: 0.5 }))).toBeNull();
+    expect(parseServerMessage(JSON.stringify({ ...message, seq: "1" }))).toBeNull();
+  });
+
   test("a bot never gets more than 3 bonuses in a race", async () => {
     // 20 mots d'une lettre : un saut de 30 % reste sous la marge de l'arbitre ; le bot lent reste dernier
     const words = Array.from({ length: 20 }, () => "a");
@@ -166,3 +192,65 @@ describe("BOT-04 — bots get and suffer the catch-up bonuses like humans", () =
     expect(bonuses(tab).filter((b) => b.playerId === BOT_ID).map((b) => [b.checkpoint, b.count])).toEqual([[1, 1], [2, 2], [3, 3]]);
   });
 });
+
+describe("COURSE-06 — an eliminated human is out of the catch-up bonuses, like an abandon", () => {
+  const beta = player("Beta");
+  const eliminate = async (tab: Tab, eliminated: string[], key: string) => {
+    tab.send({ type: "eliminated" });
+    for (let i = 0; i < 100 && !eliminated.includes(key); i++) await Bun.sleep(10);
+    await Bun.sleep(50);
+  };
+
+  test("an eliminated human in last place gets no bonus", async () => {
+    const { tab, eliminated, enter } = await race({ words: WORDS, seed: 3 }, 30_000, [beta]);
+    const other = await enter(beta);
+    await eliminate(other, eliminated, beta.id);
+    await step(tab, 0.3);
+    await Bun.sleep(100);
+    expect(bonuses(tab)).toEqual([]);
+  });
+
+  test("an eliminated human ahead of a bot is never the target of its malus", async () => {
+    // graine 1 : au point 1, le premier servi a « +3 mots », le second « brouillard » ; Alpha arrivé, Beta éliminé devant le bot
+    const { tab, eliminated, enter } = await race({ words: WORDS, bots: [raceBot("noob")], seed: 1 }, 30_000, [beta]);
+    const other = await enter(beta);
+    await step(other, 0.2);
+    await eliminate(other, eliminated, beta.id);
+    await step(tab, 1);
+    await tab.until(() => bonuses(tab).length > 0);
+    await Bun.sleep(100);
+    expect(bonuses(tab).length).toBeGreaterThan(0);
+    expect(bonuses(tab).every((b) => b.playerId !== beta.id && b.effect?.target !== beta.id)).toBe(true);
+  });
+});
+
+describe("BONUS-01 / BOT-04 — a restarted realtime server rebuilds the bonuses of the bots from the database", () => {
+  test("the checkpoints a leading bot already passed give no bonus again", async () => {
+    const { tab, restart, enter } = await race({ words: WORDS, bots: [raceBot("impossible")], seed: 1 }, 30_000);
+    await step(tab, 0.05);
+    await tab.until(() => bonuses(tab).length >= 2);
+    expect(bonuses(tab).map((b) => b.checkpoint)).toEqual([1, 2]);
+    // en pleine course : la progression d'Alpha n'est pas encore en base, le bot meneur est rejoué par le moteur
+    await restart();
+    const again = await enter(player("Alpha"));
+    await step(again, 0.06);
+    await Bun.sleep(100);
+    expect(bonuses(again)).toEqual([]);
+  });
+
+  test("a bot never gets a 4th bonus: its count is read back from the kept bonuses", async () => {
+    const words = Array.from({ length: 20 }, () => "a");
+    const { tab, kept, restart, enter } = await race({ words, bots: [raceBot("noob")], seed: 3 }, 3_000);
+    for (const p of [0.3, 0.6]) await step(tab, p);
+    await tab.until(() => bonuses(tab).filter((b) => b.playerId === BOT_ID).length >= 2);
+    // graine 3 : au point 2, le bot reçoit « +3 mots » sur Alpha : un bonus du bot gardé, même sans effet sur un bot
+    expect(kept.filter((k) => k.bonus.from === BOT_ID)).toHaveLength(2);
+    await restart();
+    const again = await enter(player("Alpha"));
+    for (const p of [0.3, 0.6, 0.8, 1]) await step(again, p);
+    await Bun.sleep(150);
+    const got = [...bonuses(tab), ...bonuses(again)].filter((b) => b.playerId === BOT_ID);
+    expect(got.map((b) => b.count)).toEqual([1, 2, 3]);
+  });
+});
+

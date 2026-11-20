@@ -11,10 +11,10 @@ import { laneOfRunner, realtimeMemberKey, type RaceLanes } from "./track";
 
 /** BOT-04 : les effets datés des bonus annoncés après les `applied` premiers qui visent un bot de la piste, avec son couloir. */
 export function botBonusesFor(bonuses: readonly ServerBonus[] | undefined, applied: number, lanes: RaceLanes): { lane: number; bonus: BotBonus }[] {
-  return (bonuses ?? []).slice(applied).flatMap(({ effect, at }) => {
+  return (bonuses ?? []).slice(applied).flatMap(({ effect, at, seq }) => {
     if (!effect || at === undefined || botNameOf(effect.target) === null) return [];
     const lane = laneOfRunner(effect.target, lanes);
-    return lane < 0 ? [] : [{ lane, bonus: { at, effect } }];
+    return lane < 0 ? [] : [{ lane, bonus: { at, ...(seq === undefined ? {} : { seq }), effect } }];
   });
 }
 

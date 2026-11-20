@@ -20,11 +20,10 @@
 import type { Server, ServerWebSocket } from "bun";
 import { concealText } from "../rooms/conceal";
 import { MAX_MESSAGE_BYTES, parseClientMessage, type Player, PROGRESS_INTERVAL_MS, type ServerMessage } from "./protocol";
-import { awardBonuses, newTally, skipPassed, type BonusTally } from "../rooms/bonus";
+import { awardBonuses, MAX_BONUSES, newTally, skipPassed, type BonusTally } from "../rooms/bonus";
 import { bonusKind, editWords, LATE_FINISH_MS, planEffect, wordsDone, type BonusEffect } from "../rooms/bonus-effects";
 import { seededRandom } from "../rooms/text";
-import type { BotBonus } from "../rooms/bot-engine";
-import { botNameOf } from "../rooms/bots";
+import { orderBotBonuses, type BotBonus } from "../rooms/bot-engine";
 import { botRunners } from "./bot-runners";
 import { charsAt, judge, standings, type Accepted, type RaceCourse } from "./referee";
 import type { RoomBackend, RoomState } from "./room-backend";
@@ -97,7 +96,7 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
   function botRaceOf(code: string, course: RaceCourse) {
     const known = botRaces.get(code);
     if (known?.startsAt === course.startsAt) return known;
-    const fresh = { startsAt: course.startsAt, bots: course.bots, list: [...(course.botBonuses ?? [])] };
+    const fresh = { startsAt: course.startsAt, bots: course.bots, list: orderBotBonuses(course.botBonuses ?? []) };
     botRaces.set(code, fresh);
     return fresh;
   }
@@ -266,9 +265,13 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
           }),
       );
       const bonus = newTally();
-      // BONUS-01 : une course reprise garde ses points de contrôle franchis, sans redonner de bonus
+      // BONUS-01 : une course reprise garde ses points de contrôle franchis, sans redonner de bonus : ceux des coureurs
+      // repris, et ceux gardés en base au franchissement (rooms.bonus_checkpoints), même franchis par un bot meneur.
+      // BOT-04 : chaque bot reprend le compte de ses bonus gardés (`from`) : jamais plus de MAX_BONUSES dans la course
       skipPassed(bonus, [...resumed.values()].map((entry) => ({ playerId: "", progress: entry.progress, finished: entry.finishedAt !== null })));
-      races.set(code, { course, over: false, entries: new Map(), resumed, resumedTexts, owners: new Map(), kept: new Set(course.abandoned ?? []), alive: new Set(), eliminated: new Set(), lastSent: -Infinity, timer: null, bonus, texts: new Map() });
+      bonus.checkpoints = Math.max(bonus.checkpoints, course.checkpoints ?? 0);
+      for (const { from } of botRaceOf(code, course).list) if (from) bonus.received.set(from, Math.min(MAX_BONUSES, (bonus.received.get(from) ?? 0) + 1));
+      races.set(code, { course, over: false, entries: new Map(), resumed, resumedTexts, owners: new Map(), kept: new Set(course.abandoned ?? []), alive: new Set(), eliminated: new Set(course.eliminated ?? []), lastSent: -Infinity, timer: null, bonus, texts: new Map() });
     } else {
       state.course = course;
       state.over = false;
@@ -334,13 +337,14 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
 
   /**
    * BONUS-01 : après une progression acceptée, franchit les points de contrôle atteints par le meneur et annonce à toute
-   * la salle les bonus attribués aux coureurs en retard (src/rooms/bonus.ts). Un coureur qui a abandonné n'est ni en
-   * retard ni dernier. BOT-04 : les bots comptent aussi, à leur progression calculée par le moteur à cet instant (un bot
-   * éliminé, comme un abandon, ne compte pas) ; un effet sur un bot part daté (`at`, ms depuis le départ).
+   * la salle les bonus attribués aux coureurs en retard (src/rooms/bonus.ts). Un coureur qui a abandonné, ou qui est
+   * éliminé (COURSE-06, mode fatal), n'est ni en retard, ni dernier, ni la cible d'un malus. BOT-04 : les bots comptent
+   * aussi, à leur progression calculée par le moteur à cet instant (un bot éliminé, comme un abandon, ne compte pas) ; un
+   * effet sur un bot, ou reçu par un bot, part daté et rangé (`at`, ms depuis le départ ; `seq`).
    */
   function awardCatchUp(code: string, state: RaceState & { course: RaceCourse }) {
     if (!state.course.catchUpBonus) return;
-    const abandoned = new Set(state.course.abandoned ?? []);
+    const out = new Set([...(state.course.abandoned ?? []), ...state.eliminated]);
     const keys = new Map(state.owners);
     for (const ws of joined.get(code) ?? []) if (ws.data.key) keys.set(ws.data.player.id, ws.data.key);
     const now = Date.now();
@@ -348,23 +352,35 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
     const bots = botRunners({ ...state.course, bots: botRace.bots }, botRace.list, now).filter((bot) => !bot.out);
     const botWords = new Map(bots.map((bot) => [bot.playerId, bot.words]));
     const runners = [...raceEntries(code, state)]
-      .filter(([playerId]) => !abandoned.has(keys.get(playerId) ?? ""))
+      .filter(([playerId]) => !out.has(keys.get(playerId) ?? ""))
       .map(([playerId, entry]) => ({ playerId, progress: entry.progress, finished: entry.finishedAt !== null }))
       .concat(bots.map(({ playerId, progress, finished }) => ({ playerId, progress, finished })));
     const served = new Map<number, number>();
-    for (const award of awardBonuses(state.bonus, runners)) {
+    const passed = state.bonus.checkpoints;
+    const awards = awardBonuses(state.bonus, runners);
+    // BONUS-01 : les points franchis partent en base, pour un serveur redémarré en pleine course
+    if (state.bonus.checkpoints > passed) backend?.checkpoints?.(code, state.course.startsAt, state.bonus.checkpoints).catch((error: unknown) => console.error(error));
+    for (const award of awards) {
       const order = served.get(award.checkpoint) ?? 0;
       served.set(award.checkpoint, order + 1);
       const effect = bonusEffect(code, state, award.playerId, award.checkpoint, order, runners, keys, botWords, now);
-      const at = effect && botNameOf(effect.target) !== null ? { at: Math.max(0, now - state.course.startsAt) } : {};
+      // BOT-04 : un effet gardé (sur un bot, ou reçu par un bot) part avec sa date et son rang, ceux de keepBotBonus
+      const kept = effect && (botWords.has(effect.target) || botWords.has(award.playerId)) ? botRace.list.at(-1) : undefined;
+      const at = kept ? { at: kept.at, ...(kept.seq === undefined ? {} : { seq: kept.seq }) } : {};
       server.publish(topic(code), encode({ type: "bonus", room: code, ...award, ...(effect ? { effect } : {}), ...at }));
     }
   }
 
-  /** BOT-04 : un effet sur un bot rejoint sa liste datée, rejouée par le moteur, et part en base (fin de course, pages). */
-  function keepBotBonus(code: string, course: RaceCourse, bonus: BotBonus) {
-    botRaceOf(code, course).list.push(bonus);
-    backend?.botBonus?.(code, course.startsAt, bonus).catch((error: unknown) => console.error(error));
+  /**
+   * BOT-04 : un effet sur un bot rejoint sa liste datée, rejouée par le moteur, et part en base (fin de course, pages).
+   * Son rang `seq` (la taille de la liste, reprise de la base après un redémarrage) fixe l'ordre de deux effets au même
+   * `at`, quel que soit l'ordre où les écritures arrivent en base.
+   */
+  function keepBotBonus(code: string, course: RaceCourse, bonus: Omit<BotBonus, "seq">) {
+    const { list } = botRaceOf(code, course);
+    const ranked: BotBonus = { at: bonus.at, seq: list.length, ...(bonus.from === undefined ? {} : { from: bonus.from }), effect: bonus.effect };
+    list.push(ranked);
+    backend?.botBonus?.(code, course.startsAt, ranked).catch((error: unknown) => console.error(error));
   }
 
   /** Le texte arbitré d'un coureur : celui que lui a laissé un bonus, sinon celui de la course (null : inconnu). */
@@ -387,8 +403,10 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
       pool: state.course.words ?? null,
       random: seededRandom((seed ^ Math.imul(checkpoint * 31 + order, 0x9e3779b1)) | 0),
     });
-    // BOT-04 : le texte et la vitesse d'un bot sont ceux du moteur, qui rejoue l'effet à son heure
-    if (effect && botWords.has(effect.target)) keepBotBonus(code, state.course, { at: Math.max(0, now - state.course.startsAt), effect });
+    // BOT-04 : le texte et la vitesse d'un bot sont ceux du moteur, qui rejoue l'effet à son heure ; un bonus reçu par un
+    // bot est gardé aussi (`from`), quelle que soit sa cible : son compte est relu par un serveur redémarré et le podium
+    const byBot = botWords.has(playerId);
+    if (effect && (byBot || botWords.has(effect.target))) keepBotBonus(code, state.course, { at: Math.max(0, now - state.course.startsAt), ...(byBot ? { from: playerId } : {}), effect });
     if (!effect || effect.kind === "fog" || botWords.has(effect.target)) return effect;
     const text = textOf(state, effect.target)!;
     const entry = state.entries.get(effect.target);

@@ -3,6 +3,7 @@
 import type { RealtimeState } from "../../realtime/client";
 import { BONUS_KINDS, type BonusKind } from "../../rooms/bonus-effects";
 import { MAX_BONUSES } from "../../rooms/bonus";
+import type { BotBonus } from "../../rooms/bot-engine";
 import { laneOfRunner, realtimeMemberKey, type RaceLanes } from "../game/track";
 import type { PlayerResult } from "./results";
 
@@ -32,15 +33,18 @@ export const isMeasured = (player: PlayerResult) => player.me || player.bot || p
 /**
  * Les bonus reçus par chaque couloir, ou undefined quand les bonus sont désactivés (le serveur ne compte alors rien).
  * Le nombre est celui du classement du serveur s'il est plus grand (des messages perdus à une reconnexion) ; les types
- * viennent des messages `bonus`. BOT-04 : un bot (hors classement du serveur) compte les messages qui le désignent.
+ * viennent des messages `bonus`. BOT-04 : un bot (hors classement du serveur) compte les messages qui le désignent ;
+ * après un rechargement (messages perdus), les bonus gardés pour lui par le serveur (`kept`, vue du salon, `from`).
  */
-export function laneBonuses(live: Pick<RealtimeState, "bonuses" | "race"> | null | undefined, lanes: RaceLanes): ReceivedBonuses[] | undefined {
+export function laneBonuses(live: Pick<RealtimeState, "bonuses" | "race"> | null | undefined, lanes: RaceLanes, kept: readonly BotBonus[] = []): ReceivedBonuses[] | undefined {
   const messages = live?.bonuses ?? [];
   const standings = live?.race?.standings ?? [];
-  if (!messages.length && !standings.some((s) => s.bonuses !== undefined)) return undefined;
+  if (!messages.length && !kept.length && !standings.some((s) => s.bonuses !== undefined)) return undefined;
   return lanes.keys.map((key, lane) => {
     if (key === null) {
       const got = messages.filter((m) => laneOfRunner(m.playerId, lanes) === lane);
+      const own = kept.filter((bonus) => bonus.from !== undefined && laneOfRunner(bonus.from, lanes) === lane);
+      if (own.length > got.length) return { count: Math.min(MAX_BONUSES, own.length), kinds: own.slice(0, MAX_BONUSES).map((bonus) => bonus.effect.kind) };
       return { count: got.length, kinds: got.flatMap((m) => (m.effect ? [m.effect.kind] : [])) };
     }
     const mine = messages.filter((m) => realtimeMemberKey(m.playerId) === key);

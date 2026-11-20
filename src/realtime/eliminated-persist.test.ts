@@ -96,6 +96,23 @@ describe("COURSE-06 — the realtime server dates and keeps an elimination", () 
     expect((await stored(code, key)).progress).toBeCloseTo(0.3);
   });
 
+  test("after a realtime restart, the eliminated runner is still out: its progress is refused", async () => {
+    const { code, host, key } = await launched("Elimine_Reprise", "fatal");
+    const page = await racePage(code, host);
+    page.send({ type: "progress", progress: 0.3, wpm: 40 });
+    await page.until(() => validated(page.messages, 0.3));
+    page.send({ type: "eliminated" });
+    for (let i = 0; i < 200 && !(await stored(code, key)).eliminatedAt; i++) await Bun.sleep(10);
+    server.stop(true);
+    server = createRealtimeServer({ port: 0, hostname: "127.0.0.1", secret: TICKET_SECRET, rooms: createRoomBackend(db, events) });
+    const again = await racePage(code, host);
+    again.send({ type: "progress", progress: 0.4, wpm: 40 });
+    await again.until(() => again.messages.some((m) => m.type === "error"));
+    expect(again.messages.find((m) => m.type === "error")).toMatchObject({ code: "eliminated" });
+    expect(validated(again.messages, 0.4)).toBe(false);
+    again.ws.close();
+  });
+
   test("outside the fatal mode, an elimination is not kept", async () => {
     const { code, host, key } = await launched("Elimine_Libre", "fix");
     const page = await racePage(code, host);

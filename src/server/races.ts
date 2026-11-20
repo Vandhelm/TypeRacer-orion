@@ -210,7 +210,8 @@ export const SERVER_WPM_SLACK_CHARS = SLACK_CHARS;
  *   fin de la course). Le temps du corps n'est jamais repris : une élimination que le serveur n'a pas vue est une course
  *   encore en cours.
  *   MPM : celui du corps tant qu'il ne dépasse pas ce que permettent les caractères validés par le serveur sur le texte
- *   du coureur (BONUS-04 : son texte changé, sinon celui de la course), à la tolérance près (SERVER_WPM_SLACK_CHARS) ;
+ *   du coureur (BONUS-04 : son texte changé, sinon celui de la course), à la tolérance près (SERVER_WPM_SLACK_CHARS,
+ *   au plus les deux mots suivants du texte pour un coureur pas arrivé, AUTH-06) ;
  *   au-delà, le MPM du serveur (caractères validés ÷ 5 ÷ minutes). Un MPM plus bas est gardé : les fautes laissées
  *   (mode libre) et les lettres justes que seule la page voit le baissent honnêtement.
  * - Précision et MPM brut : le serveur ne voit pas les frappes ; ceux du corps restent, bornés par le schéma (précision
@@ -231,7 +232,11 @@ export function serverMeasures<T extends { name: string; bot: boolean; wpm: numb
   if (!words.length) return consistent({ ...result, seconds });
   const marks = marksOf(words);
   const chars = standing.finishedAt ? marks.at(-1)! : charsAt(marks, standing.progress);
-  const allowed = standing.finishedAt ? netWpm(chars, Math.max(seconds - CLOCK_TOLERANCE_MS / 1000, 1.3)) : netWpm(chars + SERVER_WPM_SLACK_CHARS, seconds);
+  // AUTH-06 : pas arrivé, la marge est au plus les deux mots suivants du texte (le mot en cours, un paquet en vol) :
+  // 40 caractères sur une course très courte (élimination juste après le départ) donneraient un MPM sans frappe
+  const done = Math.min(words.length, Math.max(0, Math.round(standing.progress * words.length)));
+  const slack = Math.min(SERVER_WPM_SLACK_CHARS, marks[Math.min(words.length, done + 2)]! - marks[done]!);
+  const allowed = standing.finishedAt ? netWpm(chars, Math.max(seconds - CLOCK_TOLERANCE_MS / 1000, 1.3)) : netWpm(chars + slack, seconds);
   return consistent({ ...result, seconds, wpm: result.wpm > allowed ? netWpm(chars, seconds) : result.wpm });
 }
 

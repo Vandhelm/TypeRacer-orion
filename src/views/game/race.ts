@@ -2,7 +2,7 @@
 // qu'il envoie en temps réel (applyRemote). Progression déclarée par le client : le serveur autoritaire reste à faire (COURSE-06).
 import { countKey, type KeyCounts } from "../../players/keys";
 import { transition, type RaceEvent, type RaceState } from "../../rooms/race-state";
-import { BOT_ACCURACY_FACTOR, BOT_LEVEL_SPECS, BOT_START, BOT_TICK_MS, botArrived, botBonusTick, botErrorChance, botPosition, botProfile, botSeed, botStep, botText, levelOfSpeed, type BotBonus, type BotProfile, type BotState, type BotText } from "../../rooms/bot-engine";
+import { BOT_ACCURACY_FACTOR, BOT_LEVEL_SPECS, BOT_START, BOT_TICK_MS, botArrived, botBonusTick, botErrorChance, botPosition, botProfile, botSeed, botStep, botText, levelOfSpeed, orderBotBonuses, type BotBonus, type BotProfile, type BotState, type BotText } from "../../rooms/bot-engine";
 import { botRunnerId } from "../../rooms/bots";
 import type { BotAccuracy, BotSpeed, MistakeMode, Player } from "../room/room";
 
@@ -296,8 +296,8 @@ function botMove(race: Race, bot: Bot, text: BotText, state: BotState): Bot {
   return { ...bot, ...state, words: botPosition(text, state.chars), keys, ...(text.words === race.course.words ? {} : { text }) };
 }
 
-/** Par heure, et à heure égale dans l'ordre reçu : l'ordre où le serveur les a décidés. */
-const sortBonuses = (list: readonly BotBonus[]) => [...list].sort((a, b) => a.at - b.at);
+/** Par heure, et à heure égale par rang (seq) : l'ordre où le serveur les a décidés, quel que soit l'ordre reçu. */
+const sortBonuses = orderBotBonuses;
 
 /**
  * BOT-04 : les bonus gardés par le serveur pour les bots (vue du salon), donnés à chaque bot avant de le faire courir :
