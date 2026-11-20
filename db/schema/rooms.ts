@@ -56,6 +56,8 @@ export const rooms = pgTable(
     textId: integer("text_id").references(() => corpusTexts.id, { onDelete: "set null" }),
     /** CONF-03 : la graine des mots tirés au hasard (mode aléatoire, chiffres, caractères spéciaux), la même pour tous. */
     textSeed: integer("text_seed"),
+    /** COURSE-06 : l'empreinte des mots tirés au lancement (src/rooms/course-words.ts), vérifiée par le serveur temps réel. */
+    textHash: text("text_hash"),
   },
   (table) => [index("rooms_lobby").on(table.status, table.visibility), check("rooms_guests_range", sql`${table.guests} between 2 and 30`),
     check("rooms_code_format", sql`${table.code} ~ ${sql.raw(`'${CODE_PATTERN}'`)}`),

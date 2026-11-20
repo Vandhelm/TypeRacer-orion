@@ -5,6 +5,7 @@ import { roomMembers, rooms } from "../../db/schema";
 import { COUNTDOWN_MS } from "../rooms/race-clock";
 import { roomsFixture } from "./rooms.fixture";
 import { recordProgress } from "./rooms";
+import { courseWords, textFingerprint } from "../rooms/course-words";
 
 type Fixture = Awaited<ReturnType<typeof roomsFixture>>;
 type Clocked = { startsAt: number | null; endsAt: number | null; status: string };
@@ -90,6 +91,22 @@ describe("COURSE-06 — the server finish: progress validated by the realtime se
     expect((await t.read(host.cookie, room.code)).body.room.status).toBe("results");
     await launch(t, room.code, host.cookie);
     expect((await member(t, room.code, host.key)).progress).toBe(0);
+  });
+});
+
+describe("COURSE-06 — the room view carries a fingerprint of the words drawn at launch", () => {
+  let t: Fixture;
+  beforeAll(async () => {
+    t = await roomsFixture();
+  });
+
+  test("before launch none; after launch, the fingerprint of the words the race page will type", async () => {
+    const { room, host } = await t.open("Empreinte_Mots", { bots: true, guests: 2 });
+    expect((room as unknown as { textHash: string | null }).textHash).toBeNull();
+    await launch(t, room.code, host.cookie);
+    const view = (await t.read(host.cookie, room.code)).body.room as unknown as Parameters<typeof courseWords>[0] & { textHash: string };
+    expect(view.textHash).toBe(textFingerprint(courseWords(view)!));
+    expect(view.textHash).toMatch(/^[0-9a-f]{8}$/);
   });
 });
 

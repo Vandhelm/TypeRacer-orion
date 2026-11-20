@@ -1,7 +1,8 @@
 // COURSE-06 : la course que le serveur temps réel arbitre, lue du salon en base.
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 import { DEFAULT_SETTINGS } from "../rooms/settings";
 import { seededRandom } from "../rooms/text";
+import { textFingerprint } from "../rooms/course-words";
 import { buildWords } from "../views/game/course";
 import type { RoomView } from "../server/rooms";
 import { raceCourseOf } from "./room-backend";
@@ -17,6 +18,7 @@ const view = (over: Partial<RoomView> = {}): RoomView => ({
   seed: 42,
   startsAt: 10_000,
   endsAt: 70_000,
+  textHash: null,
   ...over,
 });
 
@@ -40,5 +42,21 @@ describe("COURSE-06 — the realtime server knows the race it referees", () => {
 
   test("without a seed the text is unknown: no character count", () => {
     expect(raceCourseOf(view({ seed: null }))!.marks).toBeNull();
+  });
+});
+
+describe("COURSE-06 — the realtime server checks it draws the same words as the site", () => {
+  test("the fingerprint of the room matches its own words: the characters are refereed", () => {
+    const matching = view({ textHash: textFingerprint(["le", "riz", "attend"]) });
+    expect(raceCourseOf(matching)!.marks).toEqual([0, 3, 7, 14]);
+  });
+
+  test("another fingerprint (site and realtime server out of sync): it refuses to referee characters and logs it", () => {
+    const log = spyOn(console, "error").mockImplementation(() => undefined);
+    const course = raceCourseOf(view({ textHash: textFingerprint(["autre", "texte"]) }));
+    expect(course!.marks).toBeNull();
+    expect(log).toHaveBeenCalledTimes(1);
+    expect(String(log.mock.calls[0]![0])).toContain("fingerprint");
+    log.mockRestore();
   });
 });

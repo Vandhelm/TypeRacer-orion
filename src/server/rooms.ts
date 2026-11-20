@@ -7,6 +7,7 @@ import { players, raceConfigs, roomBans, roomMembers, rooms } from "../../db/sch
 import { allows, canJoin, isListed, newRoomCode } from "../rooms/access";
 import { launchBlocker } from "../rooms/launch";
 import { raceClock } from "../rooms/race-clock";
+import { courseWords, textFingerprint } from "../rooms/course-words";
 import type { RoomFilters } from "../rooms/explorer";
 import { seatColor } from "../rooms/seats";
 import { wordTarget } from "../rooms/text";
@@ -80,6 +81,8 @@ export type RoomView = {
   startsAt: number | null;
   /** COURSE-06 : la fin de la course (départ + durée), en ms epoch ; null sans limite de temps ou avant le lancement. */
   endsAt: number | null;
+  /** COURSE-06 : l'empreinte des mots tirés au lancement (src/rooms/course-words.ts) ; null avant. */
+  textHash: string | null;
 };
 export type RoomStatus = (typeof rooms.$inferSelect)["status"];
 /** Ce que renvoie une action réussie : l'état du salon, et la clé de celui qui l'a demandée. */
@@ -228,6 +231,7 @@ export async function roomView(db: Db, roomId: number, _viewer?: string): Promis
     passage: passage && { body: passage.body, source: passage.source },
     seed: row.rooms.textSeed,
     ...raceClock(row.rooms.launchedAt, row.race_configs.duration),
+    textHash: row.rooms.textHash,
   };
 }
 
@@ -493,6 +497,9 @@ export async function launchRoom(db: Db, code: string, who: Identity): Promise<R
     const textSeed = crypto.getRandomValues(new Int32Array(1))[0]!;
     await tx.update(rooms).set({ status: "racing", launchedAt: sql`now()`, textId: passage?.id ?? null, textSeed }).where(eq(rooms.id, id));
     await tx.update(roomMembers).set({ finishedAt: null, progress: 0, raceRecorded: false }).where(eq(roomMembers.roomId, id));
+    // COURSE-06 : l'empreinte des mots que la page de course va retirer, vérifiée par le serveur temps réel
+    const words = courseWords(await roomView(tx, id));
+    await tx.update(rooms).set({ textHash: words && textFingerprint(words) }).where(eq(rooms.id, id));
   });
   return { room: await roomView(db, id, key), you: key };
 }

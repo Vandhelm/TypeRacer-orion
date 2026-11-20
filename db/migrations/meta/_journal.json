@@ -183,6 +183,13 @@
       "when": 1795138323216,
       "tag": "0025_race_authority",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1795143075349,
+      "tag": "0026_room_text_hash",
+      "breakpoints": true
     }
   ]
 }

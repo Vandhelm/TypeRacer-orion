@@ -3,9 +3,8 @@
 // Les changements faits par les routes HTTP (Next.js, Vercel) arrivent par `changes` : NOTIFY de Postgres en
 // production (room-events.ts), un émetteur en mémoire dans les tests.
 import type { Db } from "../../db/client";
-import { seededRandom } from "../rooms/text";
+import { courseWords, textFingerprint } from "../rooms/course-words";
 import { leaveAfterDisconnect, readRoom, recordProgress, refreshRoom, RoomRefused, roomIdByCode, roomView, type Identity, type RoomView } from "../server/rooms";
-import { buildWords } from "../views/game/course";
 import type { Player } from "./protocol";
 import type { RaceCourse } from "./referee";
 
@@ -37,10 +36,14 @@ export type RoomBackend = {
  */
 export function raceCourseOf(view: RoomView): RaceCourse | null {
   if (view.status !== "racing" || view.startsAt === null) return null;
+  const words = courseWords(view);
   let marks: number[] | null = null;
-  if (view.seed !== null) {
+  if (words && view.textHash && textFingerprint(words) !== view.textHash) {
+    // le site et le serveur temps réel ne retirent pas le même texte (versions différentes) : pas d'arbitrage des caractères
+    console.error(`COURSE-06: text fingerprint mismatch in room ${view.code} (site ${view.textHash}, realtime ${textFingerprint(words)}): characters are not refereed, deploy the same version on both.`);
+  } else if (words) {
     marks = [0];
-    for (const word of buildWords(view.settings, seededRandom(view.seed), view.passage?.body ?? null)) marks.push(marks.at(-1)! + word.length + 1);
+    for (const word of words) marks.push(marks.at(-1)! + word.length + 1);
   }
   return { startsAt: view.startsAt, endsAt: view.endsAt, marks, runners: view.members.filter((m) => m.role === "player").map((m) => m.key) };
 }
