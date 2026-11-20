@@ -13,13 +13,11 @@ import { countdownAt, raceDurationSeconds } from "./countdown";
 import { buildWords } from "./course";
 import { advanceBots, createCourse, createRace, startRace, TICK_MS, type Phase, type Race } from "./race";
 
-/** Les bots tirent leur vitesse d'un flux à part de celui des mots, avec la même graine : mêmes bots à chaque montage. */
-const BOT_STREAM = 0x5bd1e995;
-
 /**
- * La course telle que la page la monte (useRace) : texte de la graine du serveur, bots de la même graine. Arrivée après le
- * départ (rechargement, retour, retard), la course part de `start` et chaque bot est avancé tick par tick jusqu'à `now`
- * (heure serveur), au rythme moyen (tirage 0,5) : il est où il aurait été, pas au mot 0.
+ * La course telle que la page la monte (useRace) : texte de la graine du serveur, bots de la même graine (BOT-05 : le
+ * moteur partagé avec le serveur, src/rooms/bot-engine.ts ; une graine locale seulement sans serveur de salons). Arrivée
+ * après le départ (rechargement, retour, retard), la course part de `start` et chaque bot est avancé tick par tick
+ * jusqu'à `now` (heure serveur) : il est exactement où il aurait été, comme sur les autres pages du salon.
  */
 export function mountRace(
   room: Room,
@@ -27,11 +25,12 @@ export function mountRace(
   { passage = null, seed = null, startsAt = null, endsAt = null, now, start = startsAt ?? now + COUNTDOWN_MS }: { passage?: string | null; seed?: number | null; startsAt?: number | null; endsAt?: number | null; now: number; start?: number },
 ): Race {
   const words = buildWords(room, seed === null ? Math.random : seededRandom(seed), passage);
-  const fresh = createRace(createCourse(words, raceDurationSeconds(startsAt, endsAt, room.duration), room.mistakes), players, room.botSpeed, room.botAccuracy, seed === null ? Math.random : seededRandom(seed ^ BOT_STREAM));
+  const fresh = createRace(createCourse(words, raceDurationSeconds(startsAt, endsAt, room.duration), room.mistakes), players, room.botSpeed, room.botAccuracy, seed ?? Math.floor(Math.random() * 2 ** 32) | 0);
   const { count, started } = countdownAt(start, now);
   if (!started) return { ...fresh, count };
   let race = startRace(fresh, start);
-  for (let tick = start + TICK_MS; tick <= now && race.phase === "racing"; tick += TICK_MS) race = advanceBots(race, tick, race.bots.map(() => 0.5));
+  // tick par tick, pour une mesure par seconde comme la page restée ouverte
+  for (let tick = start + TICK_MS; tick <= now && race.phase === "racing"; tick += TICK_MS) race = advanceBots(race, tick);
   return { ...race, now, count };
 }
 

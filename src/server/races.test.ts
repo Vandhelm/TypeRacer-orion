@@ -338,7 +338,7 @@ describe("TECH-07 — the real body of the client is accepted", () => {
       ...base, phase: "done" as const, startedAt: 1000, now: 31000, arrivals: [0, 1], wordIndex: 3, keystrokes: 15, wrongChars: 1, finishedAt: 30000,
       keys: { e: [6, 1], " ": [2, 0] } as Record<string, [number, number]>,
       samples: [[{ chars: 5, typed: 5, errors: 0 }, { chars: 14, typed: 15, errors: 1 }], [{ chars: 5, typed: 5, errors: 0 }], []],
-      bots: [{ lane: 1, wpm: 60, accuracy: 93, words: 3, typed: 15, errors: 1, keys: {}, finishedAt: 31000 }],
+      bots: [{ lane: 1, name: "bot1", seed: 1, tick: 0, wpm: 60, accuracy: 93, words: 3, typed: 15, errors: 1, keys: {}, finishedAt: 31000 }],
     };
     const room = { textType: "words", language: "fr", duration: 60, level: "common", punctuation: false, numbers: false, specials: false, accents: true, excluded: "", mistakes: "fix", botSpeed: "medium", botAccuracy: "high", length: "short" } as Room;
     const results = { players: buildResults(raceState, [ME, BOT]), summary: buildSummary(raceState, room, 90) };
