@@ -105,7 +105,7 @@ Rien n'est déployé par le dépôt. Pour mettre le serveur en ligne sur Fly.io 
 
 1. `fly launch --no-deploy --copy-config` (garde `fly.toml`), puis `fly secrets set REALTIME_SECRET=<le même que sur Vercel>`.
 2. `fly deploy --ha=false` : une seule machine, puisque l'état est en mémoire.
-3. Sur Vercel : `REALTIME_SECRET` (même valeur) et `REALTIME_PUBLIC_URL=wss://orion-realtime.fly.dev`.
+3. Sur Vercel : `REALTIME_SECRET` (même valeur) et `REALTIME_PUBLIC_URL=wss://typeracer-orion.fly.dev`.
 4. Ajuster `REALTIME_ALLOWED_ORIGINS` dans `fly.toml` si le domaine du site change.
 
 ## Machine à états d'une course (COURSE-01)

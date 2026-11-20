@@ -1,8 +1,8 @@
 # Serveur temps réel (TECH-06) sur Fly.io, offre gratuite (TECH-08). Le site reste sur Vercel.
 # Rien n'est déployé par le dépôt : voir docs/ARCHITECTURE.md, « Déployer le serveur temps réel ».
 # L'état des salles est en mémoire : une seule machine (fly deploy --ha=false, fly scale count 1).
-app = "orion-realtime"
-primary_region = "yul"
+app = "typeracer-orion"
+primary_region = "yyz"
 
 [build]
   dockerfile = "Dockerfile.realtime"
