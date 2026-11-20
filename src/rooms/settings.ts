@@ -47,6 +47,8 @@ export const RoomSettingsSchema = z
     mistakes: z.enum(MISTAKE_MODES),
     excluded: z.string().max(20),
     text: z.string().max(MAX_TEXT_LENGTH),
+    /** CONF-09 : bonus de remontée activés ou non ; désactivés par défaut. */
+    catchUpBonus: z.boolean(),
   })
   .strict();
 
@@ -73,6 +75,7 @@ export const DEFAULT_SETTINGS: RoomSettings = {
   mistakes: "fix",
   excluded: "",
   text: "",
+  catchUpBonus: false,
 };
 
 /** POST /api/rooms : le rôle de l'hôte et, au besoin, des réglages de départ. Rien d'autre (ni hôte, ni code). */

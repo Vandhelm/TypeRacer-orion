@@ -165,6 +165,7 @@ const settingsOf = (room: typeof rooms.$inferSelect, config: typeof raceConfigs.
   mistakes: config.mistakes,
   excluded: config.excluded,
   text: config.customText,
+  catchUpBonus: config.catchUpBonus,
 });
 
 /** Les réglages de course d'un salon, en ligne de race_configs. */
@@ -184,6 +185,7 @@ const configOf = (s: RoomSettings) => ({
   mistakes: s.mistakes,
   excluded: s.excluded,
   customText: s.text,
+  catchUpBonus: s.catchUpBonus,
 });
 
 const roomColumnsOf = (s: RoomSettings) => ({ name: s.autoName ? "" : s.name, autoName: s.autoName || !s.name, visibility: s.visibility, guests: s.guests, bots: s.bots });

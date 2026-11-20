@@ -148,6 +148,13 @@
       "when": 1795132775616,
       "tag": "0020_race_no_time_limit",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1795135297641,
+      "tag": "0021_catch_up_bonus",
+      "breakpoints": true
     }
   ]
 }
