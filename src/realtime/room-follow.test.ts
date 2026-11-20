@@ -11,6 +11,7 @@ import { createAuth } from "../server/auth";
 import { GUEST_COOKIE, signGuest } from "../server/guest";
 import { handleRealtimeTicket } from "../server/realtime-ticket";
 import { memoryRoomEvents } from "../server/room-events";
+import { COUNTDOWN_MS } from "../rooms/race-clock";
 import { MEMBER_AWAY_MS, raceDeadlineMs } from "../server/rooms";
 import { handleRoomsApi } from "../server/rooms-api";
 import { createRoomBackend } from "./room-backend";
@@ -394,7 +395,7 @@ describe("COURSE-06 — with the rooms database, the realtime server referees th
     const cookie = `${GUEST_COOKIE}=${signGuest("Coureur_Arbitre", SECRET)}`;
     const { you } = (await (await h.call("POST", "/api/rooms/join", cookie, { code })).json()) as { you: string };
     expect((await h.call("POST", `/api/rooms/${code}/launch`, hostCookie)).status).toBe(200);
-    // le départ a eu lieu il y a 27 s (lancement il y a 30 s, décompte de 3 s)
+    // le départ a eu lieu il y a 30 s moins le décompte (COURSE-03 : préparation puis 3, 2, 1)
     await h.db.update(rooms).set({ launchedAt: sql`now() - interval '30 seconds'` }).where(eq(rooms.code, code));
     const host = await raw(h.server, h.auth, hostCookie);
     const runner = await raw(h.server, h.auth, cookie);
@@ -403,7 +404,7 @@ describe("COURSE-06 — with the rooms database, the realtime server referees th
     const standings = (tab: typeof host) => tab.seen.filter((m) => m.type === "standings") as unknown as { startsAt: number; players: { playerId: string; progress: number; rank: number }[] }[];
     while (standings(runner).at(-1)?.players.length !== 2) await Bun.sleep(10);
     const [launched] = await h.db.select({ at: rooms.launchedAt }).from(rooms).where(eq(rooms.code, code));
-    expect(standings(runner).at(-1)!.startsAt).toBe(launched!.at!.getTime() + 3000);
+    expect(standings(runner).at(-1)!.startsAt).toBe(launched!.at!.getTime() + COUNTDOWN_MS);
 
     // 90 % puis un recul : le recul est refusé
     runner.send({ type: "progress", progress: 0.9, wpm: 50 });
@@ -429,5 +430,51 @@ describe("COURSE-06 — with the rooms database, the realtime server referees th
     expect(host.seen.find((m) => m.type === "error")?.code).toBe("race_over");
     host.ws.close();
     runner.ws.close();
+  });
+});
+
+describe("COURSE-03 — the custom text is pushed only to the host before the launch", () => {
+  let h: Awaited<ReturnType<typeof harness>>;
+  beforeAll(async () => {
+    h = await harness();
+  });
+  afterAll(() => h.server.stop(true));
+
+  test("waiting: the host's page receives the text, a member's page an empty one; launched: everyone", async () => {
+    const hostCookie = await h.signUp("Hote_Secret");
+    const mateCookie = await h.signUp("Mate_Secret");
+    const settings = { visibility: "public", textType: "custom", text: "le riz attend le nori" };
+    const code = await created(await h.call("POST", "/api/rooms", hostCookie, { role: "player", settings }));
+    expect((await h.call("POST", "/api/rooms/join", mateCookie, { code })).status).toBe(200);
+    const text = (seen: Seen) => (seen.room as unknown as { settings: { text: string } }).settings.text;
+    const hostTab = (await h.follow(code, hostCookie))!;
+    const mateTab = (await h.follow(code, mateCookie))!;
+    expect(text(await hostTab.next())).toBe(settings.text);
+    expect(text(await mateTab.next())).toBe("");
+    // un changement diffusé à tous les suiveurs : toujours rien pour le membre
+    await h.call("PATCH", `/api/rooms/${code}`, hostCookie, { settings: { name: "Bol secret" } });
+    expect(text(await hostTab.next())).toBe(settings.text);
+    expect(text(await mateTab.next())).toBe("");
+    expect((await h.call("POST", `/api/rooms/${code}/launch`, hostCookie)).status).toBe(200);
+    expect(text(await mateTab.next())).toBe(settings.text);
+    await hostTab.close();
+    await mateTab.close();
+  });
+
+  test("results: the new text the host writes for the next race is not pushed to a member", async () => {
+    const hostCookie = await h.signUp("Hote_Suite");
+    const mateCookie = await h.signUp("Mate_Suite");
+    const code = await created(await h.call("POST", "/api/rooms", hostCookie, { role: "player", settings: { visibility: "public", textType: "custom", text: "le riz attend" } }));
+    expect((await h.call("POST", "/api/rooms/join", mateCookie, { code })).status).toBe(200);
+    expect((await h.call("POST", `/api/rooms/${code}/launch`, hostCookie)).status).toBe(200);
+    await h.db.update(rooms).set({ status: "results" }).where(eq(rooms.code, code));
+    const text = (seen: Seen) => (seen.room as unknown as { settings: { text: string } }).settings.text;
+    const mateTab = (await h.follow(code, mateCookie))!;
+    await mateTab.next();
+    expect((await h.call("PATCH", `/api/rooms/${code}`, hostCookie, { settings: { text: "prochain texte secret" } })).status).toBe(200);
+    const pushed = await mateTab.next();
+    expect(pushed.type).toBe("room");
+    expect(text(pushed)).not.toContain("secret");
+    await mateTab.close();
   });
 });

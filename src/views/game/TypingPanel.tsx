@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { formatNumber } from "../../i18n/format";
+import { READY } from "./countdown";
 import { elapsedMs, myAccuracy, myWpm, secondsLeft, type Race } from "./race";
 import { TypingText } from "./TypingText";
 import { guardTypingField, typingStep, type TypingDraft, type TypingEvent } from "./typingGuard";
@@ -63,7 +64,8 @@ export function TypingPanel({ race, onInput, lang }: { race: Race; onInput: (val
         <p className={STAT}><span className={STAT_LABEL}>{t("game.accuracy")}</span><b className={STAT_VALUE}>{formatNumber(i18n.language, myAccuracy(race))} %</b></p>
       </div>
       <p className="col-start-1 row-start-1 font-mono text-[max(18px,2.6vh)] leading-none font-normal text-red-text tabular-nums" role="timer" aria-label={`${t(unlimited ? "game.elapsed" : "game.time")} ${seconds} s`}>{timerPrefix}{seconds}</p>
-      <TypingText words={race.course.words} wordIndex={race.wordIndex} typed={race.typed} missed={race.missedWords} active={racing} lang={lang} />
+      {/* COURSE-03 : le texte n'est révélé qu'au début du décompte (3, 2, 1) : rien dans la page pendant « Prêts ? » */}
+      <TypingText words={race.count === READY ? [] : race.course.words} wordIndex={race.wordIndex} typed={race.typed} missed={race.missedWords} active={racing} lang={lang} />
       <div className="absolute inset-0 z-2">
         <label htmlFor="game-input" className="sr-only">{t("game.typeHere")}</label>
         <input

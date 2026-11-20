@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { isMobileRace, mobileRaceDeadlineMs, mobileRaceHref } from "./mobileRace";
+import { AFTER_LAST_ARRIVAL_MS, RESULTS_DELAY_MS } from "./hooks/useRace";
+import { isMobileRace, mobileRaceDeadlineMs, mobileRaceDelayMs, mobileRaceHref } from "./mobileRace";
 
 const realMatchMedia = (globalThis as { matchMedia?: unknown }).matchMedia;
 afterEach(() => {
@@ -42,5 +43,28 @@ describe("DES-06 — mobile detection reads the media query in the browser", () 
   test("a desktop with a mouse is not mobile", () => {
     fakeMatchMedia(false);
     expect(isMobileRace()).toBe(false);
+  });
+});
+
+describe("COURSE-03 — on mobile, the notice leaves at the server end (endsAt), not at mount + countdown + duration", () => {
+  const AFTER = AFTER_LAST_ARRIVAL_MS + RESULTS_DELAY_MS;
+
+  test("the delay is endsAt − the server time now, plus the results delays", () => {
+    expect(mobileRaceDelayMs({ startsAt: 10_000, endsAt: 70_000, durationSeconds: 60, serverNow: 5_000 })).toBe(65_000 + AFTER);
+    // arrivée (ou rechargement) en pleine course : il reste moins de temps
+    expect(mobileRaceDelayMs({ startsAt: 10_000, endsAt: 70_000, durationSeconds: 60, serverNow: 50_000 })).toBe(20_000 + AFTER);
+  });
+
+  test("past the end, it leaves after the results delays only", () => {
+    expect(mobileRaceDelayMs({ startsAt: 10_000, endsAt: 70_000, durationSeconds: 60, serverNow: 90_000 })).toBe(AFTER);
+  });
+
+  test("a race without time limit has no deadline", () => {
+    expect(mobileRaceDelayMs({ startsAt: 10_000, endsAt: null, durationSeconds: null, serverNow: 5_000 })).toBeNull();
+  });
+
+  test("without a server start (no rooms database), the local deadline of the room duration", () => {
+    expect(mobileRaceDelayMs({ startsAt: null, endsAt: null, durationSeconds: 60, serverNow: 5_000 })).toBe(mobileRaceDeadlineMs(60));
+    expect(mobileRaceDelayMs({ startsAt: null, endsAt: null, durationSeconds: null, serverNow: 5_000 })).toBeNull();
   });
 });

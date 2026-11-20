@@ -5,13 +5,15 @@ import { inviteDetour } from "../../../rooms/access";
 import { DEFAULT_SETTINGS, type Role, type RoomSettings } from "../../../rooms/settings";
 import type { RoomResult } from "../../../server/rooms";
 import { afterRace } from "../../podium/after-race";
-import { arrivalRequest, roomApi, watchRoom, type Answer, type RoomError } from "../api";
+import { arrivalRequest, roomApi, serverClockOffset, WAITING_POLL_MS, watchRoom, type Answer, type RoomError } from "../api";
 import { keepPresence } from "../presence";
 import { arrivalOf, isPlayer, roomOf, seatsOf, type Arrival, type Room, type RoomView } from "../room";
 
 /** Le temps d'attendre la fin d'une saisie avant d'envoyer les réglages au serveur. */
 const SAVE_DELAY_MS = 400;
-const EMPTY_VIEW: RoomView = { code: "", status: "waiting", host: "", settings: DEFAULT_SETTINGS, members: [], passage: null, seed: null, startsAt: null, endsAt: null, textHash: null };
+/** COURSE-03 : les relectures de /game qui affinent le décalage d'horloge, après l'arrivée. */
+const CLOCK_REFINE_MS = [250, 700];
+const EMPTY_VIEW: RoomView = { code: "", status: "waiting", host: "", settings: DEFAULT_SETTINGS, members: [], passage: null, seed: null, startsAt: null, endsAt: null, textHash: null, serverNow: 0 };
 
 /**
  * The room shown on this page, as the server knows it: its settings, its members, who we are in it.
@@ -47,8 +49,15 @@ export function useRoom(page: "room" | "game" = "room") {
     setReady(true);
   }, []);
 
+  /**
+   * COURSE-03 : heure du serveur − heure du navigateur, la meilleure mesure des réponses HTTP du salon (api.ts), y compris
+   * celles prises au salon avant d'arriver ici (sessionStorage) ; 0 tant qu'aucune.
+   */
+  const [clockOffset, setClockOffset] = useState(serverClockOffset);
+
   const answer = useCallback(
     (reply: Answer) => {
+      if (reply.ok && reply.offset !== undefined) setClockOffset(reply.offset);
       if (reply.ok) apply(reply.result);
       else if (reply.error === "unauthorized") location.replace(inviteDetour(new URLSearchParams(location.search)));
       else {
@@ -93,6 +102,23 @@ export function useRoom(page: "room" | "game" = "room") {
   // SALLE-08 : sur /room comme sur /game, la page donne signe de vie, socket ou pas
   useEffect(() => (code ? keepPresence(code) : undefined), [code]);
 
+  // COURSE-03 : sur /game, deux relectures de plus pendant la préparation affinent le décalage (meilleure des mesures)
+  useEffect(() => {
+    if (!code || page !== "game") return;
+    let live = true;
+    const timers = CLOCK_REFINE_MS.map((ms) =>
+      setTimeout(() => {
+        void roomApi.read(code).then((reply) => {
+          if (live && reply.ok && reply.offset !== undefined) setClockOffset(reply.offset);
+        });
+      }, ms),
+    );
+    return () => {
+      live = false;
+      timers.forEach(clearTimeout);
+    };
+  }, [code, page]);
+
   // En direct : les arrivées, les départs et les réglages de l'hôte.
   // /game ne suit pas le salon : sa socket fermée hors course ferait sortir le joueur (leaveAfterDisconnect)
   useEffect(() => {
@@ -109,6 +135,7 @@ export function useRoom(page: "room" | "game" = "room") {
         if (gone) location.replace(gone);
         else setError(error);
       },
+      WAITING_POLL_MS, // COURSE-03 : sans temps réel, le lancement est appris à temps pour voir le décompte
     );
   }, [code, page]);
 
@@ -198,6 +225,11 @@ export function useRoom(page: "room" | "game" = "room") {
     passage: view.passage?.body ?? null,
     /** CONF-03 : la graine des mots tirés au hasard, la même pour tous les membres. */
     seed: view.seed,
+    /** COURSE-03 / COURSE-06 : départ et fin de la course, heure du serveur (ms epoch) ; null avant le lancement. */
+    startsAt: view.startsAt,
+    endsAt: view.endsAt,
+    /** COURSE-03 : à ajouter à Date.now() pour lire l'heure du serveur. */
+    clockOffset,
     room,
     update,
     host,

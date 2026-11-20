@@ -5,6 +5,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import type { Server } from "bun";
 import type { Player, ServerMessage } from "./protocol";
 import type { RoomBackend, RoomState } from "./room-backend";
+import { concealText } from "../rooms/conceal";
 import { createRealtimeServer } from "./server";
 import { signTicket } from "./ticket";
 
@@ -19,7 +20,9 @@ function fakeRooms() {
   const members = new Map<string, Set<string>>();
   const pending: Deferred[] = [];
   const listeners: ((code: string) => void)[] = [];
-  const state = (code: string): RoomState | null => (members.has(code) ? { code, members: [...members.get(code)!].map((key) => ({ key })) } : null);
+  /** Le reste de la vue d'un salon (statut, hôte, réglages), comme la vue complète du vrai backend. */
+  const details = new Map<string, Record<string, unknown>>();
+  const state = (code: string): RoomState | null => (members.has(code) ? { ...details.get(code), code, members: [...members.get(code)!].map((key) => ({ key })) } : null);
   const backend: RoomBackend = {
     enter: (player, code) =>
       new Promise((done) =>
@@ -28,7 +31,8 @@ function fakeRooms() {
           player,
           resolve: () => {
             const room = state(code);
-            done(room && members.get(code)!.has(player.id) ? { key: player.id, room } : null);
+            // comme readRoom : la vue de ce lecteur (texte personnalisé retiré pour un non-hôte avant le lancement)
+            done(room && members.get(code)!.has(player.id) ? { key: player.id, room: concealText(room, player.id) } : null);
           },
         }),
       ),
@@ -45,6 +49,11 @@ function fakeRooms() {
     admit: (code: string, key: string) => members.set(code, (members.get(code) ?? new Set()).add(key)),
     remove: (code: string, key: string) => {
       members.get(code)?.delete(key);
+      for (const listener of listeners) listener(code);
+    },
+    describe: (code: string, extra: Record<string, unknown>) => details.set(code, extra),
+    /** Le salon change (ex. un réglage) : le serveur l'apprend comme d'une notification de la base. */
+    touch: (code: string) => {
       for (const listener of listeners) listener(code);
     },
     /** Attend qu'un `enter` soit en cours, puis le rend au test. */
@@ -176,5 +185,25 @@ describe("TECH-06 — without the rooms database, presence stays open to any cod
     tab.send({ type: "join", room: ROOM_A });
     while (!presenceOf(tab.messages, ROOM_A).length) await Bun.sleep(5);
     expect(presenceOf(tab.messages, ROOM_A)).toEqual(["Libre"]);
+  });
+});
+
+describe("COURSE-03 — a room page admitted while the room changes never receives the host's custom text", () => {
+  test("waiting room, non-host follower, room changed during the check: the first room message has an empty text", async () => {
+    const rooms = await start();
+    const host = player("Hote");
+    const mate = player("Convive");
+    rooms.admit(ROOM_A, host.id);
+    rooms.admit(ROOM_A, mate.id);
+    rooms.describe(ROOM_A, { status: "waiting", host: host.id, settings: { textType: "custom", text: "le riz attend le nori" } });
+    const tab = await connect(mate);
+    tab.send({ type: "join", room: ROOM_A, follow: true });
+    const check = await rooms.nextEnter();
+    rooms.touch(ROOM_A); // l'hôte change un réglage pendant le contrôle : le serveur relit la vue complète
+    check.resolve();
+    while (!tab.messages.some((m) => m.type === "room")) await Bun.sleep(5);
+    const first = tab.messages.find((m) => m.type === "room") as unknown as { room: { settings: { text: string } } };
+    expect(first.room.settings.text).toBe("");
+    expect(JSON.stringify(tab.messages)).not.toContain("nori");
   });
 });

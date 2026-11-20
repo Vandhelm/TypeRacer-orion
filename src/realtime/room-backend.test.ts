@@ -19,6 +19,7 @@ const view = (over: Partial<RoomView> = {}): RoomView => ({
   startsAt: 10_000,
   endsAt: 70_000,
   textHash: null,
+  serverNow: 0,
   ...over,
 });
 

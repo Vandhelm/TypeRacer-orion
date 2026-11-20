@@ -1,23 +1,36 @@
 // Appels du salon vers le serveur (/api/rooms…). Le serveur décide de tout : cette page n'envoie que des demandes.
 import type { Role, RoomSettings } from "../../rooms/settings";
 import { connectRealtime } from "../../realtime/client";
+import { createClockSync } from "../game/countdown";
 import type { InviteView } from "../../server/room-invites";
 import type { RefusalReason, RoomResult, RoomView } from "../../server/rooms";
 
 export type RoomError = RefusalReason | "unauthorized" | "account_required" | "invalid_body" | "no_free_code" | "rate_limited" | "network" | "bad_code";
-/** current : SALLE-06, le salon où l'on est déjà quand le serveur répond « already_in_room ». */
-export type Answer = { ok: true; result: RoomResult } | { ok: false; error: RoomError; current?: string };
+/**
+ * current : SALLE-06, le salon où l'on est déjà quand le serveur répond « already_in_room ».
+ * offset : COURSE-03, le décalage de l'horloge du serveur sur celle du navigateur (méthode : src/views/game/countdown.ts).
+ */
+export type Answer = { ok: true; result: RoomResult; offset?: number } | { ok: false; error: RoomError; current?: string };
+
+/** COURSE-03 : les mesures de toutes les réponses du salon (actions, relectures, sondages) ; la plus rapide fait foi. */
+const clock = createClockSync(typeof sessionStorage === "undefined" ? null : sessionStorage);
+
+/** COURSE-03 : heure du serveur − heure du navigateur, d'après la meilleure mesure (0 sans mesure). */
+export const serverClockOffset = () => clock.offset();
 
 async function send(method: string, path: string, body?: unknown): Promise<Answer> {
   try {
+    const sentAt = Date.now();
     const res = await fetch(path, {
       method,
       credentials: "same-origin",
       headers: body === undefined ? undefined : { "content-type": "application/json" },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
+    const receivedAt = Date.now();
     const data = (await res.json().catch(() => ({}))) as RoomResult & { error?: RoomError; room?: unknown };
-    if (res.ok) return { ok: true, result: data };
+    const serverNow = (data.room as { serverNow?: unknown } | undefined)?.serverNow;
+    if (res.ok) return { ok: true, result: data, ...(typeof serverNow === "number" && Number.isFinite(serverNow) ? { offset: clock.add(sentAt, receivedAt, serverNow) } : {}) };
     return { ok: false, error: data.error ?? "network", ...(typeof data.room === "string" ? { current: data.room } : {}) };
   } catch {
     return { ok: false, error: "network" };
@@ -70,13 +83,18 @@ export function arrivalRequest<T>(holder: { current: { key: string; request: Pro
 
 /** Tant que le temps réel n'est pas joignable, on relit l'état à ce rythme. */
 const POLL_MS = 3000;
+/**
+ * COURSE-03 : la salle d'attente sans temps réel relit plus souvent : un invité y apprend le lancement au plus 1 s après,
+ * et arrive sur /game (environ 1,7 s de chargement) avant le « 3 » (préparation READY_MS, src/rooms/race-clock.ts).
+ */
+export const WAITING_POLL_MS = 1000;
 
 /**
  * Suit un salon en direct : par le serveur temps réel (TECH-06, follow) quand il répond, sinon relecture HTTP régulière.
  * SALLE-07 : quand le serveur dit que l'on n'est plus membre, la page relit le salon par HTTP et apprend pourquoi (« kicked »).
  * Renvoie la fonction qui arrête de suivre.
  */
-export function watchRoom(code: string, onRoom: (room: RoomView) => void, onError: (error: RoomError) => void): () => void {
+export function watchRoom(code: string, onRoom: (room: RoomView) => void, onError: (error: RoomError) => void, pollMs = POLL_MS): () => void {
   let stopped = false;
   let poll = 0;
   const reread = async () => {
@@ -87,7 +105,7 @@ export function watchRoom(code: string, onRoom: (room: RoomView) => void, onErro
   };
   const startPolling = () => {
     if (stopped || poll) return;
-    poll = window.setInterval(() => void reread(), POLL_MS);
+    poll = window.setInterval(() => void reread(), pollMs);
   };
   const stopPolling = () => {
     clearInterval(poll);

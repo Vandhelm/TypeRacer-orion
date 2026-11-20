@@ -8,6 +8,7 @@ import { useRoom, type RoomState } from "../room/hooks/useRoom";
 import { rememberGuestRace } from "../profile/stats";
 import { useRealtimeRoom } from "../../realtime/useRealtimeRoom";
 import { LiveList } from "../room/LiveList";
+import { READY } from "./countdown";
 import { useRace } from "./hooks/useRace";
 import { AbandonRace } from "./AbandonRace";
 import { canAbandon, markAbandoned, raceExit } from "./abandon";
@@ -70,13 +71,13 @@ export function GameScreen({ state, mobile, onHandOver }: { state: RoomState; mo
 /** One lane per player and the shared text. It hands over to the podium at the end. COURSE-05: a spectator watches, without typing panel. */
 function GameRace({ state, onHandOver }: { state: RoomState; onHandOver?: (sending: boolean) => void }) {
   const { t } = useTranslation();
-  const { room, displayName, finish, leave, passage, seed } = state;
+  const { room, displayName, finish, leave, passage, seed, startsAt, endsAt, clockOffset } = state;
   const watching = state.role === "spectator";
   // COURSE-05 : les couloirs sont figés au départ ; un membre qui quitte ensuite ne décale ni noms ni progressions
   const [lanes] = useState(() => raceLanes(state.players, state.members ?? []));
   const { players } = lanes;
   const [images, setImages] = useState<RacePoolImages | null>(null);
-  const { race, onInput, onRemote, showResults } = useRace(room, players, images !== null, passage, seed);
+  const { race, onInput, onRemote, showResults } = useRace(room, players, { passage, seed, startsAt, endsAt, clockOffset });
   // COURSE-07 : abandon enregistré par le serveur ; la progression ne part plus et la page passe au podium
   const [abandoned, setAbandoned] = useState(false);
 
@@ -148,11 +149,17 @@ function GameRace({ state, onHandOver }: { state: RoomState; onHandOver?: (sendi
         <TypingPanel race={race} onInput={onInput} lang={room.language} />
       )}
 
-      {race.count !== null && images && (
-        <div className="fixed inset-0 z-40 flex flex-col items-center justify-center gap-[3vh] bg-[rgba(0,0,0,.82)] p-6" role="status">
-          <b key={race.count} className={`${COUNT} ${race.count > 0 ? "font-sans text-[26vh] font-extralight" : "font-serif text-[20vh] font-bold text-red-text"}`} lang={race.count > 0 ? undefined : "ja"}>
-            {race.count > 0 ? race.count : "始"}
-          </b>
+      {/* COURSE-03 : le décompte suit le départ du serveur, images du bassin prêtes ou non ; « partez » laisse voir le texte */}
+      {race.count !== null && (
+        <div className={`fixed inset-0 z-40 flex flex-col items-center justify-center gap-[3vh] p-6 ${race.count > 0 ? "bg-[rgba(0,0,0,.82)]" : "pointer-events-none"}`} role="status">
+          {race.count === READY ? (
+            // COURSE-03 : la préparation, le temps que chacun arrive sur la page avant le « 3 »
+            <b className="font-sans text-[8vh] leading-none font-extralight tracking-[.14em] uppercase">{t("game.ready")}</b>
+          ) : (
+            <b key={race.count} className={`${COUNT} ${race.count > 0 ? "font-sans text-[26vh] font-extralight" : "font-serif text-[20vh] font-bold text-red-text"}`} lang={race.count > 0 ? undefined : "ja"}>
+              {race.count > 0 ? race.count : "始"}
+            </b>
+          )}
           {race.count <= 0 && <p className="font-mono text-[max(11px,1.4vh)] leading-none font-normal tracking-[.3em] text-muted">{t("game.go")}</p>}
         </div>
       )}

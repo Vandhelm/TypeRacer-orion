@@ -10,6 +10,7 @@ import { GamePage } from "../game/GamePage";
 import type { RoomState } from "./hooks/useRoom";
 import type { Seat } from "./room";
 import { RoomPage } from "./RoomPage";
+import { RoomSettings } from "./RoomSettings";
 import { RoomTicket } from "./RoomTicket";
 
 const render = (page: typeof RoomPage) =>
@@ -70,5 +71,23 @@ describe("BOT-04 — the waiting room marks a bot as such, and only bots", () =>
 
   test("the marker reads the same in English", () => {
     expect(ticket("en")[2]).toMatch(/data-part="bot"[\s\S]*BOT[\s\S]*computer player/);
+  });
+});
+
+describe("COURSE-03 — before the launch, a member is told the custom text comes at the launch", () => {
+  const settings = (host: boolean, text: string, language: "fr" | "en" = "fr") => {
+    const state = { room: { ...DEFAULT_SETTINGS, textType: "custom", text }, host, update: () => {} } as unknown as RoomState;
+    const html = renderToString(createElement(I18nextProvider, { i18n: createI18n(language) }, createElement(RoomSettings, { state, onEditText: () => {}, action: null })));
+    return html.match(/id="label-text"[\s\S]*?<\/div>/)?.[0] ?? html;
+  };
+
+  test("a member (text withheld by the server) reads « revealed at launch », not « none »", () => {
+    expect(settings(false, "")).toContain("Révélé au lancement");
+    expect(settings(false, "", "en")).toContain("Revealed at launch");
+    expect(settings(false, "")).not.toContain("Aucun");
+  });
+
+  test("the host still sees the word count of their text", () => {
+    expect(settings(true, "le riz attend")).not.toContain("Révélé au lancement");
   });
 });
