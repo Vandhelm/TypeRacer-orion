@@ -51,16 +51,19 @@ export function seatedBots(room: { guests: number; bots: boolean; botList: reado
 /**
  * Ce que devient la liste après un changement de l'hôte. Une liste envoyée remplace l'ancienne (refusée, « full »,
  * si elle s'allonge au-delà des places libres ; retirer un bot ou changer un niveau passe toujours). L'ancien
- * interrupteur reste compris : « non » vide la liste, « oui » remplit les places libres si elle est vide.
+ * interrupteur reste compris : « non » vide la liste, « oui » avec une liste vide (ou sans liste, quand la liste
+ * actuelle est vide) remplit les places libres.
  * Les bots sont activés exactement quand la liste n'est pas vide.
  */
 export function resolveBots(current: RoomSettings, patch: Partial<RoomSettings>, humans: number): Pick<RoomSettings, "bots" | "botList"> | "full" {
   const guests = patch.guests ?? current.guests;
+  const filled = () => defaultBots(guests - humans, patch.botSpeed ?? current.botSpeed);
   let botList = current.botList;
-  if (patch.botList) {
+  if (patch.bots === false) botList = [];
+  else if (patch.botList?.length) {
     if (patch.botList.length > current.botList.length && patch.botList.length + humans > guests) return "full";
     botList = patch.botList;
-  } else if (patch.bots === false) botList = [];
-  else if (patch.bots === true && !botList.length) botList = defaultBots(guests - humans, patch.botSpeed ?? current.botSpeed);
+  } else if (patch.botList) botList = patch.bots ? filled() : [];
+  else if (patch.bots && !botList.length) botList = filled();
   return { bots: botList.length > 0, botList };
 }

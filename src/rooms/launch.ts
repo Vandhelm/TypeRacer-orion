@@ -1,6 +1,6 @@
 // COURSE-02 : la règle de lancement, partagée par le serveur (launchRoom, qui la fait respecter) et la salle (qui grise
 // le bouton Lancer et dit pourquoi). Au moins 2 participants, dont au moins 1 humain ; les bots comptent, les spectateurs non.
-import { BOT_NAMES } from "../players/bots";
+import { defaultBots, seatedBots, type RoomBot } from "./bots";
 import type { Role } from "./settings";
 
 export const MIN_PARTICIPANTS = 2;
@@ -9,12 +9,12 @@ export const MIN_PARTICIPANTS = 2;
 export type LaunchBlocker = "no_human" | "too_few";
 
 /**
- * Les bots occupent les places libres (rooms.guests moins les humains qui courent), un par nom de la liste fermée,
- * comme seatsOf dans la salle. Les spectateurs n'ont pas de place et ne courent pas.
+ * CONF-10 : les bots de la liste du salon, tant qu'il leur reste une place après les humains qui courent (seatedBots),
+ * comme seatsOf dans la salle. Sans liste (ancien réglage), un bot par place libre. Les spectateurs ne courent pas.
  */
-export function launchBlocker(room: { guests: number; bots: boolean }, members: { role: Role }[]): LaunchBlocker | null {
+export function launchBlocker(room: { guests: number; bots: boolean; botList?: readonly RoomBot[] }, members: { role: Role }[]): LaunchBlocker | null {
   const humans = members.filter((m) => m.role === "player").length;
   if (humans < 1) return "no_human";
-  const bots = room.bots ? Math.min(Math.max(room.guests - humans, 0), BOT_NAMES.length) : 0;
+  const bots = seatedBots({ ...room, botList: room.botList ?? defaultBots(room.guests - humans, "medium") }, humans).length;
   return humans + bots < MIN_PARTICIPANTS ? "too_few" : null;
 }

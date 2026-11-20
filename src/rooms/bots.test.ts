@@ -76,6 +76,12 @@ describe("CONF-10 — the server resolves a change of the bots", () => {
     expect(resolveBots(current, { bots: true }, 1)).toEqual({ bots: true, botList: current.botList });
   });
 
+  test("full old settings (bots on, empty list, as DEFAULT_SETTINGS) still fill the free seats", () => {
+    const empty = { ...current, bots: false, botList: [] };
+    expect(resolveBots(empty, { ...DEFAULT_SETTINGS, guests: 3 }, 1)).toEqual({ bots: true, botList: defaultBots(2, DEFAULT_SETTINGS.botSpeed) });
+    expect(resolveBots(empty, { botList: [{ name: "Ebi_Fry", level: "fast" }], bots: false }, 1)).toEqual({ bots: false, botList: [] });
+  });
+
   test("another change keeps the list as it is", () => {
     expect(resolveBots(current, { guests: 6 }, 1)).toEqual({ bots: true, botList: current.botList });
   });
