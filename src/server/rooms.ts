@@ -1,6 +1,6 @@
 // Salons, côté serveur (SALLE-01, 02, 03, 09). Indépendant du transport : les routes HTTP (api.ts) et le temps réel
 // (realtime.ts) appellent ces fonctions ; rien ici ne connaît Request, WebSocket ou Next.js.
-import { and, asc, desc, eq, gt, gte, inArray, isNull, ne, notInArray, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, inArray, isNotNull, isNull, ne, notInArray, sql, type SQL } from "drizzle-orm";
 import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 import type { z } from "zod";
 import type { Db } from "../../db/client";
@@ -18,6 +18,7 @@ import type { RoomFilters } from "../rooms/explorer";
 import { seatColor } from "../rooms/seats";
 import { wordTarget } from "../rooms/text";
 import { composePassage, pickPassage } from "./corpus";
+import { rerankLaunch } from "./ranking";
 import { claimInvite, revokeInvitesOf, roomOfInvite } from "./room-invites";
 import { DEFAULT_SETTINGS, normalizeSettings, type CreateRoomSchema, type Role, type RoomSettings, type UpdateRoomSchema } from "../rooms/settings";
 
@@ -93,6 +94,8 @@ export type RoomView = {
   textHash: string | null;
   /** COURSE-03 : l'heure de la base (même horloge que startsAt) au moment de la lecture, en ms epoch : le client en déduit son décalage. */
   serverNow: number;
+  /** COURSE-10 : qui a abandonné la dernière course lancée, et à quelle progression, même parti depuis ; vidé au lancement suivant. */
+  abandoned?: { name: string; progress: number }[];
 };
 export type RoomStatus = (typeof rooms.$inferSelect)["status"];
 /** Ce que renvoie une action réussie : l'état du salon, et la clé de celui qui l'a demandée. */
@@ -264,6 +267,7 @@ export async function roomView(db: Db, roomId: number, viewer?: string): Promise
     ...raceClock(row.rooms.launchedAt, row.race_configs.duration),
     textHash: revealed ? row.rooms.textHash : null,
     serverNow: Math.round(row.serverNow),
+    abandoned: row.rooms.abandons.map(({ name, progress }) => ({ name, progress })),
   };
   const view = viewer === undefined ? full : concealText(full, viewer);
   dbClockSkew.set(view, row.serverNow - readAt);
@@ -541,7 +545,7 @@ export async function launchRoom(db: Db, code: string, who: Identity): Promise<R
     const passage = config!.textType === "coherent" ? await pickPassage(tx, { language: config!.language, words: wordTarget(config!) }) : null;
     const textSeed = crypto.getRandomValues(new Int32Array(1))[0]!;
     // COURSE-01 : une relance repasse par EN_ATTENTE (results → waiting → countdown)
-    await moveRoom(tx, id, from, from === "results" ? ["reopen", "launch"] : ["launch"], { launchedAt: sql`now()`, textId: passage?.id ?? null, textSeed });
+    await moveRoom(tx, id, from, from === "results" ? ["reopen", "launch"] : ["launch"], { launchedAt: sql`now()`, textId: passage?.id ?? null, textSeed, abandons: [], departed: [] });
     await tx.update(roomMembers).set({ finishedAt: null, abandonedAt: null, progress: 0, raceRecorded: false }).where(eq(roomMembers.roomId, id));
     // COURSE-06 : l'empreinte des mots que la page de course va retirer, vérifiée par le serveur temps réel
     const words = courseWords(await roomView(tx, id));
@@ -584,11 +588,14 @@ async function sweep(tx: Db, roomId: number, actor?: string | string[]): Promise
   if (present.length) await tx.update(roomMembers).set({ lastSeenAt: sql`now()` }).where(and(eq(roomMembers.roomId, roomId), inArray(roomMembers.memberKey, present)));
   const deadline = sql`${rooms.launchedAt} + (select ${raceConfigs.duration} from ${raceConfigs} where ${raceConfigs.id} = ${rooms.configId}) * interval '1 second' + ${RACE_GRACE_MS} * interval '1 millisecond'`;
   const ended = (await stateOf(tx, roomId)) === "racing" ? await moveRoom(tx, roomId, "racing", ["finish"], {}, sql`${deadline} <= now()`) : [];
+  const silent = sql`${roomMembers.lastSeenAt} < now() - ${MEMBER_AWAY_MS} * interval '1 millisecond'`;
+  await keepDeparted(tx, roomId, (await tx.select({ key: roomMembers.memberKey }).from(roomMembers).where(and(eq(roomMembers.roomId, roomId), silent))).map((m) => m.key));
   const gone = await tx
     .delete(roomMembers)
-    .where(and(eq(roomMembers.roomId, roomId), sql`${roomMembers.lastSeenAt} < now() - ${MEMBER_AWAY_MS} * interval '1 millisecond'`))
+    .where(and(eq(roomMembers.roomId, roomId), silent))
     .returning({ key: roomMembers.memberKey });
   if (gone.length) await afterDeparture(tx, roomId);
+  if (ended.length) await rerankLaunch(tx, roomId); // COURSE-10 : la course échue est reclassée
   return timedOut || ended.length > 0 || gone.length > 0;
 }
 
@@ -685,7 +692,45 @@ async function endIfAllFinished(tx: Db, roomId: number) {
   if (racing) return;
   // COURSE-01 : pendant le décompte (fin déclarée par le client, COURSE-06 pas encore là), le départ est avancé
   const from = await stateOf(tx, roomId);
-  if (from === "countdown" || from === "racing") await moveRoom(tx, roomId, from, from === "countdown" ? ["start", "finish"] : ["finish"]);
+  if (from === "countdown" || from === "racing") {
+    await moveRoom(tx, roomId, from, from === "countdown" ? ["start", "finish"] : ["finish"]);
+    // COURSE-10 : une course envoyée plus tôt (à l'abandon) prend son rang final
+    await rerankLaunch(tx, roomId);
+  }
+}
+
+/**
+ * COURSE-10 : la progression validée d'un coureur déjà parti (bouton « Quitter ») arrive souvent après son départ : le
+ * temps réel ne l'écrit qu'à la fermeture de sa socket, quand sa ligne room_members n'existe plus. Elle complète alors
+ * son entrée de rooms.departed (jamais en recul, jamais pour un arrivé). Sous le verrou du salon.
+ */
+async function keepDepartedProgress(tx: Db, roomId: number, key: string, progress: number) {
+  const [room] = await tx.select({ departed: rooms.departed }).from(rooms).where(eq(rooms.id, roomId));
+  const entry = room?.departed.find((d) => d.key === key);
+  if (!entry || entry.finishedAt || entry.progress >= progress) return;
+  await tx.update(rooms).set({ departed: room!.departed.map((d) => (d.key === key ? { ...d, progress } : d)) }).where(eq(rooms.id, roomId));
+  // une course du lancement déjà enregistrée prend en compte cette progression
+  await rerankLaunch(tx, roomId);
+}
+
+/**
+ * COURSE-10 : avant de retirer ces membres, garde dans rooms.departed les coureurs (participants humains, pas les
+ * abandons, déjà dans rooms.abandons) qui partent pendant la course ou ses résultats : leur progression validée et leur
+ * arrivée, pour les classer parmi les non-terminés (ou les terminés) même après leur départ.
+ */
+async function keepDeparted(tx: Db, roomId: number, keys: string[]) {
+  if (!keys.length) return;
+  const [room] = await tx.select({ status: rooms.status, departed: rooms.departed }).from(rooms).where(eq(rooms.id, roomId));
+  if (!room || (room.status !== "racing" && room.status !== "results")) return;
+  const leaving = await tx
+    .select({ key: roomMembers.memberKey, name: sql<string>`coalesce(${players.name}, ${roomMembers.guestName})`, progress: roomMembers.progress, seat: roomMembers.seat, finishedAt: roomMembers.finishedAt })
+    .from(roomMembers)
+    .leftJoin(players, eq(players.id, roomMembers.playerId))
+    .where(and(eq(roomMembers.roomId, roomId), inArray(roomMembers.memberKey, keys), eq(roomMembers.role, "player"), isNull(roomMembers.abandonedAt), sql`coalesce(${players.isBot}, false) = false`));
+  if (!leaving.length) return;
+  const known = new Map(room.departed.map((d) => [d.key, d]));
+  for (const m of leaving) known.set(m.key, { ...m, finishedAt: m.finishedAt?.toISOString() ?? null });
+  await tx.update(rooms).set({ departed: [...known.values()] }).where(eq(rooms.id, roomId));
 }
 
 /** COURSE-01 : l'état d'un salon (le décompte dérivé de launched_at et de l'horloge de la base), null s'il n'existe pas. */
@@ -749,12 +794,20 @@ export async function recordProgress(db: Db, code: string, key: string, progress
   if (id === null) return false;
   return db.transaction(async (tx) => {
     const [room] = await tx.select({ status: rooms.status }).from(rooms).where(eq(rooms.id, id)).for("update");
-    if (room?.status !== "racing") return false;
     const value = Math.min(1, Math.max(0, progress));
+    // COURSE-10 : le dernier coureur parti a fait passer le salon aux résultats ; sa progression, écrite par le temps réel
+    // à la fermeture de sa socket, complète encore son entrée de rooms.departed (celle du lancement en cours : vidée au
+    // lancement suivant). Rien d'autre ne change hors course.
+    if (room?.status === "results" && value < 1) {
+      await keepDepartedProgress(tx, id, key, value);
+      return false;
+    }
+    if (room?.status !== "racing") return false;
     // COURSE-07 : la progression d'un membre qui a abandonné reste celle de l'abandon
     const member = and(eq(roomMembers.roomId, id), eq(roomMembers.memberKey, key), isNull(roomMembers.abandonedAt));
     if (value < 1) {
-      await tx.update(roomMembers).set({ progress: sql`greatest(${roomMembers.progress}, ${value})` }).where(member);
+      const kept = await tx.update(roomMembers).set({ progress: sql`greatest(${roomMembers.progress}, ${value})` }).where(member).returning({ key: roomMembers.memberKey });
+      if (!kept.length) await keepDepartedProgress(tx, id, key, value);
       return false;
     }
     const arrived = await tx.update(roomMembers).set({ progress: 1, finishedAt: sql`now()` }).where(and(member, isNull(roomMembers.finishedAt))).returning({ key: roomMembers.memberKey });
@@ -792,6 +845,7 @@ export async function abandonRace(db: Db, code: string, who: Identity): Promise<
     if (member.role !== "player") throw new RoomRefused("not_player");
     if (member.finishedAt) throw new RoomRefused("already_finished");
     await tx.update(roomMembers).set({ abandonedAt: sql`now()` }).where(and(eq(roomMembers.roomId, id), eq(roomMembers.memberKey, key)));
+    await keepAbandons(tx, id);
     await endIfAllFinished(tx, id);
   });
   return { room: await roomView(db, id, key), you: key };
@@ -817,7 +871,24 @@ export async function keepProgress(db: Db, code: string, startsAt: number, rows:
         .set({ progress: sql`greatest(${roomMembers.progress}, ${value})` })
         .where(and(eq(roomMembers.roomId, id), eq(roomMembers.memberKey, key), isNull(roomMembers.finishedAt)));
     }
+    await keepAbandons(tx, id); // COURSE-10 : la progression gardée à l'abandon
   });
+}
+
+/**
+ * COURSE-10 : recopie dans rooms.abandons les membres présents qui ont abandonné (nom, progression validée, place) ;
+ * ceux déjà notés et partis depuis y restent. Ainsi l'abandon survit au départ du membre (podium, enregistrement).
+ */
+async function keepAbandons(tx: Db, roomId: number) {
+  const present = await tx
+    .select({ key: roomMembers.memberKey, name: sql<string>`coalesce(${players.name}, ${roomMembers.guestName})`, progress: roomMembers.progress, seat: roomMembers.seat })
+    .from(roomMembers)
+    .leftJoin(players, eq(players.id, roomMembers.playerId))
+    .where(and(eq(roomMembers.roomId, roomId), isNotNull(roomMembers.abandonedAt)));
+  const [room] = await tx.select({ abandons: rooms.abandons }).from(rooms).where(eq(rooms.id, roomId));
+  const known = new Map((room?.abandons ?? []).map((a) => [a.key, a]));
+  for (const row of present) known.set(row.key, row);
+  await tx.update(rooms).set({ abandons: [...known.values()] }).where(eq(rooms.id, roomId));
 }
 
 /**
@@ -835,6 +906,7 @@ export async function kickMember(db: Db, code: string, who: Identity, target: st
     if (!(await membership(tx, id, key))) throw new RoomRefused("not_found"); // SALLE-10 : un non-membre ne sait pas si le salon existe
     if (key !== memberKey({ playerId: room.hostId })) throw new RoomRefused("not_host");
     if (target === key) throw new RoomRefused("invalid_target");
+    await keepDeparted(tx, id, [target]);
     const [removed] = await tx.delete(roomMembers).where(and(eq(roomMembers.roomId, id), eq(roomMembers.memberKey, target))).returning({ playerId: roomMembers.playerId, guestName: roomMembers.guestName, ip: roomMembers.ip });
     if (!removed) throw new RoomRefused("unknown_member");
     const [account] = removed.playerId === null ? [] : await tx.select({ name: players.name }).from(players).where(eq(players.id, removed.playerId));
@@ -891,6 +963,7 @@ export async function leaveRoom(db: Db, code: string, who: Identity, options: { 
     if (!room || room.status === "closed") throw new RoomRefused("not_found");
     if (options.unlessRacing && room.status === "racing") return { left: false };
     if (within > 0 && room.launchedRecently) return { left: false };
+    await keepDeparted(tx, id, [memberKey(who)]);
     const removed = await tx.delete(roomMembers).where(and(eq(roomMembers.roomId, id), eq(roomMembers.memberKey, memberKey(who)))).returning({ key: roomMembers.memberKey });
     if (!removed.length) throw new RoomRefused("not_found");
     await afterDeparture(tx, id);

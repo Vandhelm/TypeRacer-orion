@@ -347,7 +347,8 @@
     "track": {
       "label": "Track: every participant, their rank and live speed",
       "wpm": "{{wpm}} WPM",
-      "watching": "You are watching the race: spectator, no typing area."
+      "watching": "You are watching the race: spectator, no typing area.",
+      "abandoned": "You abandoned: the race goes on without you until the final ranking."
     }
   },
   "podium": {

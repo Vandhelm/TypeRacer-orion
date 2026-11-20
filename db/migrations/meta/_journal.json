@@ -211,6 +211,13 @@
       "when": 1795163058440,
       "tag": "0029_room_bots",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1795182558912,
+      "tag": "0030_room_abandons",
+      "breakpoints": true
     }
   ]
 }

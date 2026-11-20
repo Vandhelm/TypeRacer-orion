@@ -1,10 +1,12 @@
 // HIST-01 : l'historique des courses du compte connecté, paginé (GET /api/history?page=N).
 // Le joueur vient de la session, jamais de la requête ; un invité n'a pas d'historique (AUTH-03).
 // HIST-02 : le détail d'une de ses courses (GET /api/history/<id>), de quoi réafficher sa page de résultats.
-import { asc, count, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Db } from "../../db/client";
-import { players, raceConfigs, raceResults, races, raceSamples } from "../../db/schema";
+import { players, raceConfigs, raceResults, races, raceSamples, roomMembers, rooms } from "../../db/schema";
+import { raceClock } from "../rooms/race-clock";
+import { memberKey, RoomRefused, type Identity } from "./rooms";
 import type { Auth } from "./auth";
 import { guestSecret, readGuest } from "./guest";
 
@@ -75,6 +77,15 @@ export class HistoryRefused extends Error {
  * Refusée de la même façon si la course n'existe pas ou si le joueur n'y a pas participé.
  */
 export async function raceDetail(db: Db, playerId: number, raceId: number) {
+  return raceDetailFor(db, raceId, { playerId }, true);
+}
+
+/**
+ * La course au format RaceResults, vue par `viewer` : « moi » est son joueur, ou son nom (un invité, COURSE-10).
+ * `participant` : refusée si le viewer n'y a pas de ligne enregistrée (HIST-02) ; sinon servie à tout membre du salon.
+ */
+async function raceDetailFor(db: Db, raceId: number, viewer: { playerId?: number | null; name?: string | null }, participant: boolean) {
+  const named = (name: string) => !!viewer.name && name.toLowerCase() === viewer.name.toLowerCase();
   const [race] = await db
     .select({
       at: races.startedAt,
@@ -105,8 +116,9 @@ export async function raceDetail(db: Db, playerId: number, raceId: number) {
     .innerJoin(players, eq(players.id, raceResults.playerId))
     .where(eq(raceResults.raceId, raceId))
     .orderBy(asc(raceResults.rank));
-  const mine = rows.find((row) => row.result.playerId === playerId);
-  if (!mine) throw new HistoryRefused();
+  const isMe = (playerId: number, name: string) => (viewer.playerId ? playerId === viewer.playerId : named(name));
+  const mine = rows.find((row) => isMe(row.result.playerId, row.name));
+  if (participant && !mine) throw new HistoryRefused();
   const samples = await db
     .select({ playerId: raceSamples.playerId, wpm: raceSamples.wpm, raw: raceSamples.raw, errors: raceSamples.errors })
     .from(raceSamples)
@@ -118,7 +130,7 @@ export async function raceDetail(db: Db, playerId: number, raceId: number) {
     const series = samples.filter((sample) => sample.playerId === result.playerId);
     return {
       name,
-      me: result.playerId === playerId,
+      me: isMe(result.playerId, name),
       bot,
       rank: result.rank,
       wpm: result.wpm,
@@ -130,6 +142,7 @@ export async function raceDetail(db: Db, playerId: number, raceId: number) {
       idle: result.idle,
       finished: result.finished,
       eliminated: result.eliminated,
+      abandoned: result.abandoned, // COURSE-10
       wpmSeries: series.map((sample) => sample.wpm),
       rawSeries: series.map((sample) => sample.raw),
       errorSeries: series.map((sample) => sample.errors),
@@ -139,16 +152,40 @@ export async function raceDetail(db: Db, playerId: number, raceId: number) {
   // sans historique : jamais « moi », jamais un bot (le flag venait du navigateur)
   const unrecorded = others.map(({ correctChars, wrongChars, extraChars, missedChars, ...other }) => ({
     ...other,
-    me: false,
+    me: named(other.name),
     bot: false,
     chars: [correctChars, wrongChars, extraChars, missedChars],
   }));
   return {
     id: raceId,
     at: at.toISOString(),
-    summary: { ...config, sessionSeconds: mine.result.sessionSeconds },
+    summary: { ...config, sessionSeconds: mine?.result.sessionSeconds ?? 0 },
     players: [...recorded, ...unrecorded].sort((a, b) => a.rank - b.rank),
   };
+}
+
+/**
+ * COURSE-10 : GET /api/rooms/:code/results, la dernière course enregistrée par un membre pour le lancement en cours de
+ * ce salon (races.room_id, départ serveur), vue par ce membre. Le podium d'un joueur qui a abandonné puis rechargé y relit
+ * l'état final des autres. not_found : pas membre (SALLE-10), salon inconnu, ou rien d'enregistré pour ce lancement.
+ */
+export async function roomRaceResults(db: Db, code: string, who: Identity): Promise<RaceDetail> {
+  const [row] = await db
+    .select({ roomId: rooms.id, launchedAt: rooms.launchedAt, duration: raceConfigs.duration })
+    .from(rooms)
+    .innerJoin(raceConfigs, eq(raceConfigs.id, rooms.configId))
+    .innerJoin(roomMembers, and(eq(roomMembers.roomId, rooms.id), eq(roomMembers.memberKey, memberKey(who))))
+    .where(eq(rooms.code, code));
+  const { startsAt } = raceClock(row?.launchedAt ?? null, row?.duration ?? null);
+  if (!row || startsAt === null) throw new RoomRefused("not_found");
+  const [race] = await db
+    .select({ id: races.id })
+    .from(races)
+    .where(and(eq(races.roomId, row.roomId), eq(races.startedAt, new Date(startsAt))))
+    .orderBy(desc(races.id))
+    .limit(1);
+  if (!race) throw new RoomRefused("not_found");
+  return raceDetailFor(db, race.id, { playerId: who.kind === "account" ? who.playerId : null, name: who.name }, false);
 }
 
 export type RaceDetail = Awaited<ReturnType<typeof raceDetail>>;
