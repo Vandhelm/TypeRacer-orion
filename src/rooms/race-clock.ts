@@ -6,7 +6,7 @@
  * tampon du salon (800 ms), rechargement de la page, lecture du salon, voire un sondage HTTP. Sans elle, des membres
  * arrivaient après le départ et ne voyaient aucun chiffre. La page de course y affiche « Prêts ? ».
  */
-export const READY_MS = 2000;
+export const READY_MS = 3000;
 /** COURSE-03 : le décompte entre le lancement et le départ (état DÉCOMPTE de COURSE-01) : préparation, puis 3, 2, 1. */
 export const COUNTDOWN_MS = READY_MS + 3000;
 
