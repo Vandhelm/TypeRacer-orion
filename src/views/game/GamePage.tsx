@@ -11,9 +11,11 @@ import { rememberGuestRace } from "../profile/stats";
 import { useRealtimeRoom } from "../../realtime/useRealtimeRoom";
 import { LiveList } from "../room/LiveList";
 import { READY } from "./countdown";
+import { useBonusAnnouncements } from "./hooks/useBonusAnnouncements";
 import { useRace } from "./hooks/useRace";
+import { BonusNotice } from "./BonusNotice";
 import { AbandonRace } from "./AbandonRace";
-import { bonusesFor } from "./bonus";
+import { bonusesFor, remoteBonuses } from "./bonus";
 import { abandonOver, canAbandon, handOverPlayers, raceExit } from "./abandon";
 import { KeyboardNotice } from "./KeyboardNotice";
 import { useMobileRace } from "./mobileRace";
@@ -130,10 +132,14 @@ function GameRace({ state, onHandOver }: { state: RoomState; onHandOver?: (sendi
     const announced = live?.bonuses?.length ?? 0;
     // une connexion neuve repart d'une liste vide
     const from = announced < appliedBonuses.current ? 0 : appliedBonuses.current;
-    const effects = watching ? [] : bonusesFor(live?.bonuses, from, live?.you?.id ?? null);
+    const you = live?.you?.id ?? null;
+    const effects = watching ? [] : bonusesFor(live?.bonuses, from, you);
     appliedBonuses.current = announced;
-    onBonus(effects);
-  }, [live, watching, onBonus]);
+    // BONUS-03 : la piste suit aussi le texte changé d'un autre humain (le meneur à +3 mots recule)
+    onBonus(effects, remoteBonuses(live?.bonuses, from, lanes, watching ? null : you));
+  }, [live, watching, onBonus, lanes]);
+  // BONUS-03 : chaque bonus est annoncé sur la piste, pour tous, et au joueur qu'il cible
+  const announcements = useBonusAnnouncements(live?.bonuses, lanes, watching ? null : (live?.you?.id ?? null));
 
   useEffect(markSessionStart, []);
 
@@ -219,12 +225,18 @@ function GameRace({ state, onHandOver }: { state: RoomState; onHandOver?: (sendi
 
       {images ? <RacePool players={players} images={images} race={race} label={t("game.poolLabel", { count: players.length })} /> : <div className="race-pool" />}
 
-      <RaceTrack lanes={trackLanes(race, players)} />
+      <RaceTrack lanes={trackLanes(race, players)} bonuses={announcements} />
 
-      {!watching && resumeNotice({ arrivedMidRace, resumed, racing: race.phase === "racing", status: live?.status }) && (
-        <p className="pointer-events-none fixed top-[84px] left-1/2 z-30 -translate-x-1/2 font-mono text-[max(11px,1.3vh)] leading-[1.6] tracking-[.12em] text-muted" role="status">
-          {t("game.resuming")}
-        </p>
+      {/* COURSE-08 et BONUS-03 : la reprise puis l'annonce du bonus qui me cible, empilées dans une même colonne fixe */}
+      {!watching && (
+        <div data-part="game-notices" className="pointer-events-none fixed top-[84px] left-1/2 z-30 flex w-max max-w-[min(92vw,560px)] -translate-x-1/2 flex-col items-center gap-2">
+          {resumeNotice({ arrivedMidRace, resumed, racing: race.phase === "racing", status: live?.status }) && (
+            <p className="text-center font-mono text-[max(11px,1.3vh)] leading-[1.6] tracking-[.12em] text-muted" role="status">
+              {t("game.resuming")}
+            </p>
+          )}
+          <BonusNotice announcements={announcements} />
+        </div>
       )}
 
       {watching || abandoned ? (

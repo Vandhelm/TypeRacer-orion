@@ -4,7 +4,7 @@ import type { RealtimeState } from "../../realtime/client";
 import type { MemberView, Player } from "../room/room";
 import { advanceBots, applyRemote, createCourse, createRace, everyoneDone, laneProgress, laneWpm, type Race } from "./race";
 import { seatsOf } from "../room/room";
-import { easeToward, raceLanes, realtimeMemberKey, remoteUpdates, trackLanes } from "./track";
+import { easeToward, laneFrame, raceLanes, realtimeMemberKey, remoteUpdates, trackLanes } from "./track";
 
 const ME: Player = { name: "Corail_418", color: "red", me: true };
 const RIVAL: Player = { name: "Maki_Test", color: "blue" };
@@ -177,6 +177,16 @@ describe("COURSE-05 — movement is interpolated between updates", () => {
 
   test("a huge frame gap (background tab) jumps straight to the target", () => {
     expect(easeToward(0, 0.8, 5000)).toBe(0.8);
+  });
+});
+
+describe("BONUS-03 — a lane sent back by a bonus is shown back at once", () => {
+  test("a lower target (+3 words on the leader) moves the bar back to it", () => {
+    expect(laneFrame(0.6, 0.45, 16)).toBe(0.45);
+  });
+
+  test("a higher target still glides toward it", () => {
+    expect(laneFrame(0, 0.5, 16)).toBe(easeToward(0, 0.5, 16));
   });
 });
 

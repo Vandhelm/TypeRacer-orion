@@ -349,6 +349,30 @@
       "wpm": "{{wpm}} MPM",
       "watching": "Tu regardes la course : spectateur, sans zone de frappe.",
       "abandoned": "Tu as abandonné : la course continue sans toi jusqu'au classement final."
+    },
+    "bonus": {
+      "someone": "Un joueur",
+      "badge": {
+        "fewer_words_one": "−{{count}} mot",
+        "fewer_words_other": "−{{count}} mots",
+        "extra_words_one": "+{{count}} mot",
+        "extra_words_other": "+{{count}} mots",
+        "fog": "Brouillard"
+      },
+      "track": {
+        "fewer_words_one": "Bonus de remontée pour {{target}} : {{count}} mot en moins.",
+        "fewer_words_other": "Bonus de remontée pour {{target}} : {{count}} mots en moins.",
+        "extra_words_one": "Bonus de {{sender}} : {{count}} mot de plus pour {{target}}.",
+        "extra_words_other": "Bonus de {{sender}} : {{count}} mots de plus pour {{target}}.",
+        "fog": "Bonus de {{sender}} : brouillard sur {{target}} pendant {{count}} s."
+      },
+      "mine": {
+        "fewer_words_one": "Bonus de remontée : le dernier mot de ton texte disparaît.",
+        "fewer_words_other": "Bonus de remontée : les {{count}} derniers mots de ton texte disparaissent.",
+        "extra_words_one": "{{sender}} ajoute {{count}} mot à la fin de ton texte.",
+        "extra_words_other": "{{sender}} ajoute {{count}} mots à la fin de ton texte.",
+        "fog": "{{sender}} t'envoie le brouillard : tes prochains mots sont flous pendant {{count}} s."
+      }
     }
   },
   "podium": {
