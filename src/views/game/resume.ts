@@ -76,6 +76,59 @@ export function keepsSnapshot({ phase, code, arrivedMidRace, resumed }: { phase:
   return phase === "racing" && code !== "" && (resumed || !arrivedMidRace);
 }
 
+const sentKey = (code: string, startsAt: number) => `${snapshotKey(code, startsAt)}.sent`;
+
+/** Cette course (salon et départ) a été envoyée au serveur depuis cet onglet : une page remontée ne la renvoie pas. */
+export function markSent(storage: Storage, code: string, startsAt: number): void {
+  try {
+    storage.setItem(sentKey(code, startsAt), "1");
+  } catch {
+    // stockage refusé : le serveur refuse de toute façon un second enregistrement (claimServerRace)
+  }
+}
+
+export function wasSent(storage: Storage, code: string, startsAt: number): boolean {
+  try {
+    return storage.getItem(sentKey(code, startsAt)) === "1";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Ce que fait une page de course à son montage. « race » : la course continue (ou commence), reprise par le serveur.
+ * « record » : la course est finie pour moi (abandon dit par le serveur, ou temps écoulé) et pas encore envoyée : la page
+ * reprend ce qu'elle gardait (restoreSnapshot) et l'enregistre, abandon compris, puis va au podium. « podium » : déjà
+ * envoyée, ou finie sans rien de gardé (pas de résultat à 0 MPM réécrit) : directement au podium.
+ */
+export function remountPlan({ abandoned, phase, watching, snapshot, sent }: { abandoned: boolean; phase: Phase; watching: boolean; snapshot: RaceSnapshot | null; sent: boolean }): "race" | "record" | "podium" {
+  if (watching) return "race";
+  if (sent && (abandoned || phase === "done")) return "podium";
+  if (abandoned) return "record";
+  if (phase === "done") return snapshot ? "record" : "podium";
+  return "race";
+}
+
+/** Ma course telle que la page la gardait (position, frappes, fautes), quelle que soit la phase ; sans snapshot, inchangée. */
+export function restoreSnapshot(race: Race, snapshot: RaceSnapshot | null): Race {
+  if (!snapshot || race.myLane < 0) return race;
+  const words = race.course.words;
+  const wordIndex = Math.min(snapshot.wordIndex, words.length);
+  const missedWords = new Set(snapshot.missedWords.filter((i) => i < wordIndex));
+  return {
+    ...race,
+    wordIndex,
+    typed: "",
+    keystrokes: snapshot.keystrokes,
+    wrongChars: snapshot.wrongChars,
+    extraChars: snapshot.extraChars,
+    keys: snapshot.keys,
+    missedWords,
+    missedChars: Math.min(snapshot.missedChars, [...missedWords].reduce((sum, i) => sum + words[i]!.length + 1, 0)),
+    samples: race.samples.map((samples, lane) => (lane === race.myLane ? snapshot.samples : samples)),
+  };
+}
+
 /** Ma course gardée pour ce salon et ce départ ; null si absente ou illisible. */
 export function loadSnapshot(storage: Storage, code: string, startsAt: number): RaceSnapshot | null {
   try {

@@ -7,7 +7,7 @@ import { MEMBER_AWAY_MS, RECONNECT_MS } from "../../server/rooms";
 import { RACE_PRESENCE_MS } from "../room/presence";
 import { buildWords, type CourseSettings } from "./course";
 import { advanceBots, applyInput, createCourse, createRace, laneProgress, myAccuracy, myWpm, secondsLeft, startRace, TICK_MS, type Race } from "./race";
-import { keepsSnapshot, loadSnapshot, mountRace, myStanding, resumeNotice, resumeRace, resumeStep, saveSnapshot, timeoutAbandon } from "./resume";
+import { keepsSnapshot, loadSnapshot, markSent, mountRace, myStanding, remountPlan, restoreSnapshot, resumeNotice, resumeRace, resumeStep, saveSnapshot, timeoutAbandon, wasSent } from "./resume";
 import { trackLanes } from "./track";
 
 const ME: Player = { name: "me", color: "red", me: true };
@@ -223,6 +223,48 @@ describe("COURSE-08 — a reload does not erase the mistakes (accuracy kept in s
     expect(loadSnapshot(storage, "ABC234", START)).toBeNull();
     storage.setItem(storage.key(0)!, JSON.stringify({ wordIndex: "3", keystrokes: -1 }));
     expect(loadSnapshot(storage, "ABC234", START)).toBeNull();
+  });
+});
+
+describe("COURSE-08 — a page remounted after an abandon or after the end records from the snapshot, once", () => {
+  const SNAP_RACE = () => {
+    const race = reloaded(10_000);
+    const [w0, w1] = race.course.words as [string, string];
+    return ["x", "", `${w0} `, `${w1} `].reduce((r, value) => applyInput(r, value, START + 5_000), race);
+  };
+
+  test("the plan: race on, record from what was kept, or go straight to the podium", () => {
+    const snapshot = { wordIndex: 2 } as never;
+    expect(remountPlan({ abandoned: false, phase: "racing", watching: false, snapshot: null, sent: false })).toBe("race");
+    expect(remountPlan({ abandoned: true, phase: "racing", watching: false, snapshot, sent: false })).toBe("record");
+    expect(remountPlan({ abandoned: true, phase: "done", watching: false, snapshot: null, sent: false })).toBe("record"); // l'abandon s'enregistre quand même
+    expect(remountPlan({ abandoned: true, phase: "racing", watching: false, snapshot, sent: true })).toBe("podium");
+    expect(remountPlan({ abandoned: false, phase: "done", watching: false, snapshot, sent: false })).toBe("record");
+    expect(remountPlan({ abandoned: false, phase: "done", watching: false, snapshot: null, sent: false })).toBe("podium"); // pas de 0 MPM réécrit
+    expect(remountPlan({ abandoned: false, phase: "done", watching: false, snapshot, sent: true })).toBe("podium");
+    expect(remountPlan({ abandoned: false, phase: "done", watching: true, snapshot: null, sent: false })).toBe("race"); // un spectateur voit le podium comme avant
+  });
+
+  test("after the end, the remounted race takes the kept counts, not 0 WPM / 100 %", () => {
+    const before = SNAP_RACE();
+    const storage = memoryStorage();
+    saveSnapshot(storage, "ABC234", START, before);
+    const ended = { ...reloaded(130_000), phase: "done" as const };
+    const restored = restoreSnapshot(ended, loadSnapshot(storage, "ABC234", START));
+    expect(restored.wordIndex).toBe(2);
+    expect(restored.keystrokes).toBe(before.keystrokes);
+    expect(myAccuracy(restored)).toBe(myAccuracy(before));
+    expect(myWpm(restored)).toBeGreaterThan(0);
+    expect(restored.phase).toBe("done");
+    expect(restoreSnapshot(ended, null)).toBe(ended);
+  });
+
+  test("sent once: the race of this room and start is marked sent in the tab", () => {
+    const storage = memoryStorage();
+    expect(wasSent(storage, "ABC234", START)).toBe(false);
+    markSent(storage, "ABC234", START);
+    expect(wasSent(storage, "ABC234", START)).toBe(true);
+    expect(wasSent(storage, "ABC234", START + 1)).toBe(false);
   });
 });
 

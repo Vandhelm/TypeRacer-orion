@@ -3,7 +3,7 @@ import type { Player, Room } from "../../room/room";
 import { COUNTDOWN_MS } from "../../../rooms/race-clock";
 import { countdownAt, GO_MS, nextChangeIn } from "../countdown";
 import { advanceBots, applyInput, applyRemote, endRace, everyoneDone, startRace, TICK_MS, type Race } from "../race";
-import { keepsSnapshot, loadSnapshot, mountRace, resumeRace, saveSnapshot, type RaceSnapshot, type ServerStanding } from "../resume";
+import { keepsSnapshot, loadSnapshot, markSent, mountRace, restoreSnapshot, resumeRace, saveSnapshot, wasSent, type RaceSnapshot, type ServerStanding } from "../resume";
 
 /** L'ancien décompte local (3 × 800 ms + GO_MS) : seule la page mobile (mobileRace.ts) s'en sert encore pour son échéance. */
 export const COUNT_STEP_MS = 800;
@@ -18,6 +18,7 @@ type Action =
   | { type: "tick"; now: number; jitters: number[] }
   | { type: "remote"; updates: { lane: number; progress: number; wpm: number }[]; now: number }
   | { type: "resume"; standing: ServerStanding; startsAt: number; snapshot: RaceSnapshot | null }
+  | { type: "restore"; snapshot: RaceSnapshot | null }
   | { type: "finish" };
 
 function reduce(race: Race, action: Action): Race {
@@ -36,6 +37,8 @@ function reduce(race: Race, action: Action): Race {
       return endRace(race);
     case "resume":
       return resumeRace(race, action.standing, action.startsAt, action.snapshot);
+    case "restore":
+      return restoreSnapshot(race, action.snapshot);
   }
 }
 
@@ -141,5 +144,26 @@ export function useRace(room: Room, players: Player[], { passage = null, seed = 
     },
     [code, start],
   );
-  return { race, onInput, onRemote, onResume, arrivedMidRace, showResults };
+  /** COURSE-08 : ce que l'onglet gardait de cette course à son montage (snapshot, déjà envoyée ?), pour remountPlan. */
+  const [stored] = useState(() => {
+    try {
+      return { snapshot: code ? loadSnapshot(sessionStorage, code, start) : null, sent: code ? wasSent(sessionStorage, code, start) : false };
+    } catch {
+      return { snapshot: null, sent: false };
+    }
+  });
+  /** COURSE-08 : la page remontée après un abandon ou la fin reprend ce qu'elle gardait, pour l'enregistrer. */
+  const onRestore = useMemo(() => () => dispatch({ type: "restore", snapshot: stored.snapshot }), [stored]);
+  /** COURSE-08 : la course part au serveur : une page remontée ne la renverra pas. */
+  const onSent = useMemo(
+    () => () => {
+      try {
+        if (code) markSent(sessionStorage, code, start);
+      } catch {
+        // stockage refusé : le serveur refuse de toute façon un second enregistrement
+      }
+    },
+    [code, start],
+  );
+  return { race, onInput, onRemote, onResume, onRestore, onSent, stored, arrivedMidRace, showResults };
 }

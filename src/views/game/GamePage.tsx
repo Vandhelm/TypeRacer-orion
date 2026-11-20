@@ -18,7 +18,7 @@ import { loadRacePoolImages, type RacePoolImages } from "./pool/createRacePool";
 import { laneProgress, myWpm } from "./race";
 import { RacePool } from "./RacePool";
 import { RaceTrack } from "./RaceTrack";
-import { myStanding, resumeNotice, resumeStep, timeoutAbandon } from "./resume";
+import { myStanding, remountPlan, resumeNotice, resumeStep, timeoutAbandon } from "./resume";
 import { raceLanes, remoteUpdates, trackLanes } from "./track";
 import { TypingPanel } from "./TypingPanel";
 
@@ -47,7 +47,9 @@ export function GamePage() {
   // COURSE-07 : un membre qui a abandonné (dit par le serveur, même après un rechargement) ne revient pas dans la course
   // (handOver : un abandon confirmé ici ; la page garde la course jusqu'à l'envoi des résultats, puis va au podium)
   const [handOver, setHandOver] = useState(false);
-  const elsewhere = state.ready && !handOver ? raceExit(state.status, state.room.code, state.abandoned) : null;
+  // COURSE-08 : sauf pour enregistrer d'abord sa course marquée abandon (le serveur l'a laissé entrer : rien d'enregistré)
+  const recording = state.abandoned && !mobile && (state.status === "racing" || state.status === "results");
+  const elsewhere = state.ready && !handOver && !recording ? raceExit(state.status, state.room.code, state.abandoned) : null;
   useEffect(() => {
     if (elsewhere) location.replace(elsewhere);
   }, [elsewhere]);
@@ -78,9 +80,17 @@ function GameRace({ state, onHandOver }: { state: RoomState; onHandOver?: (sendi
   const [lanes] = useState(() => raceLanes(state.players, state.members ?? []));
   const { players } = lanes;
   const [images, setImages] = useState<RacePoolImages | null>(null);
-  const { race, onInput, onRemote, onResume, arrivedMidRace, showResults } = useRace(room, players, { passage, seed, startsAt, endsAt, clockOffset });
+  const { race, onInput, onRemote, onResume, onRestore, onSent, stored, arrivedMidRace, showResults } = useRace(room, players, { passage, seed, startsAt, endsAt, clockOffset });
   // COURSE-07 : abandon enregistré par le serveur ; la progression ne part plus et la page passe au podium
   const [abandoned, setAbandoned] = useState(false);
+  // COURSE-08 : remontée après un abandon ou après la fin, la page enregistre ce qu'elle gardait, ou va au podium
+  const [plan] = useState(() => remountPlan({ abandoned: state.abandoned, phase: race.phase, watching, ...stored }));
+  useEffect(() => {
+    if (plan === "podium") location.replace("/podium");
+    if (plan !== "record") return;
+    onRestore();
+    if (state.abandoned) setAbandoned(true);
+  }, [plan, onRestore, state.abandoned]);
 
   // TECH-06 : ma progression part dans le salon (10 envois par seconde au plus), celle des autres arrive en direct
   const { state: live, sendProgress } = useRealtimeRoom(room.code || null);
@@ -133,13 +143,14 @@ function GameRace({ state, onHandOver }: { state: RoomState; onHandOver?: (sendi
     const me = results.players[rank];
     if (me) rememberGuestRace({ at: new Date().toISOString(), wpm: me.wpm, accuracy: me.accuracy, rank: rank + 1, keys: me.keys });
     const sent = submitRace(results, race.course.words.join(" "));
+    onSent(); // COURSE-08 : une page remontée ensuite ne la renvoie pas
     finish(); // SALLE-09 : le salon passe aux résultats et accepte de nouveau des arrivants
     // le retour arrière ne relance pas une course ; la page attend la réponse (un instant en keepalive), un refus est dit au podium
     void sent.then((outcome) => {
       rememberSubmit(outcome);
       location.replace("/podium");
     });
-  }, [showResults, abandoned, race, players, room, finish, watching]);
+  }, [showResults, abandoned, race, players, room, finish, watching, onSent]);
 
   return (
     <div className={ROOT} style={{ "--lanes": players.length } as CSSProperties}>
