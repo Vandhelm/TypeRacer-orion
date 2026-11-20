@@ -68,6 +68,8 @@ export const raceResults = pgTable(
     eliminated: boolean("eliminated").notNull().default(false),
     /** COURSE-07 : le joueur a abandonné (finished vaut alors false) ; classé par sa progression à l'abandon (COURSE-10). */
     abandoned: boolean("abandoned").notNull().default(false),
+    /** COURSE-10 : la progression d'un bot (0 à 1) envoyée par le navigateur, pour le reclasser à la fin de la course ; null sinon. */
+    progress: real("progress"),
     sessionSeconds: integer("session_seconds").notNull().default(0),
     /** caractère → [frappes, fautes] */
     keys: jsonb("keys").$type<Record<string, [number, number]>>().notNull().default({}),

@@ -3,6 +3,8 @@ import { boolean, check, index, integer, jsonb, pgTable, primaryKey, real, text,
 
 /** COURSE-10 : un abandon de la dernière course d'un salon. */
 export type RoomAbandon = { key: string; name: string; progress: number; seat: number | null };
+/** COURSE-10 : un coureur parti pendant la course sans abandonner ; finishedAt (ISO) s'il était arrivé. */
+export type RoomDeparture = RoomAbandon & { finishedAt: string | null };
 import { botAccuracy, botSpeed, language, level, memberRole, mistakeMode, roomStatus, textLength, textType, visibility } from "./enums";
 import { players } from "./players";
 import { corpusTexts } from "./texts";
@@ -68,6 +70,8 @@ export const rooms = pgTable(
      * gardés même s'ils quittent le salon (leur ligne room_members est supprimée) ; vidé au lancement.
      */
     abandons: jsonb("abandons").$type<RoomAbandon[]>().notNull().default([]),
+    /** COURSE-10 : les coureurs partis du salon pendant la dernière course sans abandonner (progression validée, arrivée) ; vidé au lancement. */
+    departed: jsonb("departed").$type<RoomDeparture[]>().notNull().default([]),
   },
   (table) => [index("rooms_lobby").on(table.status, table.visibility), check("rooms_guests_range", sql`${table.guests} between 2 and 30`),
     check("rooms_code_format", sql`${table.code} ~ ${sql.raw(`'${CODE_PATTERN}'`)}`),

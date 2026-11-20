@@ -1,5 +1,5 @@
 {
-  "id": "9fd33f36-57d6-41f8-a0cb-ec50f53ac9eb",
+  "id": "6f6e6dbc-5494-4742-8d85-a7523148f108",
   "prevId": "b22cb200-b3bf-42ff-b0ac-af9f91b6be52",
   "version": "7",
   "dialect": "postgresql",
@@ -258,6 +258,12 @@
           "primaryKey": false,
           "notNull": true,
           "default": false
+        },
+        "progress": {
+          "name": "progress",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
         },
         "session_seconds": {
           "name": "session_seconds",
@@ -1217,12 +1223,19 @@
           "primaryKey": false,
           "notNull": false
         },
-        "abandoned_names": {
-          "name": "abandoned_names",
-          "type": "text[]",
+        "abandons": {
+          "name": "abandons",
+          "type": "jsonb",
           "primaryKey": false,
           "notNull": true,
-          "default": "'{}'::text[]"
+          "default": "'[]'::jsonb"
+        },
+        "departed": {
+          "name": "departed",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
         }
       },
       "indexes": {

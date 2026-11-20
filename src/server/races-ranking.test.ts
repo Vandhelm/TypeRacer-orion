@@ -190,4 +190,75 @@ describe("COURSE-10 — the recorded race follows the final ranking", () => {
     const others = await recorded(((await res.json()) as { raceId: number }).raceId);
     expect(others.map((o) => [o.name, o.rank, o.abandoned, o.finished])).toEqual([["Dix_Absent_Parti", 2, true, false], ["Dix_Absent_Reste", 3, true, false]]);
   });
+
+  test("10.3: a race recorded at the abandon is re-ranked when the room reaches the results", async () => {
+    const me = await signUp("Dix_Fige_A");
+    const b = { kind: "guest" as const, name: "Dix_Fige_B", sessionId: crypto.randomUUID() };
+    const c = { kind: "guest" as const, name: "Dix_Fige_C", sessionId: crypto.randomUUID() };
+    const { code, who } = await launchedRoomFor(db, auth, me.cookie, GUEST_SECRET, 10_000, [b, c]);
+    await recordProgress(db, code, memberKey(who), 0.5);
+    await abandonRace(db, code, who);
+    // A envoie sa course dès l'abandon : B et C courent encore
+    const res = await post({ room: code, summary: SUMMARY, players: [result("Dix_Fige_A", { progress: 0.5 }), result("Dix_Fige_B"), result("Dix_Fige_C")] }, me.cookie);
+    expect(res.status).toBe(201);
+    const { raceId } = (await res.json()) as { raceId: number };
+    const rankOfA = async () => (await db.select({ rank: raceResults.rank }).from(raceResults).where(eq(raceResults.playerId, me.playerId)))[0]!.rank;
+    expect(await rankOfA()).toBe(3);
+    await recordProgress(db, code, memberKey(b), 0.1);
+    await abandonRace(db, code, b);
+    await recordProgress(db, code, memberKey(c), 1); // le dernier coureur arrive : le salon passe aux résultats
+    expect(await rankOfA()).toBe(2);
+    const detail = await raceDetail(db, me.playerId, raceId);
+    expect(detail.players.map((p) => [p.name, p.rank, !!p.abandoned, p.finished])).toEqual([
+      ["Dix_Fige_C", 1, false, true],
+      ["Dix_Fige_A", 2, true, false],
+      ["Dix_Fige_B", 3, true, false],
+    ]);
+  });
+
+  test("10.3: a bot keeps its place by the progress the browser sent when the race is re-ranked", async () => {
+    const me = await signUp("Dix_Bot_A");
+    const c = { kind: "guest" as const, name: "Dix_Bot_C", sessionId: crypto.randomUUID() };
+    const { code, who } = await launchedRoomFor(db, auth, me.cookie, GUEST_SECRET, 10_000, [c]);
+    await recordProgress(db, code, memberKey(who), 0.5);
+    await recordProgress(db, code, memberKey(c), 0.2);
+    await abandonRace(db, code, who);
+    const bot = { ...result("Thon_Rouge", { progress: 0.3 }), bot: true };
+    const res = await post({ room: code, summary: SUMMARY, players: [result("Dix_Bot_A"), bot, result("Dix_Bot_C")] }, me.cookie);
+    const { raceId } = (await res.json()) as { raceId: number };
+    await recordProgress(db, code, memberKey(c), 1);
+    const detail = await raceDetail(db, me.playerId, raceId);
+    expect(detail.players.map((p) => [p.name, p.rank])).toEqual([["Dix_Bot_C", 1], ["Thon_Rouge", 2], ["Dix_Bot_A", 3]]);
+  });
+
+  test("10.2: a runner who leaves without abandoning ranks among the unfinished, by his progress, before the abandons", async () => {
+    const me = await signUp("Dix_Fin_Moi");
+    const gone = { kind: "guest" as const, name: "Dix_Fin_Parti", sessionId: crypto.randomUUID() };
+    const quit = { kind: "guest" as const, name: "Dix_Fin_Aband", sessionId: crypto.randomUUID() };
+    const { code, who } = await launchedRoomFor(db, auth, me.cookie, GUEST_SECRET, 10_000, [gone, quit]);
+    await recordProgress(db, code, memberKey(gone), 0.4);
+    await leaveRoom(db, code, gone);
+    await recordProgress(db, code, memberKey(quit), 0.6);
+    await abandonRace(db, code, quit);
+    await recordProgress(db, code, memberKey(who), 1);
+    const res = await post({ room: code, summary: SUMMARY, players: [result("Dix_Fin_Aband"), result("Dix_Fin_Parti"), result("Dix_Fin_Moi", { finished: true })] }, me.cookie);
+    expect(res.status).toBe(201);
+    const others = await recorded(((await res.json()) as { raceId: number }).raceId);
+    expect(others.map((o) => [o.name, o.rank, !!o.abandoned, o.finished])).toEqual([["Dix_Fin_Parti", 2, false, false], ["Dix_Fin_Aband", 3, true, false]]);
+    const [mine] = await db.select({ rank: raceResults.rank }).from(raceResults).where(eq(raceResults.playerId, me.playerId));
+    expect(mine!.rank).toBe(1);
+  });
+
+  test("10.2: a runner who left and is missing from the body is still recorded among the unfinished", async () => {
+    const me = await signUp("Dix_Manq_Moi");
+    const gone = { kind: "guest" as const, name: "Dix_Manq_Parti", sessionId: crypto.randomUUID() };
+    const other = { kind: "guest" as const, name: "Dix_Manq_Autre", sessionId: crypto.randomUUID() };
+    const { code, who } = await launchedRoomFor(db, auth, me.cookie, GUEST_SECRET, 10_000, [gone, other]);
+    await recordProgress(db, code, memberKey(gone), 0.4);
+    await leaveRoom(db, code, gone);
+    await recordProgress(db, code, memberKey(who), 1);
+    const res = await post({ room: code, summary: SUMMARY, players: [result("Dix_Manq_Moi", { finished: true }), result("Dix_Manq_Autre")] }, me.cookie);
+    const others = await recorded(((await res.json()) as { raceId: number }).raceId);
+    expect(others.map((o) => [o.name, o.rank, !!o.abandoned])).toEqual([["Dix_Manq_Parti", 2, false], ["Dix_Manq_Autre", 3, false]]);
+  });
 });
