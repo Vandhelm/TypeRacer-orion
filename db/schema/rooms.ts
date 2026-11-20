@@ -104,6 +104,11 @@ export const roomMembers = pgTable(
     progress: real("progress").notNull().default(0),
     /** COURSE-07 : ce membre a abandonné la course en cours ; sa progression reste celle validée à ce moment. Remis à null à chaque lancement. */
     abandonedAt: timestamp("abandoned_at", { withTimezone: true }),
+    /**
+     * COURSE-06 : en mode fatal, l'élimination de ce membre, annoncée par sa page au temps réel et datée par la base ; sa
+     * progression reste celle validée à ce moment. Remis à null à chaque lancement.
+     */
+    eliminatedAt: timestamp("eliminated_at", { withTimezone: true }),
     /** COURSE-06 : le résultat de ce membre pour la course en cours est déjà enregistré (POST /api/races). */
     raceRecorded: boolean("race_recorded").notNull().default(false),
     /**

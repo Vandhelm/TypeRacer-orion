@@ -27,6 +27,8 @@ export const ClientMessage = z.discriminatedUnion("type", [
   // BONUS-04 : `words`, le nombre de mots du texte sur lequel elle compte ; une progression partie avant un bonus est
   // ainsi reconnue par le serveur et recomptée sur le nouveau texte.
   z.object({ type: z.literal("progress"), progress: z.number().min(0).max(1), wpm: z.number().min(0).max(WPM_MAX), words: z.number().int().min(1).max(MAX_TEXT_WORDS).optional() }).strict(),
+  // COURSE-06 : en mode fatal, la page annonce l'élimination de son coureur ; le serveur la date lui-même
+  z.object({ type: z.literal("eliminated") }).strict(),
 ]);
 export type ClientMessage = z.infer<typeof ClientMessage>;
 
@@ -47,6 +49,8 @@ export const ERROR_CODES = [
   "progress_too_fast",
   // COURSE-07 : ce coureur a abandonné la course ; sa progression est gelée
   "abandoned",
+  // COURSE-06 : ce coureur a été éliminé (mode fatal) ; sa progression est gelée
+  "eliminated",
 ] as const;
 
 /** COURSE-06 : la place d'un coureur au classement du serveur ; `finishedMs` : temps d'arrivée depuis le départ serveur ; `bonuses` (BONUS-01) : bonus reçus, seulement quand les bonus sont activés. */

@@ -42,7 +42,7 @@ type Member = { player: Player; connections: number };
 /** `before` (BONUS-04) : son texte d'avant le dernier effet, et l'heure de l'effet (arrivée en vol, LATE_FINISH_MS). */
 type RunnerText = { words: string[]; marks: number[]; lengths: number[]; before?: { text: RunnerText; at: number } };
 /** `resumedTexts` (BONUS-04) : textes changés par un bonus relus en base (par clé de membre), repris avec le coureur. */
-type RaceState = { course: RaceCourse | null; over: boolean; entries: Map<string, Accepted>; resumed: Map<string, Accepted>; resumedTexts: Map<string, RunnerText>; owners: Map<string, string>; kept: Set<string>; alive: Set<string>; lastSent: number; timer: ReturnType<typeof setTimeout> | null; bonus: BonusTally; texts: Map<string, RunnerText> };
+type RaceState = { course: RaceCourse | null; over: boolean; entries: Map<string, Accepted>; resumed: Map<string, Accepted>; resumedTexts: Map<string, RunnerText>; owners: Map<string, string>; kept: Set<string>; alive: Set<string>; eliminated: Set<string>; lastSent: number; timer: ReturnType<typeof setTimeout> | null; bonus: BonusTally; texts: Map<string, RunnerText> };
 
 /** BONUS-04 : un texte de coureur, ses caractères cumulés (annexe A, espaces comprises) et ses longueurs passées. */
 function runnerText(words: string[], lengths: number[]): RunnerText {
@@ -230,7 +230,7 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
       // COURSE-07 : la course vient de finir (le dernier a peut-être abandonné) : sa progression validée reste en base
       if (state?.course && !state.over) keepValidated(code, state, null);
       if (state?.course) state.over = true;
-      else if (!state) races.set(code, { course: null, over: false, entries: new Map(), resumed: new Map(), resumedTexts: new Map(), owners: new Map(), kept: new Set(), alive: new Set(), lastSent: -Infinity, timer: null, bonus: newTally(), texts: new Map() });
+      else if (!state) races.set(code, { course: null, over: false, entries: new Map(), resumed: new Map(), resumedTexts: new Map(), owners: new Map(), kept: new Set(), alive: new Set(), eliminated: new Set(), lastSent: -Infinity, timer: null, bonus: newTally(), texts: new Map() });
       return;
     }
     if (!state || !state.course || state.course.startsAt !== course.startsAt) {
@@ -251,7 +251,7 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
       const bonus = newTally();
       // BONUS-01 : une course reprise garde ses points de contrôle franchis, sans redonner de bonus
       skipPassed(bonus, [...resumed.values()].map((entry) => ({ playerId: "", progress: entry.progress, finished: entry.finishedAt !== null })));
-      races.set(code, { course, over: false, entries: new Map(), resumed, resumedTexts, owners: new Map(), kept: new Set(course.abandoned ?? []), alive: new Set(), lastSent: -Infinity, timer: null, bonus, texts: new Map() });
+      races.set(code, { course, over: false, entries: new Map(), resumed, resumedTexts, owners: new Map(), kept: new Set(course.abandoned ?? []), alive: new Set(), eliminated: new Set(), lastSent: -Infinity, timer: null, bonus, texts: new Map() });
     } else {
       state.course = course;
       state.over = false;
@@ -412,6 +412,11 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
       send(ws, { type: "error", code: "abandoned" });
       return null;
     }
+    // COURSE-06 : un coureur éliminé (mode fatal) ne progresse plus
+    if (state.eliminated.has(key)) {
+      send(ws, { type: "error", code: "eliminated" });
+      return null;
+    }
     adopt(state, ws);
     const previous = state.entries.get(ws.data.player.id);
     // BONUS-02 : un coureur dont un bonus a changé le texte est jugé sur ce texte
@@ -448,6 +453,24 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
       );
     }
     return counted;
+  }
+
+  /**
+   * COURSE-06 : la page de ce coureur annonce son élimination (mode fatal). Le serveur la date (heure de la base) et la
+   * garde avec la dernière progression validée par l'arbitre (backend.eliminated) ; ses progressions suivantes sont
+   * refusées. Rien hors course, pour un non-coureur ou un abandon ; la base refuse hors mode fatal et après l'arrivée.
+   */
+  function eliminate(ws: Socket, room: string) {
+    const state = races.get(room);
+    const key = ws.data.key;
+    if (!backend?.eliminated || !state?.course || state.over || !key || !state.course.runners.includes(key)) return;
+    if (state.course.abandoned?.includes(key) || state.eliminated.has(key)) return;
+    const entry = state.entries.get(ws.data.player.id);
+    if (entry?.finishedAt) return;
+    backend.eliminated(room, state.course.startsAt, key, entry?.progress ?? 0).then(
+      (noted) => void (noted && state.eliminated.add(key)),
+      (error: unknown) => console.error(error),
+    );
   }
 
   async function followRoom(ws: Socket, room: string) {
@@ -642,6 +665,9 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
             if (counted === null) return;
             return progress(ws, ws.data.room, counted, message.wpm);
           }
+          case "eliminated":
+            if (!ws.data.room) return send(ws, { type: "error", code: "not_in_room" });
+            return eliminate(ws, ws.data.room);
         }
       },
       close(ws) {

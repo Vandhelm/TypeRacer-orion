@@ -547,7 +547,7 @@ export async function launchRoom(db: Db, code: string, who: Identity): Promise<R
     const textSeed = crypto.getRandomValues(new Int32Array(1))[0]!;
     // COURSE-01 : une relance repasse par EN_ATTENTE (results → waiting → countdown)
     await moveRoom(tx, id, from, from === "results" ? ["reopen", "launch"] : ["launch"], { launchedAt: sql`now()`, textId: passage?.id ?? null, textSeed, abandons: [], departed: [] });
-    await tx.update(roomMembers).set({ finishedAt: null, abandonedAt: null, progress: 0, raceRecorded: false, bonusWords: null }).where(eq(roomMembers.roomId, id));
+    await tx.update(roomMembers).set({ finishedAt: null, abandonedAt: null, eliminatedAt: null, progress: 0, raceRecorded: false, bonusWords: null }).where(eq(roomMembers.roomId, id));
     // COURSE-06 : l'empreinte des mots que la page de course va retirer, vérifiée par le serveur temps réel
     const words = courseWords(await roomView(tx, id));
     await tx.update(rooms).set({ textHash: words && textFingerprint(words) }).where(eq(rooms.id, id));
@@ -814,8 +814,8 @@ export async function recordProgress(db: Db, code: string, key: string, progress
       return false;
     }
     if (room?.status !== "racing") return false;
-    // COURSE-07 : la progression d'un membre qui a abandonné reste celle de l'abandon
-    const member = and(eq(roomMembers.roomId, id), eq(roomMembers.memberKey, key), isNull(roomMembers.abandonedAt));
+    // COURSE-07 : la progression d'un membre qui a abandonné reste celle de l'abandon ; COURSE-06 : de même à l'élimination
+    const member = and(eq(roomMembers.roomId, id), eq(roomMembers.memberKey, key), isNull(roomMembers.abandonedAt), isNull(roomMembers.eliminatedAt));
     if (value < 1) {
       const kept = await tx.update(roomMembers).set({ progress: sql`greatest(${roomMembers.progress}, ${value})` }).where(member).returning({ key: roomMembers.memberKey });
       if (!kept.length) await keepDepartedProgress(tx, id, key, value);
@@ -863,6 +863,30 @@ export async function abandonRace(db: Db, code: string, who: Identity): Promise<
 }
 
 /**
+ * COURSE-06 : en mode fatal, la page annonce l'élimination de ce coureur au temps réel, qui l'écrit ici : eliminated_at
+ * à l'heure de la base, et la progression validée par l'arbitre à ce moment (jamais en recul, jamais une arrivée). Une
+ * fois, pour la course partie à `startsAt`, en course seulement, pour un participant ni arrivé, ni en abandon. Ensuite
+ * sa progression est gelée (recordProgress, keepProgress). Hors mode fatal, rien. Vrai si l'élimination est notée.
+ */
+export async function eliminateRunner(db: Db, code: string, startsAt: number, key: string, progress: number): Promise<boolean> {
+  const id = await roomIdByCode(db, code);
+  if (id === null) return false;
+  return db.transaction(async (tx) => {
+    const [room] = await tx.select({ launchedAt: rooms.launchedAt, status: rooms.status, configId: rooms.configId }).from(rooms).where(eq(rooms.id, id)).for("update");
+    if (!room?.launchedAt || room.status !== "racing" || room.launchedAt.getTime() + COUNTDOWN_MS !== startsAt) return false;
+    const [config] = await tx.select({ mistakes: raceConfigs.mistakes }).from(raceConfigs).where(eq(raceConfigs.id, room.configId));
+    if (config?.mistakes !== "fatal") return false;
+    const value = Math.min(0.9999, Math.max(0, progress));
+    const noted = await tx
+      .update(roomMembers)
+      .set({ eliminatedAt: sql`now()`, progress: sql`greatest(${roomMembers.progress}, ${value})` })
+      .where(and(eq(roomMembers.roomId, id), eq(roomMembers.memberKey, key), eq(roomMembers.role, "player"), isNull(roomMembers.finishedAt), isNull(roomMembers.abandonedAt), isNull(roomMembers.eliminatedAt)))
+      .returning({ key: roomMembers.memberKey });
+    return noted.length > 0;
+  });
+}
+
+/**
  * COURSE-07 : le serveur temps réel garde en base la dernière progression validée de ces coureurs (à l'abandon, à la fin
  * de la course), abandons compris ; jamais une arrivée (moins de 100 %) ni pour un coureur arrivé, jamais en recul.
  * Seulement pour la course partie à `startsAt` : une relance entre-temps (progression remise à 0) n'est pas touchée.
@@ -880,7 +904,7 @@ export async function keepProgress(db: Db, code: string, startsAt: number, rows:
       await tx
         .update(roomMembers)
         .set({ progress: sql`greatest(${roomMembers.progress}, ${value})` })
-        .where(and(eq(roomMembers.roomId, id), eq(roomMembers.memberKey, key), isNull(roomMembers.finishedAt)));
+        .where(and(eq(roomMembers.roomId, id), eq(roomMembers.memberKey, key), isNull(roomMembers.finishedAt), isNull(roomMembers.eliminatedAt)));
     }
     await keepAbandons(tx, id); // COURSE-10 : la progression gardée à l'abandon
   });
@@ -902,7 +926,7 @@ export async function keepBonusText(db: Db, code: string, startsAt: number, key:
     await tx
       .update(roomMembers)
       .set({ bonusWords: words, progress: sql`case when ${roomMembers.finishedAt} is null then ${value} else ${roomMembers.progress} end` })
-      .where(and(eq(roomMembers.roomId, id), eq(roomMembers.memberKey, key), isNull(roomMembers.abandonedAt)));
+      .where(and(eq(roomMembers.roomId, id), eq(roomMembers.memberKey, key), isNull(roomMembers.abandonedAt), isNull(roomMembers.eliminatedAt)));
   });
 }
 

@@ -6,7 +6,7 @@ import { eq } from "drizzle-orm";
 import type { Db } from "../../db/client";
 import { roomMembers } from "../../db/schema";
 import { courseWords, textFingerprint } from "../rooms/course-words";
-import { keepBonusText, keepProgress, leaveAfterDisconnect, readRoom, recordProgress, refreshRoom, RoomRefused, roomIdByCode, roomView, type Identity, type RoomView } from "../server/rooms";
+import { eliminateRunner, keepBonusText, keepProgress, leaveAfterDisconnect, readRoom, recordProgress, refreshRoom, RoomRefused, roomIdByCode, roomView, type Identity, type RoomView } from "../server/rooms";
 import type { Player } from "./protocol";
 import type { RaceCourse } from "./referee";
 
@@ -37,6 +37,11 @@ export type RoomBackend = {
    * pour la course partie à `startsAt` : le serveur redémarré et l'enregistrement de la course (POST /api/races) le relisent.
    */
   bonusText?(code: string, startsAt: number, key: string, words: string[], progress: number): Promise<void>;
+  /**
+   * COURSE-06 : en mode fatal, l'élimination annoncée par la page de ce coureur, datée par la base avec sa progression
+   * validée, pour la course partie à `startsAt` ; vrai si elle est notée (eliminateRunner).
+   */
+  eliminated?(code: string, startsAt: number, key: string, progress: number): Promise<boolean>;
 };
 
 /**
@@ -137,5 +142,6 @@ export function createRoomBackend(db: Db, changes: Changes): RoomBackend {
     progress: (key, code, progress) => recordProgress(db, code, key, progress),
     keep: (code, startsAt, rows) => keepProgress(db, code, startsAt, rows),
     bonusText: (code, startsAt, key, words, progress) => keepBonusText(db, code, startsAt, key, words, progress),
+    eliminated: (code, startsAt, key, progress) => eliminateRunner(db, code, startsAt, key, progress),
   };
 }
