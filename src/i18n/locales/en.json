@@ -2,6 +2,7 @@
   "home": {
     "langChoice": "Language",
     "pageTitle": "O.R.I.O.N — Home",
+    "roomClosed": "The host closed the room.",
     "viewChoice": "Play or account",
     "overline": "SUSHI RESTAURANT",
     "viewPlay": "PLAY",
@@ -330,6 +331,19 @@
     "loading": "Loading results…",
     "notSaved": "This race could not be saved to the history.",
     "backToHistory": "History",
+    "relaunch": "RACE AGAIN",
+    "closeRoom": "CLOSE THE ROOM",
+    "closeConfirm": "Close the room for everyone?",
+    "closeYes": "YES, CLOSE",
+    "closeNo": "CANCEL",
+    "waitHost": "Waiting for the host: they can start another race.",
+    "leaveRoom": "LEAVE THE ROOM",
+    "closeErrors": {
+      "not_host": "Only the host can close the room.",
+      "in_race": "A race is running: the room cannot be closed now.",
+      "not_found": "This room no longer exists.",
+      "network": "The server is not answering. Try again."
+    },
     "errors": {
       "not_found": "This race does not exist.",
       "unauthorized": "Sign in to see your races again.",

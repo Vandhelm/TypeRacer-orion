@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useCameraTravel } from "./hooks/useCameraTravel";
+import { PodiumActions, type AfterRaceControls } from "./PodiumActions";
 import { oneDecimal, playerAt, profileHref, rankLabel, type PlayerResult } from "./results";
 import { SideFace } from "./SideFace";
 
@@ -13,7 +14,7 @@ const SIDE_FACES: Partial<Record<(typeof RANKS)[number], string>> = {
 };
 
 /** The 3D set: pyramid, floor, columns, and the top three players on the podium. */
-export function PodiumScene({ players, arrived, raceId = null, roomHref = "/home" }: { players: PlayerResult[]; arrived: boolean; raceId?: number | null; roomHref?: string }) {
+export function PodiumScene({ players, arrived, raceId = null, roomHref = "/home", after }: { players: PlayerResult[]; arrived: boolean; raceId?: number | null; roomHref?: string; after?: AfterRaceControls }) {
   const { t, i18n } = useTranslation();
   const scene = useRef<HTMLDivElement>(null);
   useCameraTravel(scene, arrived);
@@ -41,14 +42,11 @@ export function PodiumScene({ players, arrived, raceId = null, roomHref = "/home
                 {side && <SideFace points={side} />}
                 {rank === 1 && (
                   <div className="podium-actions">
-                    {/* une course relue ne se rejoue pas ; SALLE-09 : rejouer passe par le salon, où l'hôte relance (/game ou /room nus ne le retrouvent pas) */}
+                    {/* une course relue ne se rejoue pas ; SALLE-09 / COURSE-11 : l'hôte relance par le salon, où il peut changer les réglages */}
                     {raceId ? (
                       <a className="podium-back" href="/profile#stats">{t("podium.backToHistory")}</a>
                     ) : (
-                      <>
-                        <a className="podium-play" href={roomHref}>{t("game.playAgain")}</a>
-                        <a className="podium-back" href={roomHref}>{t("game.backToRoom")}</a>
-                      </>
+                      <PodiumActions roomHref={roomHref} after={after} />
                     )}
                   </div>
                 )}

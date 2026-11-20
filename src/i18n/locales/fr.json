@@ -2,6 +2,7 @@
   "home": {
     "langChoice": "Choix de la langue",
     "pageTitle": "O.R.I.O.N — Accueil",
+    "roomClosed": "L’hôte a fermé la salle.",
     "viewChoice": "Jouer ou compte",
     "overline": "RESTAURANT DE SUSHI",
     "viewPlay": "JOUER",
@@ -330,6 +331,19 @@
     "loading": "Chargement des résultats…",
     "notSaved": "Cette course n’a pas pu être enregistrée dans l’historique.",
     "backToHistory": "Historique",
+    "relaunch": "RELANCER",
+    "closeRoom": "FERMER LA SALLE",
+    "closeConfirm": "Fermer la salle pour tout le monde ?",
+    "closeYes": "OUI, FERMER",
+    "closeNo": "ANNULER",
+    "waitHost": "En attente de l’hôte : il peut relancer la course.",
+    "leaveRoom": "QUITTER LE SALON",
+    "closeErrors": {
+      "not_host": "Seul l’hôte peut fermer la salle.",
+      "in_race": "Une course est en cours : la salle ne se ferme pas maintenant.",
+      "not_found": "Ce salon n’existe plus.",
+      "network": "Le serveur ne répond pas. Réessaie."
+    },
     "errors": {
       "not_found": "Cette course n’existe pas.",
       "unauthorized": "Connecte-toi pour revoir tes courses.",

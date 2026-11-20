@@ -4,6 +4,7 @@ import { usePlayer } from "../../../players/PlayerProvider";
 import { inviteDetour } from "../../../rooms/access";
 import { DEFAULT_SETTINGS, type Role, type RoomSettings } from "../../../rooms/settings";
 import type { RoomResult } from "../../../server/rooms";
+import { afterRace } from "../../podium/after-race";
 import { arrivalRequest, roomApi, watchRoom, type Answer, type RoomError } from "../api";
 import { keepPresence } from "../presence";
 import { arrivalOf, isPlayer, roomOf, seatsOf, type Arrival, type Room, type RoomView } from "../room";
@@ -102,7 +103,12 @@ export function useRoom(page: "room" | "game" = "room") {
         setView(next);
         if (!Object.keys(pending.current).length) setRoom(roomOf(next));
       },
-      setError,
+      (error) => {
+        // COURSE-11 : la salle où l'on était a été fermée par l'hôte : retour à l'accueil, avec le message
+        const gone = afterRace({ ok: false, error }, true).go;
+        if (gone) location.replace(gone);
+        else setError(error);
+      },
     );
   }, [code, page]);
 

@@ -9,6 +9,7 @@ import { LanguageSwitcher } from "../../components/tabs/LanguageSwitcher";
 import { HomePanel } from "./HomePanel";
 import { useHashView } from "./hooks/useHashView";
 import { useViewTransition } from "./hooks/useViewTransition";
+import { RoomClosedNotice } from "./RoomClosedNotice";
 import { RoomsView, type RoomsViewHandle } from "./RoomsView";
 import { Scene } from "./scene/Scene";
 import type { SceneApi } from "./scene/createScene";
@@ -57,6 +58,8 @@ export function HomePage({ me = null }: { me?: ComponentProps<typeof HomePanel>[
       </Navbar>
 
       <HangingButton ref={back} href="#home">{t("rooms.back")}</HangingButton>
+
+      <RoomClosedNotice />
 
       <RoomsView ref={rooms} descending={descending} />
 
