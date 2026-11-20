@@ -425,9 +425,9 @@
     "scope": "suivi (light)"
   },
   "A11Y-03": {
-    "commit": "2acdffe",
-    "date": "2026-11-19",
-    "scope": "suivi (light)"
+    "commit": "58506c8",
+    "date": "2026-11-20",
+    "scope": "critère (fix/design/a11y-03)"
   },
   "A11Y-04": {
     "commit": "2acdffe",
