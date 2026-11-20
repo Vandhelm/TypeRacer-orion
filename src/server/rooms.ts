@@ -1,12 +1,14 @@
 // Salons, côté serveur (SALLE-01, 02, 03, 09). Indépendant du transport : les routes HTTP (api.ts) et le temps réel
 // (realtime.ts) appellent ces fonctions ; rien ici ne connaît Request, WebSocket ou Next.js.
-import { and, asc, desc, eq, gt, inArray, isNull, ne, notInArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNull, ne, notInArray, sql, type SQL } from "drizzle-orm";
+import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 import type { z } from "zod";
 import type { Db } from "../../db/client";
 import { players, raceConfigs, roomBans, roomMembers, rooms, user } from "../../db/schema";
 import { storedAvatar } from "../players/avatar";
 import { allows, canJoin, isListed, newRoomCode } from "../rooms/access";
 import { launchBlocker } from "../rooms/launch";
+import { follow, raceState, storedStatus, type RaceEvent, type RaceState } from "../rooms/race-state";
 import type { RoomFilters } from "../rooms/explorer";
 import { seatColor } from "../rooms/seats";
 import { wordTarget } from "../rooms/text";
@@ -481,6 +483,7 @@ export async function launchRoom(db: Db, code: string, who: Identity): Promise<R
     if (key !== memberKey({ playerId: room.hostId })) throw new RoomRefused("not_host");
     if (room.status === "closed") throw new RoomRefused("not_found");
     if (!canJoin(room.status)) throw new RoomRefused("in_race");
+    const from = await stateOf(tx, id);
     // COURSE-02 : les membres et les réglages lus sous le verrou, jamais le corps de la requête
     if (launchBlocker(room, await tx.select({ role: roomMembers.role }).from(roomMembers).where(eq(roomMembers.roomId, id)))) throw new RoomRefused("not_enough_players");
     // CONF-03 : le serveur tire le texte. En mode cohérent, un passage du corpus dans la langue du salon (suivi d'autres
@@ -488,7 +491,8 @@ export async function launchRoom(db: Db, code: string, who: Identity): Promise<R
     const [config] = await tx.select().from(raceConfigs).where(eq(raceConfigs.id, room.configId));
     const passage = config!.textType === "coherent" ? await pickPassage(tx, { language: config!.language, words: wordTarget(config!) }) : null;
     const textSeed = crypto.getRandomValues(new Int32Array(1))[0]!;
-    await tx.update(rooms).set({ status: "racing", launchedAt: sql`now()`, textId: passage?.id ?? null, textSeed }).where(eq(rooms.id, id));
+    // COURSE-01 : une relance repasse par EN_ATTENTE (results → waiting → countdown)
+    await moveRoom(tx, id, from, from === "results" ? ["reopen", "launch"] : ["launch"], { launchedAt: sql`now()`, textId: passage?.id ?? null, textSeed });
     await tx.update(roomMembers).set({ finishedAt: null }).where(eq(roomMembers.roomId, id));
   });
   return { room: await roomView(db, id, key), you: key };
@@ -517,7 +521,7 @@ async function sweep(tx: Db, roomId: number, actor?: string | string[]): Promise
   const present = actor === undefined ? [] : [actor].flat();
   if (present.length) await tx.update(roomMembers).set({ lastSeenAt: sql`now()` }).where(and(eq(roomMembers.roomId, roomId), inArray(roomMembers.memberKey, present)));
   const deadline = sql`${rooms.launchedAt} + (select ${raceConfigs.duration} from ${raceConfigs} where ${raceConfigs.id} = ${rooms.configId}) * interval '1 second' + ${RACE_GRACE_MS} * interval '1 millisecond'`;
-  const ended = await tx.update(rooms).set({ status: "results" }).where(and(eq(rooms.id, roomId), eq(rooms.status, "racing"), sql`${deadline} <= now()`)).returning({ id: rooms.id });
+  const ended = (await stateOf(tx, roomId)) === "racing" ? await moveRoom(tx, roomId, "racing", ["finish"], {}, sql`${deadline} <= now()`) : [];
   const gone = await tx
     .delete(roomMembers)
     .where(and(eq(roomMembers.roomId, roomId), sql`${roomMembers.lastSeenAt} < now() - ${MEMBER_AWAY_MS} * interval '1 millisecond'`))
@@ -564,7 +568,7 @@ async function afterDeparture(tx: Db, roomId: number): Promise<RoomStatus> {
     const next = left.find((m) => m.playerId !== null && !m.isBot);
     if (!next) {
       await tx.delete(roomMembers).where(eq(roomMembers.roomId, roomId));
-      await tx.update(rooms).set({ status: "closed" }).where(eq(rooms.id, roomId));
+      await moveRoom(tx, roomId, await stateOf(tx, roomId), ["abandon"]);
       return "closed";
     }
     await tx.update(rooms).set({ hostId: next.playerId! }).where(eq(rooms.id, roomId));
@@ -586,7 +590,39 @@ export async function refreshRoom(db: Db, code: string, present: string[] = []):
 /** SALLE-09 : plus aucun participant humain en course (fini ou parti) : le salon passe aux résultats. Sous le verrou. */
 async function endIfAllFinished(tx: Db, roomId: number) {
   const racing = await tx.$count(roomMembers, and(eq(roomMembers.roomId, roomId), eq(roomMembers.role, "player"), isNull(roomMembers.finishedAt)));
-  if (!racing) await tx.update(rooms).set({ status: "results" }).where(and(eq(rooms.id, roomId), eq(rooms.status, "racing")));
+  if (racing) return;
+  // COURSE-01 : pendant le décompte (fin déclarée par le client, COURSE-06 pas encore là), le départ est avancé
+  const from = await stateOf(tx, roomId);
+  if (from === "countdown" || from === "racing") await moveRoom(tx, roomId, from, from === "countdown" ? ["start", "finish"] : ["finish"]);
+}
+
+/** COURSE-01 : l'état d'un salon (le décompte dérivé de launched_at et de l'horloge de la base), null s'il n'existe pas. */
+async function stateOf(db: Db, roomId: number): Promise<RaceState | null> {
+  const [row] = await db
+    .select({ status: rooms.status, sinceLaunchMs: sql<number | null>`extract(epoch from now() - ${rooms.launchedAt}) * 1000`.mapWith((v) => (v === null ? null : Number(v))) })
+    .from(rooms)
+    .where(eq(rooms.id, roomId));
+  return row ? raceState(row.status, row.sinceLaunchMs) : null;
+}
+
+/** COURSE-01 : l'état d'un salon par son code (fermé compris), null si le code est inconnu. */
+export async function roomRaceState(db: Db, code: string): Promise<RaceState | null> {
+  const [row] = await db.select({ id: rooms.id }).from(rooms).where(eq(rooms.code, code));
+  return row ? stateOf(db, row.id) : null;
+}
+
+/**
+ * COURSE-01 : la seule écriture de rooms.status. `events` doit mener de `from` à un état permis (follow lève
+ * InvalidTransition sinon) ; l'écriture n'a lieu que si le statut stocké est encore celui de `from` (et `where`).
+ */
+async function moveRoom(tx: Db, roomId: number, from: RaceState | null, events: RaceEvent[], extra: Omit<PgUpdateSetSource<typeof rooms>, "status"> = {}, where?: SQL) {
+  if (from === null) return [];
+  const to = follow(from, events);
+  return tx
+    .update(rooms)
+    .set({ ...extra, status: storedStatus(to) })
+    .where(and(eq(rooms.id, roomId), eq(rooms.status, storedStatus(from)), where))
+    .returning({ id: rooms.id });
 }
 
 /**
