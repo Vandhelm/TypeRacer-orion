@@ -355,9 +355,9 @@
     "scope": "critère (feature/podium/res-04)"
   },
   "RES-05": {
-    "commit": "2acdffe",
-    "date": "2026-11-19",
-    "scope": "suivi (light)"
+    "commit": "5f62fa5",
+    "date": "2026-11-20",
+    "scope": "critère (fix/server/res-05-status)"
   },
   "HIST-01": {
     "commit": "2acdffe",
@@ -365,9 +365,9 @@
     "scope": "suivi (light)"
   },
   "HIST-02": {
-    "commit": "2acdffe",
-    "date": "2026-11-19",
-    "scope": "suivi (light)"
+    "commit": "5f62fa5",
+    "date": "2026-11-20",
+    "scope": "critère, partie bonus (fix/server/res-05-status)"
   },
   "I18N-01": {
     "commit": "2acdffe",
