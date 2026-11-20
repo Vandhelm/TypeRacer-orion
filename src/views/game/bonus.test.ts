@@ -212,6 +212,17 @@ describe("BONUS-04 — progress and speed stay consistent on the text a bonus le
     expect(race.arrivals).toContain(race.myLane);
   });
 
+  test("the per-second speed of another human counts the words of his lengthened text", () => {
+    const RIVAL: Player = { name: "rival", color: "green" };
+    const course = createCourse(TWENTY, 60, "fix");
+    const start = createRace(course, [ME, RIVAL], "medium", "high", () => 0.5);
+    let race: Race = applyRemote({ ...start, phase: "racing", count: null, startedAt: 1000, now: 1000 }, 1, { progress: 0.5, wpm: 60 }, 1100);
+    race = applyRemoteBonus(race, 1, { kind: "extra_words", target: "u:7", words: ADDED });
+    race = advanceBots(applyRemote(race, 1, { progress: 12 / 23, wpm: 60 }, 1500), 2000);
+    // 12 mots de 5 caractères faits : 60 caractères, pas 12/23 des 100 caractères de la course
+    expect(race.samples[1]![0]!.chars).toBeCloseTo(60, 6);
+  });
+
   test("the progress I send names the length of my text, so the server can tell a progress sent before the bonus", () => {
     expect(progressReport(applyBonus(half(), plus, 3000))).toEqual({ progress: 10 / 23, words: 23 });
     expect(progressReport(half())).toEqual({ progress: 0.5, words: 20 });

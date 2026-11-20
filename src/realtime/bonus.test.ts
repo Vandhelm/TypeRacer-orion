@@ -296,6 +296,15 @@ describe("BONUS-04 — the server counts every runner on the text he really runs
     expect(arrivals).toEqual([1]);
   });
 
+  test("claiming the old length to skip the 3 added words does not finish the race", async () => {
+    const { a, b } = await lengthened({ startsAt: Date.now() - 120_000 });
+    for (let done = 37; done <= 100; done += 7) await stepOn(a, Math.min(1, done / 100), 100);
+    await stepOn(a, 1, 100);
+    // 100 mots faits sur 103 : pas arrivé
+    expect(progressOf(b, "g:alpha")).toBeLessThan(1);
+    expect(lastStandings(b).players.find((p) => p.playerId === "g:alpha")!.finishedMs).toBeNull();
+  });
+
   test("a length that never was this runner's text is not converted", async () => {
     const { a, b } = await lengthened();
     await stepOn(a, 0.33, 7);

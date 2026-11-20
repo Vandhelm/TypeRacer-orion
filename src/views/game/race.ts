@@ -316,7 +316,9 @@ function sampleOf(race: Race, lane: number): Sample | null {
   const remote = race.remotes.find((candidate) => candidate.lane === lane);
   if (remote) {
     if (remote.finishedAt) return null;
-    const chars = remote.progress * (race.course.marks.at(-1) ?? 0);
+    // BONUS-04 : sur la longueur de son texte (mots changés par un bonus), à la longueur moyenne des mots de la course
+    const { marks, words } = race.course;
+    const chars = remote.progress * ((marks.at(-1) ?? 0) * (remote.words ?? words.length)) / Math.max(1, words.length);
     return { chars, typed: chars, errors: 0 };
   }
   const bot = race.bots.find((candidate) => candidate.lane === lane);
