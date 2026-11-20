@@ -1,6 +1,6 @@
 // Le texte de la partie, d'après les réglages du salon.
 import type { Room } from "../room/room";
-import { excludedApplies, wordTarget } from "../../rooms/text";
+import { additionsApply, excludedApplies, wordTarget } from "../../rooms/text";
 import { LEXICON, QUOTES } from "./lexicon";
 
 export type CourseSettings = Pick<Room, "language" | "textType" | "length" | "wordCount" | "level" | "punctuation" | "numbers" | "specials" | "capitals" | "accents" | "excluded" | "text">;
@@ -60,15 +60,17 @@ export function buildWords(settings: CourseSettings, random: () => number = Math
   // composition : chiffres et caractères spéciaux glissés dans le texte, à la place d'un mot (le compte ne change pas) ;
   // un ajout qui contient un caractère exclu est abandonné, le mot reste.
   // CONF-06 : comme la ponctuation, les chiffres ne s'ajoutent qu'aux mots aléatoires ; un passage cohérent ou une
-  // citation se tape tel qu'il est écrit, avec ses propres nombres (« l'année 1866 »), et l'option y est verrouillée
-  const numbers = settings.numbers && settings.textType === "words";
-  if (numbers || settings.specials) {
+  // citation se tape tel qu'il est écrit, avec ses propres nombres (« l'année 1866 »), et l'option y est verrouillée.
+  // CONF-07 : de même pour les caractères spéciaux, sinon « @mot » apparaîtrait dans un passage ou une citation
+  const numbers = settings.numbers && additionsApply(settings.textType);
+  const specials = settings.specials && additionsApply(settings.textType);
+  if (numbers || specials) {
     words = words.map((word) => {
       if (numbers && random() < 0.1) {
         const number = String(1 + Math.floor(random() * 9999));
         return allowed(number) ? number : word;
       }
-      if (settings.specials && random() < 0.1) {
+      if (specials && random() < 0.1) {
         const special = pick(SPECIALS) + word;
         return allowed(special) ? special : word;
       }

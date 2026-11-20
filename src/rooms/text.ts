@@ -16,6 +16,14 @@ export function excludedApplies(textType: RoomSettings["textType"]): boolean {
 }
 
 /**
+ * CONF-06, CONF-07 : ponctuation, chiffres et caractères spéciaux ne s'ajoutent qu'aux mots aléatoires. Un passage
+ * cohérent ou une citation se tape tel qu'il est écrit, à la longueur exacte (CONF-04) : ces options y sont verrouillées.
+ */
+export function additionsApply(textType: RoomSettings["textType"]): boolean {
+  return textType === "words";
+}
+
+/**
  * CONF-03 : générateur à graine (mulberry32). La graine est tirée par le serveur au lancement (rooms.text_seed) :
  * chaque membre du salon tire les mêmes mots, donc tape le même texte.
  */
