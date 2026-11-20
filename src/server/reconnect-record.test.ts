@@ -9,6 +9,7 @@ import { placeholderEmail } from "../accounts/username";
 import { createAuth } from "./auth";
 import { gameDetour } from "./game-gate";
 import { handleRace } from "./races";
+import { botsDone } from "./finish.fixture";
 import { launchedRoomFor } from "./races.fixture";
 import { ABANDON_AFTER_MS, memberKey, readRoom, recordProgress } from "./rooms";
 
@@ -45,6 +46,7 @@ describe("COURSE-08 — the last human abandoned by silence comes back: his race
     const me = await signUp("Silence_Seul");
     const { code, who } = await launchedRoomFor(db, auth, me.cookie, GUEST_SECRET, 60_000);
     await recordProgress(db, code, memberKey(who), 0.3);
+    await botsDone(db, code); // BOT-05 : ses bots, que le serveur attend, ont fini leur course
     await db.update(roomMembers).set({ lastSeenAt: sql`now() - ${ABANDON_AFTER_MS + 1_000} * interval '1 millisecond'` }).where(eq(roomMembers.memberKey, memberKey(who)));
     // son retour : la page relit le salon (le balayage note l'abandon d'abord), la salle passe aux résultats
     expect(await gameDetour(db, code, who)).toBeNull();

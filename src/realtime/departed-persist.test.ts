@@ -4,6 +4,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { players, raceResults, races, rooms } from "../../db/schema";
+import { withoutBotCourse } from "../server/races.fixture";
 import { BOT_NAMES } from "../players/bots";
 import { createMockDatabase } from "../../db/mocks/test-database";
 import { placeholderEmail } from "../accounts/username";
@@ -163,6 +164,8 @@ describe("COURSE-10 — a runner who leaves mid-race keeps the progress the real
 
   test("the last human leaves at 0.8 (the room goes to the results): kept at 0.8, ranked before the bot at 0.5", async () => {
     const { code, host, sKey, cookies } = await launchedWith("Last", ["Last_P"], true);
+    // BOT-05 : un bot dont le serveur n'a pas la course (salon sans graine), classé par la progression du navigateur
+    await withoutBotCourse(db, code);
     await recordProgress(db, code, sKey, 1);
     // S envoie sa course tout de suite : P court encore
     const raceId = await post(code, host, [result("Last_S", true), { ...result(BOT_NAMES[0]), bot: true, progress: 0.5 }, result("Last_P")]);

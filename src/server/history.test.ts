@@ -7,7 +7,7 @@ import { createAuth } from "./auth";
 import { GUEST_COOKIE, signGuest } from "./guest";
 import { handleHistory, HISTORY_PAGE_SIZE, loadHistoryRace } from "./history";
 import { handleRace, parseRace, recordRace } from "./races";
-import { launchedRoomFor } from "./races.fixture";
+import { arrivedAfterStart, launchedRoomFor } from "./races.fixture";
 import { memberKey, recordProgress } from "./rooms";
 import { RACE_ERRORS, submitRace, toResults } from "../views/podium/results";
 
@@ -153,6 +153,8 @@ describe("HIST-01 — every finished race appears in the signed-in user's histor
       const { code, who } = await launchedRoomFor(t.db, t.auth, me.cookie, SECRET, 610_000);
       // le serveur temps réel l'a vu arriver : son rang est donc le premier (COURSE-06)
       await recordProgress(t.db, code, memberKey(who), 1);
+      // BOT-05 : arrivé avant les bots, dont le serveur calcule la course depuis le départ
+      await arrivedAfterStart(t.db, code, memberKey(who), 1_000);
       const results = { ...bigResults("Hist_Gros"), room: code };
 
       let sent: RequestInit | undefined;

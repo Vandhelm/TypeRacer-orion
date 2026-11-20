@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { RealtimeState } from "../../realtime/client";
+import { botProfile, botSeed, simulateBot } from "../../rooms/bot-engine";
 import { DEFAULT_SETTINGS } from "../../rooms/settings";
 import { seededRandom } from "../../rooms/text";
 import type { Player, Room } from "../room/room";
@@ -116,6 +117,23 @@ function liveFor(ms: number, random = seededRandom(7)): Race {
   for (let now = START + TICK_MS; now <= START + ms; now += TICK_MS) race = advanceBots(race, now, race.bots.map(() => random()));
   return race;
 }
+
+describe("BOT-05 — every page of the room shows the same bots, from the room seed", () => {
+  test("a page open since the start and one mounted 25 s in have the same bots at the same time", () => {
+    let open = mountRace(ROOM, [ME, BOT], { ...TIMING, now: START });
+    for (let now = START + TICK_MS; now <= START + 30_000; now += 333) open = advanceBots(open, now);
+    const late = advanceBots(mountRace(ROOM, [ME, BOT], { ...TIMING, now: START + 25_000 }), START + 30_000 - ((30_000 - TICK_MS) % 333));
+    expect(late.bots.map((b) => b.words)).toEqual(open.bots.map((b) => b.words));
+    expect(late.bots.map((b) => b.typed)).toEqual(open.bots.map((b) => b.typed));
+  });
+
+  test("the bot is the one the engine computes from the seed, as the server does", () => {
+    const mounted = mountRace(ROOM, [ME, BOT], { ...TIMING, now: START + 25_000 });
+    const bot = mounted.bots[0]!;
+    expect(bot.wpm).toBe(botProfile(botSeed(SEED, "bot"), ROOM.botSpeed, ROOM.botAccuracy).wpm);
+    expect(bot.words).toBe(simulateBot({ words: mounted.course.words, durationMs: 120_000 }, { seed: botSeed(SEED, "bot"), wpm: bot.wpm }, 25_000).position);
+  });
+});
 
 describe("COURSE-08 — the bots are where they would have been, a reload does not reset them", () => {
   test("same seed: a page mounted before and after the start draws the same bots", () => {

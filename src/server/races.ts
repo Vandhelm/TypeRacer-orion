@@ -212,7 +212,8 @@ export async function recordRace(db: Db, parsed: ParsedRace, requester: Requeste
   const results = (serverBots ? body.map((r) => ({ ...r, bot: serverBots.has(r.name.toLowerCase()) })) : body).map((r) => {
     const abandoned = !r.bot && abandonedOf(r.name);
     // COURSE-10 : l'arrivée d'un humain connu du serveur est celle qu'il a vue, comme son rang
-    const standing = r.bot ? undefined : server?.standings?.get(r.name.toLowerCase());
+    // BOT-05 : celle d'un bot aussi, quand le serveur a calculé sa course (src/server/bot-course.ts)
+    const standing = server?.standings?.get(r.name.toLowerCase());
     return { ...r, abandoned, finished: (standing ? !!standing.finishedAt : r.finished) && !abandoned };
   });
   const race = server?.standings ? { ...parsed, results: rankByServer(results, server.standings, serverBots) } : { ...parsed, results };

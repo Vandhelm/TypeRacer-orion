@@ -7,7 +7,7 @@ import { placeholderEmail } from "../accounts/username";
 import { createAuth } from "./auth";
 import { raceDetail } from "./history";
 import { handleRace, rankByServer, type ServerStanding } from "./races";
-import { launchedRoomFor } from "./races.fixture";
+import { launchedRoomFor, withoutBotCourse } from "./races.fixture";
 import { abandonRace, leaveRoom, memberKey, recordProgress } from "./rooms";
 
 process.env.BETTER_AUTH_SECRET ??= "test-secret-test-secret-test-secret";
@@ -141,6 +141,7 @@ describe("COURSE-10 — the recorded race follows the final ranking", () => {
     const me = await signUp("Dix_Lent");
     const rival = { kind: "guest" as const, name: "Dix_Rapide", sessionId: crypto.randomUUID() };
     const { code, who } = await launchedRoomFor(db, auth, me.cookie, GUEST_SECRET, 10_000, [rival]);
+    await withoutBotCourse(db, code); // BOT-05 : la règle du navigateur, pour un bot dont le serveur n'a pas la course
     await recordProgress(db, code, memberKey(rival), 1);
     await recordProgress(db, code, memberKey(who), 0.9);
     const bot = { ...result("Thon_Rouge", { finished: true, progress: 1 }), bot: true };
@@ -206,6 +207,9 @@ describe("COURSE-10 — the recorded race follows the final ranking", () => {
     expect(await rankOfA()).toBe(3);
     await recordProgress(db, code, memberKey(b), 0.1);
     await abandonRace(db, code, b);
+    // BOT-05 : bots sans course calculée (salon sans graine), qui ne retiennent pas la fin : seuls les humains comptent
+    // ici (reculer le lancement changerait le départ du lancement, qui relie la course enregistrée au salon)
+    await withoutBotCourse(db, code);
     await recordProgress(db, code, memberKey(c), 1); // le dernier coureur arrive : le salon passe aux résultats
     expect(await rankOfA()).toBe(2);
     const detail = await raceDetail(db, me.playerId, raceId);
@@ -220,6 +224,7 @@ describe("COURSE-10 — the recorded race follows the final ranking", () => {
     const me = await signUp("Dix_Bot_A");
     const c = { kind: "guest" as const, name: "Dix_Bot_C", sessionId: crypto.randomUUID() };
     const { code, who } = await launchedRoomFor(db, auth, me.cookie, GUEST_SECRET, 10_000, [c]);
+    await withoutBotCourse(db, code); // BOT-05 : la règle du navigateur, pour un bot dont le serveur n'a pas la course
     await recordProgress(db, code, memberKey(who), 0.5);
     await recordProgress(db, code, memberKey(c), 0.2);
     await abandonRace(db, code, who);

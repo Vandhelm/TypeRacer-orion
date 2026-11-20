@@ -148,7 +148,7 @@ describe("SALLE-07 — the host kicks a participant or a spectator, who can no l
   });
 
   test("kicking the last runner during a race ends it (results), and kicking twice changes nothing", async () => {
-    const { room, host } = await t.open("Exp_Course");
+    const { room, host } = await t.open("Exp_Course", { bots: false }); // BOT-05 : sans bots, que le serveur attendrait
     const cookie = t.guest("Coureur_Expulse");
     const { body } = await t.join(cookie, { code: room.code });
     await t.call("POST", `/api/rooms/${room.code}/launch`, host.cookie);

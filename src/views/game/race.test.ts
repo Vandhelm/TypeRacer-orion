@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { botProfile, botSeed, simulateBot } from "../../rooms/bot-engine";
 import type { MistakeMode, Player } from "../room/room";
 import { advanceBots, applyInput, createCourse, createRace, elapsedMs, endRace, everyoneDone, laneProgress, myAccuracy, myWpm, PHASE_STATE, secondsLeft, startRace, type Race } from "./race";
 
@@ -238,5 +239,42 @@ describe("CONF-10 — each bot races at its own level", () => {
   test("a bot without a level keeps the room speed", () => {
     const race = createRace(createCourse(["le", "riz"], 60, "fix"), [ME, BOT], "fast", "high", () => 0);
     expect(race.bots[0]!.wpm).toBe(65);
+  });
+});
+
+describe("BOT-05 — the race bots come from the room seed, the same in every browser", () => {
+  const WASABI: Player = { name: "Wasabi99", color: "blue", bot: true, level: "slow" };
+  const EBI: Player = { name: "Ebi_Fry", color: "green", bot: true, level: "fast" };
+  const WORDS = "le riz attend le poisson sur la natte de bambou pendant que le chef roule".split(" ");
+  const COURSE = { words: WORDS, durationMs: null };
+  const seeded = (seed: number, players: Player[] = [ME, WASABI, EBI]) => startRace(createRace(createCourse(WORDS, null, "fix"), players, "medium", "decent", seed), 1000);
+  const engine = (seed: number, bot: { name: string; wpm: number }, ms: number) => simulateBot(COURSE, { seed: botSeed(seed, bot.name), wpm: bot.wpm }, ms);
+
+  test("a seed draws each bot's profile from the engine, by its name", () => {
+    const race = seeded(4242);
+    expect(race.bots.map(({ wpm, accuracy }) => ({ wpm, accuracy }))).toEqual([botProfile(botSeed(4242, "Wasabi99"), "slow", "decent"), botProfile(botSeed(4242, "Ebi_Fry"), "fast", "decent")]);
+    // un autre ordre des places (un humain de plus devant) ne change pas les bots
+    const other = seeded(4242, [{ name: "rival", color: "pink" }, ME, WASABI, EBI]);
+    expect(other.bots.map((b) => b.wpm)).toEqual(race.bots.map((b) => b.wpm));
+  });
+
+  test("without jitters, the bots are where the engine puts them at that time, however the ticks fall", () => {
+    let ticked = seeded(4242);
+    for (let now = 1200; now <= 9000; now += 200) ticked = advanceBots(ticked, now);
+    const late = advanceBots(advanceBots(seeded(4242), 3_123), 9_000);
+    for (const race of [ticked, late]) race.bots.forEach((bot) => expect(bot.words).toBe(engine(4242, bot, 8_000).position));
+    expect(late.bots.map((b) => b.typed)).toEqual(ticked.bots.map((b) => b.typed));
+  });
+
+  test("a bot's arrival is the engine's, not the moment the browser noticed it", () => {
+    const race = advanceBots(seeded(4242), 1000 + 600_000);
+    race.bots.forEach((bot) => expect(bot.finishedAt).toBe(1000 + engine(4242, bot, 600_000).arrivedMs!));
+    expect(race.arrivals).toEqual([...race.bots].sort((a, b) => a.finishedAt - b.finishedAt).map((b) => b.lane));
+  });
+
+  test("another seed gives other bots", () => {
+    const a = advanceBots(seeded(1), 6_000);
+    const b = advanceBots(seeded(2), 6_000);
+    expect(a.bots.map((bot) => bot.words)).not.toEqual(b.bots.map((bot) => bot.words));
   });
 });

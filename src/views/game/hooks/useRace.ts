@@ -17,7 +17,7 @@ type Action =
   | { type: "count"; value: number | null }
   | { type: "start"; now: number }
   | { type: "input"; value: string; now: number }
-  | { type: "tick"; now: number; jitters: number[] }
+  | { type: "tick"; now: number }
   | { type: "remote"; updates: { lane: number; progress: number; wpm: number }[]; now: number }
   | { type: "resume"; standing: ServerStanding; startsAt: number; snapshot: RaceSnapshot | null }
   | { type: "restore"; snapshot: RaceSnapshot | null }
@@ -33,7 +33,7 @@ function reduce(race: Race, action: Action): Race {
     case "input":
       return applyInput(race, action.value, action.now);
     case "tick":
-      return advanceBots(race, action.now, action.jitters);
+      return advanceBots(race, action.now);
     case "remote":
       return race.phase === "racing" ? action.updates.reduce((next, { lane, ...update }) => applyRemote(next, lane, update, action.now), race) : race;
     case "bonus":
@@ -99,10 +99,11 @@ export function useRace(room: Room, players: Player[], { passage = null, seed = 
   useEffect(() => {
     if (phase !== "racing") return;
     const loop = setInterval(() => {
-      dispatch({ type: "tick", now: serverNow(), jitters: players.map(() => Math.random()) });
+      // BOT-05 : les bots rattrapent le moteur à l'heure serveur, avec la graine du salon : aucun aléa local
+      dispatch({ type: "tick", now: serverNow() });
     }, TICK_MS);
     return () => clearInterval(loop);
-  }, [phase, players, serverNow]);
+  }, [phase, serverNow]);
 
   useEffect(() => {
     if (!allDone || phase !== "racing") return;

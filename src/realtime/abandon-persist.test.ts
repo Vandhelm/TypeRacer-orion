@@ -3,6 +3,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 import { roomMembers, rooms } from "../../db/schema";
+import { withoutBotCourse } from "../server/races.fixture";
 import { createMockDatabase } from "../../db/mocks/test-database";
 import { placeholderEmail } from "../accounts/username";
 import { createAuth } from "../server/auth";
@@ -98,6 +99,7 @@ describe("COURSE-07 — the abandon keeps the progress validated by the realtime
 
   test("the last runner abandons (the race ends): the room still keeps the validated progress", async () => {
     const { code, host } = await launched("Garde_Seul", true);
+    await withoutBotCourse(db, code); // BOT-05 : des bots dont le serveur n'a pas la course ne retiennent pas la fin
     const page = await racePage(code, host);
     page.send({ type: "progress", progress: 0.3, wpm: 40 });
     await page.until(() => validated(page.messages, 0.3));

@@ -451,10 +451,13 @@ describe("SALLE-03 — a member finds their room again by its code, whatever its
 describe("SALLE-09 — the race ends on the server: racing → results once every human player has finished", () => {
   let t: Awaited<ReturnType<typeof setup>>;
   let host: { cookie: string; playerId: number };
-  /** Une salle lancée : l'hôte (participant ou spectateur) et un invité participant. */
+  /**
+   * Une salle lancée : l'hôte (participant ou spectateur) et un invité participant. BOT-05 : sans bots, que le serveur
+   * attendrait ; un hôte spectateur en garde (il en faut pour lancer à un seul participant).
+   */
   const launched = async (role: "player" | "spectator" = "player") => {
     host = await t.newHost("Hote_Fin");
-    const { room } = (await (await t.call("POST", "/api/rooms", host.cookie, { role, settings: { visibility: "public" } })).json()) as Joined;
+    const { room } = (await (await t.call("POST", "/api/rooms", host.cookie, { role, settings: { visibility: "public", bots: role === "spectator" } })).json()) as Joined;
     const runner = t.freshGuest(`Coureur_${room.code}`);
     await t.call("POST", "/api/rooms/join", runner, { code: room.code });
     expect((await t.call("POST", `/api/rooms/${room.code}/launch`, host.cookie)).status).toBe(200);
@@ -492,6 +495,8 @@ describe("SALLE-09 — the race ends on the server: racing → results once ever
 
   test("a spectating host does not hold the race: the last player finishing ends it", async () => {
     const { code, runner } = await launched("spectator");
+    // BOT-05 : le participant arrivé après la fin de la course de ses bots (temps échu) : rien d'autre ne la retient
+    await t.db.update(rooms).set({ launchedAt: sql`now() - ${raceDeadlineMs(DEFAULT_DURATION) - 1_000} * interval '1 millisecond'` }).where(eq(rooms.code, code));
     await finishAsServer(t.db, t.call, code, runner);
     expect(await statusOf(code)).toBe("results");
   });
@@ -585,7 +590,7 @@ describe("SALLE-09 — a race nobody finishes ends on its own after the maximum 
   });
 
   test("a disconnect long after the last race is a real departure; one right after a launch is not", async () => {
-    const { room } = (await (await t.call("POST", "/api/rooms", host.cookie, { role: "player", settings: { visibility: "public" } })).json()) as Joined;
+    const { room } = (await (await t.call("POST", "/api/rooms", host.cookie, { role: "player", settings: { visibility: "public", bots: false } })).json()) as Joined;
     const cookie = t.freshGuest(`Absent_${room.code}`);
     const { you } = (await (await t.call("POST", "/api/rooms/join", cookie, { code: room.code })).json()) as Joined;
     const who = { kind: "guest" as const, name: "Absent", sessionId: you.slice("guest:".length) };
