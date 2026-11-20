@@ -33,7 +33,8 @@ type Socket = ServerWebSocket<Connection>;
 type Member = { player: Player; connections: number };
 /** COURSE-06 : la course arbitrée d'une salle. `course` : la dernière connue ; `over` : le salon a quitté la course. */
 /** `resumed` : progressions relues en base (par clé de membre), reprises quand le coureur revient. */
-type RaceState = { course: RaceCourse | null; over: boolean; entries: Map<string, Accepted>; resumed: Map<string, Accepted>; owners: Map<string, string>; kept: Set<string>; lastSent: number; timer: ReturnType<typeof setTimeout> | null };
+/** `alive` (COURSE-08) : clés des coureurs dont une progression a été acceptée depuis le dernier balayage. */
+type RaceState = { course: RaceCourse | null; over: boolean; entries: Map<string, Accepted>; resumed: Map<string, Accepted>; owners: Map<string, string>; kept: Set<string>; alive: Set<string>; lastSent: number; timer: ReturnType<typeof setTimeout> | null };
 type Throttle = { lastSent: number; pending: { ws: Socket; text: string } | null; timer: ReturnType<typeof setTimeout> | null };
 
 export type RealtimeOptions = {
@@ -142,7 +143,10 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
       // silencieux depuis 30 s comme ayant abandonné, et la course l'apprend (syncRace). Seules les pages salle donnent
       // signe de vie ici (SALLE-08 inchangé) ; la page course le donne en relisant le salon (RACE_PRESENCE_MS).
       for (const code of new Set([...followers.keys(), ...joined.keys()])) {
-        const present = [...new Set([...(followers.get(code) ?? [])].map((ws) => ws.data.follow!.key))];
+        // COURSE-08 : un coureur dont l'arbitre a accepté une progression depuis le dernier balayage donne signe de vie
+        const race = races.get(code);
+        const present = [...new Set([...[...(followers.get(code) ?? [])].map((ws) => ws.data.follow!.key), ...(race?.alive ?? [])])];
+        race?.alive.clear();
         if (await backend.refresh(code, present)) await publishRoom(code);
       }
     } catch (error) {
@@ -204,7 +208,7 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
       // COURSE-07 : la course vient de finir (le dernier a peut-être abandonné) : sa progression validée reste en base
       if (state?.course && !state.over) keepValidated(code, state, null);
       if (state?.course) state.over = true;
-      else if (!state) races.set(code, { course: null, over: false, entries: new Map(), resumed: new Map(), owners: new Map(), kept: new Set(), lastSent: -Infinity, timer: null });
+      else if (!state) races.set(code, { course: null, over: false, entries: new Map(), resumed: new Map(), owners: new Map(), kept: new Set(), alive: new Set(), lastSent: -Infinity, timer: null });
       return;
     }
     if (!state || !state.course || state.course.startsAt !== course.startsAt) {
@@ -216,7 +220,7 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
           .filter((r) => r.progress > 0)
           .map((r) => [r.key, { progress: r.progress, chars: course.marks ? charsAt(course.marks, r.progress) : 0, wpm: 0, at: now, finishedAt: r.finishedAt }] as const),
       );
-      races.set(code, { course, over: false, entries: new Map(), resumed, owners: new Map(), kept: new Set(course.abandoned ?? []), lastSent: -Infinity, timer: null });
+      races.set(code, { course, over: false, entries: new Map(), resumed, owners: new Map(), kept: new Set(course.abandoned ?? []), alive: new Set(), lastSent: -Infinity, timer: null });
     } else {
       state.course = course;
       state.over = false;
@@ -311,6 +315,7 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
     }
     state.entries.set(ws.data.player.id, verdict.entry);
     state.owners.set(ws.data.player.id, key);
+    state.alive.add(key); // COURSE-08 : le coureur est là, même si sa page relit peu le salon (onglet ralenti)
     publishStandings(room);
     if (verdict.entry.finishedAt !== null && !previous?.finishedAt && backend.progress) {
       backend.progress(key, room, 1).then(
