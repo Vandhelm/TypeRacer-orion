@@ -11,6 +11,7 @@ import { cleanRoomCode, inviteReturn, joinByCodeHref } from "../../rooms/access"
 import { isValidNickname, NICKNAME_MAX, NICKNAME_PATTERN, startGuestSession, storedNickname } from "../../players/nickname";
 import { authClient, changeUsername, isProvider, linkProvider, PROVIDER_NAMES, signInWith, signInWithUsername, signUpWithUsername, SOCIAL_PROVIDERS, type SocialProvider } from "../../accounts/client";
 import { isValidUsername, PASSWORD_MIN } from "../../accounts/username";
+import { createPublicRoom, quickRace, type QuickRaceOutcome } from "./quick-race";
 
 type Pane = "play" | "account";
 type StampKey = "stampPlay" | "stampAccount" | "stampCode";
@@ -52,6 +53,9 @@ export function HomePanel({ ref, initialMe = null }: { ref?: Ref<HTMLElement>; i
   const [stamp, setStamp] = useState<{ key: StampKey | null; on: boolean; play: number }>({ key: null, on: false, play: 0 });
   const stampTimer = useRef<number>(undefined);
   const codeInput = useRef<HTMLInputElement>(null);
+  // JOIN-03 : « Faire une course » en cours, ou l'état vide (aucun salon) avec ou sans l'offre d'en créer un
+  const [racing, setRacing] = useState(false);
+  const [noRoom, setNoRoom] = useState<{ canCreate: boolean } | null>(null);
 
   useEffect(() => () => clearTimeout(stampTimer.current), []);
   // sessionStorage : lu seulement dans le navigateur, après le montage (le serveur rend le champ vide)
@@ -106,10 +110,33 @@ export function HomePanel({ ref, initialMe = null }: { ref?: Ref<HTMLElement>; i
   }
   async function play(e: FormEvent) {
     e.preventDefault();
-    if (await ensurePlayer()) {
+    if (racing) return;
+    setNoRoom(null);
+    if (!(await ensurePlayer())) return;
+    // SALLE-04 : arrivé par un lien d'invitation, on y retourne plutôt que de chercher un salon
+    if (inviteReturn(new URLSearchParams(location.search))) {
       showStamp("stampPlay");
-      backToInvite();
+      return backToInvite();
     }
+    setRacing(true);
+    follow(await quickRace());
+  }
+  // JOIN-03 : le serveur a choisi (ou créé) le salon : on y va ; sinon l'état vide, ou l'erreur
+  function follow(outcome: QuickRaceOutcome) {
+    if (outcome.kind === "go") {
+      showStamp("stampPlay");
+      setTimeout(() => { location.href = outcome.href; }, 900);
+      return;
+    }
+    setRacing(false);
+    if (outcome.kind === "empty") setNoRoom({ canCreate: outcome.canCreate });
+    else setPlayError(t("home.quickRaceFailed"));
+  }
+  async function createPublic() {
+    if (racing) return;
+    setRacing(true);
+    setPlayError("");
+    follow(await createPublicRoom());
   }
   // SALLE-04 : arrivé depuis un lien d'invitation sans session (/?invite=T), on y retourne une fois prêt
   function backToInvite() {
@@ -216,9 +243,23 @@ export function HomePanel({ ref, initialMe = null }: { ref?: Ref<HTMLElement>; i
             <p id="play-error" role="alert" className="min-h-[1.4em] font-mono text-[max(11px,1.3vh)] tracking-[.08em] text-red-text">{playError}</p>
 
             <div className="flex flex-col gap-[1.3vh]">
-              <FlipButton type="submit" label={t("home.play")} backLabel={t("home.playBack")} />
+              <FlipButton type="submit" label={t("home.quickRace")} backLabel={t("home.playBack")} disabled={racing} aria-describedby="no-room" />
               <OutlineButton onClick={createRoom}>{t("home.createRoom")}</OutlineButton>
               <OutlineButton href="#rooms">{t("home.rooms")}</OutlineButton>
+            </div>
+
+            {/* JOIN-03 : aucun salon disponible. Un compte peut en créer un public (le serveur le permet) ; un invité voit l'état vide. */}
+            <div id="no-room" role="status" className={noRoom ? "flex flex-col gap-[1.3vh] rounded-[12px] border border-dashed border-line px-[18px] py-[14px] text-center" : "sr-only"}>
+              {noRoom && (
+                <>
+                  <p className="text-white">{t("home.noRoom")}</p>
+                  {noRoom.canCreate ? (
+                    <OutlineButton disabled={racing} onClick={() => void createPublic()}>{t("home.createPublicRoom")}</OutlineButton>
+                  ) : (
+                    <p className="font-mono text-[max(11px,1.3vh)] tracking-[.08em] text-muted">{t("home.noRoomGuest")}</p>
+                  )}
+                </>
+              )}
             </div>
 
             <TextField id="code" num="02" label={t("home.code")}>
