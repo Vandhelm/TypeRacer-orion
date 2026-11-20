@@ -20,7 +20,14 @@ export const CLOCK_TOLERANCE_MS = 1000;
  * La course telle que le serveur la connaît. `marks[i]` : caractères validés après i mots (createCourse), null si
  * le texte n'est pas connu (salon lancé sans graine). `runners` : clés des membres participants (pas les spectateurs).
  */
-export type RaceCourse = { startsAt: number; endsAt: number | null; marks: number[] | null; runners: string[] };
+export type RaceCourse = {
+  startsAt: number;
+  endsAt: number | null;
+  marks: number[] | null;
+  runners: string[];
+  /** COURSE-06 : la dernière progression gardée en base par coureur (clé de membre), pour reprendre le classement. */
+  resume?: { key: string; progress: number; finishedAt: number | null }[];
+};
 /** La dernière progression acceptée d'un coureur ; `finishedAt` : heure serveur de son arrivée. */
 export type Accepted = { progress: number; chars: number; wpm: number; at: number; finishedAt: number | null };
 export type Refusal = "race_not_started" | "race_over" | "progress_backward" | "progress_jump" | "progress_too_fast";

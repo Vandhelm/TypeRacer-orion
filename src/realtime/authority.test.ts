@@ -29,7 +29,8 @@ function fakeRace(course: RaceCourse | null) {
       listeners.push(listener);
       return () => undefined;
     },
-    course: async () => state.course,
+    // COURSE-06 : la course relue en base, avec la dernière progression gardée de chaque coureur
+    course: async () => state.course && { ...state.course, resume: [...new Map(recorded.map((r) => [r.key, { key: r.key, progress: r.progress, finishedAt: null }])).values()] },
     progress: async (key, code, progress) => {
       recorded.push({ key, code, progress });
       return false;
@@ -228,5 +229,23 @@ describe("COURSE-06 — the ranking is computed and broadcast by the server", ()
     const [first] = lastStandings(b).players;
     expect(first!.playerId).toBe("g:alpha");
     expect(first!.finishedMs).toBeGreaterThanOrEqual(30_000);
+  });
+
+  test("the ranking is read back from the database when runners come back after every socket left", async () => {
+    const { tabs } = await race();
+    const [a, b] = tabs as [Tab, Tab];
+    a.send({ type: "progress", progress: 0.3, wpm: 40 });
+    b.send({ type: "progress", progress: 0.1, wpm: 30 });
+    await b.until(() => lastStandings(b).players.every((p) => p.progress > 0));
+    a.ws.close();
+    b.ws.close();
+    await Bun.sleep(100);
+    const back = await connect(player("Alpha"));
+    back.send({ type: "join", room: ROOM });
+    await back.until(() => lastStandings(back)?.players.some((p) => p.playerId === "g:alpha" && p.progress === 0.3));
+    expect(lastStandings(back).players.find((p) => p.playerId === "g:alpha")!.progress).toBe(0.3);
+    back.send({ type: "progress", progress: 0.2, wpm: 40 });
+    await back.until(() => errors(back).length > 0);
+    expect(errors(back)).toEqual(["progress_backward"]);
   });
 });

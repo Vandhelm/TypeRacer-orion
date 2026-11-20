@@ -19,7 +19,7 @@
 //   (un leave ou un join envoyé entre-temps l'annule), et un salon changé pendant le contrôle est relu avant d'admettre.
 import type { Server, ServerWebSocket } from "bun";
 import { MAX_MESSAGE_BYTES, parseClientMessage, type Player, PROGRESS_INTERVAL_MS, type ServerMessage } from "./protocol";
-import { judge, standings, type Accepted, type RaceCourse } from "./referee";
+import { charsAt, judge, standings, type Accepted, type RaceCourse } from "./referee";
 import type { RoomBackend, RoomState } from "./room-backend";
 import { TICKET_TTL_MS, verifyTicket } from "./ticket";
 
@@ -31,7 +31,8 @@ type Connection = { player: Player; room: string | null; windowStart: number; wi
 type Socket = ServerWebSocket<Connection>;
 type Member = { player: Player; connections: number };
 /** COURSE-06 : la course arbitrée d'une salle. `course` : la dernière connue ; `over` : le salon a quitté la course. */
-type RaceState = { course: RaceCourse | null; over: boolean; entries: Map<string, Accepted>; lastSent: number; timer: ReturnType<typeof setTimeout> | null };
+/** `resumed` : progressions relues en base (par clé de membre), reprises quand le coureur revient. */
+type RaceState = { course: RaceCourse | null; over: boolean; entries: Map<string, Accepted>; resumed: Map<string, Accepted>; lastSent: number; timer: ReturnType<typeof setTimeout> | null };
 type Throttle = { lastSent: number; pending: { ws: Socket; text: string } | null; timer: ReturnType<typeof setTimeout> | null };
 
 export type RealtimeOptions = {
@@ -194,12 +195,19 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
     const state = races.get(code);
     if (!course) {
       if (state?.course) state.over = true;
-      else if (!state) races.set(code, { course: null, over: false, entries: new Map(), lastSent: -Infinity, timer: null });
+      else if (!state) races.set(code, { course: null, over: false, entries: new Map(), resumed: new Map(), lastSent: -Infinity, timer: null });
       return;
     }
     if (!state || !state.course || state.course.startsAt !== course.startsAt) {
       if (state?.timer) clearTimeout(state.timer);
-      races.set(code, { course, over: false, entries: new Map(), lastSent: -Infinity, timer: null });
+      // un classement vidé (toutes les sockets parties) ou un serveur redémarré repart de ce que la base a gardé
+      const now = Date.now();
+      const resumed = new Map(
+        (course.resume ?? [])
+          .filter((r) => r.progress > 0)
+          .map((r) => [r.key, { progress: r.progress, chars: course.marks ? charsAt(course.marks, r.progress) : 0, wpm: 0, at: now, finishedAt: r.finishedAt }] as const),
+      );
+      races.set(code, { course, over: false, entries: new Map(), resumed, lastSent: -Infinity, timer: null });
     } else {
       state.course = course;
       state.over = false;
@@ -207,8 +215,18 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
     publishStandings(code, true);
   }
 
+  /** Un coureur revenu reprend la progression relue en base pour sa clé de membre. */
+  function adopt(state: RaceState, ws: Socket) {
+    const key = ws.data.key;
+    const resumed = key ? state.resumed.get(key) : undefined;
+    if (!key || !resumed) return;
+    state.resumed.delete(key);
+    if (!state.entries.has(ws.data.player.id)) state.entries.set(ws.data.player.id, resumed);
+  }
+
   /** Le classement du serveur : progressions acceptées, et 0 pour les coureurs présents qui n'ont encore rien envoyé. */
   function standingsMessage(code: string, state: RaceState & { course: RaceCourse }): ServerMessage {
+    for (const ws of joined.get(code) ?? []) adopt(state, ws);
     const entries = new Map(state.entries);
     const runners = new Set(state.course.runners);
     for (const ws of joined.get(code) ?? []) {
@@ -256,6 +274,7 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
       send(ws, { type: "error", code: "not_a_runner" });
       return false;
     }
+    adopt(state, ws);
     const previous = state.entries.get(ws.data.player.id);
     const verdict = judge(state.course, previous, value, wpm, Date.now());
     if (!verdict.ok) {

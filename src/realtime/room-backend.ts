@@ -2,7 +2,9 @@
 // ce module traduit le joueur d'un ticket en identité de salon et donne au serveur ce qu'il pousse aux pages.
 // Les changements faits par les routes HTTP (Next.js, Vercel) arrivent par `changes` : NOTIFY de Postgres en
 // production (room-events.ts), un émetteur en mémoire dans les tests.
+import { eq } from "drizzle-orm";
 import type { Db } from "../../db/client";
+import { roomMembers } from "../../db/schema";
 import { courseWords, textFingerprint } from "../rooms/course-words";
 import { leaveAfterDisconnect, readRoom, recordProgress, refreshRoom, RoomRefused, roomIdByCode, roomView, type Identity, type RoomView } from "../server/rooms";
 import type { Player } from "./protocol";
@@ -101,7 +103,11 @@ export function createRoomBackend(db: Db, changes: Changes): RoomBackend {
       const id = await roomIdByCode(db, code);
       if (id === null) return null;
       try {
-        return raceCourseOf(await roomView(db, id));
+        const course = raceCourseOf(await roomView(db, id));
+        if (!course) return null;
+        // COURSE-06 : la progression gardée en base, pour reprendre le classement après le départ de toutes les sockets
+        const rows = await db.select({ key: roomMembers.memberKey, progress: roomMembers.progress, finishedAt: roomMembers.finishedAt }).from(roomMembers).where(eq(roomMembers.roomId, id));
+        return { ...course, resume: rows.map((r) => ({ key: r.key, progress: r.progress, finishedAt: r.finishedAt?.getTime() ?? null })) };
       } catch (error) {
         return refused(error);
       }
