@@ -159,6 +159,20 @@ describe("COURSE-06 — impossible progress is refused and never broadcast", () 
     expect(lastStandings(b).players.find((p) => p.playerId === "g:alpha")!.progress).toBe(0);
   });
 
+  test("a WPM above the human limit (300) is refused and never broadcast nor ranked", async () => {
+    const { tabs } = await race();
+    const [a, b] = tabs as [Tab, Tab];
+    a.send({ type: "progress", progress: 0.1, wpm: 301 });
+    await a.until(() => errors(a).length > 0);
+    await Bun.sleep(150);
+    expect(errors(a)).toEqual(["invalid_message"]);
+    expect(progressOf(b, "g:alpha")).toEqual([]);
+    a.send({ type: "progress", progress: 0.1, wpm: 300 });
+    await b.until(() => progressOf(b, "g:alpha").length > 0);
+    await b.until(() => lastStandings(b).players.some((p) => p.wpm === 300));
+    expect(lastStandings(b).players.every((p) => p.wpm <= 300)).toBe(true);
+  });
+
   test("a spectator's progress is refused (not_a_runner)", async () => {
     const { tabs } = await race({ runners: ["g:alpha"] });
     const b = tabs[1]!;
@@ -197,7 +211,7 @@ describe("COURSE-06 — the ranking is computed and broadcast by the server", ()
     await a.until(() => lastStandings(a).players[0]!.progress === 0.3);
     a.send({ type: "progress", progress: 0.1, wpm: 40 });
     await a.until(() => lastStandings(a).players[1]!.progress === 0.1);
-    a.send({ type: "progress", progress: 0.95, wpm: 400 });
+    a.send({ type: "progress", progress: 0.95, wpm: 60 });
     await a.until(() => errors(a).length > 0);
     await Bun.sleep(150);
     expect(errors(a)).toEqual(["progress_jump"]);

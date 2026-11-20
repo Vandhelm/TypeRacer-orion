@@ -83,7 +83,7 @@ describe("TECH-06 — real-time client", () => {
     await until(states, (s) => s.players.length === 1);
     client.sendProgress(1.7, 900);
     await Bun.sleep(50);
-    expect(JSON.parse(sent[0]!)).toEqual({ type: "progress", progress: 1, wpm: 500 });
+    expect(JSON.parse(sent[0]!)).toEqual({ type: "progress", progress: 1, wpm: 300 }); // COURSE-06 : borne à 300
     client.close();
   });
 

@@ -48,7 +48,8 @@ describe("TECH-07 — real-time client messages are validated by a schema", () =
 
   test("accepts the bounds themselves", () => {
     expect(parseClientMessage(raw({ type: "progress", progress: 0, wpm: 0 }))).not.toBeNull();
-    expect(parseClientMessage(raw({ type: "progress", progress: 1, wpm: 500 }))).not.toBeNull();
+    expect(parseClientMessage(raw({ type: "progress", progress: 1, wpm: 300 }))).not.toBeNull();
+    expect(parseClientMessage(raw({ type: "progress", progress: 1, wpm: 300.01 }))).toBeNull(); // COURSE-06 : borne à 300
   });
 
   test("rejects extra fields, so nobody can slip an identity into a message", () => {
