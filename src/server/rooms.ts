@@ -3,7 +3,8 @@
 import { and, asc, desc, eq, gt, inArray, isNull, ne, sql } from "drizzle-orm";
 import type { z } from "zod";
 import type { Db } from "../../db/client";
-import { players, raceConfigs, roomBans, roomMembers, rooms } from "../../db/schema";
+import { players, raceConfigs, roomBans, roomMembers, rooms, user } from "../../db/schema";
+import { storedAvatar } from "../players/avatar";
 import { allows, canJoin, newRoomCode } from "../rooms/access";
 import type { RoomFilters } from "../rooms/explorer";
 import { seatColor } from "../rooms/seats";
@@ -61,7 +62,8 @@ export function memberKey(who: Identity | { playerId: number }): string {
 }
 
 /** finished (SALLE-09) : ce membre a fini la course en cours ; son retour au salon ne le renvoie pas courir. */
-export type MemberView = { key: string; name: string; guest: boolean; host: boolean; role: Role; seat: number | null; color: string | null; finished: boolean };
+/** image (COURSE-05) : la photo du compte, réduite par le serveur (AUTH-04) ; null pour un invité ou sans photo. */
+export type MemberView = { key: string; name: string; guest: boolean; host: boolean; role: Role; seat: number | null; color: string | null; finished: boolean; image?: string | null };
 export type RoomView = {
   code: string;
   status: RoomStatus;
@@ -205,9 +207,10 @@ export async function roomView(db: Db, roomId: number, _viewer?: string): Promis
     .where(eq(rooms.id, roomId));
   if (!row) throw new RoomRefused("not_found");
   const members = await db
-    .select({ key: roomMembers.memberKey, playerId: roomMembers.playerId, guestName: roomMembers.guestName, playerName: players.name, role: roomMembers.role, seat: roomMembers.seat, color: roomMembers.color, finishedAt: roomMembers.finishedAt })
+    .select({ key: roomMembers.memberKey, playerId: roomMembers.playerId, guestName: roomMembers.guestName, playerName: players.name, role: roomMembers.role, seat: roomMembers.seat, color: roomMembers.color, finishedAt: roomMembers.finishedAt, image: user.image })
     .from(roomMembers)
     .leftJoin(players, eq(players.id, roomMembers.playerId))
+    .leftJoin(user, eq(user.playerId, roomMembers.playerId))
     .where(eq(roomMembers.roomId, roomId))
     .orderBy(asc(roomMembers.joinedAt), asc(roomMembers.memberKey));
   const host = memberKey({ playerId: row.rooms.hostId });
@@ -218,7 +221,7 @@ export async function roomView(db: Db, roomId: number, _viewer?: string): Promis
     status: row.rooms.status,
     host,
     settings: settingsOf(row.rooms, row.race_configs),
-    members: members.map((m) => ({ key: m.key, name: m.playerName ?? m.guestName ?? "", guest: m.playerId === null, host: m.key === host, role: m.role, seat: m.seat, color: m.color, finished: m.finishedAt !== null })),
+    members: members.map((m) => ({ key: m.key, name: m.playerName ?? m.guestName ?? "", guest: m.playerId === null, host: m.key === host, role: m.role, seat: m.seat, color: m.color, finished: m.finishedAt !== null, image: storedAvatar(m.image) })),
     passage: passage && { body: passage.body, source: passage.source },
     seed: row.rooms.textSeed,
   };

@@ -31,7 +31,8 @@ export function durationChoice(duration: number | null, typing: boolean): Durati
   return DURATION_PRESETS.includes(duration) ? duration : "other";
 }
 
-export type Player = { name: string; color: string; host?: boolean; me?: boolean; bot?: boolean };
+/** image (COURSE-05) : la photo du compte, telle que l'envoie le serveur ; absente pour un invité ou un bot. */
+export type Player = { name: string; color: string; host?: boolean; me?: boolean; bot?: boolean; image?: string };
 export type Seat = Player | { free: true };
 export type SavedText = { name: string; text: string };
 
@@ -118,7 +119,7 @@ export function seatsOf(room: Pick<Room, "guests" | "bots">, members: MemberView
   const seats: Seat[] = members
     .filter((m) => m.role === "player" && m.seat !== null)
     .sort((a, b) => a.seat! - b.seat!)
-    .map((m) => ({ name: m.name, color: m.color ?? seatColor(m.seat!), host: m.host || undefined, me: m.key === you || undefined }));
+    .map((m) => ({ name: m.name, color: m.color ?? seatColor(m.seat!), host: m.host || undefined, me: m.key === you || undefined, ...(m.image ? { image: m.image } : {}) }));
   let bot = 0;
   while (seats.length < room.guests) {
     // SALLE-05 : un bot par nom de la liste fermée (le serveur ne reconnaît qu'elle) ; au-delà, des places libres
