@@ -83,7 +83,7 @@ Client vers serveur (validés par `ClientMessage`, champs en trop refusés) :
 |---|---|---|
 | `join` | `room` : code SALLE-02 | Quitte la salle précédente, rejoint celle-ci, diffuse la présence |
 | `leave` | — | Quitte la salle, diffuse la présence |
-| `progress` | `progress` : 0 à 1 (annexe A), `wpm` : 0 à 300 (MPM humain maximal, COURSE-06) | Diffusé aux autres membres de la salle, limité à 10 par seconde par joueur |
+| `progress` | `progress` : 0 à 1 (annexe A), `wpm` : 0 à 300 (MPM humain maximal, COURSE-06), `words` (facultatif, BONUS-04) : nombre de mots du texte sur lequel compte la progression, entier de 1 à 10 000 | Diffusé aux autres membres de la salle, limité à 10 par seconde par joueur ; avec `words`, recomptée sur le texte du coureur (voir « Progression et MPM avec les bonus ») |
 
 Serveur vers client (validés par `ServerMessage` côté client) :
 
@@ -121,7 +121,7 @@ Le navigateur tape et compte ; le serveur décide. Qui décide quoi :
 | Attribution des bonus (BONUS-01) | Le serveur, après chaque progression acceptée : voir « Bonus de remontée » plus bas | `src/rooms/bonus.ts`, `awardCatchUp` dans `src/realtime/server.ts` |
 | Type et effet des bonus (BONUS-02) | Le serveur choisit le type à l'attribution (graine du salon) et change le texte arbitré de la cible ; la page de course applique l'effet reçu : voir « Types de bonus » plus bas | `src/rooms/bonus-effects.ts`, `bonusEffect` dans `src/realtime/server.ts`, `src/views/game/bonus.ts` |
 | Annonce des bonus (BONUS-03) | La page de course, depuis les bonus reçus (`RealtimeState.bonuses`) : voir « Annonce des bonus » plus bas | `src/views/game/announce.ts`, `RaceTrack.tsx`, `BonusNotice.tsx` |
-| MPM des bonus (BONUS-04) | Pas codé. Il se branche sur `race.mine` (page) et `texts` (serveur) | — |
+| Progression et MPM des bonus (BONUS-04) | Une seule règle, sur le texte couru par chacun : voir « Progression et MPM avec les bonus » plus bas | `progressReport`, `raceText`, `myWpm` (`src/views/game/race.ts`), `applyBonus` (`src/views/game/bonus.ts`), `referee` / `bonusEffect` (`src/realtime/server.ts`), `keepBonusText` (`src/server/rooms.ts`), `claimServerRace` (`src/server/races.ts`) |
 
 Le texte est connu du serveur : il retire les mots comme la page de course, avec les mêmes réglages, la même graine et le même passage (CONF-03, `raceCourseOf` dans `src/realtime/room-backend.ts`). Il compte donc lui-même les caractères validés (espaces comprises, annexe A) à chaque progression. Sans graine (salon lancé avant CONF-03), seules les règles d'horloge et de recul s'appliquent.
 
@@ -346,4 +346,28 @@ Trois types (`src/rooms/bonus-effects.ts`), un qui aide le coureur en retard et 
 
 **Annonce (BONUS-03)** : chaque bonus reçu avec un effet est annoncé (`src/views/game/announce.ts`) ; un bonus sans effet ne change rien et n'est pas annoncé. Sur la piste, pour tous (spectateurs compris) : un badge sur le couloir qui subit l'effet (« +3 mots », « −3 mots », « Brouillard ») et une ligne qui dit qui l'a reçu et qui il touche, dans une région `role="status"`. Chez le joueur ciblé : un encart qui dit ce qui lui arrive (`BonusNotice`). L'annonce dure 4 s, le brouillard tant qu'il dure ; l'apparition est animée sauf avec `prefers-reduced-motion`. La piste suit l'effet : le couloir d'un autre humain dont le texte change reprend ses mots validés sur le nouveau nombre de mots, comme le serveur (`applyRemoteBonus`), donc un meneur à +3 mots recule ; sa progression d'avant, relayée de nouveau, ne le refait pas avancer (`Remote.stale`).
 
-**Limites connues** (BONUS-04, COURSE-08) : une progression partie de la page juste avant qu'elle reçoive l'effet est jugée sur le nouveau texte (au pire quelques progressions suivantes refusées en recul, sans conséquence) ; un rechargement de la page en course, ou un serveur redémarré, repart du texte de la course (les textes changés ne sont pas gardés en base). Les bots restent hors bonus (BOT-04 / BOT-05).
+Les bots restent hors bonus (BOT-04 / BOT-05).
+
+## Progression et MPM avec les bonus (BONUS-04)
+
+**Règle**, la même pour la page, l'arbitre temps réel, l'enregistrement et le podium : tout se compte sur **le texte effectivement couru par le joueur**, celui de la course changé par ses bonus (+3 / −3 mots, dans l'ordre reçu ; deux bonus s'appliquent l'un après l'autre).
+
+- **Progression** = mots validés ÷ nombre de mots de ce texte (0 à 1). À l'arrivée, tous les mots du texte sont validés : 1, que le texte ait 17, 20 ou 23 mots.
+- **MPM** (annexe A) = caractères correctement tapés de ce texte (mots réussis, espaces comprises, plus les lettres justes du mot en cours) ÷ 5 ÷ minutes. Un texte de 20 mots allongé à 23 et fini en une minute donne le MPM des 23 mots, pas des 20.
+- **Caractères arbitrés** (vitesse humaine, saut) : comptés par le serveur sur les `marks` de ce texte, jamais déclarés par le client.
+
+**Où elle s'applique :**
+
+| Lieu | Comment |
+|---|---|
+| Page de course | `myCourse(race)` (mon texte changé, `race.mine`) sert à la saisie, à la progression (`progressReport`), au MPM (`myWpm`), à la fin de course et au texte enregistré (`raceText`). Les mesures par seconde d'un autre humain comptent sur la longueur de son texte (`Remote.words`) |
+| Arbitre temps réel | Chaque coureur est jugé sur son texte (`texts`). La page envoie avec sa progression le nombre de mots de son texte (`words`) : une progression partie **avant** un bonus et reçue après (longueur passée de son texte) garde ses mots validés, recomptés sur le texte d'aujourd'hui (33 mots sur 100 deviennent 33/103), puis est jugée et relayée ainsi. Plus de recul refusé ensuite. Une longueur que son texte n'a jamais eue n'est pas convertie ; prétendre l'ancienne longueur ne fait pas sauter les mots ajoutés (100 mots faits sur 103 ne sont pas une arrivée) |
+| Enregistrement (`POST /api/races`) | Le texte enregistré (`races.content`) est celui que le joueur a couru : la page envoie `raceText`, et quand le serveur temps réel a gardé un texte changé (`room_members.bonus_words`), c'est celui-là qui est enregistré, pas celui du corps. Le MPM reste celui de la page (calculé sur ce texte), borné comme avant (MPM humain, durée) |
+| Podium | Construit depuis la course de la page (`buildResults`) : mon MPM, ma progression et mes mesures comptent sur mon texte |
+
+**−3 mots, même borne des deux côtés** : le serveur décide combien de mots partent (`removed`, au plus 3, borné sur **ses** mots validés pour ne jamais retirer le mot en cours) et la page retire exactement ce nombre, même si elle est déjà plus loin que le serveur ne l'a vu (paquets en vol). Les deux textes ont donc toujours la même longueur. Si la page avait déjà tapé tout le texte raccourci, elle est arrivée : sa progression suivante (1) est jugée sur ce texte.
+
+**Reprise** : le texte changé est gardé.
+
+- **Rechargement de la page** : il est dans l'instantané de la course (`sessionStorage`, champ `words` de `saveSnapshot`) ; la page rechargée le reprend avant de se placer à la progression du serveur, et l'enregistre à la fin. Limite : une page ouverte dans un autre onglet (sans cet instantané) repart du texte de la course ; le texte enregistré reste alors celui du serveur.
+- **Serveur temps réel redémarré** : à chaque effet sur un texte, il écrit en base le texte du coureur et sa progression recomptée (`room_members.bonus_words`, `progress`, pour ce départ seulement, via `keepBonusText` ; remis à null à chaque lancement). Relu avec la course (`resume[].words`), le coureur reprend sur ce texte. Les bonus déjà reçus ne sont pas gardés (BONUS-01) ; seuls les textes le sont, avec la longueur de la course et la leur comme longueurs connues.
