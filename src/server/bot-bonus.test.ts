@@ -7,7 +7,7 @@ import { rooms } from "../../db/schema";
 import { botProfile, botSeed, simulateBot, type BotBonus } from "../rooms/bot-engine";
 import { courseWords } from "../rooms/course-words";
 import { COUNTDOWN_MS } from "../rooms/race-clock";
-import { launchBots } from "./bot-course";
+import { launchBots, marksOf, netWpm } from "./bot-course";
 import { roomsFixture } from "./rooms.fixture";
 import { keepBotBonus, type RoomView } from "./rooms";
 
@@ -59,5 +59,28 @@ describe("BOT-04 — the server keeps the bonuses of a bot and replays them for 
     const fog: BotBonus = { at: 3_000, effect: { kind: "fog", target: `bot:${BOT}`, durationMs: 5_000 } };
     await keepBotBonus(t.db, code, view.startsAt!, fog);
     expect(((await t.read(host.cookie, code)).body.room as unknown as RoomView).botBonuses).toEqual([EXTRA, fog]);
+  });
+
+  test("COURSE-06 — the bot's net WPM counts the characters of the text it ran, +3 words included", async () => {
+    const { code, view, id, bot, course } = await launched("Bot04_Mpm", 0);
+    const bonused = simulateBot(course, bot, Infinity, [EXTRA]);
+    await keepBotBonus(t.db, code, view.startsAt!, EXTRA);
+    // en pleine course, bien après l'effet : position fractionnaire, comptée comme la page (laneWpm) sur les mots finis
+    await t.db.update(rooms).set({ launchedAt: new Date(Date.now() - COUNTDOWN_MS - Math.round(bonused.arrivedMs! * 0.7)) }).where(eq(rooms.id, id));
+    const standing = (await launchBots(t.db, id, 1)).standings.get(BOT.toLowerCase())!;
+    expect(standing.finishedAt).toBeNull();
+    const run = simulateBot(course, bot, standing.seconds * 1000, [EXTRA]);
+    expect(run.words.length).toBe(course.words.length + 3);
+    expect(standing.wpm).toBe(netWpm(marksOf(run.words)[Math.floor(run.position)]! - run.missed, standing.seconds));
+  });
+
+  test("COURSE-06 — a bot that arrived after +3 words gets the WPM of its whole longer text", async () => {
+    const { code, view, id, bot, course } = await launched("Bot04_MpmFin", 0);
+    const bonused = simulateBot(course, bot, Infinity, [EXTRA]);
+    await keepBotBonus(t.db, code, view.startsAt!, EXTRA);
+    await t.db.update(rooms).set({ launchedAt: new Date(Date.now() - COUNTDOWN_MS - bonused.arrivedMs! - 500) }).where(eq(rooms.id, id));
+    const standing = (await launchBots(t.db, id, 1)).standings.get(BOT.toLowerCase())!;
+    expect(standing.seconds).toBe(bonused.arrivedMs! / 1000);
+    expect(standing.wpm).toBe(netWpm(marksOf(bonused.words).at(-1)! - bonused.missed, standing.seconds));
   });
 });

@@ -55,7 +55,6 @@ export async function launchBots(db: Db, roomId: number, humans: number, withTex
   const words = courseWords({ settings: { ...config, text: config.customText }, seed: row.rooms.textSeed, passage }) ?? [];
   // BOT-03 : le mode d'erreur du lancement, comme la page (createCourse)
   const course = { words, durationMs: endsAt === null ? null : endsAt - startsAt, mistakes: config.mistakes };
-  const marks = marksOf(words);
   const elapsed = Math.max(0, Math.min(row.now, endsAt ?? Infinity) - startsAt);
   let running = false;
   for (const bot of bots) {
@@ -65,9 +64,10 @@ export async function launchBots(db: Db, roomId: number, humans: number, withTex
     const run = simulateBot(course, { seed, ...botProfile(seed, bot.level, config.botAccuracy) }, row.now - startsAt, bonuses);
     // un bot éliminé (mode fatal) ne court plus : il ne retient pas la course
     if (run.arrivedMs === null && run.eliminatedMs === null) running = true;
-    // COURSE-06 : son temps et son MPM, ceux de sa course calculée ; en mode libre, les mots laissés faux ne comptent pas (BOT-03)
+    // COURSE-06 : son temps et son MPM, ceux de sa course calculée ; en mode libre, les mots laissés faux ne comptent pas (BOT-03).
+    // Comptés comme la page (laneWpm) : les mots finis du texte qu'il a couru (BOT-04 : changé par ses bonus).
     const seconds = (run.arrivedMs ?? run.eliminatedMs ?? elapsed) / 1000;
-    const wpm = netWpm((marks[run.position] ?? marks.at(-1)!) - run.missed, seconds);
+    const wpm = netWpm(marksOf(run.words)[Math.floor(run.position)]! - run.missed, seconds);
     standings.set(bot.name.toLowerCase(), { finishedAt: run.arrivedMs === null ? null : new Date(startsAt + run.arrivedMs), progress: run.progress, seat: null, seconds, wpm });
   }
   return { standings, running: running && (endsAt === null || row.now < endsAt), course: { words, startsAt, endsAt, now: row.now } };
