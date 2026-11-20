@@ -325,9 +325,9 @@
     "scope": "critère (feature/game/bonus-02)"
   },
   "BONUS-03": {
-    "commit": "1fba673",
-    "date": "2026-11-18",
-    "scope": "site (light)"
+    "commit": "fecc432",
+    "date": "2026-11-20",
+    "scope": "critère (feature/game/bonus-03)"
   },
   "BONUS-04": {
     "commit": "1fba673",
