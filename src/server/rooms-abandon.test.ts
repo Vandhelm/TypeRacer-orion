@@ -62,6 +62,13 @@ describe("COURSE-07 — a runner abandons the race, recorded by the server", () 
     expect((await row(code, host.key)).abandonedAt).toEqual(first);
   });
 
+  test("two abandons sent at once both succeed and leave one abandon", async () => {
+    const { code, guest } = await racingPair("Abandon_Double");
+    const [a, b] = await Promise.all([abandon(code, guest.cookie), abandon(code, guest.cookie)]);
+    expect([a.status, b.status]).toEqual([200, 200]);
+    expect((await row(code, guest.key)).abandonedAt).not.toBeNull();
+  });
+
   test("the progress is frozen: the server ignores any progress sent after the abandon", async () => {
     const { code, guest } = await racingPair("Abandon_Gel");
     await recordProgress(t.db, code, guest.key, 0.3);
@@ -147,6 +154,9 @@ describe("COURSE-07 — a runner abandons the race, recorded by the server", () 
   test("an unknown field or a broken body is refused (400)", async () => {
     const { code, host } = await racingPair("Abandon_Corps");
     expect((await abandon(code, host.cookie, { progress: 1 })).status).toBe(400);
+    expect((await abandon(code, host.cookie, null)).status).toBe(400);
+    expect((await abandon(code, host.cookie, [])).status).toBe(400);
+    expect((await t.call("GET", `/api/rooms/${code}/abandon`, host.cookie)).status).toBe(404);
     const broken = await t.call("POST", `/api/rooms/${code}/abandon`, host.cookie, "{");
     expect(broken.status).toBe(400);
     expect((await row(code, host.key)).abandonedAt).toBeNull();
