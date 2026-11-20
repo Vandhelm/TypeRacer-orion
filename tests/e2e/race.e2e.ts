@@ -53,7 +53,9 @@ test.describe("TEST-02 — race against bots up to the podium", () => {
     const ranking = page.getByRole("region", { name: `All players (${bots + 1})` });
     // Tout le texte tapé sans faute : premier, précision 100 %.
     await expect(ranking.getByText(/^Your place · 1st · \d+ WPM · 100 %/)).toBeVisible();
-    await expect(ranking.getByRole("listitem")).toHaveCount(bots + 1);
-    await expect(ranking.getByRole("listitem").first()).toContainText(`${host} · YOU`);
+    // RES-02 : le classement est un tableau, une ligne de <tbody> par joueur (l'en-tête est à part).
+    const rows = ranking.locator("tbody").getByRole("row");
+    await expect(rows).toHaveCount(bots + 1);
+    await expect(rows.first().getByRole("rowheader")).toContainText(`${host} · YOU`);
   });
 });
