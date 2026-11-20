@@ -310,9 +310,9 @@
     "scope": "critère"
   },
   "BOT-05": {
-    "commit": "2acdffe",
-    "date": "2026-11-19",
-    "scope": "suivi (light)"
+    "commit": "649bda8",
+    "date": "2026-11-20",
+    "scope": "critère (feature/game/bot-05)"
   },
   "BONUS-01": {
     "commit": "742f253",
