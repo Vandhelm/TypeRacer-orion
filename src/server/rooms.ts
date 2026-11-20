@@ -9,7 +9,7 @@ import { storedAvatar } from "../players/avatar";
 import { allows, canJoin, isListed, newRoomCode } from "../rooms/access";
 import { launchBlocker } from "../rooms/launch";
 import { follow, raceState, storedStatus, type RaceEvent, type RaceState } from "../rooms/race-state";
-import { raceClock } from "../rooms/race-clock";
+import { COUNTDOWN_MS, raceClock } from "../rooms/race-clock";
 import { courseWords, textFingerprint } from "../rooms/course-words";
 import type { RoomFilters } from "../rooms/explorer";
 import { seatColor } from "../rooms/seats";
@@ -692,9 +692,10 @@ export async function recordProgress(db: Db, code: string, key: string, progress
 }
 
 /**
- * COURSE-07 : ce participant abandonne la course en cours. L'abandon (abandoned_at, heure de la base) garde la progression
- * que le serveur temps réel a validée à ce moment (room_members.progress, que recordProgress ne touche plus ensuite).
- * Refusé hors course, décompte compris (not_racing), pour un spectateur (not_player), après l'arrivée (already_finished).
+ * COURSE-07 : ce participant abandonne la course en cours (abandoned_at, heure de la base). Sa progression est celle que
+ * le serveur temps réel a validée : il l'écrit en base dès qu'il apprend l'abandon (keepProgress) ; recordProgress ne la
+ * touche plus ensuite. Refusé hors course : décompte, ou temps écoulé même si la salle n'est pas encore aux résultats
+ * (not_racing) ; pour un spectateur (not_player) ; après l'arrivée (already_finished).
  * Un second appel ne change rien. COURSE-09 : un abandon compte comme une fin ; le dernier coureur termine la course.
  */
 export async function abandonRace(db: Db, code: string, who: Identity): Promise<RoomResult> {
@@ -702,12 +703,16 @@ export async function abandonRace(db: Db, code: string, who: Identity): Promise<
   const key = memberKey(who);
   await db.transaction(async (tx) => {
     await sweep(tx, id, key);
-    const [room] = await tx.select({ id: rooms.id }).from(rooms).where(eq(rooms.id, id)).for("update");
+    const [room] = await tx
+      .select({ timeUp: sql<boolean>`coalesce(${rooms.launchedAt} + ${COUNTDOWN_MS} * interval '1 millisecond' + (select ${raceConfigs.duration} from ${raceConfigs} where ${raceConfigs.id} = ${rooms.configId}) * interval '1 second' <= now(), false)` })
+      .from(rooms)
+      .where(eq(rooms.id, id))
+      .for("update");
     if (!room) throw new RoomRefused("not_found");
     const [member] = await tx.select({ role: roomMembers.role, finishedAt: roomMembers.finishedAt, abandonedAt: roomMembers.abandonedAt }).from(roomMembers).where(and(eq(roomMembers.roomId, id), eq(roomMembers.memberKey, key)));
     if (!member) throw new RoomRefused("not_found"); // SALLE-10 : un non-membre ne sait pas si le salon existe
     if (member.abandonedAt) return;
-    if ((await stateOf(tx, id)) !== "racing") throw new RoomRefused("not_racing");
+    if ((await stateOf(tx, id)) !== "racing" || room.timeUp) throw new RoomRefused("not_racing");
     if (member.role !== "player") throw new RoomRefused("not_player");
     if (member.finishedAt) throw new RoomRefused("already_finished");
     await tx.update(roomMembers).set({ abandonedAt: sql`now()` }).where(and(eq(roomMembers.roomId, id), eq(roomMembers.memberKey, key)));
