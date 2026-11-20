@@ -1,9 +1,12 @@
 // Les réglages d'une course, en une ligne de libellés, pour la dernière course et l'historique du profil.
 import type { TFunction } from "i18next";
 import { formatNumber } from "../../i18n/format";
+import { effectiveComposition } from "../../rooms/text";
 import type { RaceSummary } from "../podium/results";
 
-export function raceSettingLabels(summary: RaceSummary, t: TFunction, language: string): string[] {
+export function raceSettingLabels(recorded: RaceSummary, t: TFunction, language: string): string[] {
+  // CONF-07 : seulement les options qui ont eu un effet (une course enregistrée avant la correction a pu les garder)
+  const summary = effectiveComposition(recorded);
   return [
     t(`profile.textTypes.${summary.textType}`),
     t("profile.words", { words: formatNumber(language, summary.wordCount) }),
