@@ -35,7 +35,7 @@ describe("CONF-10 — the server decides who is a bot from the stored list", () 
   };
 
   test("a race with two bots of different levels keeps both as bots", async () => {
-    const { code, host } = await launched("Conf10_Deux_Bots", [{ name: "Saba_Sensei", level: "slow" }, { name: "Uni_Kun", level: "fast" }]);
+    const { code, host } = await launched("Conf10_Deux_Bots", [{ name: "Saba_Sensei", level: "beginner" }, { name: "Uni_Kun", level: "expert" }]);
     const res = await post({ room: code, summary: SUMMARY, players: [result("Conf10_Deux_Bots", 50), result("Saba_Sensei", 30, true), result("Uni_Kun", 90, true)] }, host.cookie);
     expect(res.status).toBe(201);
     const { raceId: id } = (await res.json()) as { raceId: number };
@@ -44,7 +44,7 @@ describe("CONF-10 — the server decides who is a bot from the stored list", () 
   });
 
   test("a name of the closed list that is not in the room's list is not a bot, even flagged so by the browser", async () => {
-    const { code, host } = await launched("Conf10_Faux_Bot", [{ name: "Ebi_Fry", level: "medium" }]);
+    const { code, host } = await launched("Conf10_Faux_Bot", [{ name: "Ebi_Fry", level: "intermediate" }]);
     const before = await t.db.$count(players, eq(players.name, "Tako_San"));
     const res = await post({ room: code, summary: SUMMARY, players: [result("Tako_San", 150, true), result("Conf10_Faux_Bot", 50), result("Ebi_Fry", 40, true)] }, host.cookie);
     expect(res.status).toBe(201);
@@ -56,6 +56,6 @@ describe("CONF-10 — the server decides who is a bot from the stored list", () 
 
   test("the launch counts the bots of the list, not the free seats", () => {
     expect(launchBlocker({ guests: 4, bots: true, botList: [] }, [{ role: "player" }])).toBe("too_few");
-    expect(launchBlocker({ guests: 4, bots: true, botList: [{ name: "Ebi_Fry", level: "slow" }] }, [{ role: "player" }])).toBeNull();
+    expect(launchBlocker({ guests: 4, bots: true, botList: [{ name: "Ebi_Fry", level: "beginner" }] }, [{ role: "player" }])).toBeNull();
   });
 });

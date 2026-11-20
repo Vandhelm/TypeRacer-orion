@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { RealtimeState } from "../../realtime/client";
-import { botProfile, botSeed, simulateBot } from "../../rooms/bot-engine";
+import { botProfile, botSeed, levelOfSpeed, simulateBot } from "../../rooms/bot-engine";
 import { DEFAULT_SETTINGS } from "../../rooms/settings";
 import { seededRandom } from "../../rooms/text";
 import type { Player, Room } from "../room/room";
@@ -130,8 +130,8 @@ describe("BOT-05 — every page of the room shows the same bots, from the room s
   test("the bot is the one the engine computes from the seed, as the server does", () => {
     const mounted = mountRace(ROOM, [ME, BOT], { ...TIMING, now: START + 25_000 });
     const bot = mounted.bots[0]!;
-    expect(bot.wpm).toBe(botProfile(botSeed(SEED, "bot"), ROOM.botSpeed, ROOM.botAccuracy).wpm);
-    expect(bot.words).toBe(simulateBot({ words: mounted.course.words, durationMs: 120_000 }, { seed: botSeed(SEED, "bot"), wpm: bot.wpm }, 25_000).position);
+    expect(bot.wpm).toBe(botProfile(botSeed(SEED, "bot"), levelOfSpeed(ROOM.botSpeed), ROOM.botAccuracy).wpm);
+    expect(bot.words).toBe(simulateBot({ words: mounted.course.words, durationMs: 120_000, mistakes: ROOM.mistakes }, { seed: botSeed(SEED, "bot"), ...botProfile(botSeed(SEED, "bot"), levelOfSpeed(ROOM.botSpeed), ROOM.botAccuracy) }, 25_000).position);
   });
 });
 

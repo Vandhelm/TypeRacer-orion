@@ -1,4 +1,5 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
+import { BOT_START } from "../../rooms/bot-engine";
 import { advanceBots, createCourse, createRace, type Race } from "../game/race";
 import type { Player, Room } from "../room/room";
 import { parseRace } from "../../server/races";
@@ -20,14 +21,25 @@ describe("buildResults", () => {
     const race = finished({
       arrivals: [1],
       wordIndex: 1,
-      bots: [{ lane: 1, name: "bot1", seed: 1, tick: 0, wpm: 60, accuracy: 93, words: 3, typed: 15, errors: 1, keys: {}, finishedAt: 31000 }, { lane: 2, name: "bot2", seed: 2, tick: 0, wpm: 30, accuracy: 90, words: 2, typed: 7, errors: 0, keys: {}, finishedAt: 0 }],
+      bots: [{ ...BOT_START, level: "intermediate" as const, lane: 1, name: "bot1", seed: 1, tick: 0, wpm: 60, accuracy: 93, words: 3, typed: 15, errors: 1, keys: {}, finishedAt: 31000 }, { ...BOT_START, level: "intermediate" as const, lane: 2, name: "bot2", seed: 2, tick: 0, wpm: 30, accuracy: 90, words: 2, typed: 7, errors: 0, keys: {}, finishedAt: 0 }],
     });
     expect(buildResults(race, PLAYERS).map((p) => p.name)).toEqual(["fast", "slow", "me"]);
   });
 
   test("measures a bot from its own finish time", () => {
-    const race = finished({ arrivals: [1], bots: [{ lane: 1, name: "bot1", seed: 1, tick: 0, wpm: 60, accuracy: 93, words: 3, typed: 15, errors: 1, keys: {}, finishedAt: 31000 }, { lane: 2, name: "bot2", seed: 2, tick: 0, wpm: 30, accuracy: 90, words: 0, typed: 0, errors: 0, keys: {}, finishedAt: 0 }] });
+    const race = finished({ arrivals: [1], bots: [{ ...BOT_START, level: "intermediate" as const, lane: 1, name: "bot1", seed: 1, tick: 0, wpm: 60, accuracy: 93, words: 3, typed: 15, errors: 1, keys: {}, finishedAt: 31000 }, { ...BOT_START, level: "intermediate" as const, lane: 2, name: "bot2", seed: 2, tick: 0, wpm: 30, accuracy: 90, words: 0, typed: 0, errors: 0, keys: {}, finishedAt: 0 }] });
     expect(buildResults(race, PLAYERS)[0]).toMatchObject({ name: "fast", me: false, wpm: 6, accuracy: 93, seconds: 30, finished: true, chars: [14, 1, 0, 0] });
+  });
+
+  test("BOT-03 — a bot eliminated in fatal mode is shown eliminated; the words a bot left wrong count as missed", () => {
+    const bot = { ...BOT_START, level: "noob" as const, seed: 1, tick: 0, wpm: 15, accuracy: 88, keys: {} };
+    const race = finished({
+      arrivals: [1],
+      bots: [{ ...bot, lane: 1, name: "bot1", words: 3, chars: 14, typed: 14, errors: 2, missed: 4, finishedAt: 31000 }, { ...bot, lane: 2, name: "bot2", words: 1, chars: 3, typed: 4, errors: 1, out: true, finishedAt: 5000 }],
+    });
+    const [first, second] = buildResults(race, PLAYERS);
+    expect(first).toMatchObject({ name: "fast", finished: true, eliminated: false, chars: [12, 2, 0, 4] });
+    expect(second).toMatchObject({ name: "slow", finished: false, eliminated: true, seconds: 4 });
   });
 });
 

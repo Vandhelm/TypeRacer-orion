@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { botProfile, botSeed, simulateBot } from "../../rooms/bot-engine";
 import type { MistakeMode, Player } from "../room/room";
-import { advanceBots, applyInput, createCourse, createRace, elapsedMs, endRace, everyoneDone, laneProgress, myAccuracy, myWpm, PHASE_STATE, secondsLeft, startRace, type Race } from "./race";
+import { advanceBots, applyInput, createCourse, createRace, elapsedMs, endRace, everyoneDone, laneProgress, laneWpm, myAccuracy, myWpm, PHASE_STATE, secondsLeft, startRace, type Bot, type Race } from "./race";
 
 const ME: Player = { name: "me", color: "red", me: true };
 const BOT: Player = { name: "bot", color: "blue", bot: true };
@@ -226,33 +226,33 @@ describe("COURSE-04 — WPM and accuracy move live, as the player types", () => 
 
 describe("CONF-10 — each bot races at its own level", () => {
   test("two bots of different levels get speeds in their own ranges", () => {
-    const slow: Player = { name: "Wasabi99", color: "blue", bot: true, level: "slow" };
-    const fast: Player = { name: "Ebi_Fry", color: "green", bot: true, level: "fast" };
+    const slow: Player = { name: "Wasabi99", color: "blue", bot: true, level: "beginner" };
+    const fast: Player = { name: "Ebi_Fry", color: "green", bot: true, level: "expert" };
     const race = createRace(createCourse(["le", "riz"], 60, "fix"), [ME, slow, fast], "medium", "high", () => 0.5);
     const [first, second] = race.bots;
-    expect(first!.wpm).toBeGreaterThanOrEqual(25);
-    expect(first!.wpm).toBeLessThanOrEqual(40);
-    expect(second!.wpm).toBeGreaterThanOrEqual(65);
+    expect(first!.wpm).toBeGreaterThanOrEqual(20);
+    expect(first!.wpm).toBeLessThanOrEqual(35);
+    expect(second!.wpm).toBeGreaterThanOrEqual(70);
     expect(second!.wpm).toBeLessThanOrEqual(100);
   });
 
   test("a bot without a level keeps the room speed", () => {
     const race = createRace(createCourse(["le", "riz"], 60, "fix"), [ME, BOT], "fast", "high", () => 0);
-    expect(race.bots[0]!.wpm).toBe(65);
+    expect(race.bots[0]!.wpm).toBe(70);
   });
 });
 
 describe("BOT-05 — the race bots come from the room seed, the same in every browser", () => {
-  const WASABI: Player = { name: "Wasabi99", color: "blue", bot: true, level: "slow" };
-  const EBI: Player = { name: "Ebi_Fry", color: "green", bot: true, level: "fast" };
+  const WASABI: Player = { name: "Wasabi99", color: "blue", bot: true, level: "beginner" };
+  const EBI: Player = { name: "Ebi_Fry", color: "green", bot: true, level: "expert" };
   const WORDS = "le riz attend le poisson sur la natte de bambou pendant que le chef roule".split(" ");
-  const COURSE = { words: WORDS, durationMs: null };
+  const COURSE = { words: WORDS, durationMs: null, mistakes: "fix" as const };
   const seeded = (seed: number, players: Player[] = [ME, WASABI, EBI]) => startRace(createRace(createCourse(WORDS, null, "fix"), players, "medium", "decent", seed), 1000);
-  const engine = (seed: number, bot: { name: string; wpm: number }, ms: number) => simulateBot(COURSE, { seed: botSeed(seed, bot.name), wpm: bot.wpm }, ms);
+  const engine = (seed: number, bot: Pick<Bot, "name" | "level" | "wpm" | "accuracy">, ms: number) => simulateBot(COURSE, { seed: botSeed(seed, bot.name), ...bot }, ms);
 
   test("a seed draws each bot's profile from the engine, by its name", () => {
     const race = seeded(4242);
-    expect(race.bots.map(({ wpm, accuracy }) => ({ wpm, accuracy }))).toEqual([botProfile(botSeed(4242, "Wasabi99"), "slow", "decent"), botProfile(botSeed(4242, "Ebi_Fry"), "fast", "decent")]);
+    expect(race.bots.map(({ level, wpm, accuracy }) => ({ level, wpm, accuracy }))).toEqual([botProfile(botSeed(4242, "Wasabi99"), "beginner", "decent"), botProfile(botSeed(4242, "Ebi_Fry"), "expert", "decent")]);
     // un autre ordre des places (un humain de plus devant) ne change pas les bots
     const other = seeded(4242, [{ name: "rival", color: "pink" }, ME, WASABI, EBI]);
     expect(other.bots.map((b) => b.wpm)).toEqual(race.bots.map((b) => b.wpm));
@@ -276,5 +276,49 @@ describe("BOT-05 — the race bots come from the room seed, the same in every br
     const a = advanceBots(seeded(1), 6_000);
     const b = advanceBots(seeded(2), 6_000);
     expect(a.bots.map((bot) => bot.words)).not.toEqual(b.bots.map((bot) => bot.words));
+  });
+});
+
+describe("BOT-03 — the page bots follow the room's mistake mode, as the engine and the server do", () => {
+  const NOOB: Player = { name: "Wasabi99", color: "blue", bot: true, level: "noob" };
+  const WORDS = Array.from({ length: 40 }, (_, i) => ["le", "riz", "attend", "la", "natte", "de", "bambou"][i % 7]!);
+  const seeded = (mistakes: MistakeMode) => startRace(createRace(createCourse(WORDS, null, mistakes), [ME, NOOB], "medium", "decent", 4242), 1000);
+  const engine = (mistakes: MistakeMode, bot: Bot, ms: number) => simulateBot({ words: WORDS, durationMs: null, mistakes }, { seed: bot.seed, level: bot.level, wpm: bot.wpm, accuracy: bot.accuracy }, ms);
+
+  test("fatal: the bot stops at its first error, at the engine's time, and never takes a rank", () => {
+    const race = advanceBots(seeded("fatal"), 1000 + 600_000);
+    const bot = race.bots[0]!;
+    const run = engine("fatal", bot, 600_000);
+    expect(run.eliminatedMs).not.toBeNull();
+    expect(bot.out).toBe(true);
+    expect(bot.finishedAt).toBe(1000 + run.eliminatedMs!);
+    expect(bot.words).toBe(run.position);
+    expect(bot.errors).toBe(1);
+    expect(race.arrivals).toEqual([]);
+    expect(laneProgress(race, 1)).toBeLessThan(1);
+    // il ne retient plus la course : seul mon arrivée manque
+    expect(everyoneDone({ ...race, finishedAt: 5 })).toBe(true);
+  });
+
+  test("carry-on: the bot arrives with its errors counted, and its WPM leaves out the words it left wrong", () => {
+    let race = seeded("carry-on");
+    for (let now = 2000; now <= 1000 + 600_000 && !race.bots[0]!.finishedAt; now += 1000) race = advanceBots(race, now);
+    const bot = race.bots[0]!;
+    const run = engine("carry-on", bot, 600_000);
+    expect(bot.finishedAt).toBe(1000 + run.arrivedMs!);
+    expect(bot.missed).toBe(run.missed);
+    expect(bot.missed).toBeGreaterThan(0);
+    const chars = race.course.marks.at(-1)!;
+    const minutes = run.arrivedMs! / 60_000;
+    expect(laneWpm(race, 1)).toBe(Math.round((chars - bot.missed) / 5 / minutes));
+    expect(race.samples[1]!.at(-1)!.chars).toBeLessThan(chars);
+  });
+
+  test("fix: the bot corrects every error and is slower than in carry-on mode", () => {
+    const fix = advanceBots(seeded("fix"), 1000 + 600_000).bots[0]!;
+    const carry = advanceBots(seeded("carry-on"), 1000 + 600_000).bots[0]!;
+    expect(fix.missed).toBe(0);
+    expect(fix.typed).toBe(fix.chars + fix.errors);
+    expect(fix.finishedAt).toBeGreaterThan(carry.finishedAt);
   });
 });

@@ -120,7 +120,7 @@ describe("COURSE-08 — a runner who comes back within 30 s resumes, after that 
   // BOT-05 : la fin attend aussi les bots, dont le serveur calcule la course
   test("the last runner timing out ends the race (counts as a finish) once the bots are done", async () => {
     // contre un bot lent sur un long texte : il n'a pas fini en 60 s, quelle que soit la graine
-    const { room, host } = await t.open("Seul_Absent", { length: "long", botList: [{ name: "Saba_Sensei", level: "slow" }] });
+    const { room, host } = await t.open("Seul_Absent", { length: "long", botList: [{ name: "Saba_Sensei", level: "beginner" }] });
     expect((await t.call("POST", `/api/rooms/${room.code}/launch`, host.cookie)).status).toBe(200);
     await startedFor(room.code, 60_000);
     await cutFor(host.key, 36_000);

@@ -163,7 +163,7 @@ export function seatsOf(room: Pick<Room, "guests" | "bots"> & { botList?: readon
 /** CONF-10 : un bot de plus, au premier nom libre de la liste fermée, au niveau moyen ; la même liste si tous sont pris. */
 export function withBotAdded(list: RoomBot[]): RoomBot[] {
   const name = nextBotName(list);
-  return name ? [...list, { name, level: "medium" }] : list;
+  return name ? [...list, { name, level: "intermediate" }] : list;
 }
 /** CONF-10 : la liste sans ce bot. */
 export function withoutBot(list: RoomBot[], name: RoomBot["name"]): RoomBot[] {

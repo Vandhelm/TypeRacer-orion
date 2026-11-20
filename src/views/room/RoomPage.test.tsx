@@ -93,8 +93,8 @@ describe("COURSE-03 — before the launch, a member is told the custom text come
 });
 
 describe("CONF-10 — the bots tab lists each bot with its level", () => {
-  const botList = [{ name: "Ebi_Fry", level: "fast" }, { name: "Uni_Kun", level: "slow" }];
-  const seats: Seat[] = [{ name: "Corail_418", color: "red", host: true }, { name: "Ebi_Fry", color: "blue", bot: true, level: "fast" }];
+  const botList = [{ name: "Ebi_Fry", level: "expert" }, { name: "Uni_Kun", level: "beginner" }];
+  const seats: Seat[] = [{ name: "Corail_418", color: "red", host: true }, { name: "Ebi_Fry", color: "blue", bot: true, level: "expert" }];
   const panel = (host: boolean) => {
     const state = { room: { ...DEFAULT_SETTINGS, guests: 2, bots: true, botList }, host, seats, update: () => {} } as unknown as RoomState;
     const html = renderToString(createElement(I18nextProvider, { i18n: createI18n("fr") }, createElement(RoomSettings, { state, onEditText: () => {}, action: null })));
@@ -118,5 +118,14 @@ describe("CONF-10 — the bots tab lists each bot with its level", () => {
     expect(html).toContain("Ebi_Fry");
     expect(html).not.toContain("Retirer");
     expect(html).not.toContain("Un bot de plus");
+  });
+
+  test("BOT-01 — the host picks each bot's level among the five, the current one checked", () => {
+    const html = panel(true);
+    const radios = html.match(/<input[^>]*name="bot-level-Ebi_Fry"[^>]*>/g) ?? [];
+    expect(radios.map((radio) => radio.match(/value="([^"]+)"/)?.[1])).toEqual(["noob", "beginner", "intermediate", "expert", "impossible"]);
+    expect(radios.filter((radio) => /checked=""/.test(radio)).map((radio) => radio.match(/value="([^"]+)"/)?.[1])).toEqual(["expert"]);
+    for (const label of ["Noob", "Débutant", "Intermédiaire", "Expert", "Impossible"]) expect(html).toContain(label);
+    expect(html).toContain("Impossible : 140 MPM et plus");
   });
 });

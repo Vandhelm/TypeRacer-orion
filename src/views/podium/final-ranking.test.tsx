@@ -5,6 +5,7 @@ import { renderToString } from "react-dom/server";
 import { I18nextProvider } from "react-i18next";
 import { createI18n } from "../../i18n";
 import type { RoomView } from "../../server/rooms";
+import { BOT_START } from "../../rooms/bot-engine";
 import { createCourse, createRace, type Race } from "../game/race";
 import { abandonOver, handOverPlayers, markAbandoned } from "../game/abandon";
 import type { Answer } from "../room/api";
@@ -70,7 +71,7 @@ describe("COURSE-10 — bots follow the same rule from what the browser knows of
     const race = createRace(createCourse(["le", "riz", "attend", "midi"], 60, "fix"), PLAYERS, "medium", "high", () => 0.5);
     const done: Race = {
       ...race, phase: "done", startedAt: 1000, now: 61000, arrivals: [1], wordIndex: 1,
-      bots: [{ lane: 1, name: "bot1", seed: 1, tick: 0, wpm: 60, accuracy: 93, words: 4, typed: 20, errors: 0, keys: {}, finishedAt: 31000 }, { lane: 2, name: "bot2", seed: 2, tick: 0, wpm: 30, accuracy: 90, words: 3, typed: 12, errors: 0, keys: {}, finishedAt: 0 }],
+      bots: [{ ...BOT_START, level: "intermediate" as const, lane: 1, name: "bot1", seed: 1, tick: 0, wpm: 60, accuracy: 93, words: 4, typed: 20, errors: 0, keys: {}, finishedAt: 31000 }, { ...BOT_START, level: "intermediate" as const, lane: 2, name: "bot2", seed: 2, tick: 0, wpm: 30, accuracy: 90, words: 3, typed: 12, errors: 0, keys: {}, finishedAt: 0 }],
     };
     const results = buildResults(done, PLAYERS);
     expect(results.map((p) => [p.name, p.progress])).toEqual([["Thon_Rouge", 1], ["Wasabi99", 0.75], ["Moi", 0.25]]);
