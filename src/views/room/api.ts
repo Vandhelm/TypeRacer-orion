@@ -1,23 +1,30 @@
 // Appels du salon vers le serveur (/api/rooms…). Le serveur décide de tout : cette page n'envoie que des demandes.
 import type { Role, RoomSettings } from "../../rooms/settings";
 import { connectRealtime } from "../../realtime/client";
+import { clockOffset } from "../game/countdown";
 import type { InviteView } from "../../server/room-invites";
 import type { RefusalReason, RoomResult, RoomView } from "../../server/rooms";
 
 export type RoomError = RefusalReason | "unauthorized" | "account_required" | "invalid_body" | "no_free_code" | "rate_limited" | "network" | "bad_code";
-/** current : SALLE-06, le salon où l'on est déjà quand le serveur répond « already_in_room ». */
-export type Answer = { ok: true; result: RoomResult } | { ok: false; error: RoomError; current?: string };
+/**
+ * current : SALLE-06, le salon où l'on est déjà quand le serveur répond « already_in_room ».
+ * offset : COURSE-03, le décalage de l'horloge du serveur sur celle du navigateur (méthode : src/views/game/countdown.ts).
+ */
+export type Answer = { ok: true; result: RoomResult; offset?: number } | { ok: false; error: RoomError; current?: string };
 
 async function send(method: string, path: string, body?: unknown): Promise<Answer> {
   try {
+    const sentAt = Date.now();
     const res = await fetch(path, {
       method,
       credentials: "same-origin",
       headers: body === undefined ? undefined : { "content-type": "application/json" },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
+    const receivedAt = Date.now();
     const data = (await res.json().catch(() => ({}))) as RoomResult & { error?: RoomError; room?: unknown };
-    if (res.ok) return { ok: true, result: data };
+    const serverNow = (data.room as { serverNow?: unknown } | undefined)?.serverNow;
+    if (res.ok) return { ok: true, result: data, ...(typeof serverNow === "number" ? { offset: clockOffset(sentAt, receivedAt, serverNow) } : {}) };
     return { ok: false, error: data.error ?? "network", ...(typeof data.room === "string" ? { current: data.room } : {}) };
   } catch {
     return { ok: false, error: "network" };
