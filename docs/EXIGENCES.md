@@ -150,8 +150,8 @@ Les statuts viennent des rapports de l'agent `qa` (skill `criteria-check`). Une 
 | ID | Statut | Fichiers principaux | Tests associés | Notes et choix |
 |---|---|---|---|---|
 | TEST-01 | complet | `src/**/*.test.ts`, `db/mocks/seed.test.ts`, `tests/tech/`, `tests/i18n/`, `scripts/*.test.ts` | `bun test` (404 réussis) | Vérifié le 2026-11-19 (QA suivi, light). |
-| TEST-02 | non fait | — | aucun | Pas de Playwright. Vérifié le 2026-11-18 (QA site, light). |
-| TEST-03 | non fait | — | aucun | Dépend de TEST-02. Vérifié le 2026-11-18 (QA site, light). |
+| TEST-02 | complet | `playwright.config.ts`, `tests/e2e/`, `docs/TESTS.md` | `tests/e2e/auth.e2e.ts`, `tests/e2e/room.e2e.ts`, `tests/e2e/race.e2e.ts` | Playwright (Chromium), `bun run test:e2e`. Le webServer crée et remet à zéro la base `_e2e`, fait le build, lance `next start` sur 3100 et le temps réel sur 3101. 3 parcours (compte, salon et invité, course avec bots jusqu'au podium), 7 tests. `TRUST_PROXY=1` seulement sur le serveur de test (liens d'invitation SALLE-04). Sur un 429 de Better Auth, on attend `X-Retry-After` et on renvoie, sans désactiver la limite. Marge faible sur « invite link already used » (jusqu'à 1,3 min pour 120 s). Vérifié le 2026-11-20 (QA critère be0b138, correctifs CI/TECH-10 et durée vérifiés au merge, branche test/e2e/test-02, commit dfd69dd). |
+| TEST-03 | complet | `playwright.config.ts`, `tests/e2e/helpers.ts` | `tests/e2e/auth.e2e.ts` | Connexion par nom d'utilisateur et mot de passe seulement (`/api/auth/sign-in/username`). Serveur de test lancé avec les variables GitHub et Discord vides, aucun parcours OAuth. Vérifié le 2026-11-20 (QA critère, branche test/e2e/test-02, commit dfd69dd). |
 
 ### 6.2 Performance (PERF)
 
