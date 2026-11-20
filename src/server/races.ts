@@ -9,6 +9,7 @@ import { guestSecret, readGuest } from "./guest";
 import { storedAvatar } from "../players/avatar";
 import { isBotName } from "../players/bots";
 import { KeysSchema, type KeyCounts } from "../players/keys";
+import { DurationSchema, MAX_DURATION } from "../rooms/settings";
 import { players, raceConfigs, raceResults, races, raceSamples, user, type RaceOther } from "../../db/schema";
 
 const LANGUAGES = ["fr", "en"] as const;
@@ -18,7 +19,11 @@ const TEXT_TYPES = ["coherent", "quote", "words", "custom"] as const;
 const TEXT_LENGTHS = ["very-short", "short", "medium", "long", "other"] as const;
 const LEVELS = ["common", "rich", "expert"] as const;
 const MISTAKE_MODES = ["fix", "carry-on", "fatal"] as const;
-const MAX_SECONDS = 600;
+/**
+ * CONF-01 : sans limite de temps, une course reçue peut durer jusqu'à une heure (garde-fou de taille du corps :
+ * 8 joueurs × 3 séries de 3 600 points restent sous MAX_BODY_BYTES). Une course chronométrée, jusqu'à MAX_DURATION.
+ */
+const UNLIMITED_SECONDS = 3600;
 /** Points du graphique de progression : les dernières courses. */
 export const PROGRESS_LIMIT = 50;
 
@@ -62,7 +67,7 @@ const fail = (what: string): never => {
 // et rien de ce qui n'est pas lu ici n'atteint la base.
 const int = (min = 0, high = 100_000) => z.number().finite().min(min).max(high).transform(Math.round);
 const decimal = (min = 0, high = 100) => z.number().finite().min(min).max(high);
-const series = z.array(int(0, 10_000)).max(MAX_SECONDS);
+const series = z.array(int(0, 10_000)).max(UNLIMITED_SECONDS);
 const flag = z.boolean().default(false);
 
 const SummarySchema = z.object({
@@ -72,7 +77,7 @@ const SummarySchema = z.object({
   textType: z.enum(TEXT_TYPES),
   length: z.enum(TEXT_LENGTHS),
   wordCount: int(1, 1000),
-  duration: int(1, MAX_SECONDS),
+  duration: DurationSchema,
   level: z.enum(LEVELS),
   punctuation: flag,
   numbers: flag,
@@ -89,7 +94,7 @@ const PlayerSchema = z.object({
   wpm: int(0, 500),
   raw: int(0, 1000),
   accuracy: decimal(),
-  seconds: decimal(0, MAX_SECONDS),
+  seconds: decimal(0, UNLIMITED_SECONDS),
   chars: z.tuple([int(), int(), int(), int()]),
   consistency: int(0, 100),
   idle: decimal(),
@@ -107,6 +112,13 @@ const RaceSchema = z.object({
   summary: SummarySchema,
   content: z.string().default("").transform((value) => value.slice(0, 10_000)),
   players: z.array(PlayerSchema).min(1).max(8),
+}).superRefine(({ summary, players: list }, ctx) => {
+  // CONF-01 : une course chronométrée ne dure pas plus que la durée maximale ; seule une course sans limite va au-delà
+  const limit = summary.duration === null ? UNLIMITED_SECONDS : MAX_DURATION;
+  list.forEach((player, index) => {
+    const longest = Math.max(player.seconds, player.wpmSeries.length, player.rawSeries.length, player.errorSeries.length);
+    if (longest > limit) ctx.addIssue({ code: "custom", path: ["players", index, "seconds"], message: "longer than the race" });
+  });
 });
 
 /** Le champ en cause, pour le message d'erreur : la dernière clé nommée du chemin (« players.0.chars.1 » → « chars »). */

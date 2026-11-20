@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import type { TFunction } from "i18next";
-import { arrivalOf, raceHref, readSession, roomHrefOutsideRace, seatsOf } from "./room";
+import { arrivalOf, DURATION_PRESETS, durationChoice, raceHref, readSession, roomHrefOutsideRace, seatsOf } from "./room";
 
 const t = ((key: string) => key) as unknown as TFunction;
 
@@ -143,5 +143,23 @@ describe("SALLE-09 — /game runs a race only while the room is racing", () => {
 
   test("a racing room stays on /game", () => {
     expect(roomHrefOutsideRace("racing", "ABC234")).toBeNull();
+  });
+});
+
+describe("CONF-01 — the maximum time choice in the room settings", () => {
+  test("the presets include « none » and stay between 30 s and 10 minutes", () => {
+    expect(DURATION_PRESETS).toContain(null);
+    for (const value of DURATION_PRESETS) if (value !== null) expect(value >= 30 && value <= 600).toBe(true);
+  });
+
+  test("no limit checks « none », a preset checks itself, any other value checks « other »", () => {
+    expect(durationChoice(null, false)).toBe("none");
+    expect(durationChoice(120, false)).toBe(120);
+    expect(durationChoice(45, false)).toBe("other");
+  });
+
+  test("while the host types a custom value, « other » stays checked", () => {
+    expect(durationChoice(null, true)).toBe("other");
+    expect(durationChoice(120, true)).toBe("other");
   });
 });

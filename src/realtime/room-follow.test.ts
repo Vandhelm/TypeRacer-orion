@@ -215,12 +215,12 @@ describe("SALLE-08 / SALLE-09 — what changes with time alone is announced to t
 
   test("a race past its deadline goes to results on the room pages, with no HTTP request from anyone", async () => {
     const host = await h.signUp("Hote_Echeance");
-    const code = await created(await h.call("POST", "/api/rooms", host, { role: "player", settings: { visibility: "public", duration: 10 } }));
+    const code = await created(await h.call("POST", "/api/rooms", host, { role: "player", settings: { visibility: "public", duration: 30 } }));
     await h.call("POST", "/api/rooms/join", `${GUEST_COOKIE}=${signGuest("Lambin", SECRET)}`, { code });
     await h.call("POST", `/api/rooms/${code}/launch`, host);
     const tab = (await h.follow(code, host))!;
     expect((await tab.next()).room!.status).toBe("racing");
-    await db.update(rooms).set({ launchedAt: sql`now() - ${raceDeadlineMs(10) + 1_000} * interval '1 millisecond'` }).where(eq(rooms.code, code));
+    await db.update(rooms).set({ launchedAt: sql`now() - ${raceDeadlineMs(30) + 1_000} * interval '1 millisecond'` }).where(eq(rooms.code, code));
     let seen = await tab.next();
     while (seen.room!.status === "racing") seen = await tab.next();
     expect(seen.room!.status).toBe("results");

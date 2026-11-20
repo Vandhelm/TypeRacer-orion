@@ -15,7 +15,7 @@ export type RoomJson = {
   code: string;
   status: string;
   host: string;
-  settings: { guests: number };
+  settings: { guests: number; duration: number | null };
   members: { key: string; name: string; role: string; seat: number | null; color: string | null; host: boolean; guest: boolean }[];
 };
 export type Joined = { room: RoomJson; you: string };

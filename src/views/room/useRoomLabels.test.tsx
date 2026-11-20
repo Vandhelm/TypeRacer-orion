@@ -32,3 +32,24 @@ describe("I18N-03 — libellés de la salle", () => {
     expect(en).toContain("1,200");
   });
 });
+
+const durations = async (language: "fr" | "en", seconds: (number | null)[]) => {
+  await i18n.changeLanguage(language);
+  const room = { length: "short", wordCount: 50, text: "" } as Parameters<typeof useRoomLabels>[0];
+  const Probe = () => {
+    const l = useRoomLabels(room);
+    return createElement("p", null, seconds.map((s) => l.durationLabel(s)).join("|"));
+  };
+  return renderToStaticMarkup(createElement(I18nextProvider, { i18n }, createElement(Probe)));
+};
+
+describe("CONF-01 — the maximum time label", () => {
+  test("no limit reads « Aucun » in French and « None » in English", async () => {
+    expect(await durations("fr", [null])).toContain("Aucun");
+    expect(await durations("en", [null])).toContain("None");
+  });
+
+  test("a duration still reads in minutes or seconds", async () => {
+    expect(await durations("en", [30, 600])).toContain("30 s|10 min");
+  });
+});

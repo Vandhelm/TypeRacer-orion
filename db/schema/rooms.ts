@@ -15,7 +15,8 @@ export const raceConfigs = pgTable(
     textType: textType("text_type").notNull(),
     length: textLength("length").notNull(),
     wordCount: integer("word_count").notNull(),
-    duration: integer("duration").notNull(),
+    /** CONF-01 : temps maximal en secondes, null = aucun (pas de fin au temps). */
+    duration: integer("duration"),
     level: level("level").notNull(),
     punctuation: boolean("punctuation").notNull(),
     numbers: boolean("numbers").notNull(),

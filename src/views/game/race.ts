@@ -8,7 +8,7 @@ const BOT_ACCURACY: Record<BotAccuracy, [number, number]> = { shaky: [82, 90], d
 export const CHARS_PER_WORD = 5;
 export const TICK_MS = 200;
 
-export type Course = { words: string[]; /** Caractères cumulés (espaces comprises) après chaque mot. */ marks: number[]; durationMs: number; mistakes: MistakeMode };
+export type Course = { words: string[]; /** Caractères cumulés (espaces comprises) après chaque mot. */ marks: number[]; /** CONF-01 : null = aucun temps maximal. */ durationMs: number | null; mistakes: MistakeMode };
 /** typed et errors : frappes et fautes cumulées, comme pour moi. keys : les mêmes, touche par touche. */
 export type Bot = { lane: number; wpm: number; accuracy: number; words: number; typed: number; errors: number; keys: KeyCounts; finishedAt: number };
 /** Cumuls de fin de seconde : caractères validés, caractères tapés, fautes. */
@@ -38,10 +38,10 @@ export type Race = {
   samples: Sample[][];
 };
 
-export function createCourse(words: string[], durationSeconds: number, mistakes: MistakeMode): Course {
+export function createCourse(words: string[], durationSeconds: number | null, mistakes: MistakeMode): Course {
   const marks = [0];
   words.forEach((word, i) => marks.push(marks[i]! + word.length + 1));
-  return { words, marks, durationMs: durationSeconds * 1000, mistakes };
+  return { words, marks, durationMs: durationSeconds === null ? null : durationSeconds * 1000, mistakes };
 }
 
 export function createRace(course: Course, players: Player[], botSpeed: BotSpeed, botAccuracy: BotAccuracy, random: () => number = Math.random): Race {
@@ -154,7 +154,7 @@ export function advanceBots(race: Race, now: number, jitters: number[]): Race {
     arrivals.push(bot.lane);
     return { ...moved, finishedAt: now };
   });
-  const moved: Race = { ...race, bots, arrivals, now, phase: now - race.startedAt >= durationMs ? "done" : "racing" };
+  const moved: Race = { ...race, bots, arrivals, now, phase: durationMs !== null && now - race.startedAt >= durationMs ? "done" : "racing" };
   return { ...moved, samples: recordSamples(moved) };
 }
 
@@ -206,13 +206,15 @@ function recordSamples(race: Race) {
 export const everyoneDone = (race: Race) => race.finishedAt > 0 && race.bots.every((bot) => bot.finishedAt > 0);
 
 /** Un temps de course borné à sa durée : la fin n'est vue qu'au tick, parfois en retard (onglet en arrière-plan). */
-const capped = (race: Race, ms: number) => Math.min(race.course.durationMs, Math.max(0, ms));
+const capped = (race: Race, ms: number) => Math.min(race.course.durationMs ?? Infinity, Math.max(0, ms));
 
 export function elapsedMs(race: Race) {
   return race.startedAt ? capped(race, (race.finishedAt || race.now) - race.startedAt) : 0;
 }
 
+/** CONF-01 : null sans temps maximal (pas de compte à rebours). */
 export function secondsLeft(race: Race) {
+  if (race.course.durationMs === null) return null;
   return Math.ceil(Math.max(0, race.course.durationMs - (race.startedAt ? race.now - race.startedAt : 0)) / 1000);
 }
 

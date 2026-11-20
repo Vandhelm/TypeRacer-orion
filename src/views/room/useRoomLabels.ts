@@ -9,7 +9,8 @@ export const LENGTH_KEY: Record<Exclude<TextLength, "other">, string> = { "very-
 export function useRoomLabels(room: Pick<Room, "length" | "wordCount" | "text">) {
   const { t, i18n } = useTranslation();
   return {
-    durationLabel: (seconds: number) => (seconds % 60 === 0 ? `${formatNumber(i18n.language, seconds / 60)} ${t("room.minutes")}` : `${formatNumber(i18n.language, seconds)} s`),
+    // CONF-01 : null = aucun temps maximal
+    durationLabel: (seconds: number | null) => (seconds === null ? t("room.noTimeLimit") : seconds % 60 === 0 ? `${formatNumber(i18n.language, seconds / 60)} ${t("room.minutes")}` : `${formatNumber(i18n.language, seconds)} s`),
     lengthLabel: room.length === "other" ? `${formatNumber(i18n.language, room.wordCount)} ${t("room.wordsUnit")}` : t(`room.${LENGTH_KEY[room.length]}`),
     words: `${formatNumber(i18n.language, countWords(room.text))} ${t("room.wordsUnit")}`,
   };

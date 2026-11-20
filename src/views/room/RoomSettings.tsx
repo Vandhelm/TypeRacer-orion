@@ -6,9 +6,9 @@ import { NumberField } from "../../components/forms/NumberField";
 import { TextChoice } from "../../components/forms/TextChoice";
 import { InfoTip } from "../../components/InfoTip";
 import { SectionTabs } from "../../components/tabs/SectionTabs";
-import { ROLES } from "../../rooms/settings";
+import { DEFAULT_DURATION, MAX_DURATION, MIN_DURATION, ROLES } from "../../rooms/settings";
 import type { RoomState } from "./hooks/useRoom";
-import { cleanExcluded, countWords, type Room, type TextLength } from "./room";
+import { cleanExcluded, countWords, DURATION_PRESETS, durationChoice, type Room, type TextLength } from "./room";
 import { LENGTH_KEY, useRoomLabels } from "./useRoomLabels";
 import { DASHED_TOP, LABEL, PLAIN_VALUE, SHADE } from "./styles";
 
@@ -19,7 +19,6 @@ const SECTIONS: { value: Section; num: string; key: string }[] = [
   { value: "typing", num: "03", key: "tabTyping" },
   { value: "bots", num: "04", key: "tabBots" },
 ];
-const DURATIONS = [60, 120, 180];
 const LENGTHS = ["very-short", "short", "medium", "long"] as const;
 
 type RowProps = { id: string; label: string; help?: string; role?: "radiogroup" | "group"; inactive?: boolean; children: ReactNode };
@@ -104,21 +103,21 @@ export function RoomSettings({ state, onEditText, action }: RoomSettingsProps) {
     if (textType === "custom" && !countWords(room.text)) { onEditText(); return; }
     update({ textType, length: textType === "quote" && room.length === "other" ? "medium" : room.length });
   }
-  function pickDuration(value: string) {
+  function pickDuration(value: number | null | "other") {
     if (value === "other") {
       flushSync(() => setCustomDuration(true));
       durationInput.current?.focus();
       return;
     }
     setCustomDuration(false);
-    update({ duration: Number(value) });
+    update({ duration: value });
   }
   function pickLength(length: TextLength) {
     flushSync(() => update({ length }));
     if (length === "other") lengthInput.current?.focus();
   }
 
-  const offList = !DURATIONS.includes(room.duration);
+  const checkedDuration = durationChoice(room.duration, customDuration);
   const isCustom = room.textType === "custom";
   const usesBots = room.bots;
 
@@ -153,15 +152,15 @@ export function RoomSettings({ state, onEditText, action }: RoomSettingsProps) {
             ))}
           </Row>
         )}
-        <Row id="label-duration" label={t("room.raceLength")} help={t("room.helpRaceLength")}>
+        <Row id="label-duration" label={t("room.raceLength")} help={t("room.helpRaceTime")}>
           {host ? (
             <>
-              {DURATIONS.map((value) => (
-                <TextChoice key={value} type="radio" name="duration" value={String(value)} label={durationLabel(value)} checked={room.duration === value} onChange={() => pickDuration(String(value))} />
+              {DURATION_PRESETS.map((value) => (
+                <TextChoice key={String(value)} type="radio" name="duration" value={value === null ? "none" : String(value)} label={durationLabel(value)} checked={checkedDuration === (value ?? "none")} onChange={() => pickDuration(value)} />
               ))}
-              <TextChoice type="radio" name="duration" value="other" label={t("room.other")} checked={offList} onChange={() => pickDuration("other")} />
-              {(offList || customDuration) && (
-                <NumberField ref={durationInput} value={room.duration} min={10} max={600} step={5} ariaLabel={t("room.raceLength")} onCommit={(duration) => update({ duration })} />
+              <TextChoice type="radio" name="duration" value="other" label={t("room.other")} checked={checkedDuration === "other"} onChange={() => pickDuration("other")} />
+              {checkedDuration === "other" && (
+                <NumberField ref={durationInput} value={room.duration ?? DEFAULT_DURATION} min={MIN_DURATION} max={MAX_DURATION} step={5} ariaLabel={t("room.raceLength")} onCommit={(duration) => update({ duration })} />
               )}
             </>
           ) : (
