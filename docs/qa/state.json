@@ -260,9 +260,9 @@
     "scope": "critère feature/game/course-05 (rendu 8 couloirs 630/800/1280)"
   },
   "COURSE-06": {
-    "commit": "7bce938",
+    "commit": "7ab3a26",
     "date": "2026-11-20",
-    "scope": "critère (fix/game/course-06-times)"
+    "scope": "critère (fix/game/course-06-times + fix/game/bot-bonus-followups)"
   },
   "COURSE-07": {
     "commit": "8ac9e3d",
@@ -305,9 +305,9 @@
     "scope": "critère (feature/game/bot-levels)"
   },
   "BOT-04": {
-    "commit": "dcc1a73",
+    "commit": "7ab3a26",
     "date": "2026-11-20",
-    "scope": "critère (feature/game/bot-04-bonus)"
+    "scope": "critère (fix/game/bot-bonus-followups)"
   },
   "BOT-05": {
     "commit": "649bda8",
