@@ -1,7 +1,7 @@
 // COURSE-06 : l'enregistrement d'une course (POST /api/races) suit le serveur, pas le navigateur.
 import { beforeAll, describe, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
-import { raceResults, races, rooms, user } from "../../db/schema";
+import { players, raceResults, races, rooms, user } from "../../db/schema";
 import { createMockDatabase } from "../../db/mocks/test-database";
 import { placeholderEmail } from "../accounts/username";
 import { COUNTDOWN_MS } from "../rooms/race-clock";
@@ -180,9 +180,69 @@ describe("COURSE-06 — the recorded rank follows the server ranking", () => {
     expect(ranked.map((r) => [r.name, r.rank])).toEqual([["Rapide", 1], ["Lent", 2], ["Moi", 3]]);
   });
 
-  test("bots (simulated by the browser) keep their place; a human unknown to the server ranks after the known ones", () => {
+  test("finished humans, then bots, then unfinished humans; a human unknown to the server ranks last", () => {
     const server = new Map([["moi", { finishedAt: at(20), progress: 1 }], ["autre", { finishedAt: null, progress: 0.8 }]]);
     const ranked = rankByServer([row("Inconnu"), row("Thon_Rouge"), row("Autre"), row("Moi")], server, new Set(["thon_rouge"]));
     expect(ranked.map((r) => [r.name, r.rank])).toEqual([["Moi", 1], ["Thon_Rouge", 2], ["Autre", 3], ["Inconnu", 4]]);
+  });
+
+  test("a bot is never placed before a human the server saw finish", () => {
+    const server = new Map([["humain", { finishedAt: at(50), progress: 1 }]]);
+    const ranked = rankByServer([row("Thon_Rouge"), row("Wasabi99"), row("Humain")], server, new Set(["thon_rouge", "wasabi99"]));
+    expect(ranked.map((r) => r.name)).toEqual(["Humain", "Thon_Rouge", "Wasabi99"]);
+  });
+
+  test("a human the server did not see finish never passes a bot; bots keep the body order among themselves", () => {
+    const server = new Map([["humain", { finishedAt: null, progress: 0.9 }]]);
+    const ranked = rankByServer([row("Humain"), row("Wasabi99"), row("Thon_Rouge")], server, new Set(["thon_rouge", "wasabi99"]));
+    expect(ranked.map((r) => r.name)).toEqual(["Wasabi99", "Thon_Rouge", "Humain"]);
+  });
+});
+
+describe("COURSE-06 — the bot status of a result comes from the server, never from the body", () => {
+  let db: Awaited<ReturnType<typeof createMockDatabase>>;
+  let auth: ReturnType<typeof createAuth>;
+  beforeAll(async () => {
+    db = await createMockDatabase();
+    auth = createAuth(db);
+  });
+  const post = (body: Record<string, unknown>, cookie: string) =>
+    handleRace(new Request("http://localhost/api/races", { method: "POST", headers: { "content-type": "application/json", cookie }, body: JSON.stringify({ id: crypto.randomUUID(), ...body }) }), db, auth, GUEST_SECRET);
+
+  test("an account named like a bot, posting itself as a bot at the head of the body, gets its server rank", async () => {
+    await auth.api.signUpEmail({ body: { name: "Ancien_Nom", email: placeholderEmail("Ancien_Nom"), password: "sushi-roll-42", username: "Ancien_Nom", displayUsername: "Ancien_Nom" } });
+    const { headers } = await auth.api.signInUsername({ body: { username: "Ancien_Nom", password: "sushi-roll-42" }, returnHeaders: true });
+    const cookie = headers.get("set-cookie")!.split(";")[0]!;
+    const [account] = await db.select({ playerId: user.playerId }).from(user).where(eq(user.username, "ancien_nom"));
+    const playerId = account!.playerId!;
+    // un compte créé avant la réservation des noms de bots
+    await db.update(players).set({ name: "Nori_Ninja" }).where(eq(players.id, playerId));
+    const rival = { kind: "guest" as const, name: "Rival_Bot", sessionId: crypto.randomUUID() };
+    const { code } = await launchedRoomFor(db, auth, cookie, GUEST_SECRET, 60_000, [rival]);
+    await recordProgress(db, code, memberKey(rival), 1);
+    const cheat = { ...result("Nori_Ninja", 90), bot: true };
+    const res = await post({ room: code, summary: SUMMARY, players: [cheat, { ...result("Thon_Rouge", 60), bot: true }, result("Rival_Bot", 40)] }, cookie);
+    expect(res.status).toBe(201);
+    const rows = await db.select({ rank: raceResults.rank, playerId: raceResults.playerId }).from(raceResults).where(eq(raceResults.playerId, playerId));
+    // le rival arrivé (serveur), puis le bot du salon, puis le compte à 0 %
+    expect(rows).toEqual([{ rank: 3, playerId }]);
+    const [row] = await db.select({ isBot: players.isBot }).from(players).where(eq(players.id, playerId));
+    expect(row!.isBot).toBe(false);
+  });
+
+  test("a bot name that is not a bot of the room (bots off) is a human for the ranking", async () => {
+    await auth.api.signUpEmail({ body: { name: "Sans_Bots", email: placeholderEmail("Sans_Bots"), password: "sushi-roll-42", username: "Sans_Bots", displayUsername: "Sans_Bots" } });
+    const { headers } = await auth.api.signInUsername({ body: { username: "Sans_Bots", password: "sushi-roll-42" }, returnHeaders: true });
+    const cookie = headers.get("set-cookie")!.split(";")[0]!;
+    const [account] = await db.select({ playerId: user.playerId }).from(user).where(eq(user.username, "sans_bots"));
+    const rival = { kind: "guest" as const, name: "Rival_Sans", sessionId: crypto.randomUUID() };
+    const { code } = await launchedRoomFor(db, auth, cookie, GUEST_SECRET, 60_000, [rival]);
+    await db.update(rooms).set({ bots: false }).where(eq(rooms.code, code));
+    await recordProgress(db, code, memberKey({ playerId: account!.playerId! }), 1);
+    const res = await post({ room: code, summary: SUMMARY, players: [{ ...result("Tako_San", 99), bot: true }, result("Sans_Bots", 50), result("Rival_Sans", 40)] }, cookie);
+    expect(res.status).toBe(201);
+    const [mine] = await db.select({ rank: raceResults.rank }).from(raceResults).where(eq(raceResults.playerId, account!.playerId!));
+    expect(mine!.rank).toBe(1);
+    expect(await db.$count(players, eq(players.name, "Tako_San"))).toBe(0);
   });
 });

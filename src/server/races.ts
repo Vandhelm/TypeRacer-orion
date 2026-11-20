@@ -9,7 +9,7 @@ import type { Db } from "../../db/client";
 import type { Auth } from "./auth";
 import { guestSecret } from "./guest";
 import { storedAvatar } from "../players/avatar";
-import { isBotName } from "../players/bots";
+import { BOT_NAMES, isBotName } from "../players/bots";
 import { KeysSchema, type KeyCounts } from "../players/keys";
 import { DurationSchema, MAX_DURATION } from "../rooms/settings";
 import { CODE_PATTERN } from "../rooms/access";
@@ -180,32 +180,31 @@ const sameName = (a: string, b: string | null | undefined) => !!b && a.toLowerCa
 /** COURSE-06 : la place d'un membre participant au classement du serveur (temps réel, room_members). */
 export type ServerStanding = { finishedAt: Date | null; progress: number };
 /** COURSE-06 : ce que le serveur sait de la course : son départ, si l'expéditeur est arrivé, et le classement des humains (par nom en minuscules). */
-export type ServerRace = { startedAt: Date; finished: boolean; standings?: Map<string, ServerStanding> };
+export type ServerRace = { startedAt: Date; finished: boolean; standings?: Map<string, ServerStanding>; bots?: Set<string> };
 
 /**
- * COURSE-06 : les rangs du corps refaits d'après le serveur. Les humains (tout ce qui n'est pas dans `bots`) sont
- * reclassés entre eux, dans les places qu'ils occupent : arrivés par heure d'arrivée, puis par progression ; un humain
- * inconnu du serveur passe après les autres. Les bots, simulés par le navigateur (BOT-*), gardent leur place.
+ * COURSE-06 : les rangs du corps refaits d'après le serveur. `bots` : les bots du salon, décidés par le serveur (jamais
+ * le drapeau du corps) ; tout le reste est humain. Ordre : les humains que le serveur a vus arriver (par heure
+ * d'arrivée), puis les bots (simulés par le navigateur, BOT-* : dans l'ordre du corps, que le serveur ne peut pas encore
+ * vérifier), puis les humains non arrivés selon le serveur (par progression validée), puis les humains inconnus du
+ * serveur. Ainsi un client ne gagne rien en plaçant les bots : aucun bot devant un humain arrivé, aucun humain non
+ * arrivé devant un bot.
  */
 export function rankByServer<T extends { name: string; rank: number }>(results: T[], server: Map<string, ServerStanding>, bots: Set<string> = new Set()): T[] {
   const isBot = (r: T) => bots.has(r.name.toLowerCase());
-  const order = (r: T) => server.get(r.name.toLowerCase());
-  const humans = results.filter((r) => !isBot(r)).sort((a, b) => {
-    const sa = order(a);
-    const sb = order(b);
-    if (!sa || !sb) return sa ? -1 : sb ? 1 : 0;
-    if (sa.finishedAt && sb.finishedAt) return sa.finishedAt.getTime() - sb.finishedAt.getTime();
-    if (sa.finishedAt || sb.finishedAt) return sa.finishedAt ? -1 : 1;
-    return sb.progress - sa.progress;
-  });
-  let next = 0;
-  return results.map((r) => (isBot(r) ? r : humans[next++]!)).map((r, index) => ({ ...r, rank: index + 1 }));
+  const standing = (r: T) => server.get(r.name.toLowerCase());
+  const humans = results.filter((r) => !isBot(r));
+  const arrived = humans.filter((r) => standing(r)?.finishedAt).sort((a, b) => standing(a)!.finishedAt!.getTime() - standing(b)!.finishedAt!.getTime());
+  const racing = humans.filter((r) => standing(r) && !standing(r)!.finishedAt).sort((a, b) => standing(b)!.progress - standing(a)!.progress);
+  const unknown = humans.filter((r) => !standing(r));
+  return [...arrived, ...results.filter(isBot), ...racing, ...unknown].map((r, index) => ({ ...r, rank: index + 1 }));
 }
 
 export async function recordRace(db: Db, parsed: ParsedRace, requester: Requester = {}, server?: ServerRace) {
-  // COURSE-06 : le rang des humains est celui du serveur ; les bots (noms de la liste, flag du corps) gardent leur place
-  const bots = new Set(parsed.results.filter((r) => r.bot && isBotName(r.name)).map((r) => r.name.toLowerCase()));
-  const race = server?.standings ? { ...parsed, results: rankByServer(parsed.results, server.standings, bots) } : parsed;
+  // COURSE-06 : avec le serveur, le statut bot vient de lui (les bots du salon), jamais du corps ; le rang aussi
+  const serverBots = server?.bots;
+  const results = serverBots ? parsed.results.map((r) => ({ ...r, bot: serverBots.has(r.name.toLowerCase()) })) : parsed.results;
+  const race = server?.standings ? { ...parsed, results: rankByServer(results, server.standings, serverBots) } : { ...parsed, results };
   const [account] = requester.playerId
     ? await db.select({ id: players.id, name: players.name }).from(players).where(eq(players.id, requester.playerId))
     : [];
@@ -262,7 +261,7 @@ export const ELAPSED_TOLERANCE_SECONDS = 2;
 export async function claimServerRace(db: Db, race: ParsedRace, key: string | null): Promise<ServerRace & { release: () => Promise<void> }> {
   if (!race.room || !key) throw new RaceRefused("race_not_launched");
   const [row] = await db
-    .select({ roomId: rooms.id, launchedAt: rooms.launchedAt, duration: raceConfigs.duration, progress: roomMembers.progress })
+    .select({ roomId: rooms.id, launchedAt: rooms.launchedAt, duration: raceConfigs.duration, progress: roomMembers.progress, bots: rooms.bots, guests: rooms.guests })
     .from(rooms)
     .innerJoin(raceConfigs, eq(raceConfigs.id, rooms.configId))
     .innerJoin(roomMembers, and(eq(roomMembers.roomId, rooms.id), eq(roomMembers.memberKey, key)))
@@ -275,14 +274,21 @@ export async function claimServerRace(db: Db, race: ParsedRace, key: string | nu
   const claimed = await db.update(roomMembers).set({ raceRecorded: true }).where(and(member, eq(roomMembers.raceRecorded, false))).returning({ key: roomMembers.memberKey });
   if (!claimed.length) throw new DuplicateRace("Race already recorded");
   const runners = await db
-    .select({ name: sql<string>`coalesce(${players.name}, ${roomMembers.guestName})`, finishedAt: roomMembers.finishedAt, progress: roomMembers.progress })
+    .select({ name: sql<string>`coalesce(${players.name}, ${roomMembers.guestName})`, isBot: sql<boolean>`coalesce(${players.isBot}, false)`, finishedAt: roomMembers.finishedAt, progress: roomMembers.progress })
     .from(roomMembers)
     .leftJoin(players, eq(players.id, roomMembers.playerId))
     .where(and(eq(roomMembers.roomId, row.roomId), eq(roomMembers.role, "player")));
+  // les bots du salon : ses membres bots, puis les places libres remplies par la liste fermée, comme la page salle
+  // (seatsOf) ; jamais un nom porté par un membre humain
+  const humans = runners.filter((r) => !r.isBot);
+  const humanNames = new Set(humans.map((r) => r.name.toLowerCase()));
+  const seatBots = row.bots ? BOT_NAMES.slice(0, Math.max(0, row.guests - runners.length)) : [];
+  const bots = new Set([...runners.filter((r) => r.isBot).map((r) => r.name), ...seatBots].map((name) => name.toLowerCase()).filter((name) => !humanNames.has(name)));
   return {
     startedAt: new Date(startsAt),
     finished: row.progress >= 1,
-    standings: new Map(runners.map((r) => [r.name.toLowerCase(), { finishedAt: r.finishedAt, progress: r.progress }])),
+    standings: new Map(humans.map((r) => [r.name.toLowerCase(), { finishedAt: r.finishedAt, progress: r.progress }])),
+    bots,
     release: async () => void (await db.update(roomMembers).set({ raceRecorded: false }).where(member)),
   };
 }

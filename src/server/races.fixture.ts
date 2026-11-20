@@ -32,7 +32,7 @@ export async function launchedRoomFor(db: Db, auth: Auth, cookie: string, guestS
   }
   const [current] = await db.select({ code: rooms.code }).from(roomMembers).innerJoin(rooms, eq(rooms.id, roomMembers.roomId)).where(eq(roomMembers.memberKey, memberKey(who)));
   if (current) await leaveRoom(db, current.code, who);
-  const { room } = await createRoom(db, { playerId: host.playerId }, { role: "player", settings: { visibility: "public", bots: true, guests: 4 } });
+  const { room } = await createRoom(db, { playerId: host.playerId }, { role: "player", settings: { visibility: "public", bots: true, guests: 8 } }); // 8 places : les bots de la liste remplissent celles des humains absents
   if (who.kind === "guest") await joinRoom(db, who, { code: room.code });
   for (const other of others) await joinRoom(db, other, { code: room.code });
   await launchRoom(db, room.code, host);

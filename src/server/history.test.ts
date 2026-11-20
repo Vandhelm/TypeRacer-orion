@@ -8,6 +8,7 @@ import { GUEST_COOKIE, signGuest } from "./guest";
 import { handleHistory, HISTORY_PAGE_SIZE, loadHistoryRace } from "./history";
 import { handleRace, parseRace, recordRace } from "./races";
 import { launchedRoomFor } from "./races.fixture";
+import { memberKey, recordProgress } from "./rooms";
 import { RACE_ERRORS, submitRace, toResults } from "../views/podium/results";
 
 process.env.BETTER_AUTH_SECRET ??= "test-secret-test-secret-test-secret";
@@ -149,7 +150,9 @@ describe("HIST-01 — every finished race appears in the signed-in user's histor
     test("8 players, 600-second series and a 10 000-character text are sent without keepalive, then listed", async () => {
       const me = await t.signUp("Hist_Gros");
       // COURSE-06 : la course vient d'un salon lancé par le serveur, il y a plus de 600 s
-      const { code } = await launchedRoomFor(t.db, t.auth, me.cookie, SECRET, 610_000);
+      const { code, who } = await launchedRoomFor(t.db, t.auth, me.cookie, SECRET, 610_000);
+      // le serveur temps réel l'a vu arriver : son rang est donc le premier (COURSE-06)
+      await recordProgress(t.db, code, memberKey(who), 1);
       const results = { ...bigResults("Hist_Gros"), room: code };
 
       let sent: RequestInit | undefined;
