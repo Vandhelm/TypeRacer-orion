@@ -235,9 +235,9 @@
     "scope": "critère"
   },
   "COURSE-01": {
-    "commit": "2acdffe",
+    "commit": "d6eb6b4",
     "date": "2026-11-19",
-    "scope": "suivi (light)"
+    "scope": "critère feature/game/course-01 (light)"
   },
   "COURSE-02": {
     "commit": "d160638",
