@@ -14,7 +14,7 @@ describe("JOIN-02 — the explorer offers language and complexity filters", () =
     const html = render("fr", {});
     expect(html).toContain("Langue du texte");
     expect(html).toContain("Complexité");
-    expect(html).toContain("COURANT");
+    expect(html).toContain("FACILE");
     expect(html).toContain('aria-label="Anglais"');
   });
 
@@ -22,13 +22,13 @@ describe("JOIN-02 — the explorer offers language and complexity filters", () =
     const html = render("en", {});
     expect(html).toContain("Text language");
     expect(html).toContain("Complexity");
-    expect(html).toContain("EXPERT");
+    expect(html).toContain("HARD");
   });
 
   test("the chosen values are pressed, the others are not", () => {
     const html = render("fr", { language: "en", level: "rich" });
     expect(html).toMatch(/aria-pressed="true"[^>]*aria-label="Anglais"/);
-    expect(html).toMatch(/aria-pressed="true"[^>]*>RICHE</);
+    expect(html).toMatch(/aria-pressed="true"[^>]*>MOYEN</);
     expect(html.match(/aria-pressed="true"/g)).toHaveLength(2);
   });
 

@@ -118,3 +118,39 @@ Longueurs : très court 10 mots, court 25, moyen 50, long 100, autre de 1 à 1 0
 - **Texte perso** : pris tel quel, la longueur affichée est son nombre de mots.
 
 CONF-07, comportement retenu : les caractères exclus ne s'appliquent qu'au texte aléatoire (`excludedApplies`). En cohérent et en citation, l'option est désactivée dans le salon (grisée, avec une aide) et ignorée par le serveur et la course : retirer les mots qui contiennent un caractère exclu casserait le passage et ferait passer le texte sous la longueur demandée. En aléatoire, l'exclusion vaut aussi pour la ponctuation, les chiffres et les caractères spéciaux ajoutés. Si les caractères exclus vident le dictionnaire, la longueur est gardée et l'exclusion ne peut pas être respectée.
+
+## Complexité du texte : facile, moyen, difficile (CONF-05)
+
+Trois niveaux, affichés Facile / Moyen / Difficile (Easy / Medium / Hard), codés `common`, `rich`, `expert`. Ils choisissent la liste de mots du dictionnaire (`LEXICON`, `src/views/game/lexicon.ts`, au moins 100 mots par langue et par niveau) en mode aléatoire. En cohérent et en citation, le niveau est ignoré et grisé (CONF-03). Ponctuation, chiffres, majuscules, accents (CONF-06) et caractères exclus (CONF-07) sont des options à part, appliquées après le tirage : ils ne comptent pas dans la mesure du niveau.
+
+Critères mesurés sur chaque liste (`measureWords`, `src/views/game/complexity.ts`) ; la longueur se compte en caractères, accents compris :
+
+- **Longueur des mots** : moyenne, plus court et plus long mot, part des mots de 10 caractères ou plus.
+- **Fréquence d'usage** : part des mots qui sont dans la liste de référence des mots très fréquents de la langue (`FREQUENT_WORDS`, `src/views/game/frequent.ts`, environ 300 mots ; français : mots très fréquents choisis à la main ; anglais : d'après les premiers rangs de la liste Fry, quelques mots retirés ; c'est une approximation).
+- **Caractères spéciaux** : part des mots qui ont une lettre accentuée ou un signe (apostrophe, tiret), ou une lettre rare de la langue, c'est-à-dire moins de 1 % des lettres d'un texte courant : k w x y z j en français, v k j x q z en anglais.
+
+Seuils, les mêmes pour les deux langues (`COMPLEXITY`) :
+
+| Critère | Facile | Moyen | Difficile |
+|---|---|---|---|
+| Longueur moyenne | ≤ 4,5 | de 5,5 à 8,5 | ≥ 9 |
+| Mot le plus court | — | ≥ 3 | ≥ 6 |
+| Mot le plus long | ≤ 8 | ≤ 12 | — |
+| Mots de 10 caractères ou plus | 0 % | ≤ 15 % | ≥ 50 % |
+| Mots très fréquents | ≥ 80 % | ≤ 25 % | ≤ 2 % |
+| Mots à caractère spécial | ≤ 15 % | ≤ 30 % | ≥ 20 % |
+
+En plus des seuils, chaque critère doit aller dans le sens de la difficulté de facile à difficile (sans jamais revenir en arrière, et avec une vraie différence entre facile et difficile), la longueur moyenne doit croître strictement d'un niveau à l'autre, et aucun mot n'appartient à deux niveaux d'une même langue.
+
+Mesure du dictionnaire au 2026-11-19 :
+
+| Langue, niveau | Moyenne | Min–max | ≥ 10 car. | Fréquents | Spéciaux |
+|---|---|---|---|---|---|
+| fr facile | 3,9 | 2–8 | 0 % | 97,5 % | 11,8 % |
+| fr moyen | 6,9 | 4–10 | 3,4 % | 0 % | 19,8 % |
+| fr difficile | 11,1 | 6–19 | 75,9 % | 0 % | 49,1 % |
+| en facile | 3,6 | 1–6 | 0 % | 96,3 % | 12,1 % |
+| en moyen | 6,0 | 3–10 | 3,5 % | 1,8 % | 16,7 % |
+| en difficile | 11,5 | 8–28 | 82,4 % | 0 % | 25,5 % |
+
+Les tests `CONF-05` (`src/views/game/complexity.test.ts`, `bun test -t CONF-05`) refont cette mesure à chaque lancement : un mot ajouté qui fait sortir un niveau de ses seuils, ou qui casse l'ordre des niveaux, fait échouer la suite.

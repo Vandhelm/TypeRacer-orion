@@ -78,9 +78,9 @@
       "french": "Français",
       "english": "Anglais",
       "levels": {
-        "common": "COURANT",
-        "rich": "RICHE",
-        "expert": "EXPERT"
+        "common": "FACILE",
+        "rich": "MOYEN",
+        "expert": "DIFFICILE"
       },
       "host": "Hôte",
       "state": "État",
@@ -167,9 +167,9 @@
     "yes": "Oui",
     "no": "Non",
     "difficulty": "Difficulté",
-    "common": "Courant",
-    "rich": "Riche",
-    "expert": "Expert",
+    "common": "Facile",
+    "rich": "Moyen",
+    "expert": "Difficile",
     "settingsSections": "Sections des réglages",
     "tabRoom": "SALON",
     "tabContent": "CONTENU",
@@ -382,9 +382,9 @@
       "custom": "texte perso"
     },
     "levels": {
-      "common": "courant",
-      "rich": "riche",
-      "expert": "expert"
+      "common": "facile",
+      "rich": "moyen",
+      "expert": "difficile"
     },
     "punctuation": "ponctuation",
     "numbers": "chiffres",

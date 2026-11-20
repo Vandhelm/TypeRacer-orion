@@ -78,9 +78,9 @@
       "french": "French",
       "english": "English",
       "levels": {
-        "common": "COMMON",
-        "rich": "RICH",
-        "expert": "EXPERT"
+        "common": "EASY",
+        "rich": "MEDIUM",
+        "expert": "HARD"
       },
       "host": "Host",
       "state": "State",
@@ -167,9 +167,9 @@
     "yes": "Yes",
     "no": "No",
     "difficulty": "Difficulty",
-    "common": "Common",
-    "rich": "Rich",
-    "expert": "Expert",
+    "common": "Easy",
+    "rich": "Medium",
+    "expert": "Hard",
     "settingsSections": "Settings sections",
     "tabRoom": "ROOM",
     "tabContent": "CONTENT",
@@ -382,9 +382,9 @@
       "custom": "custom text"
     },
     "levels": {
-      "common": "common",
-      "rich": "rich",
-      "expert": "expert"
+      "common": "easy",
+      "rich": "medium",
+      "expert": "hard"
     },
     "punctuation": "punctuation",
     "numbers": "numbers",
