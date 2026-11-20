@@ -14,4 +14,7 @@
 
 @media (max-width: 760px){
     [data-tip]::after{ max-width: min(260px, calc(100vw - 48px)); }
+    /* DES-06 : the "i" sits after its label; the tooltip starts at the label's left edge so it never runs off the screen */
+    :has(> .info-tip[data-tip]){ position: relative; }
+    .info-tip[data-tip]{ position: static; }
 }

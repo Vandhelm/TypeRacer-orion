@@ -10,6 +10,8 @@ import { rememberGuestRace } from "../profile/stats";
 import { useRealtimeRoom } from "../../realtime/useRealtimeRoom";
 import { LiveList } from "../room/LiveList";
 import { useRace } from "./hooks/useRace";
+import { KeyboardNotice } from "./KeyboardNotice";
+import { useMobileRace } from "./mobileRace";
 import { loadRacePoolImages, type RacePoolImages } from "./pool/createRacePool";
 import { laneProgress, myWpm } from "./race";
 import { RacePool } from "./RacePool";
@@ -31,6 +33,7 @@ const COUNT = "leading-none tracking-[.02em] animate-[game-count-hit_.8s_cubic-b
 export function GamePage() {
   const { t } = useTranslation();
   const state = useRoom("game");
+  const mobile = useMobileRace();
 
   useEffect(() => {
     document.title = t("game.pageTitle");
@@ -51,7 +54,12 @@ export function GamePage() {
       </div>
     );
   }
-  return <GameRace state={state} />;
+  return <GameScreen state={state} mobile={mobile} />;
+}
+
+/** DES-06 : on mobile the race is never mounted (no pool, no typing field): a notice recommends a physical keyboard. */
+export function GameScreen({ state, mobile }: { state: RoomState; mobile: boolean }) {
+  return mobile ? <KeyboardNotice state={state} /> : <GameRace state={state} />;
 }
 
 /** One lane per player and the shared text. It hands over to the podium at the end. */

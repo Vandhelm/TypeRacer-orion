@@ -31,6 +31,11 @@
 }
 .stamp.on{ animation: stamp-hit 1.6s cubic-bezier(.2,.9,.3,1) both; }
 
+/* DES-06 : on a phone the stamp lands from a smaller height, so it never runs off the screen (no horizontal scroll) */
+@media (max-width: 760px){
+    .stamp{ --stamp-from: 1.4; }
+}
+
 @media (prefers-reduced-motion: reduce){
     .stamp.on{ animation: none; opacity: 1; }
 }

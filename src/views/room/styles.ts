@@ -3,9 +3,9 @@
 /** Small uppercase label above or beside a value. */
 export const LABEL = "block font-mono text-[max(11px,1.3vh)] leading-[1.2] font-normal tracking-[.2em] text-muted uppercase";
 
-/** A soft shadow behind a group of text: the fish sink into it and fade, never cut sharply. */
+/** A soft shadow behind a group of text: the fish sink into it and fade, never cut sharply. Narrow: within the page padding (DES-06). */
 export const SHADE =
-  "relative before:pointer-events-none before:absolute before:-inset-x-[22px] before:-inset-y-[18px] before:-z-1 " +
+  "relative before:pointer-events-none before:absolute before:-inset-x-[22px] before:-inset-y-[18px] before:-z-1 narrow:before:-inset-x-4 " +
   "before:rounded-[30px] before:bg-[rgba(0,0,0,.94)] before:[filter:blur(14px)]";
 
 /** A value shown as text instead of choices (guest view, custom text). */

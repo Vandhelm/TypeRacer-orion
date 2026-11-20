@@ -15,7 +15,7 @@ body{ height: auto; min-height: 100vh; overflow: visible; font-size: 16px; paddi
 .room-stamp span{ font: 600 22px/1 var(--font-mono); }
 .stamp.room-stamp.on{ animation: room-stamp-hit 1.6s cubic-bezier(.2,.9,.3,1) both; }
 @keyframes room-stamp-hit{
-    0%{ opacity: 0; transform: translate(-50%, -50%) scale(2.2) rotate(-16deg); }
+    0%{ opacity: 0; transform: translate(-50%, -50%) scale(var(--stamp-from, 2.2)) rotate(-16deg); }
     25%{ opacity: 1; transform: translate(-50%, -50%) scale(.92) rotate(-8deg); }
     35%{ transform: translate(-50%, -50%) scale(1.04) rotate(-8deg); }
     45%, 80%{ opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(-8deg); }
