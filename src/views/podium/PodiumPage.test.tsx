@@ -50,7 +50,8 @@ describe("TECH-01 — /podium rendu côté serveur", () => {
 
 const board = (language: "fr" | "en", raceId: number | null = null) =>
   (renderToString(createElement(I18nextProvider, { i18n: createI18n(language) }, createElement(PodiumBoard, { players: RESULTS.players, showPlace: true, arrived: true, raceId })))
-    .match(/<li[\s\S]*?<\/li>/g) ?? []);
+    // RES-02 : one table row per player (the board was a list before)
+    .match(/<tbody[\s\S]*<\/tbody>/)?.[0].match(/<tr[\s\S]*?<\/tr>/g) ?? []);
 
 describe("BOT-04 — the results board marks a bot as such, and only bots", () => {
   test("the bot's row carries the BOT marker with a spoken label; the human's row does not", () => {

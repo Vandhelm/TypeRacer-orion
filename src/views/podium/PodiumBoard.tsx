@@ -3,6 +3,8 @@ import { useTranslation } from "react-i18next";
 import { formatNumber } from "../../i18n/format";
 import { BotTag } from "../../players/BotTag";
 import type { PersonalRecord } from "../../players/records";
+import { WORDS_CHANGED } from "../../rooms/bonus-effects";
+import { errorCount, hasTime, isBlank, isMeasured, playerStatus, type PlayerStatus, type ReceivedBonuses } from "./board";
 import { RecordBadge } from "./RecordBadge";
 import { profileHref, rankLabel, type PlayerResult } from "./results";
 
@@ -12,11 +14,35 @@ const BOARD =
   "motion-reduce:animate-none phone:px-3 phone:py-2.5 " +
   "before:pointer-events-none before:absolute before:-top-[7px] before:-left-[7px] before:size-4 before:border-t before:border-l before:border-white " +
   "after:pointer-events-none after:absolute after:-right-[7px] after:-bottom-[7px] after:size-4 after:border-r after:border-b after:border-white";
-const ROW =
-  "box-border grid min-h-[34px] w-full grid-cols-[3.4em_minmax(0,1fr)_auto_auto] items-center gap-3 border-b border-b-line-faint [border-bottom-style:dashed] px-0.5 " +
-  "font-mono text-[max(12px,1.4vh)] leading-[1.2] tracking-[.04em] no-underline hover:bg-[rgba(255,255,255,.08)] hover:text-white " +
-  "focus-visible:outline focus-visible:-outline-offset-2 focus-visible:outline-white";
-const VALUE = "text-[.9em] whitespace-nowrap text-muted";
+// RES-02 : a real table. At 360 px it scrolls inside the board (never the page), rank and name staying in view.
+const SCROLL = "min-h-0 flex-[1_1_auto] overflow-auto overscroll-contain phone:pr-2";
+const TABLE = "w-full min-w-[760px] border-separate border-spacing-0 font-mono text-[max(12px,1.4vh)] leading-[1.2] tracking-[.04em]";
+const CELL = "h-[30px] border-b border-b-line-faint [border-bottom-style:dashed] px-2 whitespace-nowrap";
+const HEAD = "sticky top-0 z-[1] h-[26px] border-b border-b-line-soft bg-black px-2 text-left text-[.8em] font-normal tracking-[.12em] whitespace-nowrap text-muted uppercase";
+const NUMBER = "text-right tabular-nums";
+// rank and name stick to the left while the other columns scroll under them
+const STICKY_RANK = "sticky left-0 z-[1] w-[3.4em] min-w-[3.4em] bg-black";
+const STICKY_NAME = "sticky left-[3.4em] z-[1] w-[13em] max-w-[13em] bg-black";
+const TAG = "inline-block border border-line-soft px-1.5 py-px text-[.85em] tracking-[.12em] uppercase";
+const STATUS_TONE: Record<PlayerStatus, string> = { finished: "text-white", timeout: "text-muted", abandoned: "text-muted", eliminated: "text-muted" };
+
+/** « — » on screen, a word for a screen reader: a value nobody measured (another human live, a bonus not kept). */
+function Unknown() {
+  const { t } = useTranslation();
+  return (
+    <>
+      <span aria-hidden="true">—</span>
+      <span className="sr-only">{t("podium.table.unknown")}</span>
+    </>
+  );
+}
+
+function BonusCell({ bonuses }: { bonuses?: ReceivedBonuses }) {
+  const { t, i18n } = useTranslation();
+  if (!bonuses) return <Unknown />;
+  const kinds = bonuses.kinds.map((kind) => t(`game.bonus.badge.${kind}`, { count: WORDS_CHANGED })).join(", ");
+  return <>{kinds ? `${formatNumber(i18n.language, bonuses.count)} · ${kinds}` : formatNumber(i18n.language, bonuses.count)}</>;
+}
 
 /** Every player in final order, with the local player's place when the results come from a real race. */
 /** charts : RES-03, the button that opens the race charts, at the end of the header. */
@@ -40,19 +66,46 @@ export function PodiumBoard({ players, showPlace, arrived, raceId = null, charts
           {charts}
         </div>
       </header>
-      <ol className="min-h-0 flex-[1_1_auto] list-none overflow-y-auto phone:pr-2 min-[900px]:grid min-[900px]:auto-cols-[minmax(0,1fr)] min-[900px]:grid-flow-col min-[900px]:grid-rows-[repeat(4,34px)] min-[900px]:gap-x-8">
-        {players.map((player, index) => (
-          <li key={player.name}>
-            <a className={`${ROW} ${player.me ? "font-medium text-white" : "font-normal text-[rgba(255,255,255,.7)]"}`} href={profileHref(index, raceId)}>
-              <span>{rankLabel(t, player.rank)}</span>
-              {/* BOT-04 : le marqueur bot reste hors du nom tronqué */}
-              <span className="flex min-w-0 items-center gap-2"><span className="truncate">{player.me ? `${player.name} · ${t("room.you")}` : player.name}</span>{player.bot && <BotTag className="text-[.8em]" />}{player.abandoned && <span className="flex-none border border-line-soft px-1.5 py-px text-[.75em] tracking-[.12em] text-muted uppercase">{t("podium.abandoned")}</span>}</span>
-              <span className={VALUE}>{formatNumber(i18n.language, player.wpm)} {wpm}</span>
-              <span className={VALUE}>{formatNumber(i18n.language, player.accuracy)} %</span>
-            </a>
-          </li>
-        ))}
-      </ol>
+      <div className={SCROLL}>
+        <table className={TABLE}>
+          <caption className="sr-only">{t("podium.table.caption")}</caption>
+          <thead>
+            <tr>
+              <th scope="col" className={`${HEAD} ${STICKY_RANK} z-[2]`}>{t("podium.table.rank")}</th>
+              <th scope="col" className={`${HEAD} ${STICKY_NAME} z-[2]`}>{t("podium.table.player")}</th>
+              <th scope="col" className={`${HEAD} ${NUMBER}`}>{t("podium.table.wpm")}</th>
+              <th scope="col" className={`${HEAD} ${NUMBER}`}>{t("podium.table.raw")}</th>
+              <th scope="col" className={`${HEAD} ${NUMBER}`}>{t("podium.table.accuracy")}</th>
+              <th scope="col" className={`${HEAD} ${NUMBER}`}>{t("podium.table.errors")}</th>
+              <th scope="col" className={`${HEAD} ${NUMBER}`}>{t("podium.table.time")}</th>
+              <th scope="col" className={HEAD}>{t("podium.table.status")}</th>
+              <th scope="col" className={HEAD}>{t("podium.table.bonuses")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {players.map((player, index) => {
+              const status = playerStatus(player);
+              const measured = isMeasured(player);
+              return (
+                <tr key={player.name} className={`hover:bg-[rgba(255,255,255,.08)] ${player.me ? "font-medium text-white" : "font-normal text-[rgba(255,255,255,.7)]"}`}>
+                  <td className={`${CELL} ${STICKY_RANK}`}>{rankLabel(t, player.rank)}</td>
+                  <th scope="row" className={`${CELL} ${STICKY_NAME} text-left font-[inherit]`}>
+                    {/* BOT-04 : le marqueur bot reste hors du nom tronqué */}
+                    <a className="flex min-w-0 items-center gap-2 text-inherit no-underline hover:text-white focus-visible:outline focus-visible:outline-offset-2 focus-visible:outline-white" href={profileHref(index, raceId)}><span className="truncate">{player.me ? `${player.name} · ${t("room.you")}` : player.name}</span>{player.bot && <BotTag className="text-[.8em]" />}</a>
+                  </th>
+                  <td className={`${CELL} ${NUMBER}`}>{isBlank(player) ? <Unknown /> : formatNumber(i18n.language, player.wpm)}</td>
+                  <td className={`${CELL} ${NUMBER}`}>{measured ? formatNumber(i18n.language, player.raw) : <Unknown />}</td>
+                  <td className={`${CELL} ${NUMBER}`}>{measured ? `${formatNumber(i18n.language, player.accuracy)} %` : <Unknown />}</td>
+                  <td className={`${CELL} ${NUMBER}`}>{measured ? formatNumber(i18n.language, errorCount(player)) : <Unknown />}</td>
+                  <td className={`${CELL} ${NUMBER}`}>{hasTime(player) ? t("podium.table.seconds", { value: formatNumber(i18n.language, player.seconds) }) : <Unknown />}</td>
+                  <td className={CELL}><span className={`${TAG} ${STATUS_TONE[status]}`}>{t(`podium.status.${status}`)}</span></td>
+                  <td className={CELL}><BonusCell bonuses={player.bonuses} /></td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </section>
   );
 }

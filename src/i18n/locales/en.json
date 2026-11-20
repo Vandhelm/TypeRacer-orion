@@ -380,6 +380,26 @@
   "podium": {
     "pageTitle": "O.R.I.O.N — The podium",
     "abandoned": "abandoned",
+    "table": {
+      "caption": "Results of each player: rank, speed, accuracy, errors, time, status and bonuses received",
+      "rank": "Rank",
+      "player": "Player",
+      "wpm": "WPM",
+      "raw": "Raw WPM",
+      "accuracy": "Accuracy",
+      "errors": "Errors",
+      "time": "Time",
+      "status": "Status",
+      "bonuses": "Bonuses received",
+      "unknown": "unknown",
+      "seconds": "{{value}} s"
+    },
+    "status": {
+      "finished": "finished",
+      "timeout": "time up",
+      "abandoned": "abandoned",
+      "eliminated": "eliminated"
+    },
     "record": {
       "title": "Personal best beaten",
       "wpm": "{{current}} {{unit}} · previous best {{previous}} {{unit}}",

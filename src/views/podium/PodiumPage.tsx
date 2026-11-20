@@ -8,12 +8,15 @@ import { useRaceResults, type ResultsState } from "./hooks/useRaceResults";
 import { PodiumBoard } from "./PodiumBoard";
 import { PodiumScene } from "./PodiumScene";
 import { RaceCharts } from "./RaceCharts";
+import { awaitingMeasures, withMeasures } from "./board";
 import type { PersonalRecord } from "../../players/records";
 import { podiumRecord, readRecord } from "./record";
 import { backToRoomHref, fetchRoomResults, finalRanking, raceErrorKey, saveResults, submitFailed, withRoomResults, type RaceResults } from "./results";
 
 /** COURSE-10 : relecture des résultats finaux, après un abandon suivi d'un rechargement. */
 const REFRESH_MS = 3000;
+/** RES-02 : au plus une minute d’attente des courses des autres humains. */
+const MEASURE_READS = 20;
 
 /** Une course de l'historique lue par le serveur : ses résultats, ou le code du refus. */
 export type ServerRace = { raceId: number; results: RaceResults } | { raceId: number; error: string };
@@ -78,6 +81,34 @@ export function PodiumPage({ race }: { race?: ServerRace }) {
       clearInterval(timer);
     };
   }, [provisional, stored]);
+  // RES-02 : les autres humains n'envoient en direct que leur MPM ; leur MPM brut, leur précision et leurs erreurs
+  // arrivent avec leur propre course enregistrée, relue ici quelques fois (« — » tant qu'elle ne l'est pas)
+  const waiting = !!tabResults && !tabResults.provisional && !!tabResults.room && awaitingMeasures(tabResults.players);
+  useEffect(() => {
+    const code = stored?.room;
+    if (!waiting || !code) return;
+    let live = true;
+    let reads = 0;
+    const read = async () => {
+      reads += 1;
+      const recorded = await fetchRoomResults(code);
+      if (!live || !recorded) return;
+      setRefreshed((current) => {
+        const base = current ?? stored;
+        const players = withMeasures(base.players, recorded.players);
+        return players === base.players ? current : { ...base, players };
+      });
+    };
+    void read();
+    const timer = setInterval(() => {
+      if (reads >= MEASURE_READS) clearInterval(timer);
+      else void read();
+    }, REFRESH_MS);
+    return () => {
+      live = false;
+      clearInterval(timer);
+    };
+  }, [waiting, stored]);
   const ranked = useMemo(() => (tabResults ? finalRanking(tabResults.players, after.abandoned) : null), [tabResults, after.abandoned]);
   useEffect(() => {
     if (tabResults && ranked) saveResults({ ...tabResults, players: ranked });

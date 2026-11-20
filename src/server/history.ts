@@ -1,7 +1,7 @@
 // HIST-01 : l'historique des courses du compte connecté, paginé (GET /api/history?page=N).
 // Le joueur vient de la session, jamais de la requête ; un invité n'a pas d'historique (AUTH-03).
 // HIST-02 : le détail d'une de ses courses (GET /api/history/<id>), de quoi réafficher sa page de résultats.
-import { and, asc, count, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Db } from "../../db/client";
 import { players, raceConfigs, raceResults, races, raceSamples, roomMembers, rooms } from "../../db/schema";
@@ -187,7 +187,50 @@ export async function roomRaceResults(db: Db, code: string, who: Identity): Prom
     .orderBy(desc(races.id))
     .limit(1);
   if (!race) throw new RoomRefused("not_found");
-  return raceDetailFor(db, race.id, { playerId: who.kind === "account" ? who.playerId : null, name: who.name }, false);
+  const detail = await raceDetailFor(db, race.id, { playerId: who.kind === "account" ? who.playerId : null, name: who.name }, false);
+  const own = await ownMeasures(db, row.roomId, new Date(startsAt));
+  // RES-02 : un humain n'est mesuré que par sa propre course ; sans elle (pas encore envoyée), sa ligne reste sans mesure
+  const players = detail.players.map((p) => (p.bot ? p : { ...p, ...(own.get(p.name.toLowerCase()) ?? UNMEASURED) }));
+  return { ...detail, players };
+}
+
+type Measures = { raw: number; accuracy: number; chars: number[] };
+const UNMEASURED: Measures = { raw: 0, accuracy: 0, chars: [0, 0, 0, 0] };
+const measured = (m: Measures) => m.raw > 0 || m.chars.some((value) => value > 0);
+
+/**
+ * RES-02 : ce que chaque humain d'un lancement a lui-même envoyé (POST /api/races), par nom en minuscules. Un compte :
+ * sa ligne de race_results, gardée sous sa session. Un invité n'a pas de ligne à lui : sa ligne mesurée dans une course
+ * envoyée par un invité (aucun compte humain dans race_results) ; si deux envois se contredisent, rien. La ligne qu'un
+ * membre écrit pour un autre n'est jamais crue.
+ */
+async function ownMeasures(db: Db, roomId: number, startedAt: Date): Promise<Map<string, Measures>> {
+  const launch = await db.select({ id: races.id, others: races.others }).from(races).where(and(eq(races.roomId, roomId), eq(races.startedAt, startedAt)));
+  const own = new Map<string, Measures>();
+  if (!launch.length) return own;
+  const accounts = await db
+    .select({ raceId: raceResults.raceId, name: players.name, raw: raceResults.raw, accuracy: raceResults.accuracy, correct: raceResults.correctChars, wrong: raceResults.wrongChars, extra: raceResults.extraChars, missed: raceResults.missedChars })
+    .from(raceResults)
+    .innerJoin(players, eq(players.id, raceResults.playerId))
+    .where(and(inArray(raceResults.raceId, launch.map((r) => r.id)), eq(players.isBot, false)));
+  const byAccount = new Set(accounts.map((a) => a.raceId));
+  // seuls les invités membres du salon : jamais un compte, que seule sa propre ligne mesure
+  const members = await db.select({ name: roomMembers.guestName }).from(roomMembers).where(and(eq(roomMembers.roomId, roomId), isNotNull(roomMembers.guestName)));
+  const guestNames = new Set(members.map((m) => m.name!.toLowerCase()));
+  const guests = new Map<string, Measures | null>();
+  for (const { id, others } of launch) {
+    if (byAccount.has(id)) continue;
+    for (const o of others) {
+      const m = { raw: o.raw, accuracy: o.accuracy, chars: [o.correctChars, o.wrongChars, o.extraChars, o.missedChars] };
+      const key = o.name.toLowerCase();
+      if (!measured(m) || !guestNames.has(key)) continue;
+      const seen = guests.get(key);
+      guests.set(key, seen === undefined || JSON.stringify(seen) === JSON.stringify(m) ? m : null);
+    }
+  }
+  for (const [key, m] of guests) if (m) own.set(key, m);
+  for (const a of accounts) own.set(a.name.toLowerCase(), { raw: a.raw, accuracy: a.accuracy, chars: [a.correct, a.wrong, a.extra, a.missed] });
+  return own;
 }
 
 export type RaceDetail = Awaited<ReturnType<typeof raceDetail>>;

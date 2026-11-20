@@ -94,3 +94,77 @@ describe("COURSE-10 — a member reads the final results recorded for the curren
     expect((await results(code, host.cookie)).status).toBe(404);
   });
 });
+
+describe("RES-02 — the room results show what each human submitted himself (raw WPM, accuracy, chars)", () => {
+  let db: Awaited<ReturnType<typeof createMockDatabase>>;
+  let auth: ReturnType<typeof createAuth>;
+  beforeAll(async () => {
+    db = await createMockDatabase();
+    auth = createAuth(db);
+  });
+  const signUp = async (name: string) => {
+    await auth.api.signUpEmail({ body: { name, email: placeholderEmail(name), password: "sushi-roll-42", username: name, displayUsername: name } });
+    const { headers } = await auth.api.signInUsername({ body: { username: name, password: "sushi-roll-42" }, returnHeaders: true });
+    return headers.get("set-cookie")!.split(";")[0]!;
+  };
+  const post = (body: Record<string, unknown>, cookie: string) =>
+    handleRace(new Request("http://localhost/api/races", { method: "POST", headers: { "content-type": "application/json", cookie }, body: JSON.stringify({ id: crypto.randomUUID(), ...body }) }), db, auth, GUEST_SECRET);
+  type Line = { name: string; raw: number; accuracy: number; chars: number[] };
+  const read = async (code: string, cookie: string) => {
+    const res = await handleRoomsApi(new Request(`http://localhost/api/rooms/${code}/results`, { headers: { cookie } }), db, auth, GUEST_SECRET);
+    const body = (await res.json()) as { players: Line[] };
+    return (name: string) => body.players.find((p) => p.name === name)!;
+  };
+  const blank = (name: string) => result(name, { raw: 0, accuracy: 100, chars: [0, 0, 0, 0] });
+  const bot = { ...result("Thon_Rouge", { finished: true, progress: 1 }), bot: true };
+
+  /** Un compte hôte et un invité membre, tous deux en course. */
+  const room = async (prefix: string) => {
+    const host = await signUp(`${prefix}_Hote`);
+    const sessionId = crypto.randomUUID();
+    const guest = { kind: "guest" as const, name: `${prefix}_Inv`, sessionId };
+    const { code } = await launchedRoomFor(db, auth, host, GUEST_SECRET, 10_000, [guest]);
+    const guestCookie = `${GUEST_COOKIE}=${signGuest(guest.name, GUEST_SECRET, Date.now(), sessionId)}`;
+    return { host, code, guestCookie, hostName: `${prefix}_Hote`, guestName: `${prefix}_Inv` };
+  };
+
+  test("each human's line carries the measures from his own submission, whoever submitted last", async () => {
+    const { host, code, guestCookie, hostName, guestName } = await room("Mes_Deux");
+    expect((await post({ room: code, summary: SUMMARY, players: [result(hostName, { raw: 70, accuracy: 97, chars: [100, 3, 1, 0] }), bot, blank(guestName)] }, host)).status).toBe(201);
+    expect((await post({ room: code, summary: SUMMARY, players: [blank(hostName), bot, result(guestName, { raw: 55, accuracy: 91, chars: [90, 6, 2, 1] })] }, guestCookie)).status).toBe(201);
+    for (const cookie of [host, guestCookie]) {
+      const line = await read(code, cookie);
+      expect(line(hostName)).toMatchObject({ raw: 70, accuracy: 97, chars: [100, 3, 1, 0] });
+      expect(line(guestName)).toMatchObject({ raw: 55, accuracy: 91, chars: [90, 6, 2, 1] });
+    }
+  });
+
+  test("a human who has not submitted yet keeps an unmeasured line", async () => {
+    const { host, code, guestCookie, hostName, guestName } = await room("Mes_Seul");
+    expect((await post({ room: code, summary: SUMMARY, players: [result(hostName, { raw: 70 }), bot, blank(guestName)] }, host)).status).toBe(201);
+    const line = await read(code, guestCookie);
+    expect(line(guestName)).toMatchObject({ raw: 0, chars: [0, 0, 0, 0] });
+    expect(line(hostName)).toMatchObject({ raw: 70 });
+  });
+
+  test("a guest cannot forge an account's measures: the account's own submission wins", async () => {
+    const { host, code, guestCookie, hostName, guestName } = await room("Mes_Faux");
+    expect((await post({ room: code, summary: SUMMARY, players: [result(hostName, { raw: 70, accuracy: 97 }), bot, blank(guestName)] }, host)).status).toBe(201);
+    expect((await post({ room: code, summary: SUMMARY, players: [result(hostName, { raw: 5, accuracy: 10, chars: [5, 40, 0, 0] }), bot, result(guestName, { raw: 55 })] }, guestCookie)).status).toBe(201);
+    expect((await read(code, guestCookie))(hostName)).toMatchObject({ raw: 70, accuracy: 97 });
+  });
+
+  test("a guest cannot fill in an account that has not submitted yet", async () => {
+    const { code, guestCookie, hostName, guestName } = await room("Mes_Avant");
+    expect((await post({ room: code, summary: SUMMARY, players: [result(hostName, { raw: 5, accuracy: 10, chars: [5, 40, 0, 0] }), bot, result(guestName, { raw: 55 })] }, guestCookie)).status).toBe(201);
+    const line = await read(code, guestCookie);
+    expect(line(hostName)).toMatchObject({ raw: 0, chars: [0, 0, 0, 0] });
+    expect(line(guestName)).toMatchObject({ raw: 55 });
+  });
+
+  test("an account cannot forge a guest's measures: only the guest's own submission counts", async () => {
+    const { host, code, guestCookie, hostName, guestName } = await room("Mes_Hote");
+    expect((await post({ room: code, summary: SUMMARY, players: [result(hostName, { raw: 70 }), bot, result(guestName, { raw: 3, accuracy: 5, chars: [1, 50, 0, 0] })] }, host)).status).toBe(201);
+    expect((await read(code, guestCookie))(guestName)).toMatchObject({ raw: 0, chars: [0, 0, 0, 0] });
+  });
+});
