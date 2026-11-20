@@ -6,10 +6,11 @@ export const E2E_PORT = 3100;
 export const E2E_REALTIME_PORT = 3101;
 export const E2E_BASE_URL = `http://localhost:${E2E_PORT}`;
 
-/** E2E_DATABASE_URL, sinon DATABASE_URL avec le nom de base suffixé par `_e2e`, sinon la base Docker du projet. */
+/** E2E_DATABASE_URL, sinon DATABASE_URL (voir .env.example) avec le nom de base suffixé par `_e2e`. */
 export function e2eDatabaseUrl(env: Env): string {
   if (env.E2E_DATABASE_URL) return env.E2E_DATABASE_URL;
-  const url = new URL(env.DATABASE_URL || "postgres://orion:orion@localhost:5432/orion");
+  if (!env.DATABASE_URL) throw new Error("TEST-02 : définis E2E_DATABASE_URL ou DATABASE_URL (voir .env.example)");
+  const url = new URL(env.DATABASE_URL);
   url.pathname = `${url.pathname.replace(/\/$/, "")}_e2e`;
   return url.toString();
 }
