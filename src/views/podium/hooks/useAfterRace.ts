@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { roomApi } from "../../room/api";
-import { afterRace, ROOM_CLOSED_HREF } from "../after-race";
+import { abandonedNames, afterRace, ROOM_CLOSED_HREF } from "../after-race";
 import type { AfterRaceControls } from "../PodiumActions";
 
 /** Assez vif pour suivre une relance de l'hôte ; chaque relecture est aussi le signe de vie du membre (SALLE-08). */
@@ -11,8 +11,10 @@ const FOLLOW_MS = 3000;
  * quittant le podium ferait sortir le membre). Le serveur dit qui est hôte ; une course relancée emmène à /game,
  * une salle fermée renvoie à l'accueil. code : le salon de la course, ou undefined (rien à suivre).
  */
-export function useAfterRace(code: string | undefined): AfterRaceControls {
+export function useAfterRace(code: string | undefined): AfterRaceControls & { abandoned: string[] } {
   const [host, setHost] = useState<boolean | null>(null);
+  // COURSE-10 : qui a abandonné, selon le serveur ; une relecture ratée garde la précédente
+  const [abandoned, setAbandoned] = useState<string[]>([]);
   const ended = useRef(false);
 
   useEffect(() => {
@@ -21,6 +23,10 @@ export function useAfterRace(code: string | undefined): AfterRaceControls {
     const read = async () => {
       const reply = await roomApi.read(code);
       if (!live) return;
+      if (reply.ok) {
+        const names = abandonedNames(reply);
+        setAbandoned((current) => (current.join("\n") === names.join("\n") ? current : names));
+      }
       const next = afterRace(reply, ended.current);
       ended.current = next.ended;
       if (next.go) {
@@ -51,5 +57,5 @@ export function useAfterRace(code: string | undefined): AfterRaceControls {
     void roomApi.leave(code).then(() => location.assign("/home#rooms"));
   }, [code]);
 
-  return { host, close, leave };
+  return { host, close, leave, abandoned };
 }

@@ -2,6 +2,11 @@
 // les autres attendent, puis rejoignent la course relancée, ou repartent à l'accueil si la salle est fermée.
 import type { Answer } from "../room/api";
 
+/** COURSE-10 : les membres dont le serveur a noté l'abandon (members[].abandoned), par nom ; aucun sans réponse. */
+export function abandonedNames(reply: Answer): string[] {
+  return reply.ok ? reply.result.room.members.filter((m) => m.abandoned).map((m) => m.name) : [];
+}
+
 /** L'accueil, avec le message « la salle a été fermée ». */
 export const ROOM_CLOSED_HREF = "/home?roomClosed=1";
 const PARAM = "roomClosed";

@@ -27,6 +27,8 @@ export type PlayerResult = {
   eliminated: boolean;
   /** COURSE-07 : ce joueur a abandonné la course (jamais « finished ») ; absent d'un résultat gardé avant l'abandon. */
   abandoned?: boolean;
+  /** COURSE-10 : part du texte faite, de 0 à 1, à la fin de sa course (ou à l'abandon) ; absente d'un résultat d'avant. */
+  progress?: number;
   wpmSeries: number[];
   rawSeries: number[];
   errorSeries: number[];
@@ -105,9 +107,28 @@ export function buildResults(race: Race, players: Player[]): PlayerResult[] {
       seconds: Math.round(laneElapsedMs(race, lane) / 1000),
       finished: race.arrivals.includes(lane),
       eliminated: mine && race.eliminated,
+      progress: Math.min(1, Math.max(0, laneProgress(race, lane))),
       ...detailOf(race, lane),
     };
   });
+}
+
+/** À progression égale, l'ordre reçu (celui des couloirs) : un tri stable. Sans progression (résultat d'avant COURSE-10), 0. */
+const byProgress = (players: PlayerResult[]) => [...players].sort((a, b) => (b.progress ?? 0) - (a.progress ?? 0));
+
+/**
+ * COURSE-10 : le classement final affiché. D'abord les terminés, dans l'ordre reçu (l'ordre d'arrivée, buildResults) ;
+ * puis les non terminés, par progression ; enfin les abandons, par progression au moment de l'abandon. Égalité : l'ordre
+ * reçu. `abandoned` : les noms des membres dont le serveur a noté l'abandon (members[].abandoned), pour le podium des
+ * autres membres ; un bot n'abandonne jamais. Les rangs sont renumérotés.
+ */
+export function finalRanking(players: PlayerResult[], abandoned: string[] = []): PlayerResult[] {
+  const left = new Set(abandoned.map((name) => name.toLowerCase()));
+  const marked = players.map((p) => (!p.bot && left.has(p.name.toLowerCase()) ? { ...p, abandoned: true, finished: false } : p));
+  const gaveUp = (p: PlayerResult) => !p.bot && !!p.abandoned;
+  const finished = marked.filter((p) => p.finished && !gaveUp(p));
+  const racing = marked.filter((p) => !p.finished && !gaveUp(p));
+  return [...finished, ...byProgress(racing), ...byProgress(marked.filter(gaveUp))].map((p, index) => ({ ...p, rank: index + 1 }));
 }
 
 export function buildSummary(race: Race, room: Room, sessionSeconds: number): RaceSummary {
@@ -152,6 +173,7 @@ export function toResults(value: unknown): RaceResults | null {
         finished: !!p.finished,
         eliminated: !!p.eliminated,
         ...(p.abandoned ? { abandoned: true } : {}),
+        ...(typeof p.progress === "number" && p.progress >= 0 && p.progress <= 1 ? { progress: p.progress } : {}),
         wpmSeries: numbersOf(p.wpmSeries),
         rawSeries: numbersOf(p.rawSeries),
         errorSeries: numbersOf(p.errorSeries),

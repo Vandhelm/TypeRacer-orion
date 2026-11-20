@@ -1,13 +1,13 @@
 "use client";
 // TECH-01 : rendu côté serveur par app/podium/page.tsx, qui lui passe la course de l'historique (?race=N) déjà lue.
-import { useEffect, useLayoutEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FLOATING_TABS, LanguageSwitcher } from "../../components/tabs/LanguageSwitcher";
 import { useAfterRace } from "./hooks/useAfterRace";
 import { useRaceResults, type ResultsState } from "./hooks/useRaceResults";
 import { PodiumBoard } from "./PodiumBoard";
 import { PodiumScene } from "./PodiumScene";
-import { backToRoomHref, raceErrorKey, submitFailed, type RaceResults } from "./results";
+import { backToRoomHref, finalRanking, raceErrorKey, saveResults, submitFailed, type RaceResults } from "./results";
 
 /** Une course de l'historique lue par le serveur : ses résultats, ou le code du refus. */
 export type ServerRace = { raceId: number; results: RaceResults } | { raceId: number; error: string };
@@ -46,6 +46,15 @@ export function PodiumPage({ race }: { race?: ServerRace }) {
   const roomCode = loaded.status === "ready" && loaded.raceId === null ? loaded.results.room : undefined;
   const after = useAfterRace(roomCode);
 
+  // COURSE-10 : la course jouée dans l'onglet est reclassée (terminés, non terminés, abandons), avec les abandons notés
+  // par le serveur ; une course de l'historique garde les rangs enregistrés par le serveur. Le classement est gardé pour
+  // que le profil ouvert depuis le tableau (?player=N) montre le même joueur.
+  const tabResults = loaded.status === "ready" && loaded.raceId === null ? loaded.results : null;
+  const ranked = useMemo(() => (tabResults ? finalRanking(tabResults.players, after.abandoned) : null), [tabResults, after.abandoned]);
+  useEffect(() => {
+    if (tabResults && ranked) saveResults({ ...tabResults, players: ranked });
+  }, [tabResults, ranked]);
+
   if (loaded.status === "loading") return <p className="grid min-h-screen place-content-center justify-items-center gap-5 p-6 text-center font-mono text-[13px] leading-[1.6] font-normal text-muted" role="status">{t("podium.loading")}</p>;
   if (loaded.status === "error") {
     return (
@@ -57,13 +66,14 @@ export function PodiumPage({ race }: { race?: ServerRace }) {
   }
   if (loaded.status !== "ready") return null;
   const { results, raceId } = loaded;
+  const players = ranked ?? results.players;
 
   return (
     <>
       <LanguageSwitcher className={FLOATING_TABS} />
       {raceId === null && notSaved ? <p className="fixed top-4 left-1/2 z-20 m-0 w-max max-w-[calc(100vw-32px)] border border-red-text bg-black px-3.5 py-2 text-center font-mono text-[12px] leading-[1.5] font-normal text-white [transform:translateX(-50%)]" role="alert">{t("podium.notSaved")}</p> : null}
-      <PodiumScene players={results.players} arrived={arrived} raceId={raceId} roomHref={backToRoomHref(results.room)} after={after} />
-      <PodiumBoard players={results.players} showPlace arrived={arrived} raceId={raceId} />
+      <PodiumScene players={players} arrived={arrived} raceId={raceId} roomHref={backToRoomHref(results.room)} after={after} />
+      <PodiumBoard players={players} showPlace arrived={arrived} raceId={raceId} />
     </>
   );
 }
