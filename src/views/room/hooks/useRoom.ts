@@ -6,7 +6,7 @@ import { DEFAULT_SETTINGS, type Role, type RoomSettings } from "../../../rooms/s
 import type { RoomResult } from "../../../server/rooms";
 import { afterRace } from "../../podium/after-race";
 import { arrivalRequest, roomApi, serverClockOffset, WAITING_POLL_MS, watchRoom, type Answer, type RoomError } from "../api";
-import { keepPresence } from "../presence";
+import { keepPresence, PRESENCE_MS, RACE_PRESENCE_MS } from "../presence";
 import { arrivalOf, isPlayer, roomOf, seatsOf, type Arrival, type Room, type RoomView } from "../room";
 
 /** Le temps d'attendre la fin d'une saisie avant d'envoyer les réglages au serveur. */
@@ -100,7 +100,8 @@ export function useRoom(page: "room" | "game" = "room") {
   useEffect(() => () => clearTimeout(timer.current), []);
 
   // SALLE-08 : sur /room comme sur /game, la page donne signe de vie, socket ou pas
-  useEffect(() => (code ? keepPresence(code) : undefined), [code]);
+  // COURSE-08 : sur /game plus souvent, la règle des 30 s compte depuis le dernier signe de vie
+  useEffect(() => (code ? keepPresence(code, page === "game" ? RACE_PRESENCE_MS : PRESENCE_MS) : undefined), [code, page]);
 
   // COURSE-03 : sur /game, deux relectures de plus pendant la préparation affinent le décalage (meilleure des mesures)
   useEffect(() => {

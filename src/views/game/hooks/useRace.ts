@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { Player, Room } from "../../room/room";
 import { COUNTDOWN_MS } from "../../../rooms/race-clock";
-import { seededRandom } from "../../../rooms/text";
-import { countdownAt, GO_MS, nextChangeIn, raceDurationSeconds } from "../countdown";
-import { buildWords } from "../course";
-import { advanceBots, applyInput, applyRemote, createCourse, createRace, endRace, everyoneDone, startRace, TICK_MS, type Race } from "../race";
+import { countdownAt, GO_MS, nextChangeIn } from "../countdown";
+import { advanceBots, applyInput, applyRemote, endRace, everyoneDone, startRace, TICK_MS, type Race } from "../race";
+import { keepsSnapshot, loadSnapshot, markSent, mountRace, restoreSnapshot, resumeRace, saveSnapshot, wasSent, type RaceSnapshot, type ServerStanding } from "../resume";
 
 /** L'ancien décompte local (3 × 800 ms + GO_MS) : seule la page mobile (mobileRace.ts) s'en sert encore pour son échéance. */
 export const COUNT_STEP_MS = 800;
@@ -18,6 +17,8 @@ type Action =
   | { type: "input"; value: string; now: number }
   | { type: "tick"; now: number; jitters: number[] }
   | { type: "remote"; updates: { lane: number; progress: number; wpm: number }[]; now: number }
+  | { type: "resume"; standing: ServerStanding; startsAt: number; snapshot: RaceSnapshot | null }
+  | { type: "restore"; snapshot: RaceSnapshot | null }
   | { type: "finish" };
 
 function reduce(race: Race, action: Action): Race {
@@ -34,6 +35,10 @@ function reduce(race: Race, action: Action): Race {
       return race.phase === "racing" ? action.updates.reduce((next, { lane, ...update }) => applyRemote(next, lane, update, action.now), race) : race;
     case "finish":
       return endRace(race);
+    case "resume":
+      return resumeRace(race, action.standing, action.startsAt, action.snapshot);
+    case "restore":
+      return restoreSnapshot(race, action.snapshot);
   }
 }
 
@@ -64,18 +69,9 @@ export function useRace(room: Room, players: Player[], { passage = null, seed = 
   const serverNow = useMemo(() => () => Date.now() + offset.current, []);
   // le départ est figé au montage : sans serveur de salons, un décompte local de la même durée
   const [start] = useState(() => startsAt ?? Date.now() + clockOffset + COUNTDOWN_MS);
-  const [race, dispatch] = useReducer(reduce, null, () => {
-    const fresh = createRace(
-      createCourse(buildWords(room, seed === null ? Math.random : seededRandom(seed), passage), raceDurationSeconds(startsAt, endsAt, room.duration), room.mistakes),
-      players,
-      room.botSpeed,
-      room.botAccuracy,
-    );
-    // dès le premier affichage : le bon chiffre pour qui arrive ou recharge en plein décompte, la course pour qui arrive après
-    const now = Date.now() + clockOffset;
-    const { count, started } = countdownAt(start, now);
-    return { ...(started ? { ...startRace(fresh, start), now } : fresh), count };
-  });
+  // dès le premier affichage : le bon chiffre pour qui arrive ou recharge en plein décompte, la course pour qui arrive après
+  // COURSE-08 : bots de la graine de la course, avancés jusqu'à maintenant (src/views/game/resume.ts)
+  const [race, dispatch] = useReducer(reduce, null, () => mountRace(room, players, { passage, seed, startsAt, endsAt, start, now: Date.now() + clockOffset }));
   const [showResults, setShowResults] = useState(false);
   const { phase } = race;
   const allDone = everyoneDone(race);
@@ -120,5 +116,54 @@ export function useRace(room: Room, players: Player[], { passage = null, seed = 
   const onRemote = useMemo(() => (updates: { lane: number; progress: number; wpm: number }[]) => {
     if (updates.length) dispatch({ type: "remote", updates, now: serverNow() });
   }, [serverNow]);
-  return { race, onInput, onRemote, showResults };
+  // COURSE-08 : mes frappes et fautes de cette course restent dans l'onglet (sessionStorage), pour la reprise
+  const { code } = room;
+  const { keystrokes, wordIndex, samples } = race;
+  const latest = useRef(race);
+  useEffect(() => {
+    latest.current = race;
+  });
+  /** COURSE-08 : la course avait déjà commencé quand cette page s'est ouverte (rechargement, retour, arrivée tardive). */
+  const [arrivedMidRace] = useState(() => countdownAt(start, Date.now() + clockOffset).started);
+  // une page rechargée n'écrase pas ce qu'elle gardait avant d'avoir repris (onResume le relit)
+  const [resumed, setResumed] = useState(false);
+  useEffect(() => {
+    if (keepsSnapshot({ phase, code, arrivedMidRace, resumed })) saveSnapshot(sessionStorage, code, start, latest.current);
+  }, [phase, code, start, keystrokes, wordIndex, samples, resumed, arrivedMidRace]);
+  /** COURSE-08 : après un rechargement, la page reprend à la progression validée par le serveur (jamais en arrière). */
+  const onResume = useMemo(
+    () => (standing: ServerStanding) => {
+      let snapshot: RaceSnapshot | null = null;
+      try {
+        snapshot = code ? loadSnapshot(sessionStorage, code, start) : null;
+      } catch {
+        snapshot = null; // stockage refusé : les mots repris comptent comme justes
+      }
+      dispatch({ type: "resume", standing, startsAt: start, snapshot });
+      setResumed(true);
+    },
+    [code, start],
+  );
+  /** COURSE-08 : ce que l'onglet gardait de cette course à son montage (snapshot, déjà envoyée ?), pour remountPlan. */
+  const [stored] = useState(() => {
+    try {
+      return { snapshot: code ? loadSnapshot(sessionStorage, code, start) : null, sent: code ? wasSent(sessionStorage, code, start) : false };
+    } catch {
+      return { snapshot: null, sent: false };
+    }
+  });
+  /** COURSE-08 : la page remontée après un abandon ou la fin reprend ce qu'elle gardait, pour l'enregistrer. */
+  const onRestore = useMemo(() => () => dispatch({ type: "restore", snapshot: stored.snapshot }), [stored]);
+  /** COURSE-08 : la course part au serveur : une page remontée ne la renverra pas. */
+  const onSent = useMemo(
+    () => () => {
+      try {
+        if (code) markSent(sessionStorage, code, start);
+      } catch {
+        // stockage refusé : le serveur refuse de toute façon un second enregistrement
+      }
+    },
+    [code, start],
+  );
+  return { race, onInput, onRemote, onResume, onRestore, onSent, stored, arrivedMidRace, showResults };
 }

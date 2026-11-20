@@ -12,6 +12,7 @@ import { launchBlocker } from "../rooms/launch";
 import { follow, raceState, storedStatus, type RaceEvent, type RaceState } from "../rooms/race-state";
 import { concealText, textRevealed } from "../rooms/conceal";
 import { COUNTDOWN_MS, raceClock } from "../rooms/race-clock";
+import { ABANDON_AFTER_MS } from "../rooms/reconnect";
 import { courseWords, textFingerprint } from "../rooms/course-words";
 import type { RoomFilters } from "../rooms/explorer";
 import { seatColor } from "../rooms/seats";
@@ -559,6 +560,14 @@ export const raceDeadlineMs = (durationSeconds: number) => durationSeconds * 100
  * ralentit (une minuterie par minute au pire).
  */
 export const MEMBER_AWAY_MS = 90_000;
+/**
+ * COURSE-08 : pendant la course, un coureur sans signe de vie depuis ABANDON_AFTER_MS (RECONNECT_MS = 30 s depuis sa
+ * coupure, plus RACE_PRESENCE_MS, l'écart au pire entre son dernier signe de vie et la coupure) a abandonné. Mesuré par
+ * l'heure de la base, depuis room_members.last_seen_at (lecture du salon : /game la relit toutes les RACE_PRESENCE_MS ;
+ * progression acceptée par le temps réel), au plus tôt depuis le départ ; appliqué à chaque balayage du salon (sweep :
+ * lecture ou action d'un membre, balayage du temps réel toutes les 5 s). Voir docs/ARCHITECTURE.md.
+ */
+export { ABANDON_AFTER_MS, RECONNECT_MS } from "../rooms/reconnect";
 
 /**
  * Le salon à jour, sous son verrou (pris ici) : l'heure de la base décide, sans minuterie de processus (Next.js, Vercel).
@@ -569,6 +578,8 @@ export const MEMBER_AWAY_MS = 90_000;
  */
 async function sweep(tx: Db, roomId: number, actor?: string | string[]): Promise<boolean> {
   await tx.select({ id: rooms.id }).from(rooms).where(eq(rooms.id, roomId)).for("update");
+  // COURSE-08 : avant le signe de vie de qui revient, pour qu'un retour après le délai trouve l'abandon
+  const timedOut = await abandonSilentRunners(tx, roomId);
   const present = actor === undefined ? [] : [actor].flat();
   if (present.length) await tx.update(roomMembers).set({ lastSeenAt: sql`now()` }).where(and(eq(roomMembers.roomId, roomId), inArray(roomMembers.memberKey, present)));
   const deadline = sql`${rooms.launchedAt} + (select ${raceConfigs.duration} from ${raceConfigs} where ${raceConfigs.id} = ${rooms.configId}) * interval '1 second' + ${RACE_GRACE_MS} * interval '1 millisecond'`;
@@ -578,7 +589,37 @@ async function sweep(tx: Db, roomId: number, actor?: string | string[]): Promise
     .where(and(eq(roomMembers.roomId, roomId), sql`${roomMembers.lastSeenAt} < now() - ${MEMBER_AWAY_MS} * interval '1 millisecond'`))
     .returning({ key: roomMembers.memberKey });
   if (gone.length) await afterDeparture(tx, roomId);
-  return ended.length > 0 || gone.length > 0;
+  return timedOut || ended.length > 0 || gone.length > 0;
+}
+
+/**
+ * COURSE-08 : les coureurs (participants ni arrivés ni ayant abandonné) silencieux depuis ABANDON_AFTER_MS, comptés au plus
+ * tôt depuis le départ, ont abandonné : même effet que abandonRace (abandoned_at, progression validée gardée, une fin
+ * pour COURSE-09). Le silence compte jusqu'à la fin de la course (endsAt), pas au-delà : un coureur déjà silencieux depuis
+ * le délai à endsAt a abandonné, même balayé pendant la marge d'après (SALLE-09) ; un silence commencé trop tard pour
+ * l'atteindre avant endsAt laisse le coureur classé par sa progression. Sans limite de temps, jusqu'à maintenant.
+ * Seulement tant que la salle est en course (décompte exclu). Sous le verrou.
+ */
+async function abandonSilentRunners(tx: Db, roomId: number): Promise<boolean> {
+  if ((await stateOf(tx, roomId)) !== "racing") return false;
+  const startsAt = sql`(select ${rooms.launchedAt} + ${COUNTDOWN_MS} * interval '1 millisecond' from ${rooms} where ${rooms.id} = ${roomId})`;
+  // least() ignore un null : sans durée (CONF-01), la fin est maintenant
+  const until = sql`least(now(), (select ${rooms.launchedAt} + ${COUNTDOWN_MS} * interval '1 millisecond' + ${raceConfigs.duration} * interval '1 second' from ${rooms} join ${raceConfigs} on ${raceConfigs.id} = ${rooms.configId} where ${rooms.id} = ${roomId}))`;
+  const gone = await tx
+    .update(roomMembers)
+    .set({ abandonedAt: sql`now()` })
+    .where(
+      and(
+        eq(roomMembers.roomId, roomId),
+        eq(roomMembers.role, "player"),
+        isNull(roomMembers.finishedAt),
+        isNull(roomMembers.abandonedAt),
+        sql`greatest(${roomMembers.lastSeenAt}, ${startsAt}) < ${until} - ${ABANDON_AFTER_MS} * interval '1 millisecond'`,
+      ),
+    )
+    .returning({ key: roomMembers.memberKey });
+  if (gone.length) await endIfAllFinished(tx, roomId);
+  return gone.length > 0;
 }
 
 /** Tous les salons qui ont une course échue ou un membre silencieux (explorateur, temps réel), chacun sous son verrou. */

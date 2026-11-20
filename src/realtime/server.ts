@@ -33,7 +33,8 @@ type Socket = ServerWebSocket<Connection>;
 type Member = { player: Player; connections: number };
 /** COURSE-06 : la course arbitrée d'une salle. `course` : la dernière connue ; `over` : le salon a quitté la course. */
 /** `resumed` : progressions relues en base (par clé de membre), reprises quand le coureur revient. */
-type RaceState = { course: RaceCourse | null; over: boolean; entries: Map<string, Accepted>; resumed: Map<string, Accepted>; owners: Map<string, string>; kept: Set<string>; lastSent: number; timer: ReturnType<typeof setTimeout> | null };
+/** `alive` (COURSE-08) : clés des coureurs dont une progression a été acceptée depuis le dernier balayage. */
+type RaceState = { course: RaceCourse | null; over: boolean; entries: Map<string, Accepted>; resumed: Map<string, Accepted>; owners: Map<string, string>; kept: Set<string>; alive: Set<string>; lastSent: number; timer: ReturnType<typeof setTimeout> | null };
 type Throttle = { lastSent: number; pending: { ws: Socket; text: string } | null; timer: ReturnType<typeof setTimeout> | null };
 
 export type RealtimeOptions = {
@@ -83,6 +84,8 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
 
   /** Toutes les sockets entrées dans chaque salon (présence et course), suivies ou non. */
   const joined = new Map<string, Set<Socket>>();
+  /** COURSE-08 : les salles dont la course est en cours (vue par syncRace), gardées au balayage même sans socket. */
+  const racing = new Set<string>();
 
   /**
    * Pousse l'état du salon à ses seuls membres qui le suivent ; un membre retiré apprend qu'il ne l'est plus.
@@ -131,16 +134,25 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
   let refreshing = false;
   async function refreshAll() {
     if (!backend || refreshing) return;
-    if (!followers.size) {
+    if (!followers.size && !joined.size && !racing.size) {
       if (refreshTimer) clearInterval(refreshTimer);
       refreshTimer = null;
       return;
     }
     refreshing = true;
     try {
-      for (const [code, sockets] of followers) {
-        const present = [...new Set([...sockets].map((ws) => ws.data.follow!.key))];
+      // COURSE-08 : aussi les salles sans page salle ouverte (la page course ne suit pas), et les salles en course dont
+      // toutes les sockets sont fermées (un coureur seul coupé) : le balayage y note les coureurs silencieux depuis le délai
+      // comme ayant abandonné, et la course l'apprend (syncRace). Seules les pages salle et les progressions acceptées donnent
+      // signe de vie ici (SALLE-08 inchangé) ; la page course le donne aussi en relisant le salon (RACE_PRESENCE_MS).
+      for (const code of new Set([...followers.keys(), ...joined.keys(), ...racing])) {
+        // COURSE-08 : un coureur dont l'arbitre a accepté une progression depuis le dernier balayage donne signe de vie
+        const race = races.get(code);
+        const present = [...new Set([...[...(followers.get(code) ?? [])].map((ws) => ws.data.follow!.key), ...(race?.alive ?? [])])];
+        race?.alive.clear();
         if (await backend.refresh(code, present)) await publishRoom(code);
+        // sans socket, personne ne relit la course : la salle sort du balayage quand sa course est finie
+        if (!joined.has(code) && racing.has(code) && !(await backend.course?.(code))) racing.delete(code);
       }
     } catch (error) {
       console.error(error);
@@ -183,6 +195,7 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
     if (!entry) return send(ws, { type: "error", code: "not_member" });
     join(ws, room);
     ws.data.key = entry.key;
+    refreshTimer ??= setInterval(() => void refreshAll(), refreshMs);
     await syncRace(room);
   }
 
@@ -196,11 +209,13 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
       return console.error(error);
     }
     const state = races.get(code);
+    if (course) racing.add(code);
+    else racing.delete(code);
     if (!course) {
       // COURSE-07 : la course vient de finir (le dernier a peut-être abandonné) : sa progression validée reste en base
       if (state?.course && !state.over) keepValidated(code, state, null);
       if (state?.course) state.over = true;
-      else if (!state) races.set(code, { course: null, over: false, entries: new Map(), resumed: new Map(), owners: new Map(), kept: new Set(), lastSent: -Infinity, timer: null });
+      else if (!state) races.set(code, { course: null, over: false, entries: new Map(), resumed: new Map(), owners: new Map(), kept: new Set(), alive: new Set(), lastSent: -Infinity, timer: null });
       return;
     }
     if (!state || !state.course || state.course.startsAt !== course.startsAt) {
@@ -212,7 +227,7 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
           .filter((r) => r.progress > 0)
           .map((r) => [r.key, { progress: r.progress, chars: course.marks ? charsAt(course.marks, r.progress) : 0, wpm: 0, at: now, finishedAt: r.finishedAt }] as const),
       );
-      races.set(code, { course, over: false, entries: new Map(), resumed, owners: new Map(), kept: new Set(course.abandoned ?? []), lastSent: -Infinity, timer: null });
+      races.set(code, { course, over: false, entries: new Map(), resumed, owners: new Map(), kept: new Set(course.abandoned ?? []), alive: new Set(), lastSent: -Infinity, timer: null });
     } else {
       state.course = course;
       state.over = false;
@@ -307,6 +322,7 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
     }
     state.entries.set(ws.data.player.id, verdict.entry);
     state.owners.set(ws.data.player.id, key);
+    state.alive.add(key); // COURSE-08 : le coureur est là, même si sa page relit peu le salon (onglet ralenti)
     publishStandings(room);
     if (verdict.entry.finishedAt !== null && !previous?.finishedAt && backend.progress) {
       backend.progress(key, room, 1).then(

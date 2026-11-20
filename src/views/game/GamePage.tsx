@@ -3,7 +3,7 @@ import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import { HangingButton } from "../../components/buttons/HangingButton";
 import { FLOATING_TABS, LanguageSwitcher } from "../../components/tabs/LanguageSwitcher";
-import { buildResults, buildSummary, markSessionStart, rememberSubmit, saveResults, sessionSeconds, submitRace } from "../podium/results";
+import { buildResults, buildSummary, clearResults, markSessionStart, rememberSubmit, saveResults, sessionSeconds, submitRace } from "../podium/results";
 import { useRoom, type RoomState } from "../room/hooks/useRoom";
 import { rememberGuestRace } from "../profile/stats";
 import { useRealtimeRoom } from "../../realtime/useRealtimeRoom";
@@ -18,6 +18,7 @@ import { loadRacePoolImages, type RacePoolImages } from "./pool/createRacePool";
 import { laneProgress, myWpm } from "./race";
 import { RacePool } from "./RacePool";
 import { RaceTrack } from "./RaceTrack";
+import { myStanding, remountPlan, resumeNotice, resumeStep, staleResults, timeoutAbandon } from "./resume";
 import { raceLanes, remoteUpdates, trackLanes } from "./track";
 import { TypingPanel } from "./TypingPanel";
 
@@ -46,7 +47,9 @@ export function GamePage() {
   // COURSE-07 : un membre qui a abandonné (dit par le serveur, même après un rechargement) ne revient pas dans la course
   // (handOver : un abandon confirmé ici ; la page garde la course jusqu'à l'envoi des résultats, puis va au podium)
   const [handOver, setHandOver] = useState(false);
-  const elsewhere = state.ready && !handOver ? raceExit(state.status, state.room.code, state.abandoned) : null;
+  // COURSE-08 : sauf pour enregistrer d'abord sa course marquée abandon (le serveur l'a laissé entrer : rien d'enregistré)
+  const recording = state.abandoned && !mobile && (state.status === "racing" || state.status === "results");
+  const elsewhere = state.ready && !handOver && !recording ? raceExit(state.status, state.room.code, state.abandoned) : null;
   useEffect(() => {
     if (elsewhere) location.replace(elsewhere);
   }, [elsewhere]);
@@ -77,9 +80,18 @@ function GameRace({ state, onHandOver }: { state: RoomState; onHandOver?: (sendi
   const [lanes] = useState(() => raceLanes(state.players, state.members ?? []));
   const { players } = lanes;
   const [images, setImages] = useState<RacePoolImages | null>(null);
-  const { race, onInput, onRemote, showResults } = useRace(room, players, { passage, seed, startsAt, endsAt, clockOffset });
+  const { race, onInput, onRemote, onResume, onRestore, onSent, stored, arrivedMidRace, showResults } = useRace(room, players, { passage, seed, startsAt, endsAt, clockOffset });
   // COURSE-07 : abandon enregistré par le serveur ; la progression ne part plus et la page passe au podium
   const [abandoned, setAbandoned] = useState(false);
+  // COURSE-08 : remontée après un abandon ou après la fin, la page enregistre ce qu'elle gardait, ou va au podium
+  const [plan] = useState(() => remountPlan({ abandoned: state.abandoned, phase: race.phase, watching, ...stored }));
+  useEffect(() => {
+    if (staleResults(plan, stored.sent)) clearResults();
+    if (plan === "podium") location.replace("/podium");
+    if (plan !== "record") return;
+    onRestore();
+    if (state.abandoned) setAbandoned(true);
+  }, [plan, onRestore, state.abandoned, stored.sent]);
 
   // TECH-06 : ma progression part dans le salon (10 envois par seconde au plus), celle des autres arrive en direct
   const { state: live, sendProgress } = useRealtimeRoom(room.code || null);
@@ -88,6 +100,20 @@ function GameRace({ state, onHandOver }: { state: RoomState; onHandOver?: (sendi
   useEffect(() => {
     if (!watching && !abandoned && race.phase !== "countdown") sendProgress(mine, wpm);
   }, [watching, abandoned, race.phase, mine, wpm, sendProgress]);
+  // COURSE-08 : après un rechargement ou une coupure, la page reprend une fois à la progression validée par le serveur ;
+  // un abandon par silence (plus de 30 s), dit par le serveur, mène au podium comme un abandon
+  const [resumed, setResumed] = useState(false);
+  const standing = myStanding(live);
+  const toResume = resumeStep({ resumed, standing, phase: race.phase });
+  useEffect(() => {
+    if (!toResume) return;
+    onResume(toResume);
+    setResumed(true);
+  }, [toResume, onResume]);
+  const timedOut = timeoutAbandon(live, watching);
+  useEffect(() => {
+    if (timedOut) setAbandoned(true);
+  }, [timedOut]);
   // COURSE-05 : les autres humains avancent dans leur couloir avec ce qu'ils envoient
   useEffect(() => {
     if (race.phase === "racing") onRemote(remoteUpdates(live, lanes));
@@ -118,13 +144,14 @@ function GameRace({ state, onHandOver }: { state: RoomState; onHandOver?: (sendi
     const me = results.players[rank];
     if (me) rememberGuestRace({ at: new Date().toISOString(), wpm: me.wpm, accuracy: me.accuracy, rank: rank + 1, keys: me.keys });
     const sent = submitRace(results, race.course.words.join(" "));
+    onSent(); // COURSE-08 : une page remontée ensuite ne la renvoie pas
     finish(); // SALLE-09 : le salon passe aux résultats et accepte de nouveau des arrivants
     // le retour arrière ne relance pas une course ; la page attend la réponse (un instant en keepalive), un refus est dit au podium
     void sent.then((outcome) => {
       rememberSubmit(outcome);
       location.replace("/podium");
     });
-  }, [showResults, abandoned, race, players, room, finish, watching]);
+  }, [showResults, abandoned, race, players, room, finish, watching, onSent]);
 
   return (
     <div className={ROOT} style={{ "--lanes": players.length } as CSSProperties}>
@@ -140,6 +167,12 @@ function GameRace({ state, onHandOver }: { state: RoomState; onHandOver?: (sendi
       {images ? <RacePool players={players} images={images} race={race} label={t("game.poolLabel", { count: players.length })} /> : <div className="race-pool" />}
 
       <RaceTrack lanes={trackLanes(race, players)} />
+
+      {!watching && resumeNotice({ arrivedMidRace, resumed, racing: race.phase === "racing", status: live?.status }) && (
+        <p className="pointer-events-none fixed top-[84px] left-1/2 z-30 -translate-x-1/2 font-mono text-[max(11px,1.3vh)] leading-[1.6] tracking-[.12em] text-muted" role="status">
+          {t("game.resuming")}
+        </p>
+      )}
 
       {watching ? (
         <p className="py-[1.4vh] text-center font-mono text-[max(11px,1.3vh)] leading-[1.6] tracking-[.12em] text-muted compact:col-[1/-1]" role="status">
