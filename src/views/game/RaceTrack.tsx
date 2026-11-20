@@ -1,5 +1,6 @@
 import { useEffect, useRef, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
+import { BotTag } from "../../players/BotTag";
 import { GeneratedAvatar } from "../profile/ProfileAvatar";
 import { easeToward, type TrackLane } from "./track";
 
@@ -65,6 +66,8 @@ export function RaceTrack({ lanes }: { lanes: TrackLane[] }) {
           </p>
           <p data-part="stats" className={`${STATS_LINE} ${lane.me ? "text-red-text" : ""}`}>
             {/* masquage progressif quand le couloir rétrécit : le MPM, puis le badge ; le rang reste toujours */}
+            {/* BOT-04 : le marqueur bot n'est jamais masqué ; sous 44 px il serre ses lettres et perd son retrait */}
+            {lane.bot && <BotTag className="[@container(max-width:44px)]:px-px [@container(max-width:44px)]:tracking-normal" />}
             {lane.me && <b className="bg-red-solid px-[.5vh] font-medium whitespace-nowrap text-white [@container(max-width:44px)]:hidden">{t("room.you")}</b>}
             <span data-part="rank" className="whitespace-nowrap">{t("podium.rank", { count: lane.rank, ordinal: true })}</span>
             <span data-part="wpm" className="whitespace-nowrap [@container(max-width:60px)]:hidden">{t("game.track.wpm", { wpm: lane.wpm })}</span>
