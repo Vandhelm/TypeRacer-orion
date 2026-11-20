@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, spyOn, test } from "bun:test";
-import { arrivalRequest, roomApi, serverClockOffset, watchRoom } from "./api";
+import { READY_MS } from "../../rooms/race-clock";
+import { arrivalRequest, roomApi, serverClockOffset, WAITING_POLL_MS, watchRoom } from "./api";
 
 describe("SALLE-06 — the arrival request is sent once, even if the page effect runs twice (React StrictMode)", () => {
   test("two runs of the same arrival share one request: the host's room is created once, never refused as « already in a room »", async () => {
@@ -75,6 +76,26 @@ describe("COURSE-03 — each room read measures the clock offset with the server
     if (!hadWindow) delete browser.window;
     expect(polled).toBeGreaterThanOrEqual(1);
     expect(Math.abs(serverClockOffset() - 7_000)).toBeLessThan(20);
+  }, 10_000);
+
+  test("the waiting room without realtime polls fast enough for a guest to see the « 3 »", async () => {
+    // budget : le lancement est appris au pire un sondage après, puis /game se charge (≈ 1,7 s mesurées en production)
+    const PAGE_LOAD_MS = 2_000;
+    expect(WAITING_POLL_MS + PAGE_LOAD_MS).toBeLessThanOrEqual(READY_MS);
+    const browser = globalThis as unknown as { window?: unknown };
+    const hadWindow = "window" in browser;
+    browser.window ??= globalThis;
+    let polled = 0;
+    globalThis.fetch = (async (url: string) => {
+      if (String(url).includes("/realtime/ticket")) return new Response(null, { status: 401 });
+      polled++;
+      return Response.json({ room: { code: "ABC234" }, you: "player:1" });
+    }) as unknown as typeof fetch;
+    const stop = watchRoom("ABC234", () => {}, () => {}, WAITING_POLL_MS);
+    await new Promise((resolve) => setTimeout(resolve, WAITING_POLL_MS * 2 + 200));
+    stop();
+    if (!hadWindow) delete browser.window;
+    expect(polled).toBeGreaterThanOrEqual(2);
   }, 10_000);
 
   test("a reply without serverNow (an older server), or with a non-number one, gives no offset", async () => {

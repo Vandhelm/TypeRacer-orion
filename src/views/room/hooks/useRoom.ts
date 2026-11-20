@@ -5,7 +5,7 @@ import { inviteDetour } from "../../../rooms/access";
 import { DEFAULT_SETTINGS, type Role, type RoomSettings } from "../../../rooms/settings";
 import type { RoomResult } from "../../../server/rooms";
 import { afterRace } from "../../podium/after-race";
-import { arrivalRequest, roomApi, serverClockOffset, watchRoom, type Answer, type RoomError } from "../api";
+import { arrivalRequest, roomApi, serverClockOffset, WAITING_POLL_MS, watchRoom, type Answer, type RoomError } from "../api";
 import { keepPresence } from "../presence";
 import { arrivalOf, isPlayer, roomOf, seatsOf, type Arrival, type Room, type RoomView } from "../room";
 
@@ -135,6 +135,7 @@ export function useRoom(page: "room" | "game" = "room") {
         if (gone) location.replace(gone);
         else setError(error);
       },
+      WAITING_POLL_MS, // COURSE-03 : sans temps réel, le lancement est appris à temps pour voir le décompte
     );
   }, [code, page]);
 

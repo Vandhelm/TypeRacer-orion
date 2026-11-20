@@ -83,13 +83,18 @@ export function arrivalRequest<T>(holder: { current: { key: string; request: Pro
 
 /** Tant que le temps réel n'est pas joignable, on relit l'état à ce rythme. */
 const POLL_MS = 3000;
+/**
+ * COURSE-03 : la salle d'attente sans temps réel relit plus souvent : un invité y apprend le lancement au plus 1 s après,
+ * et arrive sur /game (environ 1,7 s de chargement) avant le « 3 » (préparation READY_MS, src/rooms/race-clock.ts).
+ */
+export const WAITING_POLL_MS = 1000;
 
 /**
  * Suit un salon en direct : par le serveur temps réel (TECH-06, follow) quand il répond, sinon relecture HTTP régulière.
  * SALLE-07 : quand le serveur dit que l'on n'est plus membre, la page relit le salon par HTTP et apprend pourquoi (« kicked »).
  * Renvoie la fonction qui arrête de suivre.
  */
-export function watchRoom(code: string, onRoom: (room: RoomView) => void, onError: (error: RoomError) => void): () => void {
+export function watchRoom(code: string, onRoom: (room: RoomView) => void, onError: (error: RoomError) => void, pollMs = POLL_MS): () => void {
   let stopped = false;
   let poll = 0;
   const reread = async () => {
@@ -100,7 +105,7 @@ export function watchRoom(code: string, onRoom: (room: RoomView) => void, onErro
   };
   const startPolling = () => {
     if (stopped || poll) return;
-    poll = window.setInterval(() => void reread(), POLL_MS);
+    poll = window.setInterval(() => void reread(), pollMs);
   };
   const stopPolling = () => {
     clearInterval(poll);
