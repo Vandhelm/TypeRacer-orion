@@ -290,19 +290,19 @@
     "scope": "critère (medium)"
   },
   "BOT-01": {
-    "commit": "2acdffe",
-    "date": "2026-11-19",
-    "scope": "suivi (light)"
+    "commit": "664b859",
+    "date": "2026-11-20",
+    "scope": "critère (feature/game/bot-levels)"
   },
   "BOT-02": {
-    "commit": "2acdffe",
-    "date": "2026-11-19",
-    "scope": "suivi (light)"
+    "commit": "664b859",
+    "date": "2026-11-20",
+    "scope": "critère (feature/game/bot-levels)"
   },
   "BOT-03": {
-    "commit": "2acdffe",
-    "date": "2026-11-19",
-    "scope": "suivi (light)"
+    "commit": "664b859",
+    "date": "2026-11-20",
+    "scope": "critère (feature/game/bot-levels)"
   },
   "BOT-04": {
     "commit": "b217b6e",
