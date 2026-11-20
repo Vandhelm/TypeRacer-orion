@@ -313,6 +313,20 @@
     "poolLabel": "Course : {{count}} poissons, un par joueur. La progression de chacun est indiquée sous son couloir.",
     "playAgain": "REJOUER",
     "backToRoom": "RETOUR AU SALON",
+    "abandon": {
+      "button": "Abandonner",
+      "title": "Abandonner la course ?",
+      "body": "Votre progression s'arrête ici et vous serez classé parmi les abandons. Vous ne pourrez pas reprendre cette course.",
+      "confirm": "Oui, abandonner",
+      "cancel": "Continuer la course",
+      "errors": {
+        "not_racing": "La course n'a pas commencé ou est déjà terminée.",
+        "already_finished": "Vous avez déjà terminé la course.",
+        "not_player": "Un spectateur ne peut pas abandonner.",
+        "not_found": "Ce salon n'existe plus.",
+        "network": "Abandon impossible pour le moment. Réessayez."
+      }
+    },
     "keyboard": {
       "title": "Sortez un clavier physique",
       "body": "L'épreuve se joue au clavier. Sur téléphone ou tablette tactile, le clavier à l'écran cache le texte et fausse le score : revenez sur un ordinateur, ou branchez un clavier."
@@ -325,6 +339,7 @@
   },
   "podium": {
     "pageTitle": "O.R.I.O.N — Le podium",
+    "abandoned": "abandon",
     "label": "Podium",
     "wordsPerSecond": "mots/s",
     "avatar": "{{name}}, {{rank}} place, {{speed}} mots par seconde",
