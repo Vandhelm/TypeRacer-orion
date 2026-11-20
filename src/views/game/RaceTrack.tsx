@@ -2,7 +2,7 @@ import { useEffect, useRef, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import { BotTag } from "../../players/BotTag";
 import { GeneratedAvatar } from "../profile/ProfileAvatar";
-import type { BonusAnnouncement } from "./announce";
+import { latestBatch, type BonusAnnouncement } from "./announce";
 import { BONUS_HIT, bonusBadge, bonusSentence } from "./BonusNotice";
 import { laneFrame, type TrackLane } from "./track";
 
@@ -13,11 +13,12 @@ const NAME_LINE =
 // sous 72 px, le nom serre ses lettres et prend jusqu'à trois lignes plutôt que d'être coupé
 const NAME_LABEL = "line-clamp-2 min-w-0 [overflow-wrap:anywhere] [@container(max-width:72px)]:line-clamp-3 [@container(max-width:72px)]:tracking-normal";
 const STATS_LINE = "flex max-w-full flex-wrap items-center justify-center gap-x-[.8ch] gap-y-[.4vh] font-mono text-[max(10px,1.1vh)] leading-none tracking-[.12em] tabular-nums";
-// BONUS-03 : la ligne qui dit le dernier bonus, posée au bas du bassin, et le badge posé sur le haut du couloir touché
+// BONUS-03 : la ligne qui dit le dernier lot de bonus, posée au bas du bassin, et le badge dans la ligne des stats du couloir
+// touché, comme VOUS et BOT : il ne recouvre jamais le nom
 const BONUS_NEWS =
   "pointer-events-none absolute bottom-[calc(100%+.8vh)] left-1/2 w-max max-w-full -translate-x-1/2 text-center font-mono text-[max(11px,1.3vh)] leading-[1.5] tracking-[.1em] text-red-text";
 const BONUS_BADGE =
-  "absolute top-0 left-1/2 max-w-full -translate-x-1/2 truncate border border-red-text bg-red-solid px-[.6ch] font-mono text-[max(10px,1.1vh)] leading-[1.4] font-medium tracking-[.08em] whitespace-nowrap text-white";
+  "max-w-full truncate border border-red-text bg-red-solid px-[.6ch] font-mono text-[max(10px,1.1vh)] leading-[1.4] font-medium tracking-[.08em] whitespace-nowrap text-white";
 
 /**
  * COURSE-05 : sous le bassin, un couloir par participant : avatar, nom, rang courant, MPM et barre de progression.
@@ -30,7 +31,7 @@ export function RaceTrack({ lanes, bonuses = [] }: { lanes: TrackLane[]; bonuses
   const shown = useRef<number[]>([]);
   const targets = useRef<number[]>([]);
   targets.current = lanes.map((lane) => lane.progress);
-  const latest = bonuses.at(-1);
+  const latest = latestBatch(bonuses);
 
   useEffect(() => {
     const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -53,11 +54,11 @@ export function RaceTrack({ lanes, bonuses = [] }: { lanes: TrackLane[]; bonuses
   return (
     <div className="relative compact:col-[1/-1]">
       <p data-part="bonus-news" role="status" className={BONUS_NEWS}>
-        {latest && <span key={latest.key} className={`block bg-[rgba(0,0,0,.72)] px-2 ${BONUS_HIT}`}>{bonusSentence(t, latest, "track")}</span>}
+        {latest.map((a) => <span key={a.key} className={`block bg-[rgba(0,0,0,.72)] px-2 ${BONUS_HIT}`}>{bonusSentence(t, a, "track")}</span>)}
       </p>
       <ul className="grid grid-cols-[repeat(var(--lanes),minmax(0,1fr))]" aria-label={t("game.track.label")}>
         {lanes.map((lane) => {
-          const bonus = bonuses.findLast((a) => a.lane === lane.lane);
+          const laneBonuses = latestBatch(bonuses.filter((a) => a.lane === lane.lane));
           return (
             <li
               key={`${lane.lane}-${lane.name}`}
@@ -86,12 +87,12 @@ export function RaceTrack({ lanes, bonuses = [] }: { lanes: TrackLane[]; bonuses
                 {lane.me && <b className="bg-red-solid px-[.5vh] font-medium whitespace-nowrap text-white [@container(max-width:44px)]:hidden">{t("room.you")}</b>}
                 <span data-part="rank" className="whitespace-nowrap">{t("podium.rank", { count: lane.rank, ordinal: true })}</span>
                 <span data-part="wpm" className="whitespace-nowrap [@container(max-width:60px)]:hidden">{t("game.track.wpm", { wpm: lane.wpm })}</span>
+                {/* BONUS-03 : un badge par bonus du dernier lot ; il double la ligne annoncée, les lecteurs d'écran l'entendent déjà */}
+                {laneBonuses.map((a) => <b key={a.key} data-part="bonus" aria-hidden="true" className={`${BONUS_BADGE} ${BONUS_HIT}`}>{bonusBadge(t, a)}</b>)}
               </p>
               <span className={`block w-[70%] bg-line-faint ${lane.me ? "h-[3px]" : "h-px"}`} aria-hidden="true">
                 <i className={`block h-full w-[calc(var(--progress)*100%)] ${lane.me ? "bg-red-text" : "bg-line"}`} />
               </span>
-              {/* le badge double la ligne annoncée : les lecteurs d'écran l'entendent déjà une fois */}
-              {bonus && <b key={bonus.key} data-part="bonus" aria-hidden="true" className={`${BONUS_BADGE} ${BONUS_HIT}`}>{bonusBadge(t, bonus)}</b>}
             </li>
           );
         })}
