@@ -1,4 +1,5 @@
-// Déroulé d'une course. À BRANCHER : les adversaires sont simulés, leur progression doit venir du serveur de jeu.
+// Déroulé d'une course. COURSE-05 : seuls les bots du salon sont simulés ; un adversaire humain avance avec la progression
+// qu'il envoie en temps réel (applyRemote). Progression déclarée par le client : le serveur autoritaire reste à faire (COURSE-06).
 import { countKey, type KeyCounts } from "../../players/keys";
 import type { BotAccuracy, BotSpeed, MistakeMode, Player } from "../room/room";
 
@@ -11,6 +12,8 @@ export const TICK_MS = 200;
 export type Course = { words: string[]; /** Caractères cumulés (espaces comprises) après chaque mot. */ marks: number[]; /** CONF-01 : null = aucun temps maximal. */ durationMs: number | null; mistakes: MistakeMode };
 /** typed et errors : frappes et fautes cumulées, comme pour moi. keys : les mêmes, touche par touche. */
 export type Bot = { lane: number; wpm: number; accuracy: number; words: number; typed: number; errors: number; keys: KeyCounts; finishedAt: number };
+/** COURSE-05 : un adversaire humain, tel qu'il se déclare en temps réel (progression de 0 à 1, MPM courant). */
+export type Remote = { lane: number; progress: number; wpm: number; finishedAt: number };
 /** Cumuls de fin de seconde : caractères validés, caractères tapés, fautes. */
 export type Sample = { chars: number; typed: number; errors: number };
 export type Race = {
@@ -32,6 +35,8 @@ export type Race = {
   finishedAt: number;
   eliminated: boolean;
   bots: Bot[];
+  /** COURSE-05 : les autres humains du salon. */
+  remotes: Remote[];
   /** Les couloirs, dans l'ordre d'arrivée. */
   arrivals: number[];
   /** Une mesure par seconde et par couloir. */
@@ -48,8 +53,13 @@ export function createRace(course: Course, players: Player[], botSpeed: BotSpeed
   const [low, high] = BOT_WPM[botSpeed];
   const [worst, best] = BOT_ACCURACY[botAccuracy];
   const bots: Bot[] = [];
+  const remotes: Remote[] = [];
   players.forEach((player, lane) => {
     if (player.me) return;
+    if (!player.bot) {
+      remotes.push({ lane, progress: 0, wpm: 0, finishedAt: 0 });
+      return;
+    }
     bots.push({ lane, wpm: Math.round(low + random() * (high - low)), accuracy: worst + random() * (best - worst), words: 0, typed: 0, errors: 0, keys: {}, finishedAt: 0 });
   });
   return {
@@ -70,6 +80,7 @@ export function createRace(course: Course, players: Player[], botSpeed: BotSpeed
     finishedAt: 0,
     eliminated: false,
     bots,
+    remotes,
     arrivals: [],
     samples: players.map(() => []),
   };
@@ -132,6 +143,27 @@ export function applyInput(race: Race, value: string, now: number): Race {
   return { ...race, ...counted, typed: spaced ? clean : value, now };
 }
 
+const unit = (value: number) => (Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0);
+
+/**
+ * COURSE-05 : la progression qu'un adversaire humain vient d'envoyer. Elle ne recule jamais (un message en retard ne
+ * ramène pas son poisson en arrière) ; à 1, il arrive, une seule fois. Mon couloir et ceux des bots ne bougent pas ici.
+ */
+export function applyRemote(race: Race, lane: number, update: { progress: number; wpm: number }, now: number): Race {
+  const remote = race.remotes.find((candidate) => candidate.lane === lane);
+  if (!remote || remote.finishedAt) return race;
+  const progress = Math.max(remote.progress, unit(update.progress));
+  const wpm = Number.isFinite(update.wpm) ? Math.max(0, Math.round(update.wpm)) : remote.wpm;
+  if (progress === remote.progress && wpm === remote.wpm) return race;
+  const arrived = progress >= 1;
+  const moved: Remote = { ...remote, progress, wpm, finishedAt: arrived ? now : 0 };
+  return {
+    ...race,
+    remotes: race.remotes.map((candidate) => (candidate === remote ? moved : candidate)),
+    arrivals: arrived ? [...race.arrivals, lane] : race.arrivals,
+  };
+}
+
 /** jitters : un tirage entre 0 et 1 par adversaire, pour garder cette fonction pure. */
 export function advanceBots(race: Race, now: number, jitters: number[]): Race {
   if (race.phase !== "racing") return race;
@@ -187,6 +219,12 @@ function sampleOf(race: Race, lane: number): Sample | null {
   if (lane === race.myLane) {
     return race.finishedAt ? null : { chars: myValidChars(race), typed: race.keystrokes, errors: race.wrongChars + race.extraChars };
   }
+  const remote = race.remotes.find((candidate) => candidate.lane === lane);
+  if (remote) {
+    if (remote.finishedAt) return null;
+    const chars = remote.progress * (race.course.marks.at(-1) ?? 0);
+    return { chars, typed: chars, errors: 0 };
+  }
   const bot = race.bots.find((candidate) => candidate.lane === lane);
   if (!bot || bot.finishedAt) return null;
   return { chars: botChars(race, bot), typed: bot.typed, errors: bot.errors };
@@ -203,7 +241,11 @@ function recordSamples(race: Race) {
   });
 }
 
-export const everyoneDone = (race: Race) => race.finishedAt > 0 && race.bots.every((bot) => bot.finishedAt > 0);
+/** Un joueur attend ses bots ; un spectateur (aucun couloir à lui) attend aussi chaque humain. */
+export const everyoneDone = (race: Race) =>
+  race.myLane < 0
+    ? race.bots.every((bot) => bot.finishedAt > 0) && race.remotes.every((remote) => remote.finishedAt > 0)
+    : race.finishedAt > 0 && race.bots.every((bot) => bot.finishedAt > 0);
 
 /** Un temps de course borné à sa durée : la fin n'est vue qu'au tick, parfois en retard (onglet en arrière-plan). */
 const capped = (race: Race, ms: number) => Math.min(race.course.durationMs ?? Infinity, Math.max(0, ms));
@@ -232,6 +274,8 @@ export function myAccuracy(race: Race) {
 /** Temps passé en course dans ce couloir, en millisecondes. */
 export function laneElapsedMs(race: Race, lane: number) {
   if (lane === race.myLane) return elapsedMs(race);
+  const remote = race.remotes.find((candidate) => candidate.lane === lane);
+  if (remote) return race.startedAt ? capped(race, (remote.finishedAt || race.now) - race.startedAt) : 0;
   const bot = race.bots.find((candidate) => candidate.lane === lane);
   return bot && race.startedAt ? capped(race, (bot.finishedAt || race.now) - race.startedAt) : 0;
 }
@@ -239,6 +283,8 @@ export function laneElapsedMs(race: Race, lane: number) {
 /** Vitesse finale de ce couloir, en mots par minute. */
 export function laneWpm(race: Race, lane: number) {
   if (lane === race.myLane) return myWpm(race);
+  const remote = race.remotes.find((candidate) => candidate.lane === lane);
+  if (remote) return remote.wpm;
   const bot = race.bots.find((candidate) => candidate.lane === lane);
   const minutes = laneElapsedMs(race, lane) / 60000;
   return bot && minutes > 0.02 ? Math.round((race.course.marks[Math.floor(bot.words)] ?? 0) / CHARS_PER_WORD / minutes) : 0;
@@ -246,6 +292,8 @@ export function laneWpm(race: Race, lane: number) {
 
 /** Part du texte faite dans ce couloir, de 0 à 1. */
 export function laneProgress(race: Race, lane: number) {
+  const remote = race.remotes.find((candidate) => candidate.lane === lane);
+  if (remote) return remote.progress;
   const words = lane === race.myLane ? race.wordIndex : (race.bots.find((bot) => bot.lane === lane)?.words ?? 0);
   return Math.min(1, words / race.course.words.length);
 }
