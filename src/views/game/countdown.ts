@@ -15,6 +15,49 @@ export function clockOffset(sentAt: number, receivedAt: number, serverNow: numbe
   return serverNow - (sentAt + receivedAt) / 2;
 }
 
+/** Au-delà, une mesure est trop vieille pour rester la meilleure (dérive des horloges, autre réseau). */
+export const SAMPLE_MAX_AGE_MS = 10 * 60_000;
+const STORAGE_KEY = "orion.clock";
+type Sample = { offset: number; rtt: number; at: number };
+type SampleStorage = Pick<Storage, "getItem" | "setItem">;
+
+function stored(storage: SampleStorage | null): Sample | null {
+  try {
+    const value = JSON.parse(storage?.getItem(STORAGE_KEY) ?? "null") as Partial<Sample> | null;
+    if (!value || ![value.offset, value.rtt, value.at].every((n) => typeof n === "number" && Number.isFinite(n))) return null;
+    return value as Sample;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * COURSE-03 : le filtre des mesures. L'erreur d'une mesure est au plus la moitié de son aller-retour : on garde celle
+ * dont l'aller-retour est le plus court (une réponse lente isolée ne déplace rien), tant qu'elle a moins de
+ * SAMPLE_MAX_AGE_MS. Elle est gardée en sessionStorage : celle prise au salon sert encore sur /game (rechargement).
+ */
+export function createClockSync(storage: SampleStorage | null, now: () => number = Date.now) {
+  let best = stored(storage);
+  if (best && now() - best.at > SAMPLE_MAX_AGE_MS) best = null;
+  return {
+    /** Ajoute la mesure d'une requête (heures locales d'envoi et de réception, heure du serveur) ; renvoie le décalage retenu. */
+    add(sentAt: number, receivedAt: number, serverNow: number): number {
+      const sample = { offset: clockOffset(sentAt, receivedAt, serverNow), rtt: Math.max(0, receivedAt - sentAt), at: receivedAt };
+      if (!best || sample.rtt <= best.rtt || sample.at - best.at > SAMPLE_MAX_AGE_MS) {
+        best = sample;
+        try {
+          storage?.setItem(STORAGE_KEY, JSON.stringify(best));
+        } catch {
+          // stockage plein ou interdit : la mesure reste en mémoire
+        }
+      }
+      return best.offset;
+    },
+    /** Le décalage retenu ; 0 sans mesure. */
+    offset: () => best?.offset ?? 0,
+  };
+}
+
 /**
  * Le chiffre affiché à l'heure serveur `now` : 3, 2, 1 (une seconde chacun) avant `startsAt`, 0 (« partez ») pendant
  * GO_MS après, puis rien. `started` : la frappe est ouverte (dès startsAt).

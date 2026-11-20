@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { Player } from "../room/room";
-import { clockOffset, countdownAt, GO_MS, nextChangeIn, raceDurationSeconds } from "./countdown";
+import { clockOffset, countdownAt, createClockSync, GO_MS, nextChangeIn, raceDurationSeconds, SAMPLE_MAX_AGE_MS } from "./countdown";
 import { advanceBots, createCourse, createRace, secondsLeft, startRace } from "./race";
 
 const STARTS = 1_000_000;
@@ -78,5 +78,63 @@ describe("COURSE-03 — the race timer follows the server end (endsAt)", () => {
     expect(secondsLeft(midway)).toBe(13);
     expect(advanceBots(started, ends - 1, [0]).phase).toBe("racing");
     expect(advanceBots(started, ends, [0]).phase).toBe("done");
+  });
+});
+
+describe("COURSE-03 — the clock offset kept is the one of the fastest round trip", () => {
+  const memory = () => {
+    const data = new Map<string, string>();
+    return { getItem: (k: string) => data.get(k) ?? null, setItem: (k: string, v: string) => void data.set(k, v) };
+  };
+
+  test("a slow reply in between does not move the offset; a faster one replaces it", () => {
+    const sync = createClockSync(memory());
+    expect(sync.offset()).toBe(0);
+    expect(sync.add(10_000, 10_100, 15_050)).toBe(5_000); // aller-retour 100 ms
+    expect(sync.add(20_000, 22_000, 26_000)).toBe(5_000); // 2 s : réponse lente isolée, écart brut 5 000 ± 1 000
+    expect(sync.add(30_000, 30_040, 35_060)).toBe(5_040); // 40 ms : plus sûre
+    expect(sync.offset()).toBe(5_040);
+  });
+
+  test("two browsers, one of them with a slow isolated reply, stay within 150 ms of each other", () => {
+    // l'heure réelle (serveur) d'une heure locale : A a 3 s d'avance, B 2 s de retard
+    const realA = (local: number) => local - 3_000;
+    const realB = (local: number) => local + 2_000;
+    const a = createClockSync(memory());
+    const b = createClockSync(memory());
+    a.add(1_000, 1_080, realA(1_040)); // le serveur lit son heure au milieu de l'aller-retour
+    b.add(1_000, 1_090, realB(1_045));
+    b.add(5_000, 7_000, realB(5_100)); // réponse lente isolée : lue tôt, revenue 2 s après (écart brut faux de 900 ms)
+    // erreur de chacun sur l'heure du serveur, puis écart entre les deux navigateurs
+    const errorA = a.offset() - -3_000;
+    const errorB = b.offset() - 2_000;
+    expect(Math.abs(errorA - errorB)).toBeLessThan(150);
+  });
+
+  test("the best sample survives the page change to /game (session storage), but not forever", () => {
+    const storage = memory();
+    createClockSync(storage).add(10_000, 10_100, 15_050);
+    const next = createClockSync(storage, () => 10_100 + 60_000);
+    expect(next.offset()).toBe(5_000);
+    expect(createClockSync(storage, () => 10_100 + SAMPLE_MAX_AGE_MS + 1).offset()).toBe(0);
+  });
+
+  test("an old fast sample gives way to a fresh slower one", () => {
+    const sync = createClockSync(memory());
+    sync.add(10_000, 10_020, 15_010);
+    expect(sync.add(10_000 + SAMPLE_MAX_AGE_MS + 1, 10_000 + SAMPLE_MAX_AGE_MS + 501, 10_000 + SAMPLE_MAX_AGE_MS + 251 + 4_000)).toBe(4_000);
+  });
+
+  test("a broken or foreign stored value is ignored", () => {
+    for (const raw of ["{", "null", '{"offset":"x","rtt":1,"at":1}', '{"offset":1e400,"rtt":1,"at":1}']) {
+      const storage = memory();
+      storage.setItem("orion.clock", raw);
+      expect(createClockSync(storage, () => 2).offset()).toBe(0);
+    }
+  });
+
+  test("without storage (private mode, server), the sync still works in memory", () => {
+    const sync = createClockSync(null);
+    expect(sync.add(0, 100, 1_050)).toBe(1_000);
   });
 });
