@@ -90,15 +90,16 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
   const races = new Map<string, RaceState>();
   /**
    * BOT-04 : les effets de bonus reçus par les bots, par salle, pour la course partie à `startsAt` ; une nouvelle course
-   * (ou un serveur redémarré) repart de ceux gardés en base (RaceCourse.botBonuses).
+   * (ou un serveur redémarré) repart de ceux gardés en base (RaceCourse.botBonuses). Les bots sont ceux de la première
+   * lecture de la course, figés comme les couloirs de la page : un humain parti en course n'assoit pas un bot de plus.
    */
-  const botBonuses = new Map<string, { startsAt: number; list: BotBonus[] }>();
-  function botBonusesOf(code: string, course: RaceCourse): BotBonus[] {
-    const known = botBonuses.get(code);
-    if (known?.startsAt === course.startsAt) return known.list;
-    const list = [...(course.botBonuses ?? [])];
-    botBonuses.set(code, { startsAt: course.startsAt, list });
-    return list;
+  const botRaces = new Map<string, { startsAt: number; bots: RaceCourse["bots"]; list: BotBonus[] }>();
+  function botRaceOf(code: string, course: RaceCourse) {
+    const known = botRaces.get(code);
+    if (known?.startsAt === course.startsAt) return known;
+    const fresh = { startsAt: course.startsAt, bots: course.bots, list: [...(course.botBonuses ?? [])] };
+    botRaces.set(code, fresh);
+    return fresh;
   }
 
   function presence(room: string) {
@@ -241,6 +242,7 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
     const state = races.get(code);
     if (course) racing.add(code);
     else racing.delete(code);
+    if (course) botRaceOf(code, course); // BOT-04 : les bots figés à la première lecture de cette course
     if (!course) {
       // COURSE-07 : la course vient de finir (le dernier a peut-être abandonné) : sa progression validée reste en base
       if (state?.course && !state.over) keepValidated(code, state, null);
@@ -342,7 +344,8 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
     const keys = new Map(state.owners);
     for (const ws of joined.get(code) ?? []) if (ws.data.key) keys.set(ws.data.player.id, ws.data.key);
     const now = Date.now();
-    const bots = botRunners(state.course, botBonusesOf(code, state.course), now).filter((bot) => !bot.out);
+    const botRace = botRaceOf(code, state.course);
+    const bots = botRunners({ ...state.course, bots: botRace.bots }, botRace.list, now).filter((bot) => !bot.out);
     const botWords = new Map(bots.map((bot) => [bot.playerId, bot.words]));
     const runners = [...raceEntries(code, state)]
       .filter(([playerId]) => !abandoned.has(keys.get(playerId) ?? ""))
@@ -360,7 +363,7 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
 
   /** BOT-04 : un effet sur un bot rejoint sa liste datée, rejouée par le moteur, et part en base (fin de course, pages). */
   function keepBotBonus(code: string, course: RaceCourse, bonus: BotBonus) {
-    botBonusesOf(code, course).push(bonus);
+    botRaceOf(code, course).list.push(bonus);
     backend?.botBonus?.(code, course.startsAt, bonus).catch((error: unknown) => console.error(error));
   }
 

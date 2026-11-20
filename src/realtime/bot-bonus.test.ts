@@ -53,14 +53,19 @@ const bonuses = (tab: Tab) => tab.messages.filter((m): m is Bonus => m.type === 
 async function race(course: Partial<RaceCourse> & { words: string[] }, sinceStartMs: number) {
   const alpha = player("Alpha");
   const kept: { startsAt: number; bonus: BotBonus }[] = [];
+  const listeners: ((code: string) => void)[] = [];
   const full: RaceCourse = { startsAt: Date.now() - sinceStartMs, endsAt: null, marks: marksOf(course.words), runners: [alpha.id], catchUpBonus: true, mistakes: "fix", ...course };
   const backend: RoomBackend = {
     enter: async (p, code) => ({ key: p.id, room: { code, members: [{ key: p.id }] } }),
     view: async (code) => ({ code, members: [{ key: alpha.id }] }),
     refresh: async () => false,
     leave: async () => false,
-    changes: () => () => undefined,
-    course: async () => full,
+    changes: (listener) => {
+      listeners.push(listener);
+      return () => undefined;
+    },
+    // relue comme en base : une copie à chaque lecture
+    course: async () => ({ ...full }),
     progress: async () => false,
     botBonus: async (_code, startsAt, bonus) => void kept.push({ startsAt, bonus }),
   };
@@ -68,7 +73,7 @@ async function race(course: Partial<RaceCourse> & { words: string[] }, sinceStar
   const tab = await connect(alpha);
   tab.send({ type: "join", room: ROOM });
   await tab.until(() => tab.messages.some((m) => m.type === "standings"));
-  return { tab, kept, course: full };
+  return { tab, kept, course: full, changed: () => listeners.forEach((listener) => listener(ROOM)) };
 }
 
 async function step(tab: Tab, progress: number) {
@@ -128,6 +133,19 @@ describe("BOT-04 — bots get and suffer the catch-up bonuses like humans", () =
     await step(tab, 0.3);
     await Bun.sleep(100);
     expect(bonuses(tab)).toEqual([]);
+  });
+
+  test("the bots are fixed at the start, like the lanes of the page: a seat freed during the race adds no bot", async () => {
+    const { tab, course, changed } = await race({ words: WORDS, bots: [raceBot("impossible")], seed: 3 }, 30_000);
+    // un humain parti : le salon relu assoit un bot de plus, lent, qui serait dernier
+    const seed = botSeed(77, "Wasabi99");
+    course.bots = [raceBot("impossible"), { id: "bot:Wasabi99", seed, profile: botProfile(seed, "noob", "decent") }];
+    changed();
+    await Bun.sleep(100);
+    await step(tab, 0.05);
+    await tab.until(() => bonuses(tab).length > 0);
+    await Bun.sleep(100);
+    expect(bonuses(tab).every((b) => b.playerId === "g:alpha")).toBe(true);
   });
 
   test("the date of a bot effect is a whole number of ms from the start, never negative", () => {
