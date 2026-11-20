@@ -14,7 +14,7 @@ process.env.BETTER_AUTH_URL ??= "http://localhost:3000";
 const SECRET = "guest-secret-guest-secret-guest-secret";
 
 const SUMMARY = {
-  textType: "words", language: "fr", duration: 60, level: "common", punctuation: false, numbers: false, specials: false, accents: true,
+  textType: "words", language: "fr", duration: 60, level: "common", punctuation: false, numbers: false, specials: false, capitals: true, accents: true,
   excluded: "", mistakes: "fix", botSpeed: "medium", botAccuracy: "high", length: "short", wordCount: 20, sessionSeconds: 90,
 };
 const result = (name: string, bot: boolean, wpm: number) => ({

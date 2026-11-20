@@ -2,6 +2,7 @@ import { Fragment } from "react";
 import { useTranslation } from "react-i18next";
 import { formatNumber } from "../../i18n/format";
 import { oneDecimal, type PlayerResult, type RaceSummary } from "../podium/results";
+import { raceSettingLabels } from "./race-settings";
 import { SpeedChart } from "./SpeedChart";
 import { StatBlock, Swatch, Unit } from "./StatBlock";
 import { CROSS, RACE_CARD, SECTION, SECTION_TITLE } from "./styles";
@@ -19,21 +20,7 @@ const keep = (text: string) => text.replaceAll(" ", NBSP);
 export function LastRace({ player, summary, title }: { player: PlayerResult; summary: RaceSummary; title?: string }) {
   const { t, i18n } = useTranslation();
 
-  const settings = [
-    t(`profile.textTypes.${summary.textType}`),
-    t("profile.words", { words: formatNumber(i18n.language, summary.wordCount) }),
-    // CONF-01 : une course sans temps maximal
-    summary.duration === null ? t("profile.noTimeLimit") : t("profile.seconds", { duration: formatNumber(i18n.language, summary.duration) }),
-    t(`profile.languages.${summary.language}`),
-    summary.textType === "words" && t(`profile.levels.${summary.level}`),
-    summary.punctuation && t("profile.punctuation"),
-    summary.numbers && t("profile.numbers"),
-    summary.specials && t("profile.specials"),
-    // CONF-06 : l'option accents ne concerne que le français
-    summary.language === "fr" && !summary.accents && t("profile.noAccents"),
-    summary.excluded && t("profile.without", { chars: summary.excluded }),
-    t(`profile.mistakes.${summary.mistakes}`),
-  ].filter((setting): setting is string => !!setting);
+  const settings = raceSettingLabels(summary, t, i18n.language);
   const outcome = [t(player.eliminated ? "profile.out" : player.finished ? "profile.finished" : "profile.notFinished")];
   if (player.idle >= IDLE_ALERT) outcome.push(t("profile.idleDetected"));
 

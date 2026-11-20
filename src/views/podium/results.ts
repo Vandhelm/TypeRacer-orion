@@ -31,6 +31,8 @@ export type PlayerResult = {
   keys: KeyCounts;
 };
 export type RaceSummary = Pick<Room, "textType" | "language" | "duration" | "level" | "punctuation" | "numbers" | "specials" | "accents" | "excluded" | "mistakes" | "botSpeed" | "botAccuracy" | "length"> & {
+  /** CONF-06 : absent d'un résultat gardé avant l'option (le texte avait alors ses majuscules). */
+  capitals?: boolean;
   wordCount: number;
   sessionSeconds: number;
 };
@@ -106,8 +108,8 @@ export function buildResults(race: Race, players: Player[]): PlayerResult[] {
 }
 
 export function buildSummary(race: Race, room: Room, sessionSeconds: number): RaceSummary {
-  const { textType, language, duration, level, punctuation, numbers, specials, accents, excluded, mistakes, botSpeed, botAccuracy, length } = room;
-  return { textType, language, duration, level, punctuation, numbers, specials, accents, excluded, mistakes, botSpeed, botAccuracy, length, wordCount: race.course.words.length, sessionSeconds };
+  const { textType, language, duration, level, punctuation, numbers, specials, capitals, accents, excluded, mistakes, botSpeed, botAccuracy, length } = room;
+  return { textType, language, duration, level, punctuation, numbers, specials, capitals, accents, excluded, mistakes, botSpeed, botAccuracy, length, wordCount: race.course.words.length, sessionSeconds };
 }
 
 const numbersOf = (value: unknown) => (Array.isArray(value) ? value.map(Number) : []);

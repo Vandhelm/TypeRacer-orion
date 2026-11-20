@@ -91,6 +91,7 @@ export async function raceDetail(db: Db, playerId: number, raceId: number) {
       numbers: raceConfigs.numbers,
       specials: raceConfigs.specials,
       accents: raceConfigs.accents,
+      capitals: raceConfigs.capitals,
       mistakes: raceConfigs.mistakes,
       excluded: raceConfigs.excluded,
     })

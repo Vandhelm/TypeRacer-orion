@@ -404,6 +404,7 @@
     "punctuation": "ponctuation",
     "numbers": "chiffres",
     "specials": "caractères spéciaux",
+    "noCapitals": "sans majuscules",
     "noAccents": "sans accents",
     "without": "sans {{chars}}",
     "mistakes": {

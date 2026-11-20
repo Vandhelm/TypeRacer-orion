@@ -83,6 +83,8 @@ const SummarySchema = z.object({
   numbers: flag,
   specials: flag,
   accents: flag,
+  // CONF-06 : sans l'option (client d'avant), le texte avait ses majuscules
+  capitals: z.boolean().default(true),
   mistakes: z.enum(MISTAKE_MODES),
   excluded: z.string().default("").transform((value) => value.slice(0, 20)),
   sessionSeconds: int(0, 10_000_000).default(0),
