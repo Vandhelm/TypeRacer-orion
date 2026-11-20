@@ -255,9 +255,9 @@
     "scope": "suivi (light)"
   },
   "COURSE-05": {
-    "commit": "1fba673",
-    "date": "2026-11-18",
-    "scope": "site (light)"
+    "commit": "552231d",
+    "date": "2026-11-19",
+    "scope": "critère feature/game/course-05 (rendu 8 couloirs 630/800/1280)"
   },
   "COURSE-06": {
     "commit": "1fba673",
