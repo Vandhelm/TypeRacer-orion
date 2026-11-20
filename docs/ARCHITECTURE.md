@@ -150,7 +150,12 @@ Un coureur légitime refusé (paquets groupés) n'est pas bloqué : la marge aut
 - **Limite restante** : les bots sont simulés par le navigateur (BOT-*) ; le serveur ne peut pas encore reproduire leur course (graine des bots : BOT-05). Leur ordre entre eux, leurs MPM et leur arrivée viennent du corps, bornés par les refus ci-dessus ; un humain non arrivé mais devant un bot lent dans la vraie course est classé derrière lui.
 - Reste du navigateur : MPM, précision et résultats des bots (bornés par les refus ci-dessus).
 
-**Reste côté pages (COURSE-03, après le merge)** : le décompte, le minuteur, la piste et le podium de la page de course ne suivent pas encore `startsAt`, `endsAt` et `standings` du serveur (exposés par `src/realtime/client.ts`, `state.race`) ; ils gardent leur horloge locale. C'est le décompte synchronisé de COURSE-03.
+**Décompte synchronisé (COURSE-03)** : la page de course compte en heure du serveur.
+- **Décalage d'horloge** : la vue du salon donne `serverNow`, l'heure de la base (`clock_timestamp()`, même horloge que `launched_at`, donc que `startsAt`) au moment de la lecture. Le navigateur note son heure à l'envoi et à la réception de la requête ; décalage = `serverNow − (envoi + réception) / 2` (algorithme de Cristian, `src/views/game/countdown.ts`, mesuré dans `src/views/room/api.ts` à chaque réponse HTTP du salon). L'erreur est au plus la moitié de l'aller-retour : quelques dizaines de ms, sous les ~100 ms visées.
+- **Décompte** : 3, 2, 1 (une seconde chacun) avant `startsAt`, puis la frappe s'ouvre et « partez » s'affiche 500 ms (`countdownAt`). Le chiffre est calculé dès le premier affichage : qui arrive ou recharge en plein décompte voit le bon ; qui arrive après le départ court tout de suite, chronométré depuis `startsAt`.
+- **Minuteur et fin** : durée = `endsAt − startsAt` ; le minuteur lit `endsAt − maintenant serveur` et la course se termine à `endsAt`.
+- **Texte** : passage, graine et empreinte ne figurent dans la vue du salon qu'une fois le salon lancé (`racing` ou `results`), donc au début du décompte ; avant, ils valent `null`, même si des colonnes en base étaient remplies.
+- **Classement serveur (`state.race.standings`)** : pas branché sur la piste ni le podium. Il ne classe que les humains (les bots sont simulés par le navigateur) et ne porte ni précision ni touches : il ne remplace pas simplement le classement local, qui mélange humains et bots. La piste montre déjà, pour les autres humains, la progression relayée par le serveur après arbitrage.
 
 ## Déployer le serveur temps réel
 
