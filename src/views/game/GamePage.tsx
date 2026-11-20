@@ -158,8 +158,8 @@ function GameRace({ state, onHandOver }: { state: RoomState; onHandOver?: (sendi
   // RES-02 : les bonus reçus par chaque couloir, confiés au podium avec les résultats
   const received = useRef<ReceivedBonuses[] | undefined>(undefined);
   useEffect(() => {
-    received.current = laneBonuses(live, lanes);
-  }, [live, lanes]);
+    received.current = laneBonuses(live, lanes, botBonuses);
+  }, [live, lanes, botBonuses]);
 
   useEffect(markSessionStart, []);
 

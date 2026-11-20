@@ -4,6 +4,7 @@ import { renderToString } from "react-dom/server";
 import { I18nextProvider } from "react-i18next";
 import { createI18n } from "../../i18n";
 import type { RealtimeState } from "../../realtime/client";
+import type { BotBonus } from "../../rooms/bot-engine";
 import { createCourse, createRace, type Race } from "../game/race";
 import type { RaceLanes } from "../game/track";
 import type { Player } from "../room/room";
@@ -82,6 +83,23 @@ describe("RES-02 — bonuses received, from the server (bonus messages and stand
   test("BOT-04 — a bot gets the bonuses awarded to it, like a human", () => {
     const state = live({ bonuses: [bonus("bot:Bip", 1, "fewer_words"), bonus("bot:Bip", 2, "fog")], race: { startsAt: 0, endsAt: null, standings: [standing("u:1", 0)] } });
     expect(laneBonuses(state, LANES)![2]).toEqual({ count: 2, kinds: ["fewer_words", "fog"] });
+  });
+
+  test("BOT-04 — after a reload (messages lost), a bot falls back on the bonuses the server kept for it (view.botBonuses)", () => {
+    const kept: BotBonus[] = [
+      { at: 1_000, seq: 0, from: "bot:Bip", effect: { kind: "fewer_words", target: "bot:Bip", removed: 3 } },
+      { at: 2_000, seq: 1, effect: { kind: "fog", target: "bot:Bip", durationMs: 5000 } },
+      { at: 3_000, seq: 2, from: "bot:Bip", effect: { kind: "extra_words", target: "u:1", words: ["a", "b", "c"] } },
+    ];
+    const reloaded = live({ race: { startsAt: 0, endsAt: null, standings: [standing("u:1", 0)] } });
+    expect(laneBonuses(reloaded, LANES, kept)![2]).toEqual({ count: 2, kinds: ["fewer_words", "extra_words"] });
+    // sans classement ni message (la course vient de finir), les bonus gardés suffisent
+    expect(laneBonuses(null, LANES, kept)![2]).toEqual({ count: 2, kinds: ["fewer_words", "extra_words"] });
+    // les messages en direct l'emportent quand ils en savent plus
+    const open = live({ bonuses: [bonus("bot:Bip", 1, "fewer_words"), bonus("bot:Bip", 2, "fog"), bonus("bot:Bip", 3, "fog")] });
+    expect(laneBonuses(open, LANES, kept)![2]).toEqual({ count: 3, kinds: ["fewer_words", "fog", "fog"] });
+    // un effet sur un bot qu'il n'a pas reçu (malus d'un autre) ne compte pas comme un bonus du bot
+    expect(laneBonuses(null, LANES, [kept[1]!])![2]).toEqual({ count: 0, kinds: [] });
   });
 
   test("a bonus for an unknown runner or a spectator is not given to any lane", () => {
