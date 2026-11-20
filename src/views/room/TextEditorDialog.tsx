@@ -106,7 +106,10 @@ export function TextEditorDialog({ text, onUse, ref }: TextEditorDialogProps) {
           id="editor-text" maxLength={MAX_TEXT_LENGTH} spellCheck={false} value={draft} onChange={(e) => setDraft(e.target.value)} />
         <p className="mt-2 mb-[14px] flex items-center justify-between gap-3 font-mono text-[max(11px,1.2vh)] leading-[1.4] font-normal text-muted"><span>{`${formatNumber(i18n.language, words)} ${t("room.wordsUnit")}`}</span><span>{t("room.maxChars", { n: formatNumber(i18n.language, MAX_TEXT_LENGTH) })}</span></p>
         <div className="mb-3 flex flex-wrap items-center gap-2">
+          {/* A11Y-03 : le placeholder ne suffit pas comme libellé (il disparaît à la saisie) */}
+          <label className="sr-only" htmlFor="editor-text-name">{t("room.textName")}</label>
           <input
+            id="editor-text-name"
             className="unset box-border h-10 min-w-0 flex-[1_1_180px] border-b border-b-line-soft [border-bottom-style:dashed] font-mono text-[14px] leading-none font-normal text-white placeholder:text-muted focus:border-b-white"
             type="text" maxLength={40} autoComplete="off" placeholder={t("room.textName")} value={saveName} onChange={(e) => setSaveName(e.target.value)} />
           <SmallButton onClick={save}>{t("room.save")}</SmallButton>
