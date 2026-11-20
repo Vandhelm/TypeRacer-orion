@@ -226,12 +226,17 @@ function GameRace({ state, onHandOver }: { state: RoomState; onHandOver?: (sendi
       {images ? <RacePool players={players} images={images} race={race} label={t("game.poolLabel", { count: players.length })} /> : <div className="race-pool" />}
 
       <RaceTrack lanes={trackLanes(race, players)} bonuses={announcements} />
-      {!watching && <BonusNotice announcements={announcements} />}
 
-      {!watching && resumeNotice({ arrivedMidRace, resumed, racing: race.phase === "racing", status: live?.status }) && (
-        <p className="pointer-events-none fixed top-[84px] left-1/2 z-30 -translate-x-1/2 font-mono text-[max(11px,1.3vh)] leading-[1.6] tracking-[.12em] text-muted" role="status">
-          {t("game.resuming")}
-        </p>
+      {/* COURSE-08 et BONUS-03 : la reprise puis l'annonce du bonus qui me cible, empilées dans une même colonne fixe */}
+      {!watching && (
+        <div data-part="game-notices" className="pointer-events-none fixed top-[84px] left-1/2 z-30 flex w-max max-w-[min(92vw,560px)] -translate-x-1/2 flex-col items-center gap-2">
+          {resumeNotice({ arrivedMidRace, resumed, racing: race.phase === "racing", status: live?.status }) && (
+            <p className="text-center font-mono text-[max(11px,1.3vh)] leading-[1.6] tracking-[.12em] text-muted" role="status">
+              {t("game.resuming")}
+            </p>
+          )}
+          <BonusNotice announcements={announcements} />
+        </div>
       )}
 
       {watching || abandoned ? (
