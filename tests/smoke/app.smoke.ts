@@ -156,8 +156,12 @@ describe("SMOKE — API", () => {
       headers: { "content-type": "application/json", cookie },
       body: JSON.stringify({ id: crypto.randomUUID(), summary, players: [player] }),
     });
-    // COURSE-06 : sans salon lancé par le serveur, la course est refusée ; le faux bot n'a donc pas d'historique
+    // COURSE-06 : 409 attendu. Un invité ne peut ni créer ni lancer de salon (seul un compte hôte le peut, avec un autre
+    // participant), et /api/races refuse toute course qui ne vient pas d'un salon lancé par le serveur (race_not_launched).
+    // Le corps n'a donc pas de `room` : c'est ce refus qui garantit ici que le faux bot n'obtient aucun historique.
+    // Le cas d'un salon réellement lancé est couvert par src/server/races.test.ts (AUTH-03) et races-authority.test.ts.
     expect(res.status).toBe(409);
+    expect(((await res.json()) as { error: string }).error).toBe("race_not_launched");
     expect((await fetch(`${base}/api/players/Smoke_Faux_Bot/stats`)).status).toBe(404);
   });
 
