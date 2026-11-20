@@ -271,7 +271,7 @@ export function createRealtimeServer({ port = 3001, hostname, secret, allowedOri
       skipPassed(bonus, [...resumed.values()].map((entry) => ({ playerId: "", progress: entry.progress, finished: entry.finishedAt !== null })));
       bonus.checkpoints = Math.max(bonus.checkpoints, course.checkpoints ?? 0);
       for (const { from } of botRaceOf(code, course).list) if (from) bonus.received.set(from, Math.min(MAX_BONUSES, (bonus.received.get(from) ?? 0) + 1));
-      races.set(code, { course, over: false, entries: new Map(), resumed, resumedTexts, owners: new Map(), kept: new Set(course.abandoned ?? []), alive: new Set(), eliminated: new Set(), lastSent: -Infinity, timer: null, bonus, texts: new Map() });
+      races.set(code, { course, over: false, entries: new Map(), resumed, resumedTexts, owners: new Map(), kept: new Set(course.abandoned ?? []), alive: new Set(), eliminated: new Set(course.eliminated ?? []), lastSent: -Infinity, timer: null, bonus, texts: new Map() });
     } else {
       state.course = course;
       state.over = false;

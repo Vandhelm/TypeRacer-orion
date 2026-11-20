@@ -153,11 +153,13 @@ export function createRoomBackend(db: Db, changes: Changes): RoomBackend {
         if (!course) return null;
         // COURSE-06 : la progression gardée en base, pour reprendre le classement après le départ de toutes les sockets
         // BONUS-04 : avec le texte changé par un bonus, sur lequel cette progression est comptée
-        const rows = await db.select({ key: roomMembers.memberKey, progress: roomMembers.progress, finishedAt: roomMembers.finishedAt, words: roomMembers.bonusWords }).from(roomMembers).where(eq(roomMembers.roomId, id));
+        const rows = await db.select({ key: roomMembers.memberKey, progress: roomMembers.progress, finishedAt: roomMembers.finishedAt, words: roomMembers.bonusWords, eliminatedAt: roomMembers.eliminatedAt }).from(roomMembers).where(eq(roomMembers.roomId, id));
+        // COURSE-06 : les coureurs éliminés (mode fatal) restent hors course pour un serveur redémarré
+        const eliminated = rows.filter((r) => r.eliminatedAt !== null).map((r) => r.key);
         // BONUS-01 : les points de contrôle déjà franchis (un meneur bot ou humain dont la progression n'est pas en base)
         const [room] = await db.select({ checkpoints: rooms.bonusCheckpoints }).from(rooms).where(eq(rooms.id, id));
         const passed = room?.checkpoints ? { checkpoints: room.checkpoints } : {};
-        return { ...course, ...passed, resume: rows.map((r) => ({ key: r.key, progress: r.progress, finishedAt: r.finishedAt?.getTime() ?? null, ...(r.words?.length ? { words: r.words } : {}) })) };
+        return { ...course, ...passed, ...(eliminated.length ? { eliminated } : {}), resume: rows.map((r) => ({ key: r.key, progress: r.progress, finishedAt: r.finishedAt?.getTime() ?? null, ...(r.words?.length ? { words: r.words } : {}) })) };
       } catch (error) {
         return refused(error);
       }
