@@ -37,7 +37,7 @@ const INPUT_LINE =
   "after:transition-[transform] after:duration-[.35s] after:ease-[cubic-bezier(.2,.8,.2,1)] focus-within:after:[transform:scaleX(1)] motion-reduce:after:transition-none";
 const INPUT =
   "unset min-h-[36px] h-[4.4vh] min-w-0 grow font-sans text-[max(15px,1.8vh)] leading-none font-normal tracking-[.04em] text-white caret-red-text " +
-  "placeholder:text-[rgba(255,255,255,.3)]";
+  "placeholder:text-muted";
 
 export function TextInput({ action, ref, type = "text", className = "", ...props }: TextInputProps) {
   return (

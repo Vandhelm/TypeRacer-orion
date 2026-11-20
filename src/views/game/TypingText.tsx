@@ -39,7 +39,7 @@ export function TypingText({ words, wordIndex, typed, missed, active, lang, fog 
   return (
     <p
       ref={box}
-      className="relative col-[1/-1] row-start-2 max-h-[calc(3*1.7em)] overflow-hidden font-mono text-[max(17px,2.5vh)] leading-[1.7] font-normal wrap-anywhere text-muted transition-[opacity] duration-200 ease-[ease] group-not-focus-within:opacity-60 motion-reduce:transition-none"
+      className="relative col-[1/-1] row-start-2 max-h-[calc(3*1.7em)] overflow-hidden font-mono text-[max(17px,2.5vh)] leading-[1.7] font-normal wrap-anywhere text-muted transition-[opacity] duration-200 ease-[ease] group-not-focus-within:opacity-85 motion-reduce:transition-none"
       lang={lang}
     >
       {words.map((word, i) => {

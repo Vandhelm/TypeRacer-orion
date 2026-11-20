@@ -51,7 +51,7 @@ export function RoomTicket({ state }: { state: RoomState }) {
           <ul className="grid list-none gap-1.5 pb-[14px] phone:grid-cols-[repeat(2,minmax(0,1fr))] phone:gap-x-[14px]">
             {seats.map((seat, i) => {
               if (!isPlayer(seat)) {
-                return <li key={i} className={`${SEAT} font-normal text-[rgba(255,255,255,.35)]`}><i className={`${DIAMOND} border-[rgba(255,255,255,.35)]`} /><span className={NAME}>{t("room.freeSeat")}</span></li>;
+                return <li key={i} className={`${SEAT} font-normal text-muted`}><i className={`${DIAMOND} border-[rgba(255,255,255,.35)]`} /><span className={NAME}>{t("room.freeSeat")}</span></li>;
               }
               const tag = [seat.host ? t("room.host").toUpperCase() : "", seat.me ? t("room.you") : ""].filter(Boolean).join(" · ");
               return (

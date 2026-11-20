@@ -41,7 +41,7 @@
 }
 .flip-button-bottom{
     transform: rotateX(-90deg) translateZ(calc(var(--h) / 2));
-    background: linear-gradient(90deg, var(--color-face-front-a), var(--color-face-side));
+    background: linear-gradient(90deg, var(--color-face-front-a), var(--color-face-front-b));
     border: 1px solid var(--color-line);
     color: var(--color-red-text);
 }

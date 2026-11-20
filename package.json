@@ -15,6 +15,7 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.14.0",
     "@electric-sql/pglite": "^0.5.16",
     "@playwright/test": "^1.65.1",
     "@tailwindcss/postcss": "^4.3.5",
@@ -44,6 +45,7 @@
     "test": "bun test",
     "test:smoke": "bun test ./tests/smoke/app.smoke.ts",
     "test:e2e": "playwright test",
+    "test:a11y": "playwright test contrast",
     "test:requirements": "bun scripts/requirement-tests.ts",
     "lighthouse": "bun scripts/lighthouse.ts",
     "vercel-build": "if [ \"$VERCEL_ENV\" = production ] || [ \"$VERCEL_ENV\" = preview ]; then bun db/cli.ts migrate; fi && bun --bun next build",
