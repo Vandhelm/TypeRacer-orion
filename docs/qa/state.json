@@ -435,9 +435,9 @@
     "scope": "suivi (light)"
   },
   "SEC-01": {
-    "commit": "2acdffe",
-    "date": "2026-11-19",
-    "scope": "suivi (light)"
+    "commit": "40409e0",
+    "date": "2026-11-20",
+    "scope": "critère (fix/server/sec-01-invites)"
   },
   "SEC-02": {
     "commit": "1fba673",
