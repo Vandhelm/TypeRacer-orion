@@ -633,6 +633,8 @@ async function keepDepartedProgress(tx: Db, roomId: number, key: string, progres
   const entry = room?.departed.find((d) => d.key === key);
   if (!entry || entry.finishedAt || entry.progress >= progress) return;
   await tx.update(rooms).set({ departed: room!.departed.map((d) => (d.key === key ? { ...d, progress } : d)) }).where(eq(rooms.id, roomId));
+  // une course du lancement déjà enregistrée prend en compte cette progression
+  await rerankLaunch(tx, roomId);
 }
 
 /**
@@ -716,8 +718,15 @@ export async function recordProgress(db: Db, code: string, key: string, progress
   if (id === null) return false;
   return db.transaction(async (tx) => {
     const [room] = await tx.select({ status: rooms.status }).from(rooms).where(eq(rooms.id, id)).for("update");
-    if (room?.status !== "racing") return false;
     const value = Math.min(1, Math.max(0, progress));
+    // COURSE-10 : le dernier coureur parti a fait passer le salon aux résultats ; sa progression, écrite par le temps réel
+    // à la fermeture de sa socket, complète encore son entrée de rooms.departed (celle du lancement en cours : vidée au
+    // lancement suivant). Rien d'autre ne change hors course.
+    if (room?.status === "results" && value < 1) {
+      await keepDepartedProgress(tx, id, key, value);
+      return false;
+    }
+    if (room?.status !== "racing") return false;
     // COURSE-07 : la progression d'un membre qui a abandonné reste celle de l'abandon
     const member = and(eq(roomMembers.roomId, id), eq(roomMembers.memberKey, key), isNull(roomMembers.abandonedAt));
     if (value < 1) {

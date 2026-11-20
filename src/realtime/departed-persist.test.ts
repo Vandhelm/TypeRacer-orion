@@ -3,7 +3,8 @@
 // Un vrai serveur temps réel sur une base de test, comme abandon-persist.test.ts.
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
-import { races, rooms } from "../../db/schema";
+import { players, raceResults, races, rooms } from "../../db/schema";
+import { BOT_NAMES } from "../players/bots";
 import { createMockDatabase } from "../../db/mocks/test-database";
 import { placeholderEmail } from "../accounts/username";
 import { createAuth } from "../server/auth";
@@ -115,5 +116,68 @@ describe("COURSE-10 — a runner who leaves mid-race keeps the progress the real
     const { raceId } = (await res.json()) as { raceId: number };
     const [race] = await db.select({ others: races.others }).from(races).where(eq(races.id, raceId));
     expect(race!.others.map((o) => [o.name, o.rank])).toEqual([["Quit_P", 2], ["Quit_R", 3]]);
+  });
+
+  /** Un salon de l'hôte S (compte) et d'invités, lancé il y a 2 min, sans limite de temps. */
+  const launchedWith = async (prefix: string, guests: string[], bots: boolean) => {
+    const host = await signUp(`${prefix}_S`);
+    const { room } = (await (await call("POST", "/api/rooms", host, { role: "player", settings: { visibility: "public", bots, guests: guests.length + 2, duration: null } })).json()) as { room: { code: string } };
+    const cookies: string[] = [];
+    for (const name of guests) {
+      const cookie = `${GUEST_COOKIE}=${signGuest(name, SECRET)}`;
+      expect((await call("POST", "/api/rooms/join", cookie, { code: room.code })).status).toBe(200);
+      cookies.push(cookie);
+    }
+    const sKey = ((await (await call("GET", `/api/rooms/${room.code}`, host)).json()) as { you: string }).you;
+    expect((await call("POST", `/api/rooms/${room.code}/launch`, host)).status).toBe(200);
+    await db.update(rooms).set({ launchedAt: sql`now() - interval '120 seconds'` }).where(eq(rooms.code, room.code));
+    return { code: room.code, host, sKey, cookies };
+  };
+  const post = async (code: string, cookie: string, players: unknown[]) => {
+    const res = await handleRace(new Request("http://localhost/api/races", { method: "POST", headers: { "content-type": "application/json", cookie }, body: JSON.stringify({ id: crypto.randomUUID(), room: code, summary: SUMMARY, players }) }), db, auth, SECRET);
+    expect(res.status).toBe(201);
+    return ((await res.json()) as { raceId: number }).raceId;
+  };
+  /** La page de course : progression validée, puis « Quitter » (POST /leave) et fermeture de sa socket. */
+  const quitAt = async (code: string, cookie: string, progress: number) => {
+    const page = await racePage(code, cookie);
+    page.send({ type: "progress", progress, wpm: 40 });
+    await page.until(() => validated(page.messages, progress));
+    expect(validated(page.messages, progress)).toBe(true);
+    expect((await call("POST", `/api/rooms/${code}/leave`, cookie)).status).toBe(200);
+    page.ws.close();
+  };
+  const ranksOf = async (raceId: number) => {
+    const [race] = await db.select({ others: races.others }).from(races).where(eq(races.id, raceId));
+    const kept = await db.select({ name: players.name, rank: raceResults.rank }).from(raceResults).innerJoin(players, eq(players.id, raceResults.playerId)).where(eq(raceResults.raceId, raceId));
+    return [...kept, ...race!.others.map((o) => ({ name: o.name, rank: o.rank }))].sort((a, b) => a.rank - b.rank).map((p) => p.name);
+  };
+  const eventuallyRanks = async (raceId: number, expected: string[]) => {
+    let value = await ranksOf(raceId);
+    for (let i = 0; i < 200 && value.join() !== expected.join(); i++) {
+      await Bun.sleep(10);
+      value = await ranksOf(raceId);
+    }
+    return value;
+  };
+
+  test("the last human leaves at 0.8 (the room goes to the results): kept at 0.8, ranked before the bot at 0.5", async () => {
+    const { code, host, sKey, cookies } = await launchedWith("Last", ["Last_P"], true);
+    await recordProgress(db, code, sKey, 1);
+    // S envoie sa course tout de suite : P court encore
+    const raceId = await post(code, host, [result("Last_S", true), { ...result(BOT_NAMES[0]), bot: true, progress: 0.5 }, result("Last_P")]);
+    await quitAt(code, cookies[0]!, 0.8);
+    expect(await eventually(() => departedProgress(code, "Last_P"), 0.8)).toBeCloseTo(0.8);
+    expect(await eventuallyRanks(raceId, ["Last_S", "Last_P", BOT_NAMES[0]])).toEqual(["Last_S", "Last_P", BOT_NAMES[0]]);
+  });
+
+  test("two leave, the last one at 0.8 after the first at 0.6: the last one ranks first among them", async () => {
+    const { code, host, sKey, cookies } = await launchedWith("Two", ["Two_P1", "Two_P2"], false);
+    await recordProgress(db, code, sKey, 1);
+    const raceId = await post(code, host, [result("Two_S", true), result("Two_P1"), result("Two_P2")]);
+    await quitAt(code, cookies[0]!, 0.6);
+    await quitAt(code, cookies[1]!, 0.8);
+    expect(await eventually(() => departedProgress(code, "Two_P2"), 0.8)).toBeCloseTo(0.8);
+    expect(await eventuallyRanks(raceId, ["Two_S", "Two_P2", "Two_P1"])).toEqual(["Two_S", "Two_P2", "Two_P1"]);
   });
 });
