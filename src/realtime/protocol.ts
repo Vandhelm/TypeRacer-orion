@@ -72,9 +72,10 @@ export const ServerMessage = z.discriminatedUnion("type", [
   // BONUS-01 : un bonus de remontée attribué par le serveur à `playerId`, au point de contrôle `checkpoint` (1 à 3) ;
   // `count` : ses bonus dans la course, celui-ci compris. L'effet (BONUS-02) et l'annonce (BONUS-03) s'y branchent.
   // BONUS-02 : `effect`, choisi par le serveur ; absent quand aucun type ne peut s'appliquer.
+  // BOT-04 : `at`, quand l'effet vise un bot (`bot:<nom>`) : son heure en ms depuis le départ, rejouée par le moteur des bots.
   // BONUS-04 : à un coureur qui rejoint la salle, son texte quand un bonus l'a changé (celui sur lequel l'arbitre le juge)
   z.object({ type: z.literal("text"), room: RoomCode, words: z.array(z.string()).min(1).max(MAX_TEXT_WORDS) }),
-  z.object({ type: z.literal("bonus"), room: RoomCode, playerId: z.string(), checkpoint: z.number().int().min(1).max(CHECKPOINTS.length), count: z.number().int().min(1).max(MAX_BONUSES), effect: BonusEffect.optional() }),
+  z.object({ type: z.literal("bonus"), room: RoomCode, playerId: z.string(), checkpoint: z.number().int().min(1).max(CHECKPOINTS.length), count: z.number().int().min(1).max(MAX_BONUSES), effect: BonusEffect.optional(), at: z.number().int().min(0).optional() }),
 ]);
 export type ServerMessage = z.infer<typeof ServerMessage>;
 

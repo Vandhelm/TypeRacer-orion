@@ -15,6 +15,14 @@ export type BotName = (typeof BOT_NAMES)[number];
 export const RoomBotSchema = z.object({ name: z.enum(BOT_NAMES), level: z.enum(BOT_LEVELS) }).strict();
 export type RoomBot = z.infer<typeof RoomBotSchema>;
 
+/**
+ * BOT-04 : l'id temps réel d'un bot (bonus de remontée), `bot:<nom>` : il ne ressemble à aucun joueur de ticket
+ * (`u:<id>`, `g:<session>`), donc un humain ne peut pas le porter.
+ */
+export const botRunnerId = (name: string) => `bot:${name}`;
+/** Le nom du bot de cet id temps réel, ou null si ce n'est pas un bot. */
+export const botNameOf = (id: string) => (id.startsWith("bot:") ? id.slice(4) : null);
+
 /** La liste des bots, dans l'ordre des places ; un nom n'y figure qu'une fois. */
 export const BotListSchema = z
   .array(RoomBotSchema)

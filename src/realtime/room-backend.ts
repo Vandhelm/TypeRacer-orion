@@ -5,8 +5,10 @@
 import { eq } from "drizzle-orm";
 import type { Db } from "../../db/client";
 import { roomMembers } from "../../db/schema";
+import { botProfile, botSeed, type BotBonus } from "../rooms/bot-engine";
+import { botRunnerId, seatedBots } from "../rooms/bots";
 import { courseWords, textFingerprint } from "../rooms/course-words";
-import { keepBonusText, keepProgress, leaveAfterDisconnect, readRoom, recordProgress, refreshRoom, RoomRefused, roomIdByCode, roomView, type Identity, type RoomView } from "../server/rooms";
+import { keepBonusText, keepBotBonus, keepProgress, leaveAfterDisconnect, readRoom, recordProgress, refreshRoom, RoomRefused, roomIdByCode, roomView, type Identity, type RoomView } from "../server/rooms";
 import type { Player } from "./protocol";
 import type { RaceCourse } from "./referee";
 
@@ -37,6 +39,8 @@ export type RoomBackend = {
    * pour la course partie à `startsAt` : le serveur redémarré et l'enregistrement de la course (POST /api/races) le relisent.
    */
   bonusText?(code: string, startsAt: number, key: string, words: string[], progress: number): Promise<void>;
+  /** BOT-04 : garde un effet de bonus reçu par un bot, pour la course partie à `startsAt` (fin, classement, pages rechargées). */
+  botBonus?(code: string, startsAt: number, bonus: BotBonus): Promise<void>;
 };
 
 /**
@@ -62,7 +66,21 @@ export function raceCourseOf(view: RoomView): RaceCourse | null {
     ...abandonedOf(view),
     // BONUS-02 : avec les bonus, le texte arbitré (le bonus +3 mots y puise) et la graine qui choisit leur type
     ...(view.settings.catchUpBonus ? { catchUpBonus: true, ...(marks && words ? { words } : {}), ...(view.seed !== null ? { seed: view.seed } : {}) } : {}),
+    ...(view.settings.catchUpBonus && marks && view.seed !== null ? raceBots(view, view.seed) : {}),
   };
+}
+
+/**
+ * BOT-04 : les bots qui courent, comme les couloirs de la page (seatsOf) : la liste du salon après les participants
+ * assis, chacun avec la graine et le profil du moteur (BOT-05) ; et les effets de bonus qu'ils ont déjà reçus.
+ */
+function raceBots(view: RoomView, seed: number): Pick<RaceCourse, "bots" | "mistakes" | "botBonuses"> {
+  const humans = view.members.filter((m) => m.role === "player" && m.seat !== null).length;
+  const bots = seatedBots(view.settings, humans).map((bot) => {
+    const own = botSeed(seed, bot.name);
+    return { id: botRunnerId(bot.name), seed: own, profile: botProfile(own, bot.level, view.settings.botAccuracy) };
+  });
+  return bots.length ? { bots, mistakes: view.settings.mistakes, botBonuses: view.botBonuses ?? [] } : {};
 }
 
 /** COURSE-07 : les coureurs qui ont abandonné, seulement s'il y en a. */
@@ -137,5 +155,6 @@ export function createRoomBackend(db: Db, changes: Changes): RoomBackend {
     progress: (key, code, progress) => recordProgress(db, code, key, progress),
     keep: (code, startsAt, rows) => keepProgress(db, code, startsAt, rows),
     bonusText: (code, startsAt, key, words, progress) => keepBonusText(db, code, startsAt, key, words, progress),
+    botBonus: (code, startsAt, bonus) => keepBotBonus(db, code, startsAt, bonus),
   };
 }
