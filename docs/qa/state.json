@@ -265,9 +265,9 @@
     "scope": "critère (medium, 3e passage)"
   },
   "COURSE-07": {
-    "commit": "1fba673",
-    "date": "2026-11-18",
-    "scope": "site (light)"
+    "commit": "8ac9e3d",
+    "date": "2026-11-20",
+    "scope": "critère (medium, branche feature/game/course-07)"
   },
   "COURSE-08": {
     "commit": "1fba673",
