@@ -1,5 +1,6 @@
 import { useRef } from "react";
 import { useTranslation } from "react-i18next";
+import { BotTag } from "../../players/BotTag";
 import { useCameraTravel } from "./hooks/useCameraTravel";
 import { oneDecimal, playerAt, profileHref, rankLabel, type PlayerResult } from "./results";
 import { SideFace } from "./SideFace";
@@ -19,6 +20,8 @@ export function PodiumScene({ players, arrived, raceId = null, roomHref = "/home
   useCameraTravel(scene, arrived);
 
   const wordsPerSecond = (player: PlayerResult) => oneDecimal(i18n.language, player.wpm / 60);
+  // BOT-04 : le libellé accessible d'un bot le dit en toutes lettres (le badge du nom est couvert par aria-label)
+  const botSpoken = (player: PlayerResult, label: string) => (player.bot ? `${label} (${t("room.botLabel")})` : label);
 
   return (
     <div ref={scene} className="podium-scene">
@@ -36,7 +39,7 @@ export function PodiumScene({ players, arrived, raceId = null, roomHref = "/home
             return (
               <div key={rank} className={`podium-block podium-block--${rank}${player ? "" : " pointer-events-none invisible"}`}>
                 <span>{rank}</span>
-                {player && <a className="podium-name" href={profileHref(players.indexOf(player), raceId)} aria-label={t("podium.viewStats", { name: player.name })}>{player.name}</a>}
+                {player && <a className="podium-name" href={profileHref(players.indexOf(player), raceId)} aria-label={botSpoken(player, t("podium.viewStats", { name: player.name }))}>{player.name}{player.bot && <BotTag className="ml-[.4em] align-middle text-[.8em]" />}</a>}
                 <span className="podium-speed">{player && `${wordsPerSecond(player)} ${t("podium.wordsPerSecond")}`}</span>
                 {side && <SideFace points={side} />}
                 {rank === 1 && (
@@ -59,7 +62,7 @@ export function PodiumScene({ players, arrived, raceId = null, roomHref = "/home
         {AVATAR_ORDER.map((rank) => {
           const player = playerAt(players, rank);
           if (!player) return null;
-          const label = t("podium.avatar", { name: player.name, rank: rankLabel(t, rank), speed: wordsPerSecond(player) });
+          const label = botSpoken(player, t("podium.avatar", { name: player.name, rank: rankLabel(t, rank), speed: wordsPerSecond(player) }));
           return <a key={rank} className={`podium-avatar podium-avatar--${rank}`} href={profileHref(players.indexOf(player), raceId)} tabIndex={-1} aria-label={label} />;
         })}
         <div className="podium-reflection" aria-hidden="true"><div /><div /><div /></div>
