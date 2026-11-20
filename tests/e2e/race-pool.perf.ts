@@ -19,6 +19,16 @@ const CPU_THROTTLE = Number(process.env.PERF_CPU_THROTTLE ?? 4);
 /** Fenêtre mesurée, en pleine course (après le départ et l'arrivée des premières boules). */
 const MEASURE_MS = Number(process.env.PERF_MEASURE_MS ?? 15_000);
 const REPORT_DIR = "reports/perf";
+/** Catégories de la trace Chrome (onglet Performance de DevTools). PERF_TRACE=invalidation ajoute qui invalide les styles (plus lent). */
+const TRACE_CATEGORIES = [
+  "devtools.timeline",
+  "disabled-by-default-devtools.timeline",
+  "disabled-by-default-devtools.timeline.frame",
+  "disabled-by-default-v8.cpu_profiler",
+  "v8.execute",
+  "blink.user_timing",
+  ...(process.env.PERF_TRACE === "invalidation" ? ["disabled-by-default-devtools.timeline.invalidationTracking", "disabled-by-default-devtools.timeline.stack"] : []),
+];
 
 const BOTS = defaultBots(7, "mixed");
 const GUESTS = MAX_GUESTS - 1 - BOTS.length;
@@ -159,13 +169,24 @@ test.describe("PERF-03 — the race track stays smooth at full capacity", () => 
       const typed = page.keyboard.type(text, { delay: 120 }).catch(() => {});
       await page.waitForTimeout(3_000);
       mkdirSync(REPORT_DIR, { recursive: true });
-      await browser.startTracing(page, { path: `${REPORT_DIR}/race-pool-trace.json`, screenshots: false });
+      await browser.startTracing(page, { path: `${REPORT_DIR}/race-pool-trace.json`, screenshots: false, categories: TRACE_CATEGORIES });
       const { stats, recorder, metrics } = await measure(page);
       await browser.stopTracing();
       await cdp.send("Emulation.setCPUThrottlingRate", { rate: 1 });
       const bonuses = await page.locator('[data-part="bonus"]').count();
+      // les animations CSS en cours à la fin de la mesure : chacune peut restyler sa cible à chaque image
+      const animations = await page.evaluate(() => {
+        const seen = new Map<string, number>();
+        for (const animation of document.getAnimations()) {
+          const target = (animation.effect as KeyframeEffect | null)?.target;
+          const name = (animation as CSSAnimation).animationName ?? (animation as CSSTransition).transitionProperty ?? "script";
+          const key = `${name} on ${target?.tagName.toLowerCase()}.${String(target?.className).split(" ")[0]}`;
+          seen.set(key, (seen.get(key) ?? 0) + 1);
+        }
+        return Object.fromEntries(seen);
+      });
       const worstFrames = [...recorder.frames].sort((a, b) => b.duration - a.duration).slice(0, 5);
-      const report = { lanes: MAX_GUESTS, cpuThrottle: CPU_THROTTLE, bonusBadges: bonuses, stats, metrics, worstFrames };
+      const report = { lanes: MAX_GUESTS, cpuThrottle: CPU_THROTTLE, bonusBadges: bonuses, stats, metrics, animations, worstFrames };
       writeFileSync(`${REPORT_DIR}/race-pool.json`, JSON.stringify(report, null, 2));
       console.log(JSON.stringify({ lanes: MAX_GUESTS, cpuThrottle: CPU_THROTTLE, bonusBadges: bonuses, ...stats, ...metrics }));
       await typed;
