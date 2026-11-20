@@ -2,7 +2,7 @@
 // qu'il envoie en temps réel (applyRemote). Progression déclarée par le client : le serveur autoritaire reste à faire (COURSE-06).
 import { countKey, type KeyCounts } from "../../players/keys";
 import { transition, type RaceEvent, type RaceState } from "../../rooms/race-state";
-import { BOT_ACCURACY_FACTOR, BOT_LEVEL_SPECS, BOT_START, BOT_TICK_MS, botArrived, botJitter, botPosition, botProfile, botSeed, botStep, botText, levelOfSpeed, type BotProfile, type BotState, type BotText } from "../../rooms/bot-engine";
+import { BOT_ACCURACY_FACTOR, BOT_LEVEL_SPECS, BOT_START, BOT_TICK_MS, botArrived, botErrorChance, botJitter, botPosition, botProfile, botSeed, botStep, botText, levelOfSpeed, type BotProfile, type BotState, type BotText } from "../../rooms/bot-engine";
 import type { BotAccuracy, BotSpeed, MistakeMode, Player } from "../room/room";
 
 export const CHARS_PER_WORD = 5;
@@ -266,24 +266,25 @@ export function advanceBots(race: Race, now: number, jitters?: number[]): Race {
  */
 function botTick(race: Race, text: BotText, bot: Bot, jitter: number): Bot {
   const state = botStep(text, bot, bot, jitter);
-  const gained = state.chars - bot.chars;
-  const rate = (100 / bot.accuracy - 1) * (0.5 + jitter);
-  const keys = botKeys(race, bot.keys, bot.chars, gained, rate);
+  const keys = botKeys(race, bot, bot.chars, state.chars - bot.chars);
   return { ...bot, ...state, words: botPosition(text, state.chars), keys };
 }
 
-/** Chaque caractère du texte qu'un bot dépasse ce tick-ci : ses fautes tombent plus souvent sur les touches difficiles. */
-function botKeys(race: Race, keys: KeyCounts, from: number, gained: number, rate: number): KeyCounts {
+/**
+ * Chaque caractère du texte qu'un bot dépasse ce tick-ci, avec les fautes qu'il y fait en moyenne : la chance de faute
+ * du moteur (botErrorChance, plus forte sur les touches difficiles). Le total des fautes des touches suit donc
+ * `bot.errors` ; en mode « corriger », la touche est aussi retapée.
+ */
+function botKeys(race: Race, bot: Bot, from: number, gained: number): KeyCounts {
   const text = race.course.words.join(" ") + " ";
-  let counts = keys;
+  const { mistakes } = race.course;
+  let counts = bot.keys;
   for (let i = Math.floor(from); i < Math.floor(from + gained) && i < text.length; i++) {
-    const misses = rate * difficulty(text[i]!);
-    counts = countKey(counts, text[i]!, misses > 0, 1 + misses, misses);
+    const misses = botErrorChance(bot, mistakes, text[i]!);
+    counts = countKey(counts, text[i]!, misses > 0, mistakes === "fix" ? 1 + misses : 1, misses);
   }
   return counts;
 }
-
-const difficulty = (char: string) => (/[a-z ]/.test(char) ? 1 : 2);
 
 function myValidChars(race: Race) {
   return Math.max(0, myCourse(race).marks[race.wordIndex]! - race.missedChars);

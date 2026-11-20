@@ -321,4 +321,26 @@ describe("BOT-03 — the page bots follow the room's mistake mode, as the engine
     expect(fix.typed).toBe(fix.chars + fix.errors);
     expect(fix.finishedAt).toBeGreaterThan(carry.finishedAt);
   });
+
+  test("a bot's keys add up to its engine counts: misses near its errors, presses near its keystrokes", () => {
+    for (const mistakes of ["fix", "carry-on"] as const) {
+      let misses = 0;
+      let errors = 0;
+      let presses = 0;
+      let typed = 0;
+      for (let seed = 1; seed <= 20; seed++) {
+        const bot = advanceBots(startRace(createRace(createCourse(WORDS, null, mistakes), [ME, NOOB], "medium", "decent", seed), 1000), 1000 + 600_000).bots[0]!;
+        for (const [keyPresses, keyMisses] of Object.values(bot.keys)) {
+          presses += keyPresses;
+          misses += keyMisses;
+        }
+        errors += bot.errors;
+        typed += bot.typed;
+      }
+      expect(misses / errors).toBeGreaterThan(0.8);
+      expect(misses / errors).toBeLessThan(1.2);
+      expect(presses / typed).toBeGreaterThan(0.97);
+      expect(presses / typed).toBeLessThan(1.03);
+    }
+  });
 });
