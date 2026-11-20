@@ -14,6 +14,8 @@ export type Room = {
   level: ListedRoom["level"];
   host: string;
   status: ListedRoom["status"];
+  /** SALLE-09 : faux pendant une course ; le ticket est affiché mais ne se prend pas. */
+  joinable: boolean;
 };
 
 export const WAITING_PAGE = "/room";
@@ -28,11 +30,23 @@ export function shortName(name: string): string {
   return name.length > HOST_MAX ? `${name.slice(0, HOST_MAX - 1)}…` : name;
 }
 
-/** Un ticket par salon public qu'on peut rejoindre (SALLE-09 : pas pendant sa course), dans l'ordre du serveur. */
+/**
+ * Un ticket par salon public, dans l'ordre du serveur. JOIN-02 : un salon en course est affiché avec son état ;
+ * SALLE-09 : il ne se prend pas (joinable faux), et le serveur refuse de toute façon l'entrée (« in_race »).
+ */
 export function tablesOf(list: ListedRoom[]): Room[] {
-  return list
-    .filter((room) => canJoin(room.status))
-    .map((room, i) => ({ n: i + 1, serial: room.code, code: room.code, lang: room.language, guests: `${room.players} / ${room.guests}`, bots: room.bots, level: room.level, host: room.host, status: room.status }));
+  return list.map((room, i) => ({
+    n: i + 1,
+    serial: room.code,
+    code: room.code,
+    lang: room.language,
+    guests: `${room.players} / ${room.guests}`,
+    bots: room.bots,
+    level: room.level,
+    host: room.host,
+    status: room.status,
+    joinable: canJoin(room.status),
+  }));
 }
 
 /** La liste filtrée ; null si le serveur ne répond pas, pour garder la liste affichée plutôt que de la vider. */
@@ -52,6 +66,8 @@ type WatchOptions = {
   every?: number;
   /** Vrai quand l'onglet est caché : on ne relit pas, on relira en revenant. */
   hidden?: () => boolean;
+  /** Une lecture a échoué (serveur injoignable) ; la liste affichée reste la dernière reçue. */
+  onFail?: () => void;
 };
 
 const pageHidden = () => typeof document !== "undefined" && document.hidden;
@@ -60,7 +76,7 @@ const pageHidden = () => typeof document !== "undefined" && document.hidden;
  * JOIN-02 : suit la liste des salons publics sans rechargement. Lecture tout de suite, puis toutes les `every` ms,
  * jamais deux à la fois, pas quand l'onglet est caché (relue dès qu'il revient). Renvoie la fonction qui arrête.
  */
-export function watchPublicRooms(filters: RoomFilters, onRooms: (rooms: Room[]) => void, { load = fetchPublicRooms, every = ROOMS_POLL_MS, hidden = pageHidden }: WatchOptions = {}): () => void {
+export function watchPublicRooms(filters: RoomFilters, onRooms: (rooms: Room[]) => void, { load = fetchPublicRooms, every = ROOMS_POLL_MS, hidden = pageHidden, onFail }: WatchOptions = {}): () => void {
   let stopped = false;
   let pending = false;
   const read = async () => {
@@ -68,7 +84,9 @@ export function watchPublicRooms(filters: RoomFilters, onRooms: (rooms: Room[]) 
     pending = true;
     try {
       const rooms = await load(filters);
-      if (!stopped && rooms) onRooms(rooms);
+      if (stopped) return;
+      if (rooms) onRooms(rooms);
+      else onFail?.();
     } finally {
       pending = false;
     }

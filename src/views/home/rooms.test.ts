@@ -19,14 +19,18 @@ const listed = (code: string, more: Partial<ListedRoom> = {}): ListedRoom => ({
 describe("SALLE-03 — the explorer shows the server's public rooms", () => {
   test("one table per listed room, entered by its code", () => {
     const tables = tablesOf([listed("CRABE7", { language: "en", guests: 6, bots: false, players: 2, level: "rich", host: "Hote_1" })]);
-    expect(tables).toEqual([{ n: 1, serial: "CRABE7", code: "CRABE7", lang: "en", guests: "2 / 6", bots: false, level: "rich", host: "Hote_1", status: "waiting" }]);
+    expect(tables).toEqual([{ n: 1, serial: "CRABE7", code: "CRABE7", lang: "en", guests: "2 / 6", bots: false, level: "rich", host: "Hote_1", status: "waiting", joinable: true }]);
   });
 });
 
-describe("SALLE-09 — the explorer offers no table whose race is running", () => {
-  test("a racing room is left out; waiting and results rooms stay", () => {
+describe("SALLE-09 — a table whose race is running is shown but cannot be taken", () => {
+  test("a racing room is listed as not joinable; waiting and results rooms can be taken", () => {
     const tables = tablesOf([listed("AAAAAA", { status: "racing" }), listed("BBBBBB", { status: "waiting" }), listed("CCCCCC", { status: "results" })]);
-    expect(tables.map((table) => table.code)).toEqual(["BBBBBB", "CCCCCC"]);
+    expect(tables.map((table) => [table.code, table.status, table.joinable])).toEqual([
+      ["AAAAAA", "racing", false],
+      ["BBBBBB", "waiting", true],
+      ["CCCCCC", "results", true],
+    ]);
   });
 });
 
@@ -44,7 +48,7 @@ describe("JOIN-02 — each table shows its complexity, host and state", () => {
 });
 
 describe("JOIN-02 — the list updates without a manual reload", () => {
-  const table = (code: string): Room => ({ n: 1, serial: code, code, lang: "fr", guests: "1 / 4", bots: true, level: "common", host: "Maki_77", status: "waiting" });
+  const table = (code: string): Room => ({ n: 1, serial: code, code, lang: "fr", guests: "1 / 4", bots: true, level: "common", host: "Maki_77", status: "waiting", joinable: true });
   const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
   test("reads the list at once, then again on each tick, with the chosen filters", async () => {
@@ -88,6 +92,15 @@ describe("JOIN-02 — the list updates without a manual reload", () => {
     await wait(50);
     stop();
     expect(seen).toEqual([[table("KEEP01")]]);
+  });
+
+  test("a failed read is reported, so a first failure shows a message instead of nothing", async () => {
+    const answers: (Room[] | null)[] = [null, [table("BACK01")]];
+    const events: string[] = [];
+    const stop = watchPublicRooms({}, (rooms) => events.push(`rooms:${rooms.length}`), { every: 10, load: async () => (answers.length ? answers.shift()! : []), onFail: () => events.push("fail") });
+    await wait(35);
+    stop();
+    expect(events.slice(0, 2)).toEqual(["fail", "rooms:1"]);
   });
 
   test("never starts a second read while one is pending", async () => {
