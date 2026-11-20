@@ -195,4 +195,16 @@ describe("CONF-07 — the race summary keeps only the options that changed the t
     const body = raceBody({ players: buildResults(finished({}), PLAYERS), summary }, "le riz attend");
     expect(effects(parseRace(JSON.parse(JSON.stringify(body))).config)).toEqual([false, false, false, ""]);
   });
+
+  test("a custom text sent with no capitals and no accents is recorded as typed (both kept)", () => {
+    const summary = { ...buildSummary(finished({}), ROOM, 90), textType: "custom" as const, capitals: false, accents: false };
+    const { config } = parseRace(JSON.parse(JSON.stringify(raceBody({ players: buildResults(finished({}), PLAYERS), summary }, "le riz attend"))));
+    expect([config.capitals, config.accents]).toEqual([true, true]);
+  });
+
+  test("a non-boolean specials flag is refused, not read as on", () => {
+    const summary = { ...buildSummary(finished({}), { ...ROOM, textType: "words" }, 90), specials: "true" };
+    const body = { ...raceBody({ players: buildResults(finished({}), PLAYERS), summary: buildSummary(finished({}), ROOM, 90) }, "x"), summary };
+    expect(() => parseRace(JSON.parse(JSON.stringify(body)))).toThrow();
+  });
 });
