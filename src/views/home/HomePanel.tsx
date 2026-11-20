@@ -11,6 +11,7 @@ import { cleanRoomCode, inviteReturn, joinByCodeHref } from "../../rooms/access"
 import { isValidNickname, NICKNAME_MAX, NICKNAME_PATTERN, startGuestSession, storedNickname } from "../../players/nickname";
 import { authClient, changeUsername, isProvider, linkProvider, PROVIDER_NAMES, signInWith, signInWithUsername, signUpWithUsername, SOCIAL_PROVIDERS, type SocialProvider } from "../../accounts/client";
 import { isValidUsername, PASSWORD_MIN } from "../../accounts/username";
+import { openExplorer } from "./explorer-entry";
 import { createPublicRoom, quickRace, type QuickRaceOutcome } from "./quick-race";
 
 type Pane = "play" | "account";
@@ -245,7 +246,7 @@ export function HomePanel({ ref, initialMe = null }: { ref?: Ref<HTMLElement>; i
             <div className="flex flex-col gap-[1.3vh]">
               <FlipButton type="submit" label={t("home.quickRace")} backLabel={t("home.playBack")} disabled={racing} aria-describedby="no-room" />
               <OutlineButton onClick={createRoom}>{t("home.createRoom")}</OutlineButton>
-              <OutlineButton href="#rooms">{t("home.rooms")}</OutlineButton>
+              <OutlineButton id="open-rooms" onClick={() => void openExplorer(ensurePlayer, () => { location.hash = "rooms"; })}>{t("home.rooms")}</OutlineButton>
             </div>
 
             {/* JOIN-03 : aucun salon disponible. Un compte peut en créer un public (le serveur le permet) ; un invité voit l'état vide. */}
