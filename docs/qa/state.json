@@ -280,9 +280,9 @@
     "scope": "suivi (light)"
   },
   "COURSE-10": {
-    "commit": "2acdffe",
-    "date": "2026-11-19",
-    "scope": "suivi (light)"
+    "commit": "9bf947d",
+    "date": "2026-11-20",
+    "scope": "critère (feature/podium/course-10)"
   },
   "COURSE-11": {
     "commit": "1b42ca7",
