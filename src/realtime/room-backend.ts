@@ -6,7 +6,7 @@ import { eq } from "drizzle-orm";
 import type { Db } from "../../db/client";
 import { roomMembers } from "../../db/schema";
 import { courseWords, textFingerprint } from "../rooms/course-words";
-import { keepProgress, leaveAfterDisconnect, readRoom, recordProgress, refreshRoom, RoomRefused, roomIdByCode, roomView, type Identity, type RoomView } from "../server/rooms";
+import { keepBonusText, keepProgress, leaveAfterDisconnect, readRoom, recordProgress, refreshRoom, RoomRefused, roomIdByCode, roomView, type Identity, type RoomView } from "../server/rooms";
 import type { Player } from "./protocol";
 import type { RaceCourse } from "./referee";
 
@@ -32,6 +32,11 @@ export type RoomBackend = {
   progress?(key: string, code: string, progress: number): Promise<boolean>;
   /** COURSE-07 : garde la dernière progression validée de ces coureurs (abandon, fin de course) pour la course partie à `startsAt`. */
   keep?(code: string, startsAt: number, rows: { key: string; progress: number }[]): Promise<void>;
+  /**
+   * BONUS-04 : garde le texte d'un coureur changé par un bonus (+3 / -3 mots) et sa progression recomptée sur ce texte,
+   * pour la course partie à `startsAt` : le serveur redémarré et l'enregistrement de la course (POST /api/races) le relisent.
+   */
+  bonusText?(code: string, startsAt: number, key: string, words: string[], progress: number): Promise<void>;
 };
 
 /**
@@ -122,13 +127,15 @@ export function createRoomBackend(db: Db, changes: Changes): RoomBackend {
         const course = raceCourseOf(await roomView(db, id));
         if (!course) return null;
         // COURSE-06 : la progression gardée en base, pour reprendre le classement après le départ de toutes les sockets
-        const rows = await db.select({ key: roomMembers.memberKey, progress: roomMembers.progress, finishedAt: roomMembers.finishedAt }).from(roomMembers).where(eq(roomMembers.roomId, id));
-        return { ...course, resume: rows.map((r) => ({ key: r.key, progress: r.progress, finishedAt: r.finishedAt?.getTime() ?? null })) };
+        // BONUS-04 : avec le texte changé par un bonus, sur lequel cette progression est comptée
+        const rows = await db.select({ key: roomMembers.memberKey, progress: roomMembers.progress, finishedAt: roomMembers.finishedAt, words: roomMembers.bonusWords }).from(roomMembers).where(eq(roomMembers.roomId, id));
+        return { ...course, resume: rows.map((r) => ({ key: r.key, progress: r.progress, finishedAt: r.finishedAt?.getTime() ?? null, ...(r.words?.length ? { words: r.words } : {}) })) };
       } catch (error) {
         return refused(error);
       }
     },
     progress: (key, code, progress) => recordProgress(db, code, key, progress),
     keep: (code, startsAt, rows) => keepProgress(db, code, startsAt, rows),
+    bonusText: (code, startsAt, key, words, progress) => keepBonusText(db, code, startsAt, key, words, progress),
   };
 }

@@ -14,6 +14,8 @@ export const PROGRESS_PER_SECOND = 10;
 export const PROGRESS_INTERVAL_MS = 1000 / PROGRESS_PER_SECOND;
 /** COURSE-06 : au-delà du MPM humain maximal de l'arbitre (300), un message de progression est refusé. */
 export const WPM_MAX = MAX_HUMAN_WPM;
+/** BONUS-04 : un texte de course ne dépasse pas 10 000 caractères (POST /api/races), donc ce nombre de mots. */
+export const MAX_TEXT_WORDS = 10_000;
 
 export const RoomCode = z.string().regex(new RegExp(CODE_PATTERN));
 
@@ -22,7 +24,9 @@ export const ClientMessage = z.discriminatedUnion("type", [
   z.object({ type: z.literal("join"), room: RoomCode, follow: z.literal(true).optional() }).strict(),
   z.object({ type: z.literal("leave") }).strict(),
   // Progression = caractères validés ÷ longueur du texte (annexe A), donc entre 0 et 1.
-  z.object({ type: z.literal("progress"), progress: z.number().min(0).max(1), wpm: z.number().min(0).max(WPM_MAX) }).strict(),
+  // BONUS-04 : `words`, le nombre de mots du texte sur lequel elle compte ; une progression partie avant un bonus est
+  // ainsi reconnue par le serveur et recomptée sur le nouveau texte.
+  z.object({ type: z.literal("progress"), progress: z.number().min(0).max(1), wpm: z.number().min(0).max(WPM_MAX), words: z.number().int().min(1).max(MAX_TEXT_WORDS).optional() }).strict(),
 ]);
 export type ClientMessage = z.infer<typeof ClientMessage>;
 
@@ -68,6 +72,8 @@ export const ServerMessage = z.discriminatedUnion("type", [
   // BONUS-01 : un bonus de remontée attribué par le serveur à `playerId`, au point de contrôle `checkpoint` (1 à 3) ;
   // `count` : ses bonus dans la course, celui-ci compris. L'effet (BONUS-02) et l'annonce (BONUS-03) s'y branchent.
   // BONUS-02 : `effect`, choisi par le serveur ; absent quand aucun type ne peut s'appliquer.
+  // BONUS-04 : à un coureur qui rejoint la salle, son texte quand un bonus l'a changé (celui sur lequel l'arbitre le juge)
+  z.object({ type: z.literal("text"), room: RoomCode, words: z.array(z.string()).min(1).max(MAX_TEXT_WORDS) }),
   z.object({ type: z.literal("bonus"), room: RoomCode, playerId: z.string(), checkpoint: z.number().int().min(1).max(CHECKPOINTS.length), count: z.number().int().min(1).max(MAX_BONUSES), effect: BonusEffect.optional() }),
 ]);
 export type ServerMessage = z.infer<typeof ServerMessage>;

@@ -3,7 +3,7 @@ import type { Player, Room } from "../../room/room";
 import { COUNTDOWN_MS } from "../../../rooms/race-clock";
 import { countdownAt, GO_MS, nextChangeIn } from "../countdown";
 import type { BonusEffect } from "../../../rooms/bonus-effects";
-import { applyBonus, applyRemoteBonus } from "../bonus";
+import { applyBonus, applyRemoteBonus, applyServerText } from "../bonus";
 import { advanceBots, applyInput, applyRemote, endRace, everyoneDone, startRace, TICK_MS, type Race } from "../race";
 import { keepsSnapshot, loadSnapshot, markSent, mountRace, restoreSnapshot, resumeRace, saveSnapshot, wasSent, type RaceSnapshot, type ServerStanding } from "../resume";
 
@@ -24,6 +24,7 @@ type Action =
   | { type: "resume"; standing: ServerStanding; startsAt: number; snapshot: RaceSnapshot | null }
   | { type: "restore"; snapshot: RaceSnapshot | null }
   | { type: "bonus"; effects: BonusEffect[]; remote: RemoteBonus[]; now: number }
+  | { type: "text"; words: string[] }
   | { type: "finish" };
 
 function reduce(race: Race, action: Action): Race {
@@ -43,6 +44,8 @@ function reduce(race: Race, action: Action): Race {
         (next, { lane, effect }) => (next.phase === "racing" ? applyRemoteBonus(next, lane, effect) : next),
         action.effects.reduce((next, effect) => applyBonus(next, effect, action.now), race),
       );
+    case "text":
+      return applyServerText(race, action.words);
     case "finish":
       return endRace(race);
     case "resume":
@@ -131,6 +134,8 @@ export function useRace(room: Room, players: Player[], { passage = null, seed = 
   const onBonus = useMemo(() => (effects: BonusEffect[], remote: RemoteBonus[] = []) => {
     if (effects.length || remote.length) dispatch({ type: "bonus", effects, remote, now: serverNow() });
   }, [serverNow]);
+  /** BONUS-04 : mon texte tel que le serveur le garde, reçu en rejoignant la salle (page reprise sans instantané). */
+  const onServerText = useMemo(() => (words: string[]) => dispatch({ type: "text", words }), []);
   // COURSE-08 : mes frappes et fautes de cette course restent dans l'onglet (sessionStorage), pour la reprise
   const { code } = room;
   const { keystrokes, wordIndex, samples } = race;
@@ -180,5 +185,5 @@ export function useRace(room: Room, players: Player[], { passage = null, seed = 
     },
     [code, start],
   );
-  return { race, onInput, onRemote, onBonus, onResume, onRestore, onSent, stored, arrivedMidRace, showResults };
+  return { race, onInput, onRemote, onBonus, onServerText, onResume, onRestore, onSent, stored, arrivedMidRace, showResults };
 }

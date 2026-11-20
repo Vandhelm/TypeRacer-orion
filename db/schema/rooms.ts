@@ -106,6 +106,11 @@ export const roomMembers = pgTable(
     abandonedAt: timestamp("abandoned_at", { withTimezone: true }),
     /** COURSE-06 : le résultat de ce membre pour la course en cours est déjà enregistré (POST /api/races). */
     raceRecorded: boolean("race_recorded").notNull().default(false),
+    /**
+     * BONUS-04 : le texte de ce membre pour la course en cours, quand un bonus l'a changé (+3 / -3 mots), écrit par le
+     * serveur temps réel ; null : celui de la course. Remis à null à chaque lancement.
+     */
+    bonusWords: jsonb("bonus_words").$type<string[]>(),
     /** SALLE-08 : dernier signe de vie (lecture du salon, action) ; silencieux trop longtemps, le membre est parti. */
     lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
     /** SALLE-07 : l'IP d'entrée (client-ip.ts), null si inconnue ; à l'expulsion, elle est bannie pour les invités. */

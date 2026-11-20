@@ -26,6 +26,8 @@ export type RealtimeState = {
   abandoned?: boolean;
   /** BONUS-02 : les bonus annoncés dans la salle, dans l'ordre ; la page de course applique ceux qui la ciblent (BONUS-03 : l'annonce). */
   bonuses?: ServerBonus[];
+  /** BONUS-04 : mon texte tel que le serveur le garde, quand un bonus l'a changé (envoyé quand je rejoins la salle). */
+  text?: string[];
 };
 export type TicketGrant = { ticket: string; url: string };
 /** Ce que reçoit une page qui suit son salon (follow) : son état, sa fermeture, ou le refus du serveur (pas ou plus membre). */
@@ -42,7 +44,9 @@ export type RealtimeOptions = {
   onRoom?: (event: RoomEvent) => void;
 };
 
-export type RealtimeConnection = { sendProgress: (progress: number, wpm: number) => void; close: () => void };
+/** BONUS-04 : `words`, le nombre de mots du texte sur lequel compte la progression (un bonus le change). */
+export type RealtimeConnection = { sendProgress: (progress: number, wpm: number, words?: number) => void; close: () => void };
+type Outgoing = PlayerProgress & { words?: number };
 
 const MAX_RETRY_DELAY_MS = 10_000;
 
@@ -63,8 +67,8 @@ export function connectRealtime({ room, onChange, getTicket = fetchTicket, WebSo
   let attempts = 0;
   let retryTimer: ReturnType<typeof setTimeout> | null = null;
   let lastSent = -Infinity;
-  let pending: PlayerProgress | null = null;
-  let latest: PlayerProgress | null = null;
+  let pending: Outgoing | null = null;
+  let latest: Outgoing | null = null;
   let sendTimer: ReturnType<typeof setTimeout> | null = null;
 
   const update = (patch: Partial<RealtimeState>) => {
@@ -84,8 +88,8 @@ export function connectRealtime({ room, onChange, getTicket = fetchTicket, WebSo
     pending = null;
   }
 
-  function sendProgress(progress: number, wpm: number) {
-    latest = pending = { progress: clamp(progress, 1), wpm: clamp(wpm, WPM_MAX) };
+  function sendProgress(progress: number, wpm: number, words?: number) {
+    latest = pending = { progress: clamp(progress, 1), wpm: clamp(wpm, WPM_MAX), ...(words !== undefined && Number.isInteger(words) && words > 0 ? { words } : {}) };
     if (sendTimer || state.status !== "open") return;
     const wait = lastSent + PROGRESS_INTERVAL_MS - performance.now();
     if (wait <= 0) flush();
@@ -126,7 +130,7 @@ export function connectRealtime({ room, onChange, getTicket = fetchTicket, WebSo
           const wasOpen = state.status === "open";
           update({ status: "open", players: message.players, progress });
           // Après une reconnexion, la salle reçoit à nouveau la dernière progression connue.
-          if (!wasOpen && latest) sendProgress(latest.progress, latest.wpm);
+          if (!wasOpen && latest) sendProgress(latest.progress, latest.wpm, latest.words);
           return;
         }
         case "progress":
@@ -135,6 +139,8 @@ export function connectRealtime({ room, onChange, getTicket = fetchTicket, WebSo
           return update({ race: { startsAt: message.startsAt, endsAt: message.endsAt, standings: message.players } });
         case "bonus":
           return update({ bonuses: [...(state.bonuses ?? []), message] });
+        case "text":
+          return update({ text: message.words });
         case "room":
           return onRoom?.({ type: "room", room: message.room });
         case "closed":

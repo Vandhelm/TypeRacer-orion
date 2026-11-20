@@ -62,6 +62,18 @@ export type Race = {
 /** BONUS-02 : le texte que je tape, celui de la course sauf si un bonus l'a changé. */
 export const myCourse = (race: Race): Course => race.mine ?? race.course;
 
+/** BONUS-04 : le texte que j'ai couru, celui qu'enregistre la course (bonus compris). */
+export const raceText = (race: Race): string => myCourse(race).words.join(" ");
+
+/**
+ * BONUS-04 : ma progression (mots validés ÷ mots de mon texte) et la longueur de ce texte, envoyées ensemble au serveur
+ * temps réel : une progression partie avant un bonus y est reconnue à sa longueur et recomptée sur le nouveau texte.
+ */
+export function progressReport(race: Race): { progress: number; words: number } {
+  const words = myCourse(race).words.length;
+  return { progress: Math.min(1, race.wordIndex / words), words };
+}
+
 /** COURSE-01 : chaque phase de la page est un état du salon (src/rooms/race-state.ts). */
 export const PHASE_STATE: Record<Phase, RaceState> = { countdown: "countdown", racing: "racing", done: "results" };
 const STATE_PHASE: Partial<Record<RaceState, Phase>> = { countdown: "countdown", racing: "racing", results: "done" };
@@ -304,7 +316,9 @@ function sampleOf(race: Race, lane: number): Sample | null {
   const remote = race.remotes.find((candidate) => candidate.lane === lane);
   if (remote) {
     if (remote.finishedAt) return null;
-    const chars = remote.progress * (race.course.marks.at(-1) ?? 0);
+    // BONUS-04 : sur la longueur de son texte (mots changés par un bonus), à la longueur moyenne des mots de la course
+    const { marks, words } = race.course;
+    const chars = remote.progress * ((marks.at(-1) ?? 0) * (remote.words ?? words.length)) / Math.max(1, words.length);
     return { chars, typed: chars, errors: 0 };
   }
   const bot = race.bots.find((candidate) => candidate.lane === lane);
@@ -384,7 +398,7 @@ export function laneWpm(race: Race, lane: number) {
 export function laneProgress(race: Race, lane: number) {
   const remote = race.remotes.find((candidate) => candidate.lane === lane);
   if (remote) return remote.progress;
-  if (lane === race.myLane) return Math.min(1, race.wordIndex / myCourse(race).words.length);
+  if (lane === race.myLane) return progressReport(race).progress;
   const words = race.bots.find((bot) => bot.lane === lane)?.words ?? 0;
   return Math.min(1, words / race.course.words.length);
 }

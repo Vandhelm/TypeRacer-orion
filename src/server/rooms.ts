@@ -547,7 +547,7 @@ export async function launchRoom(db: Db, code: string, who: Identity): Promise<R
     const textSeed = crypto.getRandomValues(new Int32Array(1))[0]!;
     // COURSE-01 : une relance repasse par EN_ATTENTE (results → waiting → countdown)
     await moveRoom(tx, id, from, from === "results" ? ["reopen", "launch"] : ["launch"], { launchedAt: sql`now()`, textId: passage?.id ?? null, textSeed, abandons: [], departed: [] });
-    await tx.update(roomMembers).set({ finishedAt: null, abandonedAt: null, progress: 0, raceRecorded: false }).where(eq(roomMembers.roomId, id));
+    await tx.update(roomMembers).set({ finishedAt: null, abandonedAt: null, progress: 0, raceRecorded: false, bonusWords: null }).where(eq(roomMembers.roomId, id));
     // COURSE-06 : l'empreinte des mots que la page de course va retirer, vérifiée par le serveur temps réel
     const words = courseWords(await roomView(tx, id));
     await tx.update(rooms).set({ textHash: words && textFingerprint(words) }).where(eq(rooms.id, id));
@@ -883,6 +883,26 @@ export async function keepProgress(db: Db, code: string, startsAt: number, rows:
         .where(and(eq(roomMembers.roomId, id), eq(roomMembers.memberKey, key), isNull(roomMembers.finishedAt)));
     }
     await keepAbandons(tx, id); // COURSE-10 : la progression gardée à l'abandon
+  });
+}
+
+/**
+ * BONUS-04 : garde le texte d'un coureur changé par un bonus et sa progression recomptée sur ce texte (elle peut baisser :
+ * +3 mots), pour la course partie à `startsAt` seulement, s'il n'est ni arrivé ni en abandon. Écrit par le serveur temps
+ * réel ; relu à sa reprise (createRoomBackend) et à l'enregistrement de la course (claimServerRace).
+ */
+export async function keepBonusText(db: Db, code: string, startsAt: number, key: string, words: string[], progress: number): Promise<void> {
+  const id = await roomIdByCode(db, code);
+  if (id === null || !words.length) return;
+  await db.transaction(async (tx) => {
+    const [room] = await tx.select({ launchedAt: rooms.launchedAt, status: rooms.status }).from(rooms).where(eq(rooms.id, id)).for("update");
+    if (!room?.launchedAt || room.status !== "racing" || room.launchedAt.getTime() + COUNTDOWN_MS !== startsAt) return;
+    const value = Math.min(0.9999, Math.max(0, progress));
+    // un coureur déjà noté arrivé (arrivée en vol, effet annulé) garde son arrivée : seul son texte change
+    await tx
+      .update(roomMembers)
+      .set({ bonusWords: words, progress: sql`case when ${roomMembers.finishedAt} is null then ${value} else ${roomMembers.progress} end` })
+      .where(and(eq(roomMembers.roomId, id), eq(roomMembers.memberKey, key), isNull(roomMembers.abandonedAt)));
   });
 }
 

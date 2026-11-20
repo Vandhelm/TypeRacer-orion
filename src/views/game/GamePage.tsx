@@ -20,7 +20,7 @@ import { abandonOver, canAbandon, handOverPlayers, raceExit } from "./abandon";
 import { KeyboardNotice } from "./KeyboardNotice";
 import { useMobileRace } from "./mobileRace";
 import { loadRacePoolImages, type RacePoolImages } from "./pool/createRacePool";
-import { laneProgress, myWpm } from "./race";
+import { laneProgress, myWpm, progressReport, raceText } from "./race";
 import { RacePool } from "./RacePool";
 import { RaceTrack } from "./RaceTrack";
 import { myStanding, remountPlan, resumeNotice, resumeStep, staleResults, timeoutAbandon } from "./resume";
@@ -87,7 +87,7 @@ function GameRace({ state, onHandOver }: { state: RoomState; onHandOver?: (sendi
   const [lanes] = useState(() => raceLanes(state.players, state.members ?? []));
   const { players } = lanes;
   const [images, setImages] = useState<RacePoolImages | null>(null);
-  const { race, onInput, onRemote, onBonus, onResume, onRestore, onSent, stored, arrivedMidRace, showResults } = useRace(room, players, { passage, seed, startsAt, endsAt, clockOffset });
+  const { race, onInput, onRemote, onBonus, onServerText, onResume, onRestore, onSent, stored, arrivedMidRace, showResults } = useRace(room, players, { passage, seed, startsAt, endsAt, clockOffset });
   // COURSE-07 : abandon enregistré par le serveur ; la progression ne part plus et la page passe au podium
   const [abandoned, setAbandoned] = useState(false);
   // COURSE-08 : remontée après un abandon ou après la fin, la page enregistre ce qu'elle gardait, ou va au podium
@@ -104,9 +104,17 @@ function GameRace({ state, onHandOver }: { state: RoomState; onHandOver?: (sendi
   const { state: live, sendProgress } = useRealtimeRoom(room.code || null);
   const mine = laneProgress(race, race.myLane);
   const wpm = myWpm(race);
+  // BONUS-04 : avec la longueur de mon texte, pour qu'une progression partie avant un bonus soit recomptée par le serveur
+  const { words: myWords } = progressReport(race);
   useEffect(() => {
-    if (!watching && !abandoned && race.phase !== "countdown") sendProgress(mine, wpm);
-  }, [watching, abandoned, race.phase, mine, wpm, sendProgress]);
+    if (!watching && !abandoned && race.phase !== "countdown") sendProgress(mine, wpm, myWords);
+  }, [watching, abandoned, race.phase, mine, wpm, myWords, sendProgress]);
+  // BONUS-04 : mon texte changé par un bonus, renvoyé par le serveur quand je rejoins (avant le classement) : appliqué
+  // avant la reprise ci-dessous, qui se place alors sur lui
+  const serverText = watching ? undefined : live?.text;
+  useEffect(() => {
+    if (serverText) onServerText(serverText);
+  }, [serverText, onServerText]);
   // COURSE-08 : après un rechargement ou une coupure, la page reprend une fois à la progression validée par le serveur ;
   // un abandon par silence (plus de 30 s), dit par le serveur, mène au podium comme un abandon
   const [resumed, setResumed] = useState(false);
@@ -160,7 +168,7 @@ function GameRace({ state, onHandOver }: { state: RoomState; onHandOver?: (sendi
     atAbandon.current = built.find((player) => player.me) ?? null;
     const results = { players: handOverPlayers(built, true, atAbandon.current), summary: buildSummary(race, room, sessionSeconds()), room: room.code };
     saveResults({ ...results, provisional: true });
-    abandonSent.current = submitRace(results, race.course.words.join(" "));
+    abandonSent.current = submitRace(results, raceText(race));
     void abandonSent.current.then(rememberSubmit);
     finish();
   }, [abandoned, race, players, room, finish]);
@@ -201,7 +209,7 @@ function GameRace({ state, onHandOver }: { state: RoomState; onHandOver?: (sendi
       const me = results.players.find((player) => player.me);
       if (me) rememberGuestRace({ at: new Date().toISOString(), wpm: me.wpm, accuracy: me.accuracy, rank: me.rank, keys: me.keys });
       // après un abandon, la course est déjà partie (un seul envoi par lancement) : on attend seulement sa réponse
-      const sent = abandonSent.current ?? submitRace(results, race.course.words.join(" "));
+      const sent = abandonSent.current ?? submitRace(results, raceText(race));
       onSent(); // COURSE-08 : une page remontée ensuite ne la renvoie pas
       if (!abandonSent.current) finish(); // SALLE-09 : le salon passe aux résultats et accepte de nouveau des arrivants
       // le retour arrière ne relance pas une course ; la page attend la réponse (un instant en keepalive), un refus est dit au podium

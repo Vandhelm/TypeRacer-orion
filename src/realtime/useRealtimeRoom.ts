@@ -19,7 +19,7 @@ export function useRealtimeRoom(room: string | null) {
   }, [room]);
 
   /** Progression du joueur local (0 à 1, annexe A) et son MPM ; limitée à 10 envois par seconde. */
-  const sendProgress = useCallback((progress: number, wpm: number) => connection.current?.sendProgress(progress, wpm), []);
+  const sendProgress = useCallback((progress: number, wpm: number, words?: number) => connection.current?.sendProgress(progress, wpm, words), []);
 
   return { state, sendProgress };
 }

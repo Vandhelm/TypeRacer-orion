@@ -28,7 +28,8 @@ export type RaceCourse = {
   /** COURSE-07 : clés des coureurs qui ont abandonné ; leur progression est gelée, toute nouvelle est refusée. */
   abandoned?: string[];
   /** COURSE-06 : la dernière progression gardée en base par coureur (clé de membre), pour reprendre le classement. */
-  resume?: { key: string; progress: number; finishedAt: number | null }[];
+  /** BONUS-04 : `words`, son texte changé par un bonus, gardé en base (absent : celui de la course). */
+  resume?: { key: string; progress: number; finishedAt: number | null; words?: string[] }[];
   /** BONUS-01 : les bonus de remontée sont activés pour cette course (CONF-09) ; absent : non. */
   catchUpBonus?: boolean;
   /** BONUS-02 : les mots tirés (avec `marks`), où le bonus +3 mots puise les siens ; absent : texte inconnu. */

@@ -7,7 +7,8 @@ import type { Player, Room } from "../room/room";
 import { MEMBER_AWAY_MS, RECONNECT_MS } from "../../server/rooms";
 import { RACE_PRESENCE_MS } from "../room/presence";
 import { buildWords, type CourseSettings } from "./course";
-import { advanceBots, applyInput, createCourse, createRace, laneProgress, myAccuracy, myWpm, secondsLeft, startRace, TICK_MS, type Race } from "./race";
+import { advanceBots, applyInput, createCourse, createRace, laneProgress, myAccuracy, myCourse, myWpm, raceText, secondsLeft, startRace, TICK_MS, type Race } from "./race";
+import { applyBonus } from "./bonus";
 import { keepsSnapshot, loadSnapshot, markSent, mountRace, myStanding, remountPlan, restoreSnapshot, resumeNotice, resumeRace, resumeStep, saveSnapshot, staleResults, timeoutAbandon, wasSent } from "./resume";
 import { trackLanes } from "./track";
 
@@ -318,5 +319,41 @@ describe("COURSE-08 — the race page decisions (GamePage)", () => {
     expect(timeoutAbandon(told, true)).toBe(false);
     expect(timeoutAbandon(live([]), false)).toBe(false);
     expect(timeoutAbandon(null, false)).toBe(false);
+  });
+});
+
+describe("BONUS-04 — a reload keeps the text a bonus changed", () => {
+  const extra = { kind: "extra_words" as const, target: "g:me", words: ["nori", "maki", "soja"] };
+  /** Trois mots tapés, puis +3 mots sur mon texte. */
+  const lengthened = () => {
+    const race = reloaded(10_000);
+    const [w0, w1, w2] = race.course.words as [string, string, string];
+    return applyBonus([`${w0} `, `${w1} `, `${w2} `].reduce((r, value) => applyInput(r, value, START + 5_000), race), extra, START + 6_000);
+  };
+
+  test("reloaded and resumed by the server on the longer text: same text, same words done, progress on it", () => {
+    const before = lengthened();
+    const storage = memoryStorage();
+    saveSnapshot(storage, "ABC234", START, before);
+    const total = myCourse(before).words.length;
+    const after = resumeRace(reloaded(12_000), { progress: 3 / total, finishedMs: null }, START, loadSnapshot(storage, "ABC234", START));
+    expect(myCourse(after).words).toEqual(myCourse(before).words);
+    expect(after.wordIndex).toBe(3);
+    expect(laneProgress(after, after.myLane)).toBeCloseTo(3 / total, 6);
+    expect(raceText(after)).toBe(raceText(before));
+  });
+
+  test("a page remounted after the end records the longer text it kept", () => {
+    const before = lengthened();
+    const storage = memoryStorage();
+    saveSnapshot(storage, "ABC234", START, before);
+    expect(raceText(restoreSnapshot(reloaded(70_000), loadSnapshot(storage, "ABC234", START)))).toBe(raceText(before));
+  });
+
+  test("a snapshot without a changed text keeps the course text", () => {
+    const storage = memoryStorage();
+    saveSnapshot(storage, "ABC234", START, reloaded(10_000));
+    const after = restoreSnapshot(reloaded(12_000), loadSnapshot(storage, "ABC234", START));
+    expect(after.mine).toBeUndefined();
   });
 });
