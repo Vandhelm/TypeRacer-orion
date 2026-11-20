@@ -169,6 +169,13 @@
       "when": 1795134558487,
       "tag": "0023_room_text_seed",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1795136436151,
+      "tag": "0024_catch_up_bonus",
+      "breakpoints": true
     }
   ]
 }

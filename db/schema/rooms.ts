@@ -26,6 +26,8 @@ export const raceConfigs = pgTable(
     mistakes: mistakeMode("mistakes").notNull(),
     excluded: text("excluded").notNull().default(""),
     customText: text("custom_text").notNull().default(""),
+    /** CONF-09 : bonus de remontée activés ou non (les bonus eux-mêmes : BONUS-01 à 04). */
+    catchUpBonus: boolean("catch_up_bonus").notNull().default(false),
   },
   (table) => [
     check("race_configs_word_count_positive", sql`${table.wordCount} > 0`),

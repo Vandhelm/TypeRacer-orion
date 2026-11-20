@@ -171,6 +171,8 @@
     "tabTyping": "SAISIE",
     "tabBots": "BOTS",
     "helpBots": "Les bots prennent les places restées libres.",
+    "catchUpBonus": "Bonus de remontée",
+    "helpCatchUpBonus": "Les joueurs distancés reçoivent des bonus pour revenir dans la course.",
     "botSpeed": "Vitesse",
     "slow": "Lents",
     "botMedium": "Moyens",
