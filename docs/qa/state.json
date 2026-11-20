@@ -305,9 +305,9 @@
     "scope": "critère (feature/game/bot-levels)"
   },
   "BOT-04": {
-    "commit": "b217b6e",
-    "date": "2026-11-19",
-    "scope": "critère"
+    "commit": "dcc1a73",
+    "date": "2026-11-20",
+    "scope": "critère (feature/game/bot-04-bonus)"
   },
   "BOT-05": {
     "commit": "649bda8",
