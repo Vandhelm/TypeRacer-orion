@@ -265,6 +265,40 @@ Un coureur parti du salon pendant la course ou ses résultats sans abandonner es
 - **Frappes et fautes** : la précision enregistrée vient du navigateur, et le serveur ne garde pas les fautes. La page garde donc sa course en cours dans `sessionStorage` (clé `orion.race.<code>.<startsAt>`, une par salon et par départ : une relance ne reprend rien) : position, frappes, fautes, touches, mots manqués, mesures par seconde. Elle l'écrit à chaque frappe, et une page rechargée ne l'écrase qu'après avoir repris (`keepsSnapshot`). À la reprise, ces comptes sont restaurés (plus ce qui a été tapé depuis le rechargement). Seuls les mots validés par le serveur au-delà de ce qui était gardé comptent comme justes. Si la page gardée était plus loin que le serveur, la position reste celle du serveur et les fautes restent comptées. Recharger n'améliore donc pas la précision. Limites : sans stockage (refusé, autre onglet, données effacées), les mots repris comptent comme justes ; et ce stockage, comme toute la précision, reste déclaré par le navigateur.
 - **Bots** : simulés par la page avec le moteur déterministe (BOT-05) et la graine de la course : une page montée après le départ les avance tick par tick jusqu'à l'heure serveur (`mountRace`), exactement où ils étaient, et recharger ne permet pas de les distancer. « Reprise de la course… » s'affiche tant que la page, arrivée en pleine course, attend ce classement. Rien n'est gagné : la page ne va jamais au-delà de la progression validée, et l'arbitre garde la progression d'avant le rechargement (recul et saut refusés comme avant).
 
+## Hébergement et coûts (TECH-05, TECH-08)
+
+### Écart assumé : trois services plutôt qu'un VPS
+
+TECH-05 demande un serveur loué (VPS) et cite Fly.io parmi les hébergeurs acceptés. L'application est découpée entre trois services, chacun pour ce qu'il fait le mieux :
+
+| Service | Forfait | Rôle | Adresse |
+|---|---|---|---|
+| **Vercel** | Hobby (gratuit) | Site Next.js et routes API | https://www.vandhelm.com |
+| **Fly.io** | Gratuit | Serveur temps réel (Bun WebSocket, `src/realtime/`) | `wss://typeracer-orion.fly.dev` |
+| **Neon** | Gratuit | Base PostgreSQL : comptes, historique, statistiques | privée, reliée à Vercel et à Fly |
+
+Pourquoi ce découpage :
+
+- **Vercel** déploie le site à chaque push et gère le HTTPS (certificat Let's Encrypt, HSTS) et le CDN, sans serveur à maintenir. `vandhelm.com` redirige (308) vers `www.vandhelm.com`.
+- **Fly.io** fait tourner ce que Vercel ne peut pas faire : ses fonctions ne gardent pas de connexion WebSocket ouverte et ne partagent pas de mémoire (voir l'ADR plus haut). Une seule petite machine (`shared-cpu-1x`, 256 Mo), puisque l'état des salons est en mémoire. Elle s'arrête quand personne n'est connecté et redémarre à la connexion suivante, ce qui la garde dans le forfait gratuit.
+- **Neon** est branché à Vercel par l'intégration Marketplace (variables `DATABASE_URL`, `POSTGRES_*`) ; le serveur temps réel y accède par le secret Fly `DATABASE_URL`.
+
+### Secrets
+
+Aucun secret n'est dans le dépôt. Ils sont stockés comme variables d'environnement :
+
+- **Vercel (production)** : `BETTER_AUTH_SECRET`, `GUEST_SESSION_SECRET`, `REALTIME_SECRET`, `REALTIME_PUBLIC_URL`, `GITHUB_CLIENT_ID`/`GITHUB_CLIENT_SECRET`, `DISCORD_CLIENT_ID`/`DISCORD_CLIENT_SECRET`, et les variables Neon.
+- **Fly.io** : `REALTIME_SECRET` (même valeur que sur Vercel) et `DATABASE_URL`.
+
+Les applications OAuth déclarent `https://www.vandhelm.com/api/auth/callback/github` et `…/callback/discord` comme adresses de retour, en plus de `http://localhost:3000/…` pour le développement.
+
+### Accès de l'enseignant
+
+L'enseignant n'a rien à payer pour corriger :
+
+- **En ligne** : le site est public sur https://www.vandhelm.com. Le mode invité permet de jouer sans compte ; on peut aussi se connecter avec GitHub, Discord ou un nom d'utilisateur et un mot de passe.
+- **En local** : il copie `.env.example` en `.env.local`, lance la base PostgreSQL avec Docker (`bun run db:up`), applique les migrations (`bun run db:migrate`), puis lance `bun run dev`. Aucun compte ni service payant n'est nécessaire.
+
 ## Déployer le serveur temps réel
 
 Rien n'est déployé par le dépôt. Pour mettre le serveur en ligne sur Fly.io :
