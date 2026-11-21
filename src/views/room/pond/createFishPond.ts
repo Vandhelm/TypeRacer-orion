@@ -7,9 +7,39 @@ https://github.com/argonautcode/animal-proc-anim
 
 Code written by Claude and ChatGPT, with minimal manual adjustments.
 */
-export type PondFish = { name: string; color: string; me?: boolean };
+import { parseCssColor } from "../../../styles/contrast";
+import { resolveColors } from "../../../theme/palette";
+import { subscribeTheme } from "../../../theme/theme";
+
+/** color : la couleur de la place, un token (var(--color-seat-N)) ; mark : DES-05, le numéro de place écrit sur le poisson. */
+export type PondFish = { name: string; color: string; me?: boolean; mark?: string };
 export type FishPondApi = { sync(players: PondFish[]): void; destroy(): void };
 type PondOptions = { reducedMotion: boolean; /** Un clic sur ces éléments ne jette pas de miette. */ noFoodSelector: string };
+
+/** La teinte, la saturation et la luminosité (0–360, 0–100, 0–100) d'une couleur ; null si elle est illisible. */
+function hslOf(color: string): [number, number, number] | null {
+  const written = /^hsla?\(\s*([\d.]+)\s*,\s*([\d.]+)%\s*,\s*([\d.]+)%/i.exec(color);
+  if (written) return [Number(written[1]), Number(written[2]), Number(written[3])];
+  let rgb;
+  try {
+    rgb = parseCssColor(color);
+  } catch {
+    return null;
+  }
+  const [r, g, b] = [rgb.r / 255, rgb.g / 255, rgb.b / 255];
+  const [max, min] = [Math.max(r, g, b), Math.min(r, g, b)];
+  const l = (max + min) / 2, d = max - min;
+  if (d === 0) return [0, 0, Math.round(l * 100)];
+  const s = d / (1 - Math.abs(2 * l - 1));
+  const h = max === r ? ((g - b) / d + 6) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [Math.round(h * 60) % 360, Math.round(s * 100), Math.round(l * 100)];
+}
+
+/** DES-05 : les nageoires, de la teinte du corps, 20 points plus claires (90 % au plus). */
+export function finColorOf(body: string): string {
+  const [h, s, l] = hslOf(body) ?? [0, 0, 100];
+  return `hsl(${h}, ${s}%, ${Math.min(l + 20, 90)}%)`;
+}
 
 class Vector2 {
   constructor(public x: number, public y: number) {}
@@ -99,10 +129,9 @@ class Fish {
   targetFood: Food | null = null;
   wander: Vector2 | null = null;
 
-  constructor(x: number, y: number, public size: number, public bodyColor: string) {
+  constructor(x: number, y: number, public size: number, public bodyColor: string, public mark = "") {
     this.spine = new Chain(new Vector2(x, y), 12, 32 * size, Math.PI / 8);
-    const hsl = bodyColor.match(/\d+/g)!.map(Number);
-    this.finColor = `hsl(${hsl[0]}, ${hsl[1]}%, ${Math.min(hsl[2]! + 20, 90)}%)`;
+    this.finColor = finColorOf(bodyColor);
     this.bodyWidth = [34, 40.5, 42, 41.5, 38.5, 32, 25.5, 19, 16, 9.5].map((w) => w * size);
     this.finWidth = size * 80;
     this.finHeight = size * 32;
@@ -110,6 +139,11 @@ class Fish {
     this.finSmallHeight = size * 16;
     this.eyeRadius = size * 8;
     this.maxTailWidth = size * 6.5;
+  }
+  /** DES-05 : le thème a changé, le poisson prend la couleur de sa place dans le nouveau thème. */
+  paint(bodyColor: string) {
+    this.bodyColor = bodyColor;
+    this.finColor = finColorOf(bodyColor);
   }
   update(target: Vector2) {
     const head = this.spine.joints[0]!;
@@ -193,10 +227,25 @@ class Fish {
     ctx.fillStyle = "#FFFFFF";
     this.drawEllipse(ctx, this.getPos(0, Math.PI / 2, -this.eyeRadius), 0, this.eyeRadius, this.eyeRadius);
     this.drawEllipse(ctx, this.getPos(0, -Math.PI / 2, -this.eyeRadius), 0, this.eyeRadius, this.eyeRadius);
+
+    // DES-05 : le numéro de place, droit, sur le dos : il distingue deux poissons sans leur couleur
+    if (this.mark) {
+      const back = at(4);
+      ctx.font = `600 ${Math.max(10, Math.round(30 * this.size))}px ui-monospace, Menlo, monospace`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.lineJoin = "round";
+      ctx.lineWidth = Math.max(2, 6 * this.size);
+      ctx.strokeStyle = "#000000";
+      ctx.strokeText(this.mark, back.x, back.y);
+      ctx.fillStyle = "#FFFFFF";
+      ctx.fillText(this.mark, back.x, back.y);
+    }
   }
 }
 
-type SchoolEntry = { fish: Fish; color: string; me: boolean; leftAt?: number };
+/** color : la couleur de la place telle qu'écrite (token) ; shown : sa valeur dans le thème affiché. */
+type SchoolEntry = { fish: Fish; color: string; shown: string; mark: string; me: boolean; leftAt?: number };
 
 const MARGIN = 36;
 const STEP_MS = 1000 / 60;
@@ -210,7 +259,7 @@ export function createFishPond(canvas: HTMLCanvasElement, { reducedMotion, noFoo
   let width = 600, height = 300, scale = 0.5;
   let last = 0, reserve = 0, frame = 0;
 
-  const makeFish = (x: number, y: number, color: string) => new Fish(x, y, scale, color);
+  const makeFish = (x: number, y: number, f: Pick<SchoolEntry, "shown" | "mark">) => new Fish(x, y, scale, f.shown, f.mark);
   const swimming = () => [...school.values()].filter((f) => !f.leftAt).map((f) => f.fish);
 
   // Chaque poisson vise une miette, sans se la disputer avec les autres
@@ -284,7 +333,7 @@ export function createFishPond(canvas: HTMLCanvasElement, { reducedMotion, noFoo
     const list = [...school.values()], cols = Math.ceil(Math.sqrt(list.length)) || 1, rows = Math.ceil(list.length / cols) || 1;
     list.forEach((f, i) => {
       const x = (width / cols) * ((i % cols) + 0.5), y = (height / rows) * (Math.floor(i / cols) + 0.5) - 140 * scale;
-      f.fish = makeFish(x, y, f.color);
+      f.fish = makeFish(x, y, f);
       f.fish.spine.resolve(new Vector2(x, y - 1));
     });
     food = [];
@@ -302,7 +351,7 @@ export function createFishPond(canvas: HTMLCanvasElement, { reducedMotion, noFoo
     if (Math.abs(next - scale) > 0.01) {
       scale = next;
       // la taille a changé : on refait chaque poisson là où il se trouve
-      school.forEach((f) => { const head = f.fish.spine.joints[0]!; f.fish = makeFish(head.x, head.y, f.color); });
+      school.forEach((f) => { const head = f.fish.spine.joints[0]!; f.fish = makeFish(head.x, head.y, f); });
     }
     // les miettes sorties de l'écran disparaissent
     food = food.filter((f) => f.initialPos.x < width && f.initialPos.y < height);
@@ -328,6 +377,16 @@ export function createFishPond(canvas: HTMLCanvasElement, { reducedMotion, noFoo
     if (!reducedMotion) draw();
   }
 
+  // DES-05 : un changement de thème repeint chaque poisson à la couleur de sa place, sans recharger la page
+  const stopTheme = subscribeTheme(() => {
+    const entries = [...school.values()];
+    resolveColors(entries.map((f) => f.color)).forEach((shown, i) => {
+      entries[i]!.shown = shown;
+      entries[i]!.fish.paint(shown);
+    });
+    if (reducedMotion) draw();
+  });
+
   document.addEventListener("click", onClick);
   window.addEventListener("resize", onResize);
   measure();
@@ -337,19 +396,28 @@ export function createFishPond(canvas: HTMLCanvasElement, { reducedMotion, noFoo
     sync(players) {
       const names = new Set(players.map((p) => p.name));
       school.forEach((f, name) => { if (!names.has(name) && !f.leftAt) f.leftAt = performance.now(); });
-      players.forEach((p) => {
+      const shown = resolveColors(players.map((p) => p.color));
+      players.forEach((p, i) => {
         let entry = school.get(p.name);
         if (!entry || entry.leftAt) {
           // il arrive par le haut de l'écran
           const x = MARGIN + Math.random() * Math.max(1, width - 2 * MARGIN);
-          entry = { color: p.color, fish: makeFish(x, -360 * scale, p.color), me: false };
+          const look = { shown: shown[i]!, mark: p.mark ?? "" };
+          entry = { ...look, color: p.color, fish: makeFish(x, -360 * scale, look), me: false };
           school.set(p.name, entry);
         }
         entry.me = !!p.me;
+        // la place a pu changer (un joueur est parti) : couleur et numéro suivent
+        if (entry.color !== p.color || entry.mark !== (p.mark ?? "")) {
+          Object.assign(entry, { color: p.color, shown: shown[i]!, mark: p.mark ?? "" });
+          entry.fish.paint(entry.shown);
+          entry.fish.mark = entry.mark;
+        }
       });
       if (reducedMotion) layOut();
     },
     destroy() {
+      stopTheme();
       cancelAnimationFrame(frame);
       document.removeEventListener("click", onClick);
       window.removeEventListener("resize", onResize);
