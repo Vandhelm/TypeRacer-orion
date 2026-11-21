@@ -10,7 +10,7 @@
     position: absolute;
     inset: 0;
     transform-origin: 50% 70%;
-    will-change: transform, opacity;
+    /* no will-change: a promoted layer is rasterized once then stretched, so text blurs while zooming */
     pointer-events: none;
 }
 .podium-layer--pyramid{ display: flex; justify-content: center; }
