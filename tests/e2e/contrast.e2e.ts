@@ -1,5 +1,7 @@
 // A11Y-01 : contraste des textes (WCAG AA) mesuré par axe-core sur chaque page et dans ses états : onglets ouverts,
 // focus, salle avec bots, course en cours (champ actif ou non, faute), podium, profil. Lancer : `bun run test:a11y`.
+// DES-05 : tout le parcours est rejoué dans chacun des deux thèmes (cookie posé avant la première page), et le
+// sélecteur de thème est vérifié à la fin : bascule au clavier, thème rendu par le serveur (aucun flash), mobile.
 //
 // axe ne conclut pas toujours (« incomplete ») : fond en dégradé, pseudo-élément décoratif, élément superposé, texte
 // d'un caractère. Ces nœuds, et les placeholders qu'axe ne lit pas, sont mesurés ici : couleur du texte (opacités des
@@ -8,6 +10,8 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 import { contrastRatio, parseCssColor, type Rgba } from "../../src/styles/contrast";
+import { THEME_COOKIE, THEMES } from "../../src/theme/theme";
+import { E2E_BASE_URL } from "./env";
 import { createRoom, freshUsername, signIn, signUp } from "./helpers";
 
 type Finding = { state: string; target: string; detail: string };
@@ -163,12 +167,17 @@ function report(findings: Finding[]): string {
   return findings.map((f) => `- [${f.state}] ${f.target} — ${f.detail}`).join("\n");
 }
 
-test.describe("A11Y-01 — text contrast reaches WCAG AA on every page", () => {
+for (const theme of THEMES) test.describe(`A11Y-01 — text contrast reaches WCAG AA on every page (DES-05: ${theme} theme)`, () => {
   // Une passe axe par élément atteint au clavier : plus long qu'un parcours e2e ordinaire.
   test.setTimeout(480_000);
 
+  test.beforeEach(async ({ context }) => {
+    await context.addCookies([{ name: THEME_COOKIE, value: theme, url: E2E_BASE_URL }]);
+  });
+
   test("home, signed out: every pane, filled fields and focus", async ({ page }) => {
     await page.goto("/home");
+    await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
     const findings = await audit(page, "home", { focus: true });
     findings.push(...(await auditTabs(page, "home")));
     for (const button of ["01 START", "02 ACCOUNT", "03 ROOMS"]) {
@@ -234,6 +243,9 @@ test.describe("A11Y-01 — text contrast reaches WCAG AA on every page", () => {
 
     await page.waitForURL(/\/podium/, { timeout: 60_000 });
     await expect(page.getByRole("region", { name: /^All players/ })).toBeVisible();
+    // Le tableau arrive 2,7 s après la page (podium-board-arrive) : mesuré avant, il est invisible (ignoré) ou à demi
+    // fondu (faux échec selon l'instant où tombe une passe axe). On attend son état d'arrivée.
+    await expect(page.locator('section[aria-labelledby="podium-board-title"]')).toHaveCSS("opacity", "1", { timeout: 10_000 });
     findings.push(...(await audit(page, "podium", { focus: true })));
     findings.push(...(await auditTabs(page, "podium")));
 
@@ -242,5 +254,44 @@ test.describe("A11Y-01 — text contrast reaches WCAG AA on every page", () => {
     findings.push(...(await auditTabs(page, "profile")));
 
     expect(findings, report(findings)).toEqual([]);
+  });
+});
+
+test.describe("DES-05 — the theme switch", () => {
+  const accent = (page: Page) => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--color-red-text").trim());
+
+  test("the keyboard switches to the colour-adapted theme at once, and the server serves it from then on", async ({ page }) => {
+    await page.goto("/home");
+    const html = page.locator("html");
+    await expect(html).toHaveAttribute("data-theme", "default");
+    const before = await accent(page);
+    const toggle = page.getByRole("button", { name: /^CVD, / });
+    await expect(toggle).toHaveAttribute("aria-pressed", "false");
+
+    await toggle.focus();
+    await page.keyboard.press("Enter");
+    await expect(html).toHaveAttribute("data-theme", "cvd");
+    await expect(toggle).toHaveAttribute("aria-pressed", "true");
+    expect(await accent(page)).not.toBe(before);
+
+    // Aucun flash : le HTML envoyé par le serveur, avant tout script, porte déjà le thème choisi.
+    expect(await (await page.request.get("/home")).text()).toMatch(/<html[^>]*data-theme="cvd"/);
+    await page.goto("/profile");
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "cvd");
+
+    // Espace le relâche : retour au thème par défaut, mémorisé aussi.
+    await page.goto("/home");
+    await page.getByRole("button", { name: /^CVD, / }).focus();
+    await page.keyboard.press("Space");
+    await expect(html).toHaveAttribute("data-theme", "default");
+    expect(await (await page.request.get("/home")).text()).toMatch(/<html[^>]*data-theme="default"/);
+  });
+
+  test("on a 360 px phone, the switch fits in the navbar without widening the page", async ({ page }) => {
+    await page.setViewportSize({ width: 360, height: 740 });
+    await page.goto("/home");
+    const toggle = page.getByRole("button", { name: /^CVD, / });
+    await expect(toggle).toBeInViewport();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
   });
 });
