@@ -8,6 +8,10 @@ type HangingTabsProps<T extends string> = {
   className?: string;
 };
 
+/** One tab's width (w-12) and the gap between two (gap-2), in px: keep in step with TAB and the rows' gap-2. */
+export const HANGING_TAB_WIDTH = 48;
+export const HANGING_TAB_GAP = 8;
+
 const TAB =
   "unset box-border flex w-12 animate-[drop_.6s_.7s_cubic-bezier(.2,.9,.3,1.25)_both] flex-col items-center justify-end border-x border-b bg-black pb-2.5 pl-[.15em] " +
   "font-mono text-[12px] leading-none font-medium tracking-[.15em] transition-[height,color,border-color] duration-[.25s,.2s,.2s] ease-[ease] " +

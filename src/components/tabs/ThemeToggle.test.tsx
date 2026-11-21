@@ -3,7 +3,7 @@ import { createElement } from "react";
 import { renderToString } from "react-dom/server";
 import { I18nextProvider } from "react-i18next";
 import { createI18n } from "../../i18n";
-import { LanguageSwitcher } from "./LanguageSwitcher";
+import { HANGING_ROW_WIDTH, LanguageSwitcher } from "./LanguageSwitcher";
 import { ThemeToggle } from "./ThemeToggle";
 
 const render = (lang: "fr" | "en", node = createElement(ThemeToggle)) => renderToString(createElement(I18nextProvider, { i18n: createI18n(lang) }, node));
@@ -36,5 +36,13 @@ describe("DES-05 — the theme switch", () => {
     const html = render("en", createElement(LanguageSwitcher));
     expect(html.indexOf(">CVD</button>")).toBeGreaterThan(-1);
     expect(html.indexOf(">CVD</button>")).toBeLessThan(html.indexOf(">FR</button>"));
+  });
+});
+
+describe("DES-05 — the width of the row of hanging tabs is derived, not guessed", () => {
+  test("HANGING_ROW_WIDTH matches the tabs LanguageSwitcher actually renders (48 px each, 8 px apart)", () => {
+    const tabs = (render("en", createElement(LanguageSwitcher)).match(/class="hanging-tab /g) ?? []).length;
+    expect(tabs).toBe(3);
+    expect(HANGING_ROW_WIDTH).toBe(tabs * 48 + (tabs - 1) * 8);
   });
 });

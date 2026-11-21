@@ -1,10 +1,10 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import { FlipButton } from "../../components/buttons/FlipButton";
 import { HangingButton } from "../../components/buttons/HangingButton";
 import { Stamp } from "../../components/Stamp";
-import { LanguageSwitcher } from "../../components/tabs/LanguageSwitcher";
+import { HANGING_ROW_WIDTH, LanguageSwitcher } from "../../components/tabs/LanguageSwitcher";
 import { useRealtimeRoom } from "../../realtime/useRealtimeRoom";
 import { FishPond } from "./FishPond";
 import { LiveList } from "./LiveList";
@@ -92,7 +92,11 @@ export function RoomPage() {
       {pond}
       <Stamp className="room-stamp" label={t("home.stampPlay")} visible={stampOn} playKey={0} />
 
-      <header className="relative z-1 isolate mb-[clamp(20px,4vh,40px)] flex flex-wrap items-center justify-between gap-x-6 gap-y-3 pr-[124px] phone:mb-[14px] phone:pr-0">
+      {/* DES-05 : la marge droite laisse passer la rangée d'onglets suspendus (thème, langues), plus 20 px d'air */}
+      <header
+        className="relative z-1 isolate mb-[clamp(20px,4vh,40px)] flex flex-wrap items-center justify-between gap-x-6 gap-y-3 pr-[calc(var(--hanging-row)+20px)] phone:mb-[14px] phone:pr-0"
+        style={{ "--hanging-row": `${HANGING_ROW_WIDTH}px` } as CSSProperties}
+      >
         <HangingButton className="room-leave" href={host ? "/home" : "/home#rooms"} onClick={leave}>
           {t("room.leave")}
         </HangingButton>
