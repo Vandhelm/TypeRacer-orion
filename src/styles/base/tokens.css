@@ -124,6 +124,19 @@
     --color-heat-ink-high: #000;
 }
 
+/* DES-05 : the generated avatar (src/views/profile/ProfileAvatar.tsx). By default a fish at the hue of the name
+   (--avatar-hue); in cvd, at one of the eight safe seat colours (--avatar-safe), the initial in white. */
+.generated-avatar{
+    --avatar-bg: hsl(var(--avatar-hue) 45% 16%);
+    --avatar-fish: hsl(var(--avatar-hue) 70% 58%);
+    --avatar-ink: hsl(var(--avatar-hue) 85% 82%);
+}
+:root[data-theme="cvd"] .generated-avatar{
+    --avatar-bg: color-mix(in srgb, var(--avatar-safe) 22%, #000);
+    --avatar-fish: var(--avatar-safe);
+    --avatar-ink: #fff;
+}
+
 /* DES-05 : in both themes, the system preferences come first. More contrast: the translucent text and lines get
    denser. Forced colours (Windows contrast themes): the system palette replaces ours, so every meaning keeps a cue
    that is not a colour (underlines, dash patterns, thicker bars), and the few marks drawn with a background or a

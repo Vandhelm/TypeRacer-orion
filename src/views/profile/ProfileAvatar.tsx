@@ -1,4 +1,6 @@
+import type { CSSProperties } from "react";
 import { generatedAvatar } from "../../players/avatar";
+import { seatFill } from "../../rooms/seats";
 
 /**
  * La photo du joueur dans un rond. Sans photo (un invité n'en a jamais, AUTH-03 ; un compte qui n'en a pas choisi,
@@ -16,22 +18,28 @@ export function ProfileAvatar({ name, src, label }: { name: string; src?: string
   );
 }
 
-/** L'avatar généré : masqué aux lecteurs d'écran sans `label`, image nommée par `label` sinon (A11Y-03). */
+/**
+ * L'avatar généré : masqué aux lecteurs d'écran sans `label`, image nommée par `label` sinon (A11Y-03).
+ * DES-05 : aucune couleur écrite ici. La teinte du nom (--avatar-hue) et une couleur sûre (--avatar-safe, l'une des
+ * huit couleurs de place) passent en variables ; src/styles/base/tokens.css en tire le fond, le poisson et l'initiale :
+ * la teinte du nom dans le thème par défaut, la couleur sûre dans le thème cvd. L'initiale reste l'indice principal.
+ */
 export function GeneratedAvatar({ name, label }: { name: string; label?: string }) {
   const { initial, hue, angle } = generatedAvatar(name);
   return (
     <svg
-      className="block size-full"
+      className="generated-avatar block size-full"
+      style={{ "--avatar-hue": hue, "--avatar-safe": seatFill(hue % 8) } as CSSProperties}
       viewBox="0 0 64 64"
       focusable="false"
       {...(label ? { role: "img", "aria-label": label } : { "aria-hidden": true })}
     >
-      <rect width="64" height="64" fill={`hsl(${hue}, 45%, 16%)`} />
-      <g transform={`rotate(${angle} 32 32)`} fill={`hsl(${hue}, 70%, 58%)`} opacity="0.45">
+      <rect className="fill-[var(--avatar-bg)]" width="64" height="64" />
+      <g className="fill-[var(--avatar-fish)]" transform={`rotate(${angle} 32 32)`} opacity="0.45">
         <ellipse cx="28" cy="32" rx="20" ry="11" />
         <path d="M44 32 L60 21 L56 32 L60 43 Z" />
       </g>
-      <text className="font-sans text-[30px] font-light [line-height:normal]" x="32" y="33" textAnchor="middle" dominantBaseline="central" fill={`hsl(${hue}, 85%, 82%)`}>
+      <text className="fill-[var(--avatar-ink)] font-sans text-[30px] font-light [line-height:normal]" x="32" y="33" textAnchor="middle" dominantBaseline="central">
         {initial}
       </text>
     </svg>
