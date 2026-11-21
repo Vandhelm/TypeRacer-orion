@@ -35,6 +35,11 @@ describe("COURSE-10 — final ranking shown on the podium: finished, then not fi
     expect(order(ranked)).toEqual([["Course", 1], ["Tard", 2], ["Tot", 3]]);
   });
 
+  test("fatal: an eliminated player ranks behind everyone still racing, even when ahead", () => {
+    const ranked = finalRanking([player("Elimine", { eliminated: true, progress: 0.9 }), player("Course", { progress: 0.2 }), player("Abandon", { abandoned: true, progress: 0.5 })]);
+    expect(order(ranked)).toEqual([["Course", 1], ["Elimine", 2], ["Abandon", 3]]);
+  });
+
   test("order between categories: finished, not finished, abandoned", () => {
     const ranked = finalRanking([player("Abandon", { abandoned: true, progress: 0.9 }), player("Course", { progress: 0.2 }), player("Arrive", { finished: true, progress: 1 })]);
     expect(order(ranked)).toEqual([["Arrive", 1], ["Course", 2], ["Abandon", 3]]);

@@ -197,8 +197,10 @@ function GameRace({ state, onHandOver }: { state: RoomState; onHandOver?: (sendi
   }, [abandoned, race, players, room, finish]);
   // /game ne suit pas le salon (useRoom) : après l'abandon, la page relit son état pour voir la course finir
   const [roomStatus, setRoomStatus] = useState(state.status);
+  // mode fatal : un éliminé suit aussi le salon, jusqu'à la fin de la course des autres
+  const following = abandoned || (!watching && race.eliminated);
   useEffect(() => {
-    if (!abandoned || !room.code) return;
+    if (!following || !room.code) return;
     let live = true;
     const read = async () => {
       const reply = await roomApi.read(room.code);
@@ -210,8 +212,8 @@ function GameRace({ state, onHandOver }: { state: RoomState; onHandOver?: (sendi
       live = false;
       clearInterval(timer);
     };
-  }, [abandoned, room.code]);
-  const over = showResults || (abandoned && abandonOver(race, roomStatus));
+  }, [following, room.code]);
+  const over = showResults || (following && abandonOver(race, roomStatus));
 
   const submitted = useRef(false);
   useEffect(() => {
