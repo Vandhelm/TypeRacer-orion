@@ -83,6 +83,13 @@ E2E_DATABASE_URL=postgres://orion@localhost:5544/orion_e2e bun run test:a11y
 
 Un seul thème existe (sombre). Le critère demande les deux thèmes : le thème clair (DES-05) n'est pas fait, et devra repasser ces deux tests.
 
+## Balises et structure des pages (A11Y-02)
+
+- `tests/a11y/a11y-02.test.tsx` (dans `bun test`, `bun test -t A11Y-02`) : sur le HTML rendu de chaque page et de ses états (accueil déconnecté et connecté, salon en attente, course en attente, en cours et sur téléphone, podium d'une course de l'historique, refusé et en chargement, profil du compte et d'un autre joueur), en français et en anglais : un seul `<main>`, un seul `<h1>`, aucun saut de niveau de titre ; le pied de page commun est un `<footer>` posé par `app/layout.tsx`.
+- `tests/e2e/a11y.e2e.ts` (`bun run test:a11y`) : axe-core avec `landmark-one-main`, `page-has-heading-one`, `heading-order`, `region`, `list`, `listitem`, `button-name` et `nested-interactive` (avec les règles d'A11Y-03), sur toutes les pages et leurs états, 404, profil déconnecté, podium refusé et salle fermée compris ; plus un décompte (un `<main>`, un `<h1>`, un `<footer>`), car axe ne voit pas un second `<main>` ou `<h1>` caché. Attendu : 0 violation.
+
+Choix : le pied de page (`src/components/navigation/SiteFooter.tsx`) est réservé aux lecteurs d'écran (`sr-only`). Toutes les pages sont des scènes plein écran (bassin, podium 3D, course en `h-screen`) où une bande visible casserait la mise en page. Les pages sans barre de navigation ont un `<header>` sans style autour de leurs onglets de langue (fixes) : il ne prend pas de place. Le `<h1>` de l'accueil, du podium, de la course en attente et du compte est `sr-only` quand le titre visible n'en tient pas lieu. Les graphiques du profil suivent le pointeur sur un `<div>` (`onPointerDown`, survol) : ce n'est pas une action, et leurs données sont aussi dans un `<table>`.
+
 ## Lighthouse sur la page d'accueil (PERF-01)
 
 `scripts/lighthouse.ts` mesure les quatre catégories (performance, accessibilité, bonnes pratiques, SEO) de la page d'accueil en mobile (profil par défaut de Lighthouse : écran de 412 px, réseau 4G lent et processeur ralenti 4 fois, simulés) puis en desktop (`--preset=desktop`). Chaque profil est mesuré trois fois et garde la médiane de chaque catégorie, comme le conseille Lighthouse : le score de performance varie de quelques points selon la charge de la machine. Le script sort en erreur si une médiane est sous 90. Il ne fait pas partie de `bun test` ni de la CI : il lui faut un build de production qui tourne et un Chrome.
