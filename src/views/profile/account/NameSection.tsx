@@ -38,9 +38,10 @@ export function NameSection({ name, onChange }: Props) {
         <div className={MAIN}>
           <div className="flex flex-wrap gap-x-4 gap-y-3 [align-items:end]">
             <label className="sr-only" htmlFor="name-input">{t("account.name.title")}</label>
+            {/* A11Y-04 : outline-none, remplacé par la ligne du bas : blanche au focus, ou rouge et plus épaisse si le pseudo est refusé */}
             <input
               id="name-input"
-              className={`min-w-0 flex-[1_1_200px] border-b bg-transparent [border-left-style:none] [border-right-style:none] [border-top-style:none] px-0 pt-1 pb-1.5 font-sans text-[clamp(20px,3vh,26px)] leading-[1.1] font-light tracking-[.08em] text-white outline-none transition-[border-color] duration-200 ease-[ease] ${invalid ? "border-red-text" : "border-b-line-soft focus:border-white"}`}
+              className={`min-w-0 flex-[1_1_200px] border-b bg-transparent [border-left-style:none] [border-right-style:none] [border-top-style:none] px-0 pt-1 pb-1.5 font-sans text-[clamp(20px,3vh,26px)] leading-[1.1] font-light tracking-[.08em] text-white outline-none transition-[border-color] duration-200 ease-[ease] ${invalid ? "border-red-text focus:border-b-2 focus:pb-[5px]" : "border-b-line-soft focus:border-white"}`}
               value={value}
               maxLength={USERNAME_MAX}
               autoComplete="off"
