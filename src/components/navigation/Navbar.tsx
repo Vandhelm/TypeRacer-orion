@@ -32,9 +32,7 @@ export function Navbar({ brand, brandHref, brandLabel, links, linksLabel, childr
           href={brandHref}
           aria-label={brandLabel}
         >
-          <svg className="size-3.5 flex-none" viewBox="0 0 100 100" aria-hidden="true">
-            <polygon className="fill-red stroke-[rgba(255,140,120,.4)] stroke-1" points="50,4 96,50 50,96 4,50" />
-          </svg>
+          <img className="size-5 flex-none" src="/logo.png" alt="" aria-hidden="true" />
           <span className="@max-[720px]:sr-only">{brand}</span>
         </a>
         <nav className="flex justify-self-center" aria-label={linksLabel}>
