@@ -12,7 +12,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { contrastRatio, parseCssColor, type Rgba } from "../../src/styles/contrast";
 import { THEME_COOKIE, THEMES } from "../../src/theme/theme";
 import { E2E_BASE_URL } from "./env";
-import { createRoom, freshUsername, signIn, signUp } from "./helpers";
+import { createRoom, freshUsername, newInviteLink, signIn, signUp } from "./helpers";
 
 type Finding = { state: string; target: string; detail: string };
 
@@ -129,6 +129,40 @@ async function placeholderContrast(page: Page, state: string): Promise<Finding[]
   return findings;
 }
 
+/**
+ * Un contrôle désactivé est exempté (WCAG 1.4.3), et axe l'ignore avec son libellé ; mais la valeur qu'il affiche
+ * reste une information (réglages vus par un membre qui n'est pas l'hôte) : texte d'un champ désactivé, libellé d'un
+ * choix désactivé mais coché. On la mesure ici.
+ */
+async function disabledValueContrast(page: Page, state: string): Promise<Finding[]> {
+  const selectors = await page.evaluate(() => {
+    const shown = (el: Element) => (el as HTMLElement).offsetParent !== null;
+    const texts: Element[] = [];
+    for (const field of document.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("input:disabled, select:disabled, textarea:disabled")) {
+      if (!shown(field)) continue;
+      const choice = field instanceof HTMLInputElement && (field.type === "radio" || field.type === "checkbox");
+      if (!choice && field.value) texts.push(field);
+      if (choice && (field as HTMLInputElement).checked) {
+        for (const label of field.labels ?? []) {
+          for (const el of [label, ...label.querySelectorAll("*")]) {
+            if (shown(el) && [...el.childNodes].some((n) => n.nodeType === Node.TEXT_NODE && n.textContent?.trim())) texts.push(el);
+          }
+        }
+      }
+    }
+    return texts.map((el, i) => {
+      el.setAttribute("data-contrast-probe", String(i));
+      return `[data-contrast-probe="${i}"]`;
+    });
+  });
+  const findings: Finding[] = [];
+  for (const selector of selectors) {
+    const s = await sample(page, selector);
+    if (s) findings.push(...check(s, `${state}, disabled value`));
+  }
+  return findings;
+}
+
 /** L'état courant : axe, placeholders ; avec `focus`, puis chaque élément atteint au clavier, focus posé. */
 async function audit(page: Page, state: string, { focus = false } = {}): Promise<Finding[]> {
   await page.waitForLoadState("networkidle");
@@ -163,6 +197,21 @@ async function auditTabs(page: Page, state: string): Promise<Finding[]> {
   return findings;
 }
 
+/** DES-05 : les titres (h1 et la ligne qui le suit) que recouvre un onglet suspendu (thème, langues). */
+async function headingsUnderTabs(page: Page, state: string): Promise<string[]> {
+  const overlaps = await page.evaluate(() => {
+    const boxes = (selector: string) =>
+      [...document.querySelectorAll(selector)].map((el) => ({ el, box: el.getBoundingClientRect() })).filter(({ box }) => box.width > 0 && box.height > 0);
+    const tabs = boxes(".hanging-tab");
+    return boxes("h1, h1 ~ p").flatMap(({ el, box }) =>
+      tabs
+        .filter(({ box: tab }) => box.left < tab.right && tab.left < box.right && box.top < tab.bottom && tab.top < box.bottom)
+        .map(({ el: tab }) => `${el.tagName.toLowerCase()} « ${el.textContent?.trim().slice(0, 30)} » under the ${tab.textContent} tab`),
+    );
+  });
+  return overlaps.map((overlap) => `[${state}] ${overlap}`);
+}
+
 function report(findings: Finding[]): string {
   return findings.map((f) => `- [${f.state}] ${f.target} — ${f.detail}`).join("\n");
 }
@@ -192,8 +241,9 @@ for (const theme of THEMES) test.describe(`A11Y-01 — text contrast reaches WCA
     expect(findings, report(findings)).toEqual([]);
   });
 
-  test("room, race, podium and profile of a signed-in host", async ({ page }) => {
+  test("room, race, podium and profile of a signed-in host, and the room seen by a member", async ({ page, browser }) => {
     const findings: Finding[] = [];
+    const covered: string[] = [];
     await signUp(page);
     findings.push(...(await audit(page, "home signed in")));
 
@@ -202,6 +252,33 @@ for (const theme of THEMES) test.describe(`A11Y-01 — text contrast reaches WCA
     await expect(page.getByRole("region", { name: "Players" }).getByRole("listitem").filter({ hasText: "bot, computer player" }).first()).toBeVisible();
     findings.push(...(await audit(page, "room", { focus: true })));
     findings.push(...(await auditTabs(page, "room")));
+    covered.push(...(await headingsUnderTabs(page, "room, host")));
+
+    // La salle vue par un membre qui n'est pas l'hôte (entré par un lien d'invitation) : réglages en lecture seule.
+    const context = await browser.newContext();
+    try {
+      await context.addCookies([{ name: THEME_COOKIE, value: theme, url: E2E_BASE_URL }]);
+      const member = await context.newPage();
+      await member.goto(await newInviteLink(page));
+      await member.getByRole("textbox", { name: "01 Nickname" }).fill("Invite_Contrast");
+      await member.getByRole("button", { name: "START A RACE" }).click();
+      await member.waitForURL(/\/room\?invite=/);
+      await expect(member.getByRole("region", { name: "Players" }).getByRole("listitem").filter({ hasText: "Invite_Contrast" })).toBeVisible();
+      await expect(member.locator("html")).toHaveAttribute("data-theme", theme);
+      findings.push(...(await audit(member, "room, member", { focus: true })));
+      findings.push(...(await disabledValueContrast(member, "room, member")));
+      const tabs = member.getByRole("tab");
+      for (let i = 0; i < (await tabs.count()); i++) {
+        if (!(await tabs.nth(i).isVisible())) continue;
+        const name = (await tabs.nth(i).textContent())?.trim() ?? String(i);
+        await tabs.nth(i).click();
+        findings.push(...(await audit(member, `room, member, tab ${name}`)));
+        findings.push(...(await disabledValueContrast(member, `room, member, tab ${name}`)));
+      }
+      covered.push(...(await headingsUnderTabs(member, "room, member")));
+    } finally {
+      await context.close();
+    }
 
     // Option qui ne s'applique pas mais reste modifiable : majuscules sur des mots mélangés sans ponctuation (CONF-06).
     await page.getByRole("tab", { name: "02 CONTENT" }).click();
@@ -247,13 +324,16 @@ for (const theme of THEMES) test.describe(`A11Y-01 — text contrast reaches WCA
     // fondu (faux échec selon l'instant où tombe une passe axe). On attend son état d'arrivée.
     await expect(page.locator('section[aria-labelledby="podium-board-title"]')).toHaveCSS("opacity", "1", { timeout: 10_000 });
     findings.push(...(await audit(page, "podium", { focus: true })));
+    covered.push(...(await headingsUnderTabs(page, "podium")));
     findings.push(...(await auditTabs(page, "podium")));
 
     await page.goto("/profile");
     findings.push(...(await audit(page, "profile", { focus: true })));
+    covered.push(...(await headingsUnderTabs(page, "profile")));
     findings.push(...(await auditTabs(page, "profile")));
 
     expect(findings, report(findings)).toEqual([]);
+    expect(covered).toEqual([]);
   });
 });
 
@@ -293,5 +373,22 @@ test.describe("DES-05 — the theme switch", () => {
     const toggle = page.getByRole("button", { name: /^CVD, / });
     await expect(toggle).toBeInViewport();
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
+  });
+});
+
+test.describe("DES-05 — the hanging tabs (theme and languages) never cover a heading", () => {
+  test("room as host, profile and home on a 1440 × 900 desktop", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await signUp(page);
+    const overlaps = [...(await headingsUnderTabs(page, "home"))];
+    await createRoom(page);
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    // les onglets tombent du haut (.7 s) : on mesure leur place d'arrivée
+    await page.waitForTimeout(1600);
+    overlaps.push(...(await headingsUnderTabs(page, "room, host")));
+    await page.goto("/profile");
+    await page.waitForTimeout(1600);
+    overlaps.push(...(await headingsUnderTabs(page, "profile")));
+    expect(overlaps).toEqual([]);
   });
 });
