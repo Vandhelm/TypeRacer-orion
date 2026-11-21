@@ -5,6 +5,7 @@
 // PERF-01 : Three.js (plus de 600 Ko) est chargé à part, seulement quand la couche 3D se prépare
 import type * as THREE from 'three';
 import fishSheetImage from '../../../assets/home/fish-sheet.webp';
+import { readPalette, watchPalette, withAlpha } from '../../../theme/palette';
 import { gpuContext, ICE_CREAM_GL_OPTIONS, plateLayer, reshapeThisFrame, spanOnScreen } from './scene-quality';
 
 export type View = 'home' | 'rooms';
@@ -60,7 +61,12 @@ export function createScene(
     const ctxFront = context2d(canvasFront);
 
     const line = (a: number) => `rgba(255,255,255,${a})`;
-    const RED = '#9e1f17', RED_HI = '#c0342a', RED_LO = '#5c120d';
+    // DES-05 : les rouges d'accent (noren, lanternes, laque, bord des assiettes, repose-baguettes) viennent des tokens
+    // du thème, relus à chaque changement de thème (watchPalette plus bas) ; la nourriture garde ses couleurs.
+    const ACCENT = { solid: 'red-solid', hi: 'red-hi', lo: 'red-lo', rim: 'red-rim', glow: 'red-glow', hover: 'red-hover' } as const;
+    let RED = '', RED_HI = '', RED_LO = '', RED_RIM = '', GLOW = '', RED_CAP = '';
+    const setAccent = (p: Record<keyof typeof ACCENT, string>) => { RED = p.solid; RED_HI = p.hi; RED_LO = p.lo; RED_RIM = p.rim; GLOW = p.glow; RED_CAP = p.hover; };
+    setAccent(readPalette(ACCENT));
     const DARK: BoxColors = { front: ['#070707', '#151515'], side: '#2a2a2a', cap: '#1d1d1d' };
     const RICE = { front: ['#cfccc5', '#ebe8e2'], side: '#bdb9b1', cap: '#f3f1ec', edge: 'rgba(0,0,0,.45)' };
     const FISH = { front: ['#a3221a', '#c0342a'], side: '#7a1812', cap: '#c94535', edge: 'rgba(255,200,190,.35)' };
@@ -373,7 +379,7 @@ export function createScene(
             ctx.clip();
             ctx.beginPath(); ctx.arc(c[0], c[1], r, 0, Math.PI * 2);
             ctx.fillStyle = RED; ctx.fill();
-            ctx.strokeStyle = 'rgba(255,140,120,.35)'; ctx.lineWidth = 1; ctx.stroke();
+            ctx.strokeStyle = withAlpha(GLOW, .35); ctx.lineWidth = 1; ctx.stroke();
             ctx.beginPath(); ctx.arc(c[0], c[1], r * 1.22, 0, Math.PI * 2);
             ctx.strokeStyle = line(.55); ctx.stroke();
             ctx.restore();
@@ -402,7 +408,7 @@ export function createScene(
         const g = ctx.createRadialGradient(c[0] - rx * .3, c[1] - ry * .2, rx * .1, c[0], c[1], rx * 1.1);
         g.addColorStop(0, RED_HI); g.addColorStop(.7, RED); g.addColorStop(1, RED_LO);
         ctx.fillStyle = g; ctx.fill();
-        ctx.strokeStyle = 'rgba(255,170,150,.45)'; ctx.stroke();
+        ctx.strokeStyle = withAlpha(GLOW, .45); ctx.stroke();
         // nervures horizontales
         ctx.strokeStyle = 'rgba(0,0,0,.35)';
         for (let k = -4; k <= 4; k++){
@@ -430,7 +436,7 @@ export function createScene(
         box(counter, { front: ['#0b0b0b', '#121212'], side: '#222', cap: '#161616' });
         // filet rouge sur l'arête avant (laque)
         const zf = counter.z - counter.d / 2;
-        seg([-30, COUNTER_TOP, zf], [30, COUNTER_TOP, zf], 'rgba(192,52,42,.9)', 2);
+        seg([-30, COUNTER_TOP, zf], [30, COUNTER_TOP, zf], withAlpha(RED_HI, .9), 2);
         // tapis
         box({ x: 0, y: BELT.y, z: (BELT.z0 + BELT.z1) / 2, w: 60, h: .16, d: BELT.z1 - BELT.z0 },
             { front: ['#0e0e0e', '#161616'], side: '#262626', cap: '#101010' });
@@ -446,7 +452,7 @@ export function createScene(
         const out = ring(x, y, z, .78), inn = ring(x, y + .001, z, .56);
         if (!allVisible(out)) return y;
         path(out); ctx.fillStyle = '#101010'; ctx.fill();
-        ctx.strokeStyle = red ? 'rgba(210,60,48,.95)' : line(.75); ctx.lineWidth = red ? 2 : 1; ctx.stroke();
+        ctx.strokeStyle = red ? withAlpha(RED_RIM, .95) : line(.75); ctx.lineWidth = red ? 2 : 1; ctx.stroke();
         path(inn as V3[]); ctx.strokeStyle = line(.2); ctx.lineWidth = 1; ctx.stroke();
         return y;
     }
@@ -740,7 +746,7 @@ export function createScene(
     function drawTableware(){
         const y = COUNTER_TOP, z = 6.75;
         // repose-baguettes et baguettes
-        box({ x: -3.1, y: y + .07, z, w: .3, h: .14, d: .22 }, { front: [RED, RED_HI], side: RED_LO, cap: '#b52c22', edge: 'rgba(255,180,170,.4)' });
+        box({ x: -3.1, y: y + .07, z, w: .3, h: .14, d: .22 }, { front: [RED, RED_HI], side: RED_LO, cap: RED_CAP, edge: withAlpha(GLOW, .4) });
         for (const dz of [-.07, .07]) box({ x: -4.7, y: y + .17, z: z + dz, w: 3.4, h: .06, d: .06 }, { front: ['#d9d6cf', '#efece6'], side: '#bdb9b1', cap: '#f3f1ec', edge: 'rgba(0,0,0,.4)' });
         // coupelle de sauce soja
         const s = ring(3.0, y + .02, z, .42);
@@ -836,6 +842,13 @@ export function createScene(
     // PERF-01 : WebGL fonctionne, mais les assiettes 3D sont encore en construction (une par tâche)
     var GL_PENDING = false;
     let disposeGl: (() => void) | null = null;
+    // DES-05 : la couche 3D reprend le rouge du bord des assiettes quand le thème change
+    let recolorGl: (() => void) | null = null;
+    const stopPalette = watchPalette(ACCENT, (palette) => {
+        setAccent(palette);
+        recolorGl?.();
+        if (reduce) render(LAST_T);   // sans animation, rien ne repeint la scène à l'image suivante
+    });
     let pendingTask = 0;
     // PERF-01 : la couche 3D se prépare après le premier rendu, hors de la tâche qui hydrate la page
     GL_PENDING = true;
@@ -1019,7 +1032,8 @@ export function createScene(
         // ---------- Assiettes ----------
         const plateMat = new THREE.MeshBasicMaterial({ color: 0x101010 });
         const rimWhite = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: .75 });
-        const rimRed = new THREE.MeshBasicMaterial({ color: 0xd23c30 });
+        const rimRed = new THREE.MeshBasicMaterial({ color: RED_RIM });
+        recolorGl = () => rimRed.color.set(RED_RIM);
         const innerRing = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: .2 });
         const shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: .55, depthWrite: false });
         const plateGeo = new THREE.CylinderGeometry(.78, .72, .06, 64);
@@ -1198,6 +1212,7 @@ export function createScene(
         destroy() {
             stopped = true;
             removeEventListener('resize', onResize);
+            stopPalette();
             clearTimeout(pendingTask);
             disposeGl?.();
         },
