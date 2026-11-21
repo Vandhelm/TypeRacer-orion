@@ -66,10 +66,13 @@ export function GamePage() {
   // la course part des réglages et des joueurs du salon : rien à lancer tant que le serveur n'a pas répondu
   if (!state.ready || elsewhere) {
     return (
-      <div className="grid min-h-screen place-content-center justify-items-center gap-5 bg-black p-6 text-center font-mono text-[13px] leading-[1.6] text-muted" role={state.error ? "alert" : "status"}>
-        <p>{t(state.error ? `room.errors.${state.error}` : "room.loading")}</p>
-        {state.error && <HangingButton className="game-leave" href="/home">{t("room.leave")}</HangingButton>}
-      </div>
+      <main className="grid min-h-screen place-content-center justify-items-center gap-5 bg-black p-6 text-center font-mono text-[13px] leading-[1.6] text-muted">
+        <h1 className="sr-only">{t("game.pageTitle")}</h1>
+        <div className="grid justify-items-center gap-5" role={state.error ? "alert" : "status"}>
+          <p>{t(state.error ? `room.errors.${state.error}` : "room.loading")}</p>
+          {state.error && <HangingButton className="game-leave" href="/home">{t("room.leave")}</HangingButton>}
+        </div>
+      </main>
     );
   }
   return <GameScreen state={state} mobile={mobile} onHandOver={setHandOver} />;
@@ -233,7 +236,8 @@ function GameRace({ state, onHandOver }: { state: RoomState; onHandOver?: (sendi
   }, [over, abandoned, race, players, room, finish, watching, onSent]);
 
   return (
-    <div className={ROOT} style={{ "--lanes": players.length } as CSSProperties}>
+    // A11Y-02 : la course est le contenu principal de la page ; les éléments fixes (langue, « Quitter ») y restent placés pareil
+    <main className={ROOT} style={{ "--lanes": players.length } as CSSProperties}>
       <LanguageSwitcher className={FLOATING_TABS} />
       {/* quitter la course quitte le salon ; /room sans code créerait un nouveau salon */}
       <HangingButton className="game-leave" href="/home" onClick={leave}>{t("room.leave")}</HangingButton>
@@ -281,6 +285,6 @@ function GameRace({ state, onHandOver }: { state: RoomState; onHandOver?: (sendi
           {race.count <= 0 && <p className="font-mono text-[max(11px,1.4vh)] leading-none font-normal tracking-[.3em] text-muted">{t("game.go")}</p>}
         </div>
       )}
-    </div>
+    </main>
   );
 }

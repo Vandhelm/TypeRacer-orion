@@ -95,8 +95,8 @@ export function RoomsView({ descending, ref }: { descending: boolean; ref?: Ref<
   };
 
   return (
-    <main className={ROOMS}>
-      <h1 className="sr-only">{t("rooms.pageTitle")}</h1>
+    <section className={ROOMS} aria-labelledby="rooms-title">
+      <h2 id="rooms-title" className="sr-only">{t("rooms.pageTitle")}</h2>
       <div className={STALL}>
         <RoomFilters value={filters} onChange={setFilters} />
         {failed && !loaded && <p className="pointer-events-auto mx-[4cqw] rounded-[12px] border border-dashed border-line px-[18px] py-[14px] text-center text-red-text" role="alert">{t("rooms.explorer.failed")}</p>}
@@ -149,6 +149,6 @@ export function RoomsView({ descending, ref }: { descending: boolean; ref?: Ref<
           />,
           document.body,
         )}
-    </main>
+    </section>
   );
 }

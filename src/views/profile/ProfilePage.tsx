@@ -53,7 +53,10 @@ export function ProfilePage({ me, query, stats }: Props) {
   // I18N-02 : le sélecteur est ici, donc présent sur chaque variante de la page (profil propre, profil d'un joueur)
   return (
     <>
-      <LanguageSwitcher className={FLOATING_TABS} />
+      {/* A11Y-02 : les onglets de langue (fixes) forment l'en-tête de la page, sans style : la mise en page ne change pas */}
+      <header>
+        <LanguageSwitcher className={FLOATING_TABS} />
+      </header>
       {own && me ? <OwnProfile me={me} stats={stats} />
         : <PlayerProfile session={me ? "signed-in" : "signed-out"} query={query} stats={stats} />}
     </>

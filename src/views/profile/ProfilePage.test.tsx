@@ -45,7 +45,8 @@ describe("TECH-01 — /profile rendu côté serveur", () => {
 describe("BOT-04 — a bot's public profile says it is a bot; a human's does not", () => {
   const header = (stats: PlayerStats, language: "fr" | "en" = "fr") =>
     renderToString(createElement(I18nextProvider, { i18n: createI18n(language) }, createElement(ProfilePage, { me: null, query: { ...none, name: stats.name }, stats })))
-      .match(/<header[\s\S]*?<\/header>/)?.[0] ?? "";
+      // l'en-tête du profil, dans <main> (le premier <header> de la page est celui des onglets de langue, A11Y-02)
+      .match(/<main[^>]*>\s*<header[\s\S]*?<\/header>/)?.[0] ?? "";
 
   test("the bot's profile header carries the BOT marker with a spoken label", () => {
     expect(header(STATS)).toMatch(/data-part="bot"[\s\S]*BOT[\s\S]*joueur automatique/);
