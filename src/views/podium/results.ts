@@ -173,8 +173,10 @@ export function finalRanking(players: PlayerResult[], abandoned: (string | Known
   const marked = [...players, ...absent].map((p) => (!p.bot && left.has(p.name.toLowerCase()) ? { ...p, abandoned: true, finished: false } : p));
   const gaveUp = (p: PlayerResult) => !p.bot && !!p.abandoned;
   const finished = marked.filter((p) => p.finished && !gaveUp(p));
-  const racing = marked.filter((p) => !p.finished && !gaveUp(p));
-  return [...finished, ...byProgress(racing), ...byProgress(marked.filter(gaveUp))].map((p, index) => ({ ...p, rank: index + 1 }));
+  // mode fatal : un éliminé est sorti de la course, il passe derrière tous ceux qui courent encore, quelle que soit son avancée
+  const racing = marked.filter((p) => !p.finished && !gaveUp(p) && !p.eliminated);
+  const eliminated = marked.filter((p) => !p.finished && !gaveUp(p) && p.eliminated);
+  return [...finished, ...byProgress(racing), ...byProgress(eliminated), ...byProgress(marked.filter(gaveUp))].map((p, index) => ({ ...p, rank: index + 1 }));
 }
 
 export function buildSummary(race: Race, room: Room, sessionSeconds: number): RaceSummary {

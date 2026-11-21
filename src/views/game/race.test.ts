@@ -79,6 +79,12 @@ test("everyoneDone waits for me and for every bot", () => {
   expect(everyoneDone({ ...race, finishedAt: 5, bots: race.bots.map((bot) => ({ ...bot, finishedAt: 5 })) })).toBe(true);
 });
 
+test("fatal: an eliminated player stays on the race until every other human is done", () => {
+  const race = { ...racing("fatal", [ME, { name: "autre", color: "blue" }]), eliminated: true, finishedAt: 5 };
+  expect(everyoneDone(race)).toBe(false);
+  expect(everyoneDone({ ...race, remotes: race.remotes.map((remote) => ({ ...remote, finishedAt: 9 })) })).toBe(true);
+});
+
 test("stats follow valid characters and keystrokes", () => {
   const race = { ...type(racing("carry-on"), "x", "x ", "r", "ri", "riz", "riz "), now: 61000, startedAt: 1000 };
   expect(myWpm(race)).toBe(1); // 7 caractères cumulés - 3 ratés, sur 5 par mot et 1 minute

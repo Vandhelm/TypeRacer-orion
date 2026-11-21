@@ -28,6 +28,11 @@ describe("COURSE-10 — final ranking recorded by the server: finished, then not
     expect(names(rankByServer([row("Lent"), row("Rapide")], server))).toEqual([["Rapide", 1], ["Lent", 2]]);
   });
 
+  test("fatal: an eliminated player ranks behind everyone still racing, even when ahead", () => {
+    const server = new Map<string, ServerStanding>([["elimine", { finishedAt: null, progress: 0.9, seat: 0, eliminatedAt: at(5) }], ["course", racing(0.2, 1)]]);
+    expect(names(rankByServer([row("Elimine"), row("Course")], server))).toEqual([["Course", 1], ["Elimine", 2]]);
+  });
+
   test("players who did not finish are ranked by validated progress, not by the body", () => {
     const server = new Map([["a", racing(0.2, 0)], ["b", racing(0.7, 1)]]);
     expect(names(rankByServer([row("A", { progress: 1 }), row("B", { progress: 0 })], server))).toEqual([["B", 1], ["A", 2]]);

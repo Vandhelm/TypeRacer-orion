@@ -45,11 +45,14 @@ export function rankByServer<T extends { name: string; rank: number; finished?: 
     .sort((a, b) => standing(a)!.finishedAt!.getTime() - standing(b)!.finishedAt!.getTime() || (isBot(a) ? 1 : 0) - (isBot(b) ? 1 : 0) || seat(a) - seat(b));
   const blindBots = botRows.filter((r) => !r.finished && r.progress === undefined);
   // humains d'abord, par place, puis les bots dans l'ordre du corps : le tri stable garde cet ordre à progression égale
-  const racing = [
+  const unfinished = [
     ...humans.filter((r) => standing(r) && !standing(r)!.finishedAt && !standing(r)!.abandonedAt).sort((a, b) => seat(a) - seat(b)).map((r) => ({ r, progress: standing(r)!.progress })),
     ...computed.filter((r) => !standing(r)!.finishedAt).map((r) => ({ r, progress: standing(r)!.progress })),
     ...botRows.filter((r) => !r.finished && r.progress !== undefined).map((r) => ({ r, progress: r.progress! })),
   ].sort((a, b) => b.progress - a.progress).map(({ r }) => r);
+  // mode fatal : un éliminé (daté par le serveur) passe derrière tous ceux qui courent encore, quelle que soit son avancée
+  const out = (r: T) => !!standing(r)?.eliminatedAt;
+  const racing = [...unfinished.filter((r) => !out(r)), ...unfinished.filter(out)];
   const abandoned = humans.filter((r) => standing(r)?.abandonedAt).sort((a, b) => standing(b)!.progress - standing(a)!.progress || seat(a) - seat(b));
   const unknown = humans.filter((r) => !standing(r));
   return [...arrived, ...botRows.filter((r) => r.finished), ...blindBots, ...racing, ...abandoned, ...unknown].map((r, index) => ({ ...r, rank: index + 1 }));

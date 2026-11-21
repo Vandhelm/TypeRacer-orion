@@ -384,10 +384,13 @@ function recordSamples(race: Race) {
   });
 }
 
-/** Un joueur attend ses bots ; un spectateur (aucun couloir à lui) attend aussi chaque humain. */
+/**
+ * Un joueur attend ses bots ; un spectateur (aucun couloir à lui) attend aussi chaque humain. Mode fatal : un éliminé
+ * reste sur la course et attend aussi chaque humain (sinon la page suit le salon jusqu'à sa fin, comme un abandon).
+ */
 export const everyoneDone = (race: Race) =>
-  race.myLane < 0
-    ? race.bots.every((bot) => bot.finishedAt > 0) && race.remotes.every((remote) => remote.finishedAt > 0)
+  race.myLane < 0 || race.eliminated
+    ? (race.myLane < 0 || race.finishedAt > 0) && race.bots.every((bot) => bot.finishedAt > 0) && race.remotes.every((remote) => remote.finishedAt > 0)
     : race.finishedAt > 0 && race.bots.every((bot) => bot.finishedAt > 0);
 
 /** Un temps de course borné à sa durée : la fin n'est vue qu'au tick, parfois en retard (onglet en arrière-plan). */
