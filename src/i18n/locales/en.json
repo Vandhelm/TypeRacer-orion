@@ -100,7 +100,11 @@
   "nav": {
     "main": "Main navigation",
     "home": "O.R.I.O.N, home",
-    "profile": "Profile"
+    "profile": "Profile",
+    "theme": {
+      "label": "CVD",
+      "name": "CVD, colour-blind friendly colours"
+    }
   },
   "room": {
     "pageTitle": "O.R.I.O.N — The room",
