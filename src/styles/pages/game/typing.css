@@ -15,6 +15,11 @@
 .game-panel:not(:focus-within) .game-cursor::after{ visibility: hidden; }
 @keyframes game-cursor-blink{ 50%{ opacity: 0; } }
 
+/* DES-05 : forced colours erase backgrounds; the cursor takes the system text colour */
+@media (forced-colors: active){
+    .game-cursor::after{ forced-color-adjust: none; background: CanvasText; }
+}
+
 @media (prefers-reduced-motion: reduce){
     .game-cursor::after{ animation: none; }
 }
