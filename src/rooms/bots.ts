@@ -11,8 +11,15 @@ export { BOT_LEVELS, type BotLevel };
 const MIXED_LEVELS: readonly BotLevel[] = ["beginner", "intermediate", "expert"];
 export type BotName = (typeof BOT_NAMES)[number];
 
-/** Un bot du salon : un nom de la liste fermée (COURSE-06 : le serveur ne reconnaît qu'elle) et son niveau. */
-export const RoomBotSchema = z.object({ name: z.enum(BOT_NAMES), level: z.enum(BOT_LEVELS) }).strict();
+/** La précision d'un bot : facteur sur le taux de fautes de son niveau (BOT_ACCURACY_FACTOR). */
+export const BOT_ACCURACIES = ["shaky", "decent", "high"] as const;
+export type BotAccuracy = (typeof BOT_ACCURACIES)[number];
+
+/**
+ * Un bot du salon : un nom de la liste fermée (COURSE-06 : le serveur ne reconnaît qu'elle), son niveau et sa
+ * précision. Sans précision (liste plus ancienne), celle du salon.
+ */
+export const RoomBotSchema = z.object({ name: z.enum(BOT_NAMES), level: z.enum(BOT_LEVELS), accuracy: z.enum(BOT_ACCURACIES).optional() }).strict();
 export type RoomBot = z.infer<typeof RoomBotSchema>;
 
 /**

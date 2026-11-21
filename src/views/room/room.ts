@@ -35,7 +35,7 @@ export function durationChoice(duration: number | null, typing: boolean): Durati
 }
 
 /** image (COURSE-05) : la photo du compte, telle que l'envoie le serveur ; absente pour un invité ou un bot. level (CONF-10) : le niveau d'un bot. */
-export type Player = { name: string; color: string; host?: boolean; me?: boolean; bot?: boolean; level?: BotLevel; image?: string };
+export type Player = { name: string; color: string; host?: boolean; me?: boolean; bot?: boolean; level?: BotLevel; accuracy?: BotAccuracy; image?: string };
 export type Seat = Player | { free: true };
 export type SavedText = { name: string; text: string };
 
@@ -154,7 +154,7 @@ export function seatsOf(room: Pick<Room, "guests" | "bots"> & { botList?: readon
   // SALLE-05 : un bot par nom de la liste fermée (le serveur ne reconnaît qu'elle) ; au-delà, des places libres
   const humans = seats.length;
   for (const bot of seatedBots({ ...room, botList: room.botList ?? defaultBots(room.guests - humans, "medium") }, humans)) {
-    seats.push({ name: bot.name, color: seatColor(seats.length), bot: true, ...(room.botList ? { level: bot.level } : {}) });
+    seats.push({ name: bot.name, color: seatColor(seats.length), bot: true, ...(room.botList ? { level: bot.level } : {}), ...(bot.accuracy ? { accuracy: bot.accuracy } : {}) });
   }
   while (seats.length < room.guests) seats.push({ free: true });
   return seats;
@@ -163,7 +163,11 @@ export function seatsOf(room: Pick<Room, "guests" | "bots"> & { botList?: readon
 /** CONF-10 : un bot de plus, au premier nom libre de la liste fermée, au niveau moyen ; la même liste si tous sont pris. */
 export function withBotAdded(list: RoomBot[]): RoomBot[] {
   const name = nextBotName(list);
-  return name ? [...list, { name, level: "intermediate" }] : list;
+  return name ? [...list, { name, level: "intermediate", accuracy: "decent" }] : list;
+}
+/** CONF-10 : la liste où seul ce bot change de précision. */
+export function withBotAccuracy(list: RoomBot[], name: RoomBot["name"], accuracy: BotAccuracy): RoomBot[] {
+  return list.map((bot) => (bot.name === name ? { ...bot, accuracy } : bot));
 }
 /** CONF-10 : la liste sans ce bot. */
 export function withoutBot(list: RoomBot[], name: RoomBot["name"]): RoomBot[] {

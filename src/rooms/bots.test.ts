@@ -8,6 +8,11 @@ describe("CONF-10 — the bot list of a room (names from the closed list, one le
     expect([...BOT_LEVELS]).toEqual(["noob", "beginner", "intermediate", "expert", "impossible"]);
   });
 
+  test("each bot may carry its own accuracy, one of three; any other value is refused", () => {
+    for (const accuracy of ["shaky", "decent", "high"]) expect(BotListSchema.safeParse([{ name: "Wasabi99", level: "expert", accuracy }]).success).toBe(true);
+    for (const accuracy of ["perfect", "", 1, null]) expect(BotListSchema.safeParse([{ name: "Wasabi99", level: "expert", accuracy }]).success).toBe(false);
+  });
+
   test("BOT-01 — each of the five levels is accepted; the old speeds, a mixed case or a number are refused", () => {
     for (const level of BOT_LEVELS) expect(BotListSchema.safeParse([{ name: "Wasabi99", level }]).success).toBe(true);
     for (const level of ["slow", "medium", "fast", "Expert", " noob", 3, null]) expect(BotListSchema.safeParse([{ name: "Wasabi99", level }]).success).toBe(false);
