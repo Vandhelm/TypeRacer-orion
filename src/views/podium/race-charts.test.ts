@@ -63,3 +63,19 @@ describe("RES-03 — the keys the player missed in this race", () => {
     expect(raceKeys([player("Nori_Bot", 1, { keys: { e: [9, 9] } })])).toBeNull();
   });
 });
+
+describe("DES-05 — a series is told apart by its dash pattern, not by its colour alone", () => {
+  test("the local player's line stays solid; every other line has its own dash pattern", () => {
+    const eight = Array.from({ length: 8 }, (_, i) => player(`Bot_${i}`, i + 1, i === 3 ? { me: true, bot: false } : {}));
+    const { lines } = raceLines(eight);
+    expect(lines[3]!.dash).toBeUndefined();
+    const dashes = lines.filter((line) => !line.me).map((line) => line.dash);
+    for (const dash of dashes) expect(dash).toMatch(/^\d+( \d+)+$/);
+    expect(new Set(dashes).size).toBe(7);
+  });
+
+  test("without the local player (history of a race watched), eight lines get eight patterns", () => {
+    const { lines } = raceLines(Array.from({ length: 8 }, (_, i) => player(`Bot_${i}`, i + 1)));
+    expect(new Set(lines.map((line) => line.dash)).size).toBe(8);
+  });
+});

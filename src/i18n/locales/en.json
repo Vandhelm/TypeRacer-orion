@@ -100,7 +100,11 @@
   "nav": {
     "main": "Main navigation",
     "home": "O.R.I.O.N, home",
-    "profile": "Profile"
+    "profile": "Profile",
+    "theme": {
+      "label": "CVD",
+      "name": "CVD, colour-blind friendly colours"
+    }
   },
   "footer": {
     "text": "O.R.I.O.N — multiplayer typing race, session project."

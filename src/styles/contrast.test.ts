@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import { contrastRatio, parseCssColor, tokensOf } from "./contrast";
+import { contrastRatio, parseCssColor, themeTokens, tokensOf } from "./contrast";
 
 const BLACK = parseCssColor("#000");
 
@@ -29,8 +29,37 @@ describe("A11Y-01 — contrast ratio (WCAG 2.x formula)", () => {
   });
 });
 
-describe("A11Y-01 — text tokens reach WCAG AA on the page backgrounds", () => {
-  const tokens = tokensOf(readFileSync(new URL("./base/tokens.css", import.meta.url), "utf8"));
+const CSS = readFileSync(new URL("./base/tokens.css", import.meta.url), "utf8");
+
+describe("DES-05 — each theme reads its own tokens from tokens.css", () => {
+  test("the default theme is the @theme block, untouched by the cvd overrides", () => {
+    const tokens = themeTokens(CSS, "default");
+    expect(tokens["red-text"]).toBe(tokensOf(CSS.slice(0, CSS.indexOf("}")))["red-text"]!);
+    expect(tokens["red-text"]).not.toBe(themeTokens(CSS, "cvd")["red-text"]);
+  });
+
+  test("the cvd theme overrides the colours that carry a meaning and inherits the others", () => {
+    const [base, cvd] = [themeTokens(CSS, "default"), themeTokens(CSS, "cvd")];
+    for (const name of ["red", "red-dark", "red-solid", "red-hover", "red-text", "chart-2", "chart-8"]) expect(cvd[name]).not.toBe(base[name]!);
+    expect(cvd["line"]).toBe(base["line"]!);
+    expect(cvd["face-front-a"]).toBe(base["face-front-a"]!);
+  });
+
+  test("prefers-contrast: more raises the translucent text and line tokens", () => {
+    const [base, more] = [themeTokens(CSS, "default"), themeTokens(CSS, "default", { moreContrast: true })];
+    for (const name of ["muted", "line-soft", "line-faint"]) {
+      expect(contrastRatio(parseCssColor(more[name]!), BLACK)).toBeGreaterThan(contrastRatio(parseCssColor(base[name]!), BLACK));
+    }
+    expect(themeTokens(CSS, "cvd", { moreContrast: true })["muted"]).toBe(more["muted"]!);
+  });
+
+  test("an unknown theme is refused", () => {
+    expect(() => themeTokens(CSS, "light" as "cvd")).toThrow();
+  });
+});
+
+describe.each(["default", "cvd"] as const)("A11Y-01 — text tokens reach WCAG AA on the page backgrounds (%s theme)", (theme) => {
+  const tokens = themeTokens(CSS, theme);
   // Fonds sur lesquels le texte est posé : la page (#000, reset.css) et les faces des cartes et du podium.
   const backgrounds = ["#000", tokens["face-front-a"]!, tokens["face-front-b"]!];
 
@@ -43,6 +72,12 @@ describe("A11Y-01 — text tokens reach WCAG AA on the page backgrounds", () => 
   test("white text on the red buttons (red-solid, red-hover) is at least 4.5:1", () => {
     for (const name of ["red-solid", "red-hover"]) {
       expect(contrastRatio(parseCssColor("#fff"), parseCssColor(tokens[name]!))).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  test("each chart colour, a graphic, reaches 3:1 on the chart panels", () => {
+    for (const name of ["chart-raw", ...Array.from({ length: 8 }, (_, i) => `chart-${i + 1}`)]) {
+      for (const background of backgrounds) expect(contrastRatio(parseCssColor(tokens[name]!), parseCssColor(background))).toBeGreaterThanOrEqual(3);
     }
   });
 

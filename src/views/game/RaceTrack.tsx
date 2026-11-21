@@ -115,7 +115,8 @@ const LaneItem = memo(function LaneItem({ lane, bonuses, shown, bars }: LaneItem
             bars[lane.lane] = el;
           }}
           data-part="bar"
-          className={`block h-full w-full origin-left transition-transform duration-300 ease-out motion-reduce:transition-none ${lane.me ? "bg-red-text" : "bg-line"}`}
+          // DES-05 : en couleurs forcées, un fond est effacé ; la barre prend la couleur du texte système
+          className={`block h-full w-full origin-left transition-transform duration-300 ease-out motion-reduce:transition-none forced-colors:forced-color-adjust-none forced-colors:bg-[CanvasText] ${lane.me ? "bg-red-text" : "bg-line"}`}
           style={{ transform: `scaleX(${start})` }}
         />
       </span>

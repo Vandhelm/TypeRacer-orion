@@ -4,7 +4,8 @@ import { formatDate, formatNumber } from "../../i18n/format";
 import { buildChart } from "./chart";
 import { useChartSize } from "./hooks/useChartSize";
 import type { ProgressPoint } from "./stats";
-import { CHART, CURSOR, DOT, GRID_LINE, LEGEND, LINE, PLOT, SWATCH, TIP, TIP_HEAD } from "./styles";
+import { Swatch } from "./StatBlock";
+import { CHART, CURSOR, DOT, GRID_LINE, LEGEND, LINE, PLOT, TIP, TIP_HEAD } from "./styles";
 
 const TIP_MARGIN = 12;
 
@@ -42,7 +43,7 @@ export function ProgressChart({ progress }: { progress: ProgressPoint[] }) {
   return (
     <div ref={root} className={CHART}>
       <div className={LEGEND}>
-        <span><i className={SWATCH.wpm} />{t("profile.progress")}</span>
+        <span><Swatch series="wpm" />{t("profile.progress")}</span>
       </div>
       <div ref={plot} className={PLOT} onPointerMove={onPointer} onPointerDown={onPointer} onPointerLeave={() => setHover(null)}>
         <svg viewBox={`0 0 ${size.width} ${chart.height}`} height={chart.height} role="img" aria-label={t("profile.progress")}>

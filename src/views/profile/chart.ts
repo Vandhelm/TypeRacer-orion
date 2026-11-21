@@ -49,4 +49,5 @@ export function buildSeriesChart(series: number[][], width: number, plot: number
 export type Chart = ReturnType<typeof buildChart>;
 
 /** RES-03 : une courbe du graphique, avec ses classes (trait, point au survol, pastille de la légende). */
-export type ChartLine = { key: string; label: string; values: number[]; line: string; dot: string; swatch: string; bot?: boolean; me?: boolean };
+/** `dash` (DES-05) : le pointillé SVG de la courbe, repris par sa légende ; sans lui, trait plein. */
+export type ChartLine = { key: string; label: string; values: number[]; line: string; dot: string; dash?: string; bot?: boolean; me?: boolean };

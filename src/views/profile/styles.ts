@@ -25,7 +25,8 @@ export const CHART = "relative min-w-0";
 export const LEGEND =
   "mb-4 flex flex-wrap gap-x-5 gap-y-2 font-mono text-[max(11px,1.2vh)] leading-none font-normal tracking-[.08em] text-muted " +
   "[&>span]:inline-flex [&>span]:items-center [&>span]:gap-2";
-export const SWATCH = { wpm: "chart-swatch inline-block h-0.5 w-[18px] bg-red-text", raw: "chart-swatch inline-block h-0.5 w-[18px] bg-chart-raw" };
+/** The legend marker of a line: a short piece of the same stroke (LineSwatch, StatBlock.tsx). */
+export const SWATCH = "chart-swatch inline-block h-1 w-[22px] flex-none overflow-visible";
 export const CROSS = "chart-cross text-white not-italic";
 export const PLOT =
   "[&_svg]:block [&_svg]:w-full [&_svg]:touch-pan-y [&_svg]:fill-muted [&_svg]:font-mono [&_svg]:text-[11px] [&_svg]:[line-height:normal] [&_svg]:font-normal";
@@ -36,6 +37,8 @@ export const LINE = {
   raw: "fill-none stroke-chart-raw stroke-[1.5] [stroke-linecap:round] [stroke-linejoin:round]",
 };
 export const CURSOR = "stroke-[rgba(255,255,255,.5)]";
+/** DES-05 : la vitesse brute en tirets, la vitesse en trait plein (stroke-dasharray, légende comprise). */
+export const DASH = { wpm: undefined, raw: "6 4" };
 export const DOT = { wpm: "fill-red-text stroke-black stroke-2", raw: "fill-chart-raw stroke-black stroke-2" };
 export const TIP =
   "pointer-events-none absolute z-2 min-w-[112px] border border-line bg-black px-2.5 py-2 font-mono text-[12px] leading-[1.6] font-normal whitespace-nowrap " +

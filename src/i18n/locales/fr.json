@@ -100,7 +100,11 @@
   "nav": {
     "main": "Navigation principale",
     "home": "O.R.I.O.N, accueil",
-    "profile": "Profil"
+    "profile": "Profil",
+    "theme": {
+      "label": "DAL",
+      "name": "DAL, couleurs adaptées au daltonisme"
+    }
   },
   "footer": {
     "text": "O.R.I.O.N — course de frappe multijoueur, travail de session."
