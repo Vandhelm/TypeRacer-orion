@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
+import { seatNumber } from "../../rooms/seats";
 import { createFishPond, type FishPondApi } from "./pond/createFishPond";
 import type { Player } from "./room";
 
@@ -19,7 +20,8 @@ export function FishPond({ players }: { players: Player[] }) {
     };
   }, []);
 
-  useEffect(() => pond.current?.sync(players), [players]);
+  // DES-05 : chaque poisson porte le numéro de sa place, le même que sur le billet et la piste
+  useEffect(() => pond.current?.sync(players.map((p, i) => ({ ...p, mark: seatNumber(i) }))), [players]);
 
   return <canvas ref={canvas} className="fixed inset-0 z-0 block size-full pointer-events-none" aria-hidden="true" />;
 }

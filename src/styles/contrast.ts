@@ -14,6 +14,14 @@ export function parseCssColor(value: string): Rgba {
   }
   const fn = /^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*(?:,\s*([\d.]+)\s*)?\)$/i.exec(text);
   if (fn) return { r: Number(fn[1]), g: Number(fn[2]), b: Number(fn[3]), a: fn[4] === undefined ? 1 : Number(fn[4]) };
+  // DES-05 : les couleurs des places du thème par défaut (src/rooms/seats.ts) s'écrivent en hsl(h, s%, l%)
+  const hsl = /^hsla?\(\s*([\d.]+)\s*,\s*([\d.]+)%\s*,\s*([\d.]+)%\s*(?:,\s*([\d.]+)\s*)?\)$/i.exec(text);
+  if (hsl) {
+    const [h, s, l] = [Number(hsl[1]) % 360, Number(hsl[2]) / 100, Number(hsl[3]) / 100];
+    const k = (n: number) => (n + h / 30) % 12;
+    const f = (n: number) => Math.round(255 * (l - s * Math.min(l, 1 - l) * Math.max(-1, Math.min(k(n) - 3, 9 - k(n), 1))));
+    return { r: f(0), g: f(8), b: f(4), a: hsl[4] === undefined ? 1 : Number(hsl[4]) };
+  }
   throw new Error(`A11Y-01 : couleur non reconnue « ${value} »`);
 }
 

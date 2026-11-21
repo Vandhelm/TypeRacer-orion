@@ -27,8 +27,8 @@ body{ height: auto; min-height: 100vh; overflow: visible; font-size: 16px; paddi
 .room-action .flip-button-face{ gap: 12px; padding: 0 18px 0 20px; white-space: nowrap; }
 
 /* "Use this text" is the red action of the text editor */
-.room-editor-end .room-editor-use{ background: var(--color-red-solid); border-color: rgba(255,140,120,.45); }
-.room-editor-end .room-editor-use:hover{ background: var(--color-red-hover); color: #fff; border-color: rgba(255,140,120,.45); }
+.room-editor-end .room-editor-use{ background: var(--color-red-solid); border-color: color-mix(in srgb, var(--color-red-glow) 45%, transparent); }
+.room-editor-end .room-editor-use:hover{ background: var(--color-red-hover); color: #fff; border-color: color-mix(in srgb, var(--color-red-glow) 45%, transparent); }
 
 @media (prefers-reduced-motion: reduce){
     .room-action .flip-button:hover .flip-button-inner, .room-action .flip-button:focus-visible .flip-button-inner{ transform: translateZ(calc(var(--h) / -2)) rotateX(0deg); }

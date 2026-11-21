@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import type { TFunction } from "i18next";
 import { createI18n } from "../../i18n";
 import { BOT_NAMES } from "../../players/bots";
+import { seatColor } from "../../rooms/seats";
 import { arrivalOf, compositionOptions, DURATION_PRESETS, durationChoice, guestComposition, launchHint, raceHref, readSession, roomHrefOutsideRace, seatSpoken, seatsOf, withBotAccuracy, withBotAdded, withBotLevel, withoutBot, type Player } from "./room";
 
 const t = ((key: string) => key) as unknown as TFunction;
@@ -37,6 +38,15 @@ describe("SALLE-01 — seats come from the server's members", () => {
     const seats = seatsOf({ guests: 2, bots: true }, [member("player:1", "player", 0, true)], "player:1");
     expect(seats[0]).toMatchObject({ name: "player:1", host: true, me: true });
     expect(seats[1]).toMatchObject({ bot: true });
+  });
+});
+
+describe("DES-05 — a seat's colour follows the theme", () => {
+  const seated = (seat: number) => ({ key: `guest:${seat}`, name: `n${seat}`, guest: true, host: false, role: "player" as const, seat, color: seatColor(seat), finished: false });
+
+  test("the colour the server assigned to a seat is shown through that seat's token, bots included", () => {
+    const seats = seatsOf({ guests: 3, bots: true, botList: [{ name: BOT_NAMES[0], level: "beginner" }] }, [seated(0), seated(1)], "");
+    expect(seats.map((s) => ("color" in s ? s.color : null))).toEqual(["var(--color-seat-1)", "var(--color-seat-2)", "var(--color-seat-3)"]);
   });
 });
 

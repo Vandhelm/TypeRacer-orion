@@ -139,3 +139,10 @@ describe("BONUS-03 — the targeted player is told what happens to them", () => 
     expect(notice(markup)![1]).toContain("your next words are blurred for 5 s");
   });
 });
+
+describe("DES-05 — each lane shows its seat number, the same as on the room ticket and the pond", () => {
+  test("lane 1, 2, 3, read before the name; hidden from screen readers, which hear the name", () => {
+    const lanes = rows(html(createElement(RaceTrack, { lanes: LANES })));
+    lanes.forEach((row, i) => expect(row).toMatch(new RegExp(`<span[^>]*data-part="seat"[^>]*aria-hidden="true"[^>]*>${i + 1}</span>`)));
+  });
+});

@@ -24,6 +24,7 @@ const NUMBER = "text-right tabular-nums";
 const STICKY_RANK = "sticky left-0 z-[1] w-[3.4em] min-w-[3.4em] bg-black";
 const STICKY_NAME = "sticky left-[3.4em] z-[1] w-[13em] max-w-[13em] bg-black";
 const TAG = "inline-block border border-line-soft px-1.5 py-px text-[.85em] tracking-[.12em] uppercase";
+// DES-05 : data-cue adds the status shape (check, hourglass, flag, cross: styles/components/cues.css), the words unchanged
 const STATUS_TONE: Record<PlayerStatus, string> = { finished: "text-white", timeout: "text-muted", abandoned: "text-muted", eliminated: "text-muted" };
 
 /** « — » on screen, a word for a screen reader: a value nobody measured (another human live, a bonus not kept). */
@@ -98,7 +99,7 @@ export function PodiumBoard({ players, showPlace, arrived, raceId = null, charts
                   <td className={`${CELL} ${NUMBER}`}>{measured ? `${formatNumber(i18n.language, player.accuracy)} %` : <Unknown />}</td>
                   <td className={`${CELL} ${NUMBER}`}>{measured ? formatNumber(i18n.language, errorCount(player)) : <Unknown />}</td>
                   <td className={`${CELL} ${NUMBER}`}>{hasTime(player) ? t("podium.table.seconds", { value: formatNumber(i18n.language, player.seconds) }) : <Unknown />}</td>
-                  <td className={CELL}><span className={`${TAG} ${STATUS_TONE[status]}`}>{t(`podium.status.${status}`)}</span></td>
+                  <td className={CELL}><span className={`${TAG} ${STATUS_TONE[status]}`} data-cue={status}>{t(`podium.status.${status}`)}</span></td>
                   <td className={CELL}><BonusCell bonuses={player.bonuses} /></td>
                 </tr>
               );

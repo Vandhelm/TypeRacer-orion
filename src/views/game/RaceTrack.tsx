@@ -1,6 +1,7 @@
 import { memo, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { BotTag } from "../../players/BotTag";
+import { seatNumber } from "../../rooms/seats";
 import { GeneratedAvatar } from "../profile/ProfileAvatar";
 import { latestBatch, type BonusAnnouncement } from "./announce";
 import { BONUS_HIT, bonusBadge, bonusSentence } from "./BonusNotice";
@@ -14,7 +15,8 @@ const NAME_LINE =
 const NAME_LABEL = "line-clamp-2 min-w-0 [overflow-wrap:anywhere] [@container(max-width:72px)]:line-clamp-3 [@container(max-width:72px)]:tracking-normal";
 const STATS_LINE = "flex max-w-full flex-wrap items-center justify-center gap-x-[.8ch] gap-y-[.4vh] font-mono text-[max(10px,1.1vh)] leading-none tracking-[.12em] tabular-nums";
 // BONUS-03 : la ligne qui dit le dernier lot de bonus, posée au bas du bassin, et le badge dans la ligne des stats du couloir
-// touché, comme VOUS et BOT : il ne recouvre jamais le nom
+// touché, comme VOUS et BOT : il ne recouvre jamais le nom. DES-05 : data-cue ajoute la forme du bonus (plus, moins,
+// vagues : styles/components/cues.css)
 const BONUS_NEWS =
   "pointer-events-none absolute bottom-[calc(100%+.8vh)] left-1/2 w-max max-w-full -translate-x-1/2 text-center font-mono text-[max(11px,1.3vh)] leading-[1.5] tracking-[.1em] text-red-text";
 const BONUS_BADGE =
@@ -97,6 +99,8 @@ const LaneItem = memo(function LaneItem({ lane, bonuses, shown, bars }: LaneItem
         >
           {lane.photo ? <img className="block size-full object-cover" src={lane.photo} alt="" /> : <GeneratedAvatar name={lane.name} />}
         </span>
+        {/* DES-05 : le numéro de place, celui du billet et du bassin de la salle (les couloirs suivent seatsOf) */}
+        <span data-part="seat" aria-hidden="true" className="flex-none tabular-nums text-muted [@container(max-width:44px)]:hidden">{seatNumber(lane.lane)}</span>
         <span data-part="label" className={NAME_LABEL}>{lane.name}</span>
       </p>
       <p data-part="stats" className={`${STATS_LINE} ${lane.me ? "text-red-text" : ""}`}>
@@ -107,7 +111,7 @@ const LaneItem = memo(function LaneItem({ lane, bonuses, shown, bars }: LaneItem
         <span data-part="rank" className="whitespace-nowrap">{t("podium.rank", { count: lane.rank, ordinal: true })}</span>
         <span data-part="wpm" className="whitespace-nowrap [@container(max-width:60px)]:hidden">{t("game.track.wpm", { wpm: lane.wpm })}</span>
         {/* BONUS-03 : un badge par bonus du dernier lot ; il double la ligne annoncée, les lecteurs d'écran l'entendent déjà */}
-        {bonuses.map((a) => <b key={a.key} data-part="bonus" aria-hidden="true" className={`${BONUS_BADGE} ${BONUS_HIT}`}>{bonusBadge(t, a)}</b>)}
+        {bonuses.map((a) => <b key={a.key} data-part="bonus" data-cue={a.kind} aria-hidden="true" className={`${BONUS_BADGE} ${BONUS_HIT}`}>{bonusBadge(t, a)}</b>)}
       </p>
       <span className={`block w-[70%] bg-line-faint ${lane.me ? "h-[3px]" : "h-px"}`} aria-hidden="true">
         <i

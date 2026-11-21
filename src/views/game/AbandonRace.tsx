@@ -46,7 +46,7 @@ export function AbandonRaceView({ step, error, onAsk, onCancel, onConfirm, trigg
         <p id="game-abandon-body" className="m-0 text-[12px] leading-[1.6] text-muted">{t("game.abandon.body")}</p>
         {error && <p className="m-0 text-[12px] leading-[1.4] text-red-text" role="alert">{t(`game.abandon.errors.${ERRORS.has(error) ? error : "network"}`)}</p>}
         <div className="flex flex-wrap justify-center gap-2">
-          <button type="button" className={`${BUTTON} border border-[rgba(255,140,120,.45)] bg-red-solid text-white hover:bg-red-hover`} disabled={step === "sending"} onClick={onConfirm}>
+          <button type="button" className={`${BUTTON} border border-red-glow/45 bg-red-solid text-white hover:bg-red-hover`} disabled={step === "sending"} onClick={onConfirm}>
             {t("game.abandon.confirm")}
           </button>
           {/* the safe choice gets the focus: Enter right after the question does not abandon */}

@@ -27,6 +27,12 @@ describe("A11Y-01 — contrast ratio (WCAG 2.x formula)", () => {
     expect(parseCssColor("rgba(255,255,255,.35)")).toEqual({ r: 255, g: 255, b: 255, a: 0.35 });
     expect(() => parseCssColor("tomato")).toThrow();
   });
+
+  test("DES-05 — parses hsl(), the format of the default seat colours", () => {
+    expect(parseCssColor("hsl(0, 0%, 72%)")).toEqual({ r: 184, g: 184, b: 184, a: 1 });
+    expect(parseCssColor("hsl(220, 85%, 65%)")).toEqual({ r: 90, g: 140, b: 242, a: 1 });
+    expect(parseCssColor("hsl(6, 71%, 58%)")).toEqual({ r: 224, g: 87, b: 72, a: 1 });
+  });
 });
 
 const CSS = readFileSync(new URL("./base/tokens.css", import.meta.url), "utf8");

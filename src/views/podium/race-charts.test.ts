@@ -79,3 +79,10 @@ describe("DES-05 — a series is told apart by its dash pattern, not by its colo
     expect(new Set(lines.map((line) => line.dash)).size).toBe(8);
   });
 });
+
+describe("DES-05 — each line of the race chart carries its rank, not only its colour and dash", () => {
+  test("the mark is the participant's rank on the board", () => {
+    const { lines } = raceLines([player("Nori_Bot", 1), player("Moi_Ssr", 2, { me: true, bot: false }), player("Ebi_Fry", 3)]);
+    expect(lines.map((line) => line.mark)).toEqual(["1", "2", "3"]);
+  });
+});

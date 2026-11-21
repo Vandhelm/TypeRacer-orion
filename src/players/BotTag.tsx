@@ -8,7 +8,8 @@ export function BotTag({ className = "" }: { className?: string }) {
   const { t } = useTranslation();
   return (
     <b data-part="bot" className={`${TAG} ${className}`.trim()}>
-      <span aria-hidden="true">{t("room.bot")}</span>
+      {/* DES-05 : data-cue dessine une tête de robot devant BOT (styles/components/cues.css) */}
+      <span aria-hidden="true" data-cue="bot">{t("room.bot")}</span>
       {/* entre parenthèses, précédé d'une espace : lu à part du nom qui le précède */}
       <span className="sr-only">{` (${t("room.botLabel")})`}</span>
     </b>

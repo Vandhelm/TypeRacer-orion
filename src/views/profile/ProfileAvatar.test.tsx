@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { generatedAvatar } from "../../players/avatar";
+import { seatFill } from "../../rooms/seats";
 import { renderToStaticMarkup } from "react-dom/server";
 import { unnamedSvgs } from "../../../tests/a11y/markup";
 import { GeneratedAvatar, ProfileAvatar } from "./ProfileAvatar";
@@ -52,5 +54,16 @@ describe("A11Y-03 — the generated avatar is hidden next to the name, named whe
     expect(html).not.toContain('aria-hidden="true"');
     expect(html.match(/aria-label="Corail_418"/g)?.length).toBe(1);
     expect(unnamedSvgs(html)).toEqual([]);
+  });
+});
+
+describe("DES-05 — the generated avatar takes its colours from the theme", () => {
+  test("no colour is written in the svg: the hue goes in a variable, the theme mixes it (tokens.css)", () => {
+    const html = renderToStaticMarkup(<GeneratedAvatar name="Corail_418" />);
+    const { hue } = generatedAvatar("Corail_418");
+    expect(html).not.toMatch(/hsl\(/);
+    expect(html).toContain(`--avatar-hue:${hue}`);
+    expect(html).toContain(`--avatar-safe:${seatFill(hue % 8)}`);
+    expect(html).toContain("generated-avatar");
   });
 });

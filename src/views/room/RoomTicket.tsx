@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { InfoTip } from "../../components/InfoTip";
 import { BotTag } from "../../players/BotTag";
+import { seatNumber } from "../../rooms/seats";
 import { BOT_ACCURACIES, BOT_LEVELS, canAddBot, type RoomBot } from "../../rooms/bots";
 import type { RoomState } from "./hooks/useRoom";
 import { isPlayer, withBotAccuracy, withBotAdded, withBotLevel, withoutBot } from "./room";
@@ -16,6 +17,8 @@ const PAPER =
 const SEAT = "flex min-w-0 items-center gap-[7px] font-mono text-[11px] leading-[1.2]";
 const DIAMOND = "size-2 flex-none border [transform:rotate(45deg)]";
 const NAME = "min-w-0 truncate";
+// DES-05 : the seat number, the cue that is not a colour (the same number on the pond and the race track)
+const NUMBER = "w-[2ch] flex-none text-right text-[10px] tabular-nums";
 const HEAD = "flex items-center justify-between pt-1 pb-2 font-mono text-[10px] leading-none font-normal tracking-[.24em] text-muted";
 const LIST = "grid list-none gap-1.5 pb-[14px]";
 const HELP = "mb-2.5 grid gap-0.5 border-l border-l-line-soft pl-2 font-mono text-[10px] leading-normal text-white/70";
@@ -35,6 +38,8 @@ function BotsPart({ state }: { state: RoomState }) {
   // CONF-10 : les humains assis comptent dans la capacité ; un bot sans place attend qu'une place se libère
   const humans = seats.filter((seat) => isPlayer(seat) && !seat.bot).length;
   const colors = new Map(seats.filter(isPlayer).filter((seat) => seat.bot).map((seat) => [seat.name, seat.color]));
+  // DES-05 : un bot assis porte son numéro de place, le même que sur l'étang et la piste
+  const numbers = new Map(seats.flatMap((seat, i) => (isPlayer(seat) && seat.bot ? [[seat.name, seatNumber(i)] as const] : [])));
   // le serveur garde la case « Autorisés » telle quelle (resolveBots) : on n'envoie que la liste
   const setBots = (botList: RoomBot[]) => update({ botList });
   const accuracyOf = (bot: RoomBot) => bot.accuracy ?? room.botAccuracy;
@@ -59,9 +64,11 @@ function BotsPart({ state }: { state: RoomState }) {
         <ul className={LIST}>
           {room.botList.map((bot) => {
             const color = colors.get(bot.name);
+            const number = numbers.get(bot.name);
             return (
               <li key={bot.name} className="grid gap-1">
                 <p className={`${SEAT} font-normal text-[rgba(255,255,255,.75)]`}>
+                  <span data-part="seat-number" className={`${NUMBER} text-muted`}>{number}</span>
                   <i className={`${DIAMOND} ${color ? "border-white" : "border-[rgba(255,255,255,.35)]"}`} style={color ? { background: color } : undefined} />
                   <span className={NAME}>{bot.name}</span>
                   {color ? <BotTag className="ml-auto text-[10px]" /> : <span className="ml-auto flex-none text-[10px] text-muted">{t("room.botWaiting")}</span>}
@@ -70,7 +77,7 @@ function BotsPart({ state }: { state: RoomState }) {
                   )}
                 </p>
                 {host ? (
-                  <span className="flex gap-2 pl-[15px]">
+                  <span className="flex gap-2 pl-[34px]">
                     <select className={PICK} aria-label={t("room.botLevelLabel", { name: bot.name })} value={bot.level} onChange={(e) => setBots(withBotLevel(room.botList, bot.name, e.target.value as RoomBot["level"]))}>
                       {BOT_LEVELS.map((level) => <option key={level} value={level}>{t(`room.level_${level}`)}</option>)}
                     </select>
@@ -79,7 +86,7 @@ function BotsPart({ state }: { state: RoomState }) {
                     </select>
                   </span>
                 ) : (
-                  <span className="pl-[15px] font-mono text-[10px] leading-[1.3] tracking-[.04em] text-muted">{`${t(`room.level_${bot.level}`)} · ${t(`room.${accuracyOf(bot)}`)}`}</span>
+                  <span className="pl-[34px] font-mono text-[10px] leading-[1.3] tracking-[.04em] text-muted">{`${t(`room.level_${bot.level}`)} · ${t(`room.${accuracyOf(bot)}`)}`}</span>
                 )}
               </li>
             );
@@ -136,11 +143,12 @@ export function RoomTicket({ state }: { state: RoomState }) {
           <ul className={`${LIST} phone:grid-cols-[repeat(2,minmax(0,1fr))] phone:gap-x-[14px]`}>
             {people.map((seat, i) => {
               if (!isPlayer(seat)) {
-                return <li key={i} className={`${SEAT} font-normal text-muted`}><i className={`${DIAMOND} border-[rgba(255,255,255,.35)]`} /><span className={NAME}>{t("room.freeSeat")}</span></li>;
+                return <li key={i} className={`${SEAT} font-normal text-muted`}><span data-part="seat-number" className={NUMBER}>{seatNumber(seats.indexOf(seat))}</span><i className={`${DIAMOND} border-[rgba(255,255,255,.35)]`} /><span className={NAME}>{t("room.freeSeat")}</span></li>;
               }
               const tag = [seat.host ? t("room.host").toUpperCase() : "", seat.me ? t("room.you") : ""].filter(Boolean).join(" · ");
               return (
                 <li key={i} className={`${SEAT} ${seat.me ? "font-medium text-white" : "font-normal text-[rgba(255,255,255,.75)]"}`}>
+                  <span data-part="seat-number" className={`${NUMBER} text-muted`}>{seatNumber(seats.indexOf(seat))}</span>
                   <i className={`${DIAMOND} border-white`} style={{ background: seat.color }} />
                   <span className={NAME}>{seat.name}</span>
                   {tag && <span className={`ml-auto flex-none text-[10px] tracking-[.06em] ${seat.host ? "text-red-text" : "text-muted"}`}>{tag}</span>}
