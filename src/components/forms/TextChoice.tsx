@@ -13,14 +13,14 @@ const TEXT =
   "peer-focus-visible:outline peer-focus-visible:outline-offset-3 peer-focus-visible:outline-white";
 const LIT = "peer-hover:text-white peer-checked:border-b-red-text peer-checked:text-white";
 // A11Y-01 : une option qui ne s'applique pas mais qu'on peut encore cocher reste lisible : texte muted (6,3:1),
-// soulignement line-soft, sans s'allumer. Une opacité de 35 % la ferait tomber à 1,6:1. Désactivée, elle est exemptée
-// (WCAG 1.4.3, composant inactif) et garde son opacité.
+// soulignement line-soft, sans s'allumer. Une opacité de 35 % la ferait tomber à 1,6:1. Désactivée aussi (salle vue par
+// un membre), elle reste une valeur affichée : même rendu, sans opacité.
 const UNLIT = "peer-checked:border-b-line-soft";
 
 /** Radio or checkbox shown as plain text, underlined when checked (Tailwind). */
 export function TextChoice({ label, inactive, hidden, className = "", ...props }: TextChoiceProps) {
   return (
-    <label className={`text-choice relative ${inactive && props.disabled ? "opacity-35" : ""} ${className}`.trim().replace(/\s+/g, " ")} hidden={hidden}>
+    <label className={`text-choice relative ${className}`.trim()} hidden={hidden}>
       <input className="peer absolute inset-0 m-0 size-full cursor-pointer opacity-0 disabled:cursor-not-allowed" {...props} />
       <span className={`${TEXT} ${inactive ? UNLIT : LIT}`}>{label}</span>
     </label>
