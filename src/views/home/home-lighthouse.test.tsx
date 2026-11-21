@@ -44,7 +44,8 @@ describe("PERF-01 — the language tabs' accessible name contains their visible 
   test.each(["fr", "en"] as const)("in %s, the FR and EN tabs are named after what they show", (lang) => {
     const out = html(lang);
     for (const code of ["FR", "EN"]) {
-      const tab = out.match(new RegExp(`<button[^>]*class="hanging-tab[^"]*"[^>]*>${code}</button>`))?.[0];
+      // the navbar's inline FR / EN buttons
+      const tab = out.match(new RegExp(`<button[^>]*aria-label="${code}, [^"]*"[^>]*>${code}</button>`))?.[0];
       expect(tab).toBeDefined();
       const label = tab!.match(/aria-label="([^"]*)"/)?.[1];
       if (label !== undefined) expect(label.startsWith(code)).toBe(true);

@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { FlipButton } from "../../components/buttons/FlipButton";
 import { HangingButton } from "../../components/buttons/HangingButton";
 import { Stamp } from "../../components/Stamp";
-import { LanguageSwitcher } from "../../components/tabs/LanguageSwitcher";
+import { SiteNavbar } from "../../components/navigation/SiteNavbar";
 import { useRealtimeRoom } from "../../realtime/useRealtimeRoom";
 import { FishPond } from "./FishPond";
 import { LiveList } from "./LiveList";
@@ -60,14 +60,13 @@ export function RoomPage() {
 
   // le salon vient du serveur : rien à montrer tant qu'il n'a pas répondu, ou s'il refuse
   // TECH-01 : le bassin et les onglets de langue sont déjà dans le HTML du serveur, aux mêmes places qu'une fois le salon reçu
-  // A11Y-02 : les onglets de langue sont dans l'en-tête (banner) de la page ; l'en-tête n'a pas de style et n'est pas
-  // positionné, les onglets restent donc placés par rapport à la page.
-  const languages = <LanguageSwitcher className="absolute top-0 right-[clamp(16px,4vw,56px)] z-20 flex items-start gap-2" />;
+  // A11Y-02 : la navbar (langue comprise, I18N-02) est l'en-tête (banner) de la page ; le titre du salon reste dans <main>
+  const navbar = <SiteNavbar current="room" />;
   if (!ready) {
     return (
       <>
         <FishPond players={players} />
-        <header>{languages}</header>
+        {navbar}
         <main className="relative z-1 isolate">
           <h1 className="sr-only">{t("room.pageTitle")}</h1>
           <div className={`${SHADE} mt-[clamp(20px,4vh,36px)] max-w-[640px]`} role={error ? "alert" : "status"}>
@@ -91,8 +90,8 @@ export function RoomPage() {
       <FishPond players={players} />
       <Stamp className="room-stamp" label={t("home.stampPlay")} visible={stampOn} playKey={0} />
 
-      <header>
-        {languages}
+      {navbar}
+      <div>
         <div className="relative z-1 isolate mb-[clamp(20px,4vh,40px)] flex flex-wrap items-center justify-between gap-x-6 gap-y-3 pr-[124px] phone:mb-[14px] phone:pr-0">
           <HangingButton className="room-leave" href={host ? "/home" : "/home#rooms"} onClick={leave}>
             {t("room.leave")}
@@ -102,7 +101,7 @@ export function RoomPage() {
             <p className="mt-2 font-mono text-[max(11px,1.3vh)] leading-none font-normal tracking-[.2em] text-muted uppercase">{`${t(host ? "room.host" : "room.guest")} · ${t(`room.${VISIBILITY_KEY[room.visibility]}`)}`}</p>
           </div>
         </div>
-      </header>
+      </div>
 
       <main className="relative z-1 isolate">
         <form

@@ -3,9 +3,7 @@
 import { useEffect, useRef, useState, type ComponentProps } from "react";
 import { useTranslation } from "react-i18next";
 import { HangingButton } from "../../components/buttons/HangingButton";
-import { UserIcon } from "../../components/icons";
-import { Navbar } from "../../components/navigation/Navbar";
-import { LanguageSwitcher } from "../../components/tabs/LanguageSwitcher";
+import { SiteNavbar } from "../../components/navigation/SiteNavbar";
 import { HomePanel } from "./HomePanel";
 import { useHashView } from "./hooks/useHashView";
 import { useViewTransition } from "./hooks/useViewTransition";
@@ -46,16 +44,7 @@ export function HomePage({ me = null }: { me?: ComponentProps<typeof HomePanel>[
     <>
       <Scene initialView={view} apiRef={scene} />
 
-      <Navbar
-        className="fixed inset-x-0 top-0 z-20"
-        brand="O.R.I.O.N"
-        brandHref="#home"
-        brandLabel={t("nav.home")}
-        links={[{ href: "/profile", label: t("nav.profile"), icon: <UserIcon /> }]}
-        linksLabel={t("nav.main")}
-      >
-        <LanguageSwitcher className="flex items-start gap-2" />
-      </Navbar>
+      <SiteNavbar current={view} me={me} />
 
       {/* A11Y-02 : un seul <main> et un seul <h1> pour les deux vues (accueil et salons), chacune cachée à son tour.
           Le <main> n'a pas de style : ses enfants sont fixes (ou empilés sur mobile), la mise en page ne change pas. */}

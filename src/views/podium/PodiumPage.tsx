@@ -2,7 +2,7 @@
 // TECH-01 : rendu côté serveur par app/podium/page.tsx, qui lui passe la course de l'historique (?race=N) déjà lue.
 import { useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { FLOATING_TABS, LanguageSwitcher } from "../../components/tabs/LanguageSwitcher";
+import { SiteNavbar } from "../../components/navigation/SiteNavbar";
 import { useAfterRace } from "./hooks/useAfterRace";
 import { useRaceResults, type ResultsState } from "./hooks/useRaceResults";
 import { PodiumBoard } from "./PodiumBoard";
@@ -118,19 +118,25 @@ export function PodiumPage({ race }: { race?: ServerRace }) {
   const heading = <h1 className="sr-only">{t("podium.pageTitle")}</h1>;
   if (loaded.status === "loading") {
     return (
-      <main className="grid min-h-screen place-content-center justify-items-center gap-5 p-6 text-center font-mono text-[13px] leading-[1.6] font-normal text-muted">
+      <>
+        <SiteNavbar current="podium" />
+        <main className="grid min-h-screen place-content-center justify-items-center gap-5 p-6 text-center font-mono text-[13px] leading-[1.6] font-normal text-muted">
         {heading}
         <p role="status">{t("podium.loading")}</p>
-      </main>
+        </main>
+      </>
     );
   }
   if (loaded.status === "error") {
     return (
-      <main className="grid min-h-screen place-content-center justify-items-center gap-5 p-6 text-center font-mono text-[13px] leading-[1.6] font-normal text-muted">
+      <>
+        <SiteNavbar current="podium" />
+        <main className="grid min-h-screen place-content-center justify-items-center gap-5 p-6 text-center font-mono text-[13px] leading-[1.6] font-normal text-muted">
         {heading}
         <p role="alert">{t(raceErrorKey(loaded.code))}</p>
         <a className="border-b border-b-red-text tracking-[.2em] text-white uppercase no-underline hover:text-red-text focus-visible:outline focus-visible:outline-offset-4 focus-visible:outline-white" href="/profile#stats">{t("podium.backToHistory")}</a>
-      </main>
+        </main>
+      </>
     );
   }
   if (loaded.status !== "ready") return null;
@@ -140,9 +146,7 @@ export function PodiumPage({ race }: { race?: ServerRace }) {
   return (
     <>
       {/* A11Y-02 : en-tête et contenu principal sans style ; leurs enfants sont fixes, la scène plein écran ne change pas */}
-      <header>
-        <LanguageSwitcher className={FLOATING_TABS} />
-      </header>
+      <SiteNavbar current="podium" />
       <main>
         {heading}
         {raceId === null && notSaved ? <p className="fixed top-4 left-1/2 z-20 m-0 w-max max-w-[calc(100vw-32px)] border border-red-text bg-black px-3.5 py-2 text-center font-mono text-[12px] leading-[1.5] font-normal text-white [transform:translateX(-50%)]" role="alert">{t("podium.notSaved")}</p> : null}

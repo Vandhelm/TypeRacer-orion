@@ -30,18 +30,19 @@ describe("I18N-02 — langue choisie, conservée, sinon celle du navigateur", ()
     expect(LANGUAGE_COOKIE).toBe("orion-lang");
   });
 
-  test("chaque page affiche le sélecteur de langue", () => {
+  test("chaque page affiche le sélecteur de langue (dans la navbar commune)", () => {
+    expect(readFileSync("src/components/navigation/SiteNavbar.tsx", "utf8")).toContain("<LanguageSwitcher");
     for (const page of ["home/HomePage", "room/RoomPage", "game/GamePage", "podium/PodiumPage", "profile/ProfilePage"]) {
-      expect(readFileSync(`src/views/${page}.tsx`, "utf8")).toContain("<LanguageSwitcher");
+      expect(readFileSync(`src/views/${page}.tsx`, "utf8")).toContain("<SiteNavbar");
     }
   });
 
   test("le sélecteur de /profile est rendu pour toutes ses variantes (attente, profil propre, joueur)", () => {
     const source = readFileSync("src/views/profile/ProfilePage.tsx", "utf8");
     const wrapper = source.slice(source.indexOf("export function ProfilePage"), source.indexOf("function PlayerProfile"));
-    expect(wrapper).toContain("<LanguageSwitcher");
+    expect(wrapper).toContain("<SiteNavbar");
     expect(wrapper).toContain("<OwnProfile");
-    expect(wrapper.indexOf("<LanguageSwitcher")).toBeLessThan(wrapper.indexOf("<OwnProfile"));
+    expect(wrapper.indexOf("<SiteNavbar")).toBeLessThan(wrapper.indexOf("<OwnProfile"));
   });
 
   test("la page 404 a le sélecteur, un titre traduit et aucune couleur en dur", () => {
@@ -51,7 +52,7 @@ describe("I18N-02 — langue choisie, conservée, sinon celle du navigateur", ()
     expect(source).not.toMatch(/#[0-9a-f]{3,6}\b/i);
   });
 
-  test("l'en-tête du profil laisse la place au sélecteur flottant", () => {
+  test("l'en-tête du profil laisse la place à la navbar fixe", () => {
     // TECH-03 : l'en-tête est stylé en Tailwind (constante HEAD de src/views/profile/styles.ts)
     const styles = readFileSync("src/views/profile/styles.ts", "utf8");
     const head = /export const HEAD = "([^"]*)"/.exec(styles)?.[1] ?? "";
