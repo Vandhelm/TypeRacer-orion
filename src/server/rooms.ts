@@ -553,7 +553,7 @@ export async function launchRoom(db: Db, code: string, who: Identity): Promise<R
     const passage = config!.textType === "coherent" ? await pickPassage(tx, { language: config!.language, words: wordTarget(config!) }) : null;
     const textSeed = crypto.getRandomValues(new Int32Array(1))[0]!;
     // COURSE-01 : une relance repasse par EN_ATTENTE (results → waiting → countdown)
-    await moveRoom(tx, id, from, from === "results" ? ["reopen", "launch"] : ["launch"], { launchedAt: sql`now()`, textId: passage?.id ?? null, textSeed, abandons: [], departed: [], botBonuses: [], bonusCheckpoints: 0 });
+    await moveRoom(tx, id, from, from === "results" ? ["reopen", "launch"] : ["launch"], { launchedAt: sql`now()`, endedAt: null, textId: passage?.id ?? null, textSeed, abandons: [], departed: [], botBonuses: [], bonusCheckpoints: 0 });
     await tx.update(roomMembers).set({ finishedAt: null, abandonedAt: null, eliminatedAt: null, progress: 0, raceRecorded: false, bonusWords: null, receivedBonuses: [] }).where(eq(roomMembers.roomId, id));
     // COURSE-06 : l'empreinte des mots que la page de course va retirer, vérifiée par le serveur temps réel
     const words = courseWords(await roomView(tx, id));
@@ -702,7 +702,7 @@ export async function refreshRoom(db: Db, code: string, present: string[] = []):
 
 /**
  * SALLE-09 / COURSE-09 : plus aucun participant humain en course (fini, abandonné, éliminé ou parti) et, BOT-05, plus aucun bot
- * assis en course (arrivé selon le moteur, ou arrêté par la fin de la course) : le salon passe aux résultats. Le dernier
+ * assis en course (arrivé selon le moteur, ou arrêté par la fin de la course) ou aucun humain arrivé : le salon passe aux résultats. Le dernier
  * bot arrivé, c'est le balayage (sweep) qui l'y fait passer. Sous le verrou. True si le salon est passé aux résultats.
  */
 async function endIfAllFinished(tx: Db, roomId: number): Promise<boolean> {
@@ -712,8 +712,12 @@ async function endIfAllFinished(tx: Db, roomId: number): Promise<boolean> {
   // COURSE-01 : pendant le décompte (fin déclarée par le client, COURSE-06 pas encore là), le départ est avancé
   const from = await stateOf(tx, roomId);
   if (from !== "countdown" && from !== "racing") return false;
-  if ((await launchStandings(tx, roomId)).botsRunning) return false;
-  await moveRoom(tx, roomId, from, from === "countdown" ? ["start", "finish"] : ["finish"]);
+  const { botsRunning, standings, humanNames } = await launchStandings(tx, roomId);
+  // COURSE-09 : les bots ne retiennent la course que pour un humain arrivé, qui les regarde finir ; sinon (tous en
+  // abandon, éliminés ou partis) elle s'arrête maintenant, et les bots avec elle (ended_at, lu par launchBots)
+  const arrived = [...humanNames].some((name) => !!standings.get(name)?.finishedAt);
+  if (botsRunning && arrived) return false;
+  await moveRoom(tx, roomId, from, from === "countdown" ? ["start", "finish"] : ["finish"], botsRunning ? { endedAt: sql`now()` } : {});
   // COURSE-10 : une course envoyée plus tôt (à l'abandon) prend son rang final
   await rerankLaunch(tx, roomId);
   return true;
