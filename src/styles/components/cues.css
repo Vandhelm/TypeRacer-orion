@@ -3,14 +3,17 @@
    masque peint à la couleur du texte : aucun texte ajouté, un lecteur d'écran entend la même chose qu'avant.
    Les formes : coche (arrivé), sablier (temps écoulé), drapeau (abandon), croix (éliminé), plus et moins (mots
    ajoutés ou retirés), vagues (brouillard), tête de robot (bot). Vérifié par src/styles/cues.test.tsx. */
+/* La forme se pose dans une marge à gauche, hors du flux : elle n'est jamais sous le texte (et la mesure du contraste,
+   tests/e2e/contrast.e2e.ts, ne la prend pas pour un fond, plus petite que l'élément). */
+[data-cue]{ position: relative; padding-left: 1.35em; }
 [data-cue]::before{
     content: "";
-    display: inline-block;
-    flex: none;
+    position: absolute;
+    left: 0;
+    top: 50%;
     width: .95em;
     height: .95em;
-    margin-right: .4em;
-    vertical-align: -.12em;
+    transform: translateY(-50%);
     background: currentColor;
     -webkit-mask: var(--cue) center / contain no-repeat;
             mask: var(--cue) center / contain no-repeat;
@@ -27,4 +30,10 @@
 /* Couleurs forcées : un fond est remplacé par celui du système ; la forme prend la couleur du texte système. */
 @media (forced-colors: active) {
     [data-cue]::before{ forced-color-adjust: none; background: CanvasText; }
+}
+
+/* Un couloir de piste étroit (30 couloirs) garde le mot BOT et perd la tête de robot, faute de place. */
+@container (max-width: 44px) {
+    [data-lane] [data-cue="bot"]{ padding-left: 0; }
+    [data-lane] [data-cue="bot"]::before{ display: none; }
 }
