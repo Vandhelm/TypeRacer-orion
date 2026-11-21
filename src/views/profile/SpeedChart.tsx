@@ -9,6 +9,10 @@ import { LineSwatch } from "./StatBlock";
 import { CHART, CROSS, CURSOR, DASH, DOT, ERROR_MARK, GRID_LINE, LEGEND, LINE, PLOT, TIP } from "./styles";
 
 const TIP_MARGIN = 12;
+// DES-05 : a line's mark (its rank on the race chart), in the legend and at the end of the line, so that a line is
+// found again without its colour; written inside the plot, left of the last point
+const MARK = "mr-1.5 inline-block min-w-[1.5em] border border-line-soft px-[.3em] text-center leading-[1.3] tabular-nums";
+const MARK_TEXT = "fill-white font-mono text-[10px] [paint-order:stroke] stroke-black stroke-[3px]";
 
 /** The profile chart: the player's speed and raw speed per second, with their errors. */
 export function SpeedChart({ player }: { player: PlayerResult }) {
@@ -38,6 +42,7 @@ export function SeriesChart({ lines, errors, label }: SeriesProps) {
   const drawn = [...lines].reverse();
   const value = (values: number[], i: number) => (i < values.length ? formatNumber(i18n.language, values[i]!) : "—");
   const nameOf = (line: ChartLine) => <>{line.label}{line.bot && <BotTag className="ml-1.5 text-[.8em]" />}</>;
+  const markOf = (line: ChartLine) => line.mark && <b data-part="mark" aria-hidden="true" className={MARK}>{line.mark}</b>;
 
   const onPointer = (event: PointerEvent<HTMLDivElement>) => {
     const box = event.currentTarget.getBoundingClientRect();
@@ -57,7 +62,7 @@ export function SeriesChart({ lines, errors, label }: SeriesProps) {
   return (
     <div ref={root} className={CHART}>
       <div className={LEGEND}>
-        {lines.map((line) => <span key={line.key}><LineSwatch line={line.line} dash={line.dash} />{nameOf(line)}</span>)}
+        {lines.map((line) => <span key={line.key}><LineSwatch line={line.line} dash={line.dash} />{markOf(line)}{nameOf(line)}</span>)}
         {errors && <span><i className={CROSS}>×</i>{labels.errors}</span>}
       </div>
 
@@ -75,6 +80,9 @@ export function SeriesChart({ lines, errors, label }: SeriesProps) {
           {chart.count > 1
             ? drawn.map((line) => <path key={line.key} className={line.line} d={chart.path(line.values)} strokeDasharray={line.dash} />)
             : chart.count === 1 && drawn.map((line) => line.values.length > 0 && <circle key={line.key} className={line.dot} cx={chart.x(0)} cy={chart.y(line.values[0]!)} r={4} />)}
+          {drawn.map((line) => line.mark && line.values.length > 0 && (
+            <text key={line.key} data-part="mark" className={MARK_TEXT} x={chart.x(line.values.length - 1) - 6} y={chart.y(line.values.at(-1)!) - 7} textAnchor="end">{line.mark}</text>
+          ))}
           {hover !== null && (
             <g>
               <line className={CURSOR} x1={chart.x(hover)} x2={chart.x(hover)} y1={chart.top} y2={chart.cursorBottom} />
