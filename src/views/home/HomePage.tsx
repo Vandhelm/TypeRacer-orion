@@ -57,14 +57,20 @@ export function HomePage({ me = null }: { me?: ComponentProps<typeof HomePanel>[
         <LanguageSwitcher className="flex items-start gap-2" />
       </Navbar>
 
-      <HangingButton ref={back} href="#home">{t("rooms.back")}</HangingButton>
+      {/* A11Y-02 : un seul <main> et un seul <h1> pour les deux vues (accueil et salons), chacune cachée à son tour.
+          Le <main> n'a pas de style : ses enfants sont fixes (ou empilés sur mobile), la mise en page ne change pas. */}
+      <main>
+        <h1 className="sr-only">{t("home.pageTitle")}</h1>
 
-      <RoomClosedNotice />
+        <HangingButton ref={back} href="#home">{t("rooms.back")}</HangingButton>
 
-      <RoomsView ref={rooms} descending={descending} />
+        <RoomClosedNotice />
 
-      <main className={leaving ? `${HOME_CLASSES} leaving` : HOME_CLASSES}>
-        <HomePanel ref={panel} initialMe={me} />
+        <RoomsView ref={rooms} descending={descending} />
+
+        <div className={leaving ? `${HOME_CLASSES} leaving` : HOME_CLASSES}>
+          <HomePanel ref={panel} initialMe={me} />
+        </div>
       </main>
     </>
   );

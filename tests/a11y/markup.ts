@@ -27,3 +27,22 @@ export function unnamedSvgs(html: string): string[] {
     .map((m) => m[0])
     .filter((tag) => attr(tag, "aria-hidden") !== "true" && !(attr(tag, "role") === "img" && attr(tag, "aria-label")?.trim()));
 }
+
+// A11Y-02 : structure de la page, lue sur le même HTML rendu.
+
+/** Nombre d'éléments ouverts par cette balise (`main`, `h1`, `footer`…). */
+export const countTag = (html: string, tag: string) => [...html.matchAll(new RegExp(`<${tag}[\\s>]`, "g"))].length;
+
+/** Les niveaux des titres h1 à h6, dans l'ordre du document. */
+export const headingLevels = (html: string) => [...html.matchAll(/<h([1-6])[\s>]/g)].map((m) => Number(m[1]));
+
+/** Les sauts de niveau (un h2 suivi d'un h4, une page qui commence par un h2) : « h2 → h4 ». Remonter n'est pas un saut. */
+export function headingJumps(html: string): string[] {
+  const jumps: string[] = [];
+  let previous = 0;
+  for (const level of headingLevels(html)) {
+    if (level > previous + 1) jumps.push(`h${previous || "∅"} → h${level}`);
+    previous = level;
+  }
+  return jumps;
+}

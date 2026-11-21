@@ -78,6 +78,8 @@ export function OwnProfile({ me, stats: preloaded }: { me: Me; stats?: PlayerSta
     <main className={PAGE} aria-label={t("nav.profile")}>
       <header className={HEAD}>
         <HangingButton className="profile-back" href="/home">{t("profile.home")}</HangingButton>
+        {/* A11Y-02 : le titre de la page ; à l'écran, le nom est dans l'onglet Compte */}
+        <h1 className="sr-only">{name}</h1>
       </header>
 
       <div className="profile-tabs mb-[clamp(20px,3vh,32px)]">
