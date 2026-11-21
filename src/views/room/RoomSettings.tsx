@@ -6,20 +6,18 @@ import { NumberField } from "../../components/forms/NumberField";
 import { TextChoice } from "../../components/forms/TextChoice";
 import { InfoTip } from "../../components/InfoTip";
 import { SectionTabs } from "../../components/tabs/SectionTabs";
-import { BOT_LEVELS, canAddBot } from "../../rooms/bots";
 import { DEFAULT_DURATION, MAX_DURATION, MIN_DURATION, ROLES } from "../../rooms/settings";
 import { excludedApplies } from "../../rooms/text";
 import type { RoomState } from "./hooks/useRoom";
-import { cleanExcluded, compositionOptions, countWords, DURATION_PRESETS, durationChoice, guestComposition, isPlayer, withBotAdded, withBotLevel, withoutBot, type CompositionOption, type Room, type TextLength } from "./room";
+import { cleanExcluded, compositionOptions, countWords, DURATION_PRESETS, durationChoice, guestComposition, type CompositionOption, type Room, type TextLength } from "./room";
 import { LENGTH_KEY, useRoomLabels } from "./useRoomLabels";
 import { DASHED_TOP, LABEL, PLAIN_VALUE, SHADE } from "./styles";
 
-type Section = "room" | "content" | "typing" | "bots";
+type Section = "room" | "content" | "typing";
 const SECTIONS: { value: Section; num: string; key: string }[] = [
   { value: "room", num: "01", key: "tabRoom" },
   { value: "content", num: "02", key: "tabContent" },
   { value: "typing", num: "03", key: "tabTyping" },
-  { value: "bots", num: "04", key: "tabBots" },
 ];
 const LENGTHS = ["very-short", "short", "medium", "long"] as const;
 
@@ -85,7 +83,7 @@ function ExcludedRow({ room, host, update }: Pick<RoomState, "room" | "host" | "
 
 type RoomSettingsProps = { state: RoomState; onEditText: () => void; action: ReactNode };
 
-/** Race settings, grouped into four tabbed sections. Read-only for a guest. */
+/** Race settings, grouped into three tabbed sections. Read-only for a guest. */
 export function RoomSettings({ state, onEditText, action }: RoomSettingsProps) {
   const { t } = useTranslation();
   const { room, update, host } = state;
@@ -128,15 +126,9 @@ export function RoomSettings({ state, onEditText, action }: RoomSettingsProps) {
 
   const checkedDuration = durationChoice(room.duration, customDuration);
   const isCustom = room.textType === "custom";
-  const usesBots = room.bots;
-  // CONF-10 : les humains assis comptent dans la capacité ; un bot sans place attend qu'une place se libère
-  const humans = state.seats.filter((seat) => isPlayer(seat) && !seat.bot).length;
-  const seated = new Set(state.seats.filter((seat) => isPlayer(seat) && seat.bot).map((seat) => (isPlayer(seat) ? seat.name : "")));
-  const setBots = (botList: Room["botList"]) => update({ botList, bots: botList.length > 0 });
 
   const help = {
     visibility: t(`room.help${{ private: "Private", semi: "SemiPrivate", public: "Public" }[room.visibility]}`),
-    accuracy: t(`room.help${{ shaky: "Shaky", decent: "Decent", high: "High" }[room.botAccuracy]}`),
     type: t(`room.help${{ coherent: "Coherent", quote: "Quote", words: "Scrambled", custom: "Custom" }[room.textType]}`),
     mistakes: t(`room.help${{ fix: "Fix", "carry-on": "CarryOn", fatal: "Fatal" }[room.mistakes]}`),
   };
@@ -178,31 +170,15 @@ export function RoomSettings({ state, onEditText, action }: RoomSettingsProps) {
             <span className={PLAIN_VALUE}>{durationLabel(room.duration)}</span>
           )}
         </Row>
+        {/* CONF-10 : les bots peuvent-ils prendre les places libres ; chacun se règle dans le ticket */}
+        <Row id="label-bots" label={t("room.bots")} help={t("room.helpBots")} role="group">
+          <TextChoice type="checkbox" name="bots" label={t("room.botsAllowed")} checked={room.bots} disabled={!host} onChange={(e) => update({ bots: e.target.checked })} />
+        </Row>
         {/* CONF-09 : bonus de remontée ; les non-hôtes voient seulement la valeur choisie */}
         <Row id="label-catch-up" label={t("room.catchUpBonus")} help={t("room.helpCatchUpBonus")}>
           {[true, false].map((value) => (
             <TextChoice key={String(value)} type="radio" name="catchUpBonus" value={value ? "yes" : "no"} label={t(value ? "room.yes" : "room.no")} checked={room.catchUpBonus === value} disabled={!host} hidden={!host && room.catchUpBonus !== value} onChange={() => update({ catchUpBonus: value })} />
           ))}
-        </Row>
-      </div>
-
-      <div className={PANEL} role="tabpanel" id="panel-bots" aria-labelledby="tab-bots" hidden={section !== "bots"}>
-        {/* CONF-10 : l'hôte ajoute et retire les bots un par un, chacun à son niveau ; les autres voient la liste */}
-        <Row id="label-bots" label={t("room.bots")} help={t("room.helpBotList")} role="group">
-          {!room.botList.length && <span className={PLAIN_VALUE}>{t("room.noBots")}</span>}
-          {host && <SmallButton onClick={() => setBots(withBotAdded(room.botList))} disabled={!canAddBot(room, humans)}>{t("room.addBot")}</SmallButton>}
-        </Row>
-        {room.botList.map((bot) => (
-          <Row key={bot.name} id={`label-bot-${bot.name}`} label={bot.name} help={t("room.helpBotLevels")}>
-            {BOT_LEVELS.map((level) => (
-              <TextChoice key={level} type="radio" name={`bot-level-${bot.name}`} value={level} label={t(`room.level_${level}`)} checked={bot.level === level} disabled={!host} inactive={!seated.has(bot.name)} hidden={!host && bot.level !== level} onChange={() => setBots(withBotLevel(room.botList, bot.name, level))} />
-            ))}
-            {!seated.has(bot.name) && <span className={PLAIN_VALUE}>{t("room.botWaiting")}</span>}
-            {host && <SmallButton aria-label={t("room.removeBotLabel", { name: bot.name })} onClick={() => setBots(withoutBot(room.botList, bot.name))}>{t("room.removeBot")}</SmallButton>}
-          </Row>
-        ))}
-        <Row id="label-accuracy" label={t("room.botAccuracy")} help={help.accuracy} inactive={!usesBots}>
-          {radios("botAccuracy", [["shaky", "shaky"], ["decent", "decent"], ["high", "high"]], undefined, !host || !usesBots)}
         </Row>
       </div>
 
