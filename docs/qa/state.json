@@ -420,9 +420,9 @@
     "scope": "critère (feature/design/a11y-01)"
   },
   "A11Y-02": {
-    "commit": "2acdffe",
-    "date": "2026-11-19",
-    "scope": "suivi (light)"
+    "commit": "6980ac7",
+    "date": "2026-11-20",
+    "scope": "critère (fix/design/a11y-02)"
   },
   "A11Y-03": {
     "commit": "58506c8",
