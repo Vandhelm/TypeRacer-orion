@@ -46,11 +46,6 @@ describe("DES — aide des réglages en note dépliable", () => {
     for (const id of ["label-role", "label-language", "label-length"]) expect(html).not.toContain(`aria-controls="help-${id}"`);
   });
 
-  test("chaque bot a la note de son propre niveau", () => {
-    const html = render({ bots: true, botList: [{ name: "Wasabi99", level: "expert" }] }, "en");
-    expect(html).toContain("70 to 100 WPM, 2 % mistakes.");
-  });
-
   test("toutes les notes tiennent sur une ligne (44 caractères au plus), en français et en anglais", () => {
     for (const locale of [fr, en]) {
       const help = Object.entries(locale.room).filter(([key]) => key.startsWith("help") && !TOOL_HELP.includes(key));

@@ -67,7 +67,7 @@ export async function launchBots(db: Db, roomId: number, humans: number, withTex
     const seed = botSeed(row.rooms.textSeed!, bot.name);
     // BOT-04 : avec les bonus qu'il a reçus (rooms.bot_bonuses), rejoués par le moteur comme sur la page
     const bonuses = row.rooms.botBonuses.filter((bonus) => bonus.effect.target === botRunnerId(bot.name));
-    const run = simulateBot(course, { seed, ...botProfile(seed, bot.level, config.botAccuracy) }, now - startsAt, bonuses);
+    const run = simulateBot(course, { seed, ...botProfile(seed, bot.level, bot.accuracy ?? config.botAccuracy) }, now - startsAt, bonuses);
     // un bot éliminé (mode fatal) ne court plus : il ne retient pas la course
     if (run.arrivedMs === null && run.eliminatedMs === null) running = true;
     // COURSE-06 : son temps et son MPM, ceux de sa course calculée ; en mode libre, les mots laissés faux ne comptent pas (BOT-03).

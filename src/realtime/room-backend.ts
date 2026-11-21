@@ -91,7 +91,7 @@ function raceBots(view: RoomView, seed: number): Pick<RaceCourse, "bots" | "mist
   const humans = view.members.filter((m) => m.role === "player" && m.seat !== null).length;
   const bots = seatedBots(view.settings, humans).map((bot) => {
     const own = botSeed(seed, bot.name);
-    return { id: botRunnerId(bot.name), seed: own, profile: botProfile(own, bot.level, view.settings.botAccuracy) };
+    return { id: botRunnerId(bot.name), seed: own, profile: botProfile(own, bot.level, bot.accuracy ?? view.settings.botAccuracy) };
   });
   return bots.length ? { bots, mistakes: view.settings.mistakes, botBonuses: view.botBonuses ?? [] } : {};
 }

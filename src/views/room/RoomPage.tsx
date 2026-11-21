@@ -7,14 +7,13 @@ import { Stamp } from "../../components/Stamp";
 import { HANGING_ROW_WIDTH, LanguageSwitcher } from "../../components/tabs/LanguageSwitcher";
 import { useRealtimeRoom } from "../../realtime/useRealtimeRoom";
 import { FishPond } from "./FishPond";
-import { LiveList } from "./LiveList";
 import { useRoom } from "./hooks/useRoom";
 import { isPlayer, launchHint, raceHref, seatSpoken } from "./room";
 import { RoomIntro } from "./RoomIntro";
 import { RoomSettings } from "./RoomSettings";
 import { RoomTicket } from "./RoomTicket";
 import { TextEditorDialog, type TextEditorHandle } from "./TextEditorDialog";
-import { ACTION, DASHED_TOP, LABEL, SHADE } from "./styles";
+import { ACTION, LABEL, SHADE } from "./styles";
 
 const VISIBILITY_KEY = { private: "private", semi: "semiPrivate", public: "public" } as const;
 
@@ -26,8 +25,8 @@ export function RoomPage() {
   const editor = useRef<TextEditorHandle>(null);
   const launched = useRef(false);
   const [stampOn, setStampOn] = useState(false);
-  // TECH-06 : les personnes présentes dans ce salon, en direct
-  const { state: live } = useRealtimeRoom(room.code || null);
+  // TECH-06 : la présence en temps réel dans ce salon ; la liste des membres est dans le ticket
+  useRealtimeRoom(room.code || null);
 
   useEffect(() => {
     document.title = t("room.pageTitle");
@@ -130,7 +129,6 @@ export function RoomPage() {
             }
           />
         </form>
-        <LiveList state={live} className={`${SHADE} ${DASHED_TOP} mt-[clamp(24px,4vh,40px)] max-w-[640px] pt-[clamp(16px,2.6vh,24px)]`} />
         <TextEditorDialog ref={editor} text={room.text} onUse={(text) => update({ text, textType: "custom" })} />
         {host && others.length > 0 && (
           <section className={`${SHADE} mt-[clamp(20px,3.4vh,36px)] max-w-[640px]`} aria-labelledby="members-title">
