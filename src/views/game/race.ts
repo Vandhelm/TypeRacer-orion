@@ -126,12 +126,12 @@ export function createRace(course: Course, players: Player[], botSpeed: BotSpeed
     const start = { lane, name: player.name, tick: 0, words: 0, keys: {}, finishedAt: 0, ...BOT_START };
     if (typeof source === "number") {
       const seed = botSeed(source, player.name);
-      bots.push({ ...start, seed, ...botProfile(seed, level, botAccuracy) });
+      bots.push({ ...start, seed, ...botProfile(seed, level, player.accuracy ?? botAccuracy) });
       return;
     }
     const { wpm: [low, high], errorRate } = BOT_LEVEL_SPECS[level];
     const wpm = Math.round(low + source() * (high - low));
-    const accuracy = 100 * (1 - errorRate * BOT_ACCURACY_FACTOR[botAccuracy] * (0.8 + source() * 0.4));
+    const accuracy = 100 * (1 - errorRate * BOT_ACCURACY_FACTOR[player.accuracy ?? botAccuracy] * (0.8 + source() * 0.4));
     bots.push({ ...start, level, wpm, accuracy, seed: Math.floor(source() * 2 ** 32) | 0 });
   });
   return {

@@ -264,6 +264,11 @@ describe("BOT-05 — the race bots come from the room seed, the same in every br
     expect(other.bots.map((b) => b.wpm)).toEqual(race.bots.map((b) => b.wpm));
   });
 
+  test("CONF-10 — a bot with its own accuracy runs with it; one without keeps the room's", () => {
+    const race = seeded(4242, [ME, { ...WASABI, accuracy: "high" }, EBI]);
+    expect(race.bots.map(({ level, wpm, accuracy }) => ({ level, wpm, accuracy }))).toEqual([botProfile(botSeed(4242, "Wasabi99"), "beginner", "high"), botProfile(botSeed(4242, "Ebi_Fry"), "expert", "decent")]);
+  });
+
   test("without jitters, the bots are where the engine puts them at that time, however the ticks fall", () => {
     let ticked = seeded(4242);
     for (let now = 1200; now <= 9000; now += 200) ticked = advanceBots(ticked, now);

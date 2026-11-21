@@ -11,13 +11,16 @@ const PastOrNextWord = memo(function PastOrNextWord({ text, status }: { text: st
   return <span className={classes}>{text}</span>;
 });
 
-/** The word being typed, letter by letter: right in white, wrong in red, extra letters added in red. */
+// DES-05 : une faute n'est jamais dite par sa seule couleur (daltonismes, couleurs forcées) : elle est soulignée.
+const WRONG = "text-red-text underline decoration-1 underline-offset-[.2em]";
+
+/** The word being typed, letter by letter: right in white, wrong in red and underlined, extra letters added the same way. */
 function CurrentWord({ text, typed }: { text: string; typed: string }) {
   return (
     <span className={`${WORD} is-current`}>
       {[...typed].map((char, k) => {
-        if (k >= text.length) return <span key={k} className="text-red-text underline decoration-1 underline-offset-[.2em]">{char === " " ? "·" : char}</span>;
-        return <span key={k} className={char === text[k] ? "text-white" : "text-red-text"}>{text[k]}</span>;
+        if (k >= text.length) return <span key={k} className={WRONG}>{char === " " ? "·" : char}</span>;
+        return <span key={k} className={char === text[k] ? "text-white" : WRONG}>{text[k]}</span>;
       })}
       <i className="game-cursor" aria-hidden="true" />
       {typed.length < text.length && <span>{text.slice(typed.length)}</span>}

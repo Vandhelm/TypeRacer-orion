@@ -1,11 +1,19 @@
 // Photo de profil (AUTH-04) : le serveur revérifie le format et le poids, puis réduit lui-même l'image,
 // sans se fier à la réduction faite par le navigateur.
 import { eq, isNotNull } from "drizzle-orm";
-import sharp from "sharp";
 import { z } from "zod";
 import type { Db } from "../../db/client";
 import * as schema from "../../db/schema";
 import type { Auth } from "./auth";
+
+// sharp (native) is loaded on first use, not when the module loads. Under `bun --bun next dev`, Turbopack serves it as
+// a hashed external linked in .next/dev/node_modules, which Bun cannot resolve (it caches that folder before the link
+// exists): every page turned into a 500 and photos were refused. In dev, Turbopack leaves the import alone and Bun
+// resolves sharp from node_modules; the production build keeps the normal import (and its file tracing).
+let sharpModule: Promise<typeof import("sharp")> | undefined;
+const importSharp = () =>
+  process.env.NODE_ENV === "development" ? import(/* turbopackIgnore: true */ "sharp") : import("sharp");
+const loadSharp = async () => (await (sharpModule ??= importSharp())).default;
 
 export const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
 const AVATAR_SIZE = 256;
@@ -22,6 +30,7 @@ export function avatarType(bytes: Uint8Array): "image/jpeg" | "image/png" | "ima
 /** Carré central de 256 px au plus (jamais agrandi), en WebP, sans métadonnées. null : l'image ne se décode pas. */
 export async function resizeAvatar(bytes: Uint8Array): Promise<Buffer | null> {
   try {
+    const sharp = await loadSharp();
     const image = sharp(bytes, { limitInputPixels: 40_000_000, failOn: "error" }).rotate();
     const { width, height } = await image.metadata();
     const side = Math.min(AVATAR_SIZE, width ?? 0, height ?? 0);
@@ -35,6 +44,7 @@ export async function resizeAvatar(bytes: Uint8Array): Promise<Buffer | null> {
 /** Une photo déjà réduite par le serveur : un carré WebP de 256 px au plus. */
 async function isReduced(bytes: Uint8Array) {
   if (avatarType(bytes) !== "image/webp") return false;
+  const sharp = await loadSharp();
   const { width, height } = await sharp(bytes).metadata().catch(() => ({ width: 0, height: 0 }));
   return Boolean(width) && width === height && width! <= AVATAR_SIZE;
 }

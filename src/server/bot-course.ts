@@ -57,7 +57,9 @@ export async function launchBots(db: Db, roomId: number, humans: number, withTex
   const words = courseWords({ settings: { ...config, text: config.customText }, seed: row.rooms.textSeed, passage }) ?? [];
   // BOT-03 : le mode d'erreur du lancement, comme la page (createCourse)
   const course = { words, durationMs: endsAt === null ? null : endsAt - startsAt, mistakes: config.mistakes };
-  const elapsed = Math.max(0, Math.min(row.now, endsAt ?? Infinity) - startsAt);
+  // COURSE-09 : une course arrêtée avant ses bots (rooms.ended_at) les arrête à cette heure
+  const now = row.rooms.endedAt ? Math.min(row.now, row.rooms.endedAt.getTime()) : row.now;
+  const elapsed = Math.max(0, Math.min(now, endsAt ?? Infinity) - startsAt);
   let running = false;
   // HIST-02 : les bonus reçus par un bot, gardés par le serveur temps réel avec `from` (BOT-04)
   const received = (name: string) => row.rooms.botBonuses.filter((bonus) => bonus.from === botRunnerId(name)).map((bonus) => bonus.effect.kind);
@@ -65,7 +67,7 @@ export async function launchBots(db: Db, roomId: number, humans: number, withTex
     const seed = botSeed(row.rooms.textSeed!, bot.name);
     // BOT-04 : avec les bonus qu'il a reçus (rooms.bot_bonuses), rejoués par le moteur comme sur la page
     const bonuses = row.rooms.botBonuses.filter((bonus) => bonus.effect.target === botRunnerId(bot.name));
-    const run = simulateBot(course, { seed, ...botProfile(seed, bot.level, config.botAccuracy) }, row.now - startsAt, bonuses);
+    const run = simulateBot(course, { seed, ...botProfile(seed, bot.level, bot.accuracy ?? config.botAccuracy) }, now - startsAt, bonuses);
     // un bot éliminé (mode fatal) ne court plus : il ne retient pas la course
     if (run.arrivedMs === null && run.eliminatedMs === null) running = true;
     // COURSE-06 : son temps et son MPM, ceux de sa course calculée ; en mode libre, les mots laissés faux ne comptent pas (BOT-03).
@@ -74,5 +76,5 @@ export async function launchBots(db: Db, roomId: number, humans: number, withTex
     const wpm = netWpm(marksOf(run.words)[Math.floor(run.position)]! - run.missed, seconds);
     standings.set(bot.name.toLowerCase(), { finishedAt: run.arrivedMs === null ? null : new Date(startsAt + run.arrivedMs), progress: run.progress, seat: null, seconds, wpm, eliminatedAt: run.eliminatedMs === null ? null : new Date(startsAt + run.eliminatedMs), bonuses: receivedOf(received(bot.name)) });
   }
-  return { standings, running: running && (endsAt === null || row.now < endsAt), course: { words, startsAt, endsAt, now: row.now } };
+  return { standings, running: running && !row.rooms.endedAt && (endsAt === null || row.now < endsAt), course: { words, startsAt, endsAt, now: row.now } };
 }

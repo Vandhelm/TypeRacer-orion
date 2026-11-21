@@ -1,5 +1,5 @@
 // Appels du salon vers le serveur (/api/rooms…). Le serveur décide de tout : cette page n'envoie que des demandes.
-import type { Role, RoomSettings } from "../../rooms/settings";
+import { DEFAULT_SETTINGS, type Role, type RoomSettings } from "../../rooms/settings";
 import { connectRealtime } from "../../realtime/client";
 import { createClockSync } from "../game/countdown";
 import type { InviteView } from "../../server/room-invites";
@@ -90,11 +90,22 @@ const POLL_MS = 3000;
 export const WAITING_POLL_MS = 1000;
 
 /**
+ * TECH-06 : la vue poussée par le serveur temps réel, complétée par les réglages par défaut. Si ce serveur tourne une version
+ * plus ancienne que le site (déployés séparément), un réglage récent manque (ex. botList) : la page ne doit pas planter.
+ */
+export function liveRoomView(room: Record<string, unknown>): RoomView {
+  const settings = (room.settings ?? {}) as Partial<RoomSettings>;
+  return { ...(room as unknown as RoomView), settings: { ...DEFAULT_SETTINGS, ...settings } };
+}
+
+/**
  * Suit un salon en direct : par le serveur temps réel (TECH-06, follow) quand il répond, sinon relecture HTTP régulière.
  * SALLE-07 : quand le serveur dit que l'on n'est plus membre, la page relit le salon par HTTP et apprend pourquoi (« kicked »).
+ * SALLE-09 : `keepPolling` (salle d'attente) relit aussi quand la socket est ouverte : une annonce perdue (NOTIFY sans
+ * LISTEN, pooler…) ne laisse pas un invité bloqué au salon pendant que l'hôte court.
  * Renvoie la fonction qui arrête de suivre.
  */
-export function watchRoom(code: string, onRoom: (room: RoomView) => void, onError: (error: RoomError) => void, pollMs = POLL_MS): () => void {
+export function watchRoom(code: string, onRoom: (room: RoomView) => void, onError: (error: RoomError) => void, pollMs = POLL_MS, keepPolling = false): () => void {
   let stopped = false;
   let poll = 0;
   const reread = async () => {
@@ -114,11 +125,11 @@ export function watchRoom(code: string, onRoom: (room: RoomView) => void, onErro
   startPolling();
   const connection = connectRealtime({
     room: code,
-    onChange: (state) => (state.status === "open" ? stopPolling() : startPolling()),
+    onChange: (state) => (state.status === "open" && !keepPolling ? stopPolling() : startPolling()),
     onRoom: (event) => {
       if (stopped) return;
       // le serveur pousse la même vue que GET /api/rooms/:code (roomView), validée par le protocole
-      if (event.type === "room") onRoom(event.room as unknown as RoomView);
+      if (event.type === "room") onRoom(liveRoomView(event.room));
       else if (event.type === "closed") onError("closed");
       else void reread();
     },

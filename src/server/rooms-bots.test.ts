@@ -26,13 +26,23 @@ describe("CONF-10 — the host adds and removes bots one by one, each with its l
     expect(await storedList(t, room.code)).toEqual({ bots: true, botList: [{ name: "Wasabi99", level: "beginner" }, { name: "Ebi_Fry", level: "expert" }] });
   });
 
-  test("removing a bot keeps the others with their level; removing the last one turns bots off", async () => {
+  test("removing a bot keeps the others with their level; removing the last one keeps bots allowed", async () => {
     const { room, host } = await t.open("Conf10_Retrait", { bots: false, guests: 4 });
     await patch(t, room.code, host.cookie, { botList: [{ name: "Wasabi99", level: "beginner" }, { name: "Ebi_Fry", level: "expert" }] });
     expect((await patch(t, room.code, host.cookie, { botList: [{ name: "Ebi_Fry", level: "expert" }] })).status).toBe(200);
     expect(await storedList(t, room.code)).toEqual({ bots: true, botList: [{ name: "Ebi_Fry", level: "expert" }] });
     expect((await patch(t, room.code, host.cookie, { botList: [] })).status).toBe(200);
-    expect(await storedList(t, room.code)).toEqual({ bots: false, botList: [] });
+    // la case « Autorisés » ne se décoche pas toute seule : l'hôte peut rajouter un bot
+    expect(await storedList(t, room.code)).toEqual({ bots: true, botList: [] });
+  });
+
+  test("each bot keeps its own accuracy; a value outside the three is refused (400) and nothing changes", async () => {
+    const { room, host } = await t.open("Conf10_Precision", { bots: false, guests: 3 });
+    const list = [{ name: "Uni_Kun", level: "expert", accuracy: "high" }, { name: "Tako_San", level: "beginner" }] satisfies RoomBot[];
+    expect((await patch(t, room.code, host.cookie, { botList: list })).status).toBe(200);
+    expect((await storedList(t, room.code)).botList).toEqual(list);
+    expect((await patch(t, room.code, host.cookie, { botList: [{ name: "Uni_Kun", level: "expert", accuracy: "perfect" }] })).status).toBe(400);
+    expect((await storedList(t, room.code)).botList).toEqual(list);
   });
 
   test("changing the level of one bot leaves the other one as it was", async () => {

@@ -34,6 +34,23 @@ test.describe("TEST-02 — room created by an account, joined by a guest", () =>
     }
   });
 
+  test("the host launches the game and the guest goes to the race too", async ({ page, browser }) => {
+    await signUp(page);
+    await createRoom(page);
+    const context = await browser.newContext();
+    try {
+      const guest = await joinAsGuest(context, await newInviteLink(page), "Racer_E2E");
+      await expect(page.getByRole("region", { name: "Players" }).getByRole("listitem").filter({ hasText: "Racer_E2E" })).toBeVisible();
+      await page.getByRole("button", { name: "START THE GAME" }).click();
+      await page.waitForURL(/\/game\?code=/);
+      // SALLE-09 : chaque membre rejoint la course lancée par l'hôte
+      await guest.waitForURL(/\/game\?code=/, { timeout: 10_000 });
+      await expect(guest.getByRole("region", { name: "Typing area" })).toBeVisible();
+    } finally {
+      await context.close();
+    }
+  });
+
   test("an invite link already used by a guest is refused to a second guest", async ({ page, browser }) => {
     await signUp(page);
     await createRoom(page);

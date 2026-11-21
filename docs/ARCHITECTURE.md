@@ -265,6 +265,40 @@ Un coureur parti du salon pendant la course ou ses résultats sans abandonner es
 - **Frappes et fautes** : la précision enregistrée vient du navigateur, et le serveur ne garde pas les fautes. La page garde donc sa course en cours dans `sessionStorage` (clé `orion.race.<code>.<startsAt>`, une par salon et par départ : une relance ne reprend rien) : position, frappes, fautes, touches, mots manqués, mesures par seconde. Elle l'écrit à chaque frappe, et une page rechargée ne l'écrase qu'après avoir repris (`keepsSnapshot`). À la reprise, ces comptes sont restaurés (plus ce qui a été tapé depuis le rechargement). Seuls les mots validés par le serveur au-delà de ce qui était gardé comptent comme justes. Si la page gardée était plus loin que le serveur, la position reste celle du serveur et les fautes restent comptées. Recharger n'améliore donc pas la précision. Limites : sans stockage (refusé, autre onglet, données effacées), les mots repris comptent comme justes ; et ce stockage, comme toute la précision, reste déclaré par le navigateur.
 - **Bots** : simulés par la page avec le moteur déterministe (BOT-05) et la graine de la course : une page montée après le départ les avance tick par tick jusqu'à l'heure serveur (`mountRace`), exactement où ils étaient, et recharger ne permet pas de les distancer. « Reprise de la course… » s'affiche tant que la page, arrivée en pleine course, attend ce classement. Rien n'est gagné : la page ne va jamais au-delà de la progression validée, et l'arbitre garde la progression d'avant le rechargement (recul et saut refusés comme avant).
 
+## Hébergement et coûts (TECH-05, TECH-08)
+
+### Écart assumé : trois services plutôt qu'un VPS
+
+TECH-05 demande un serveur loué (VPS) et cite Fly.io parmi les hébergeurs acceptés. L'application est découpée entre trois services, chacun pour ce qu'il fait le mieux :
+
+| Service | Forfait | Rôle | Adresse |
+|---|---|---|---|
+| **Vercel** | Hobby (gratuit) | Site Next.js et routes API | https://www.vandhelm.com |
+| **Fly.io** | Gratuit | Serveur temps réel (Bun WebSocket, `src/realtime/`) | `wss://typeracer-orion.fly.dev` |
+| **Neon** | Gratuit | Base PostgreSQL : comptes, historique, statistiques | privée, reliée à Vercel et à Fly |
+
+Pourquoi ce découpage :
+
+- **Vercel** déploie le site à chaque push et gère le HTTPS (certificat Let's Encrypt, HSTS) et le CDN, sans serveur à maintenir. `vandhelm.com` redirige (308) vers `www.vandhelm.com`.
+- **Fly.io** fait tourner ce que Vercel ne peut pas faire : ses fonctions ne gardent pas de connexion WebSocket ouverte et ne partagent pas de mémoire (voir l'ADR plus haut). Une seule petite machine (`shared-cpu-1x`, 256 Mo), puisque l'état des salons est en mémoire. Elle s'arrête quand personne n'est connecté et redémarre à la connexion suivante, ce qui la garde dans le forfait gratuit.
+- **Neon** est branché à Vercel par l'intégration Marketplace (variables `DATABASE_URL`, `POSTGRES_*`) ; le serveur temps réel y accède par le secret Fly `DATABASE_URL`.
+
+### Secrets
+
+Aucun secret n'est dans le dépôt. Ils sont stockés comme variables d'environnement :
+
+- **Vercel (production)** : `BETTER_AUTH_SECRET`, `GUEST_SESSION_SECRET`, `REALTIME_SECRET`, `REALTIME_PUBLIC_URL`, `GITHUB_CLIENT_ID`/`GITHUB_CLIENT_SECRET`, `DISCORD_CLIENT_ID`/`DISCORD_CLIENT_SECRET`, et les variables Neon.
+- **Fly.io** : `REALTIME_SECRET` (même valeur que sur Vercel) et `DATABASE_URL`.
+
+Les applications OAuth déclarent `https://www.vandhelm.com/api/auth/callback/github` et `…/callback/discord` comme adresses de retour, en plus de `http://localhost:3000/…` pour le développement.
+
+### Accès de l'enseignant
+
+L'enseignant n'a rien à payer pour corriger :
+
+- **En ligne** : le site est public sur https://www.vandhelm.com. Le mode invité permet de jouer sans compte ; on peut aussi se connecter avec GitHub, Discord ou un nom d'utilisateur et un mot de passe.
+- **En local** : il copie `.env.example` en `.env.local`, lance la base PostgreSQL avec Docker (`bun run db:up`), applique les migrations (`bun run db:migrate`), puis lance `bun run dev`. Aucun compte ni service payant n'est nécessaire.
+
 ## Déployer le serveur temps réel
 
 Rien n'est déployé par le dépôt. Pour mettre le serveur en ligne sur Fly.io :
@@ -447,3 +481,19 @@ Critère : « Ils sont soumis aux bonus et malus comme les humains. » Un bot n'
 - **Rechargement de la page** : il est dans l'instantané de la course (`sessionStorage`, champ `words` de `saveSnapshot`) ; la page rechargée le reprend avant de se placer à la progression du serveur, et l'enregistre à la fin.
 - **Reprise sans instantané** (autre onglet, autre appareil, stockage perdu) : à chaque coureur qui rejoint la salle, le serveur envoie son texte changé (message `text { room, words }`, seulement à lui, avant le classement). La page le prend pour le sien (`applyServerText`) puis se place à la progression du serveur sur ce texte : son arrivée vient après tous ses mots (103 sur 103), pas avant.
 - **Serveur temps réel redémarré** : à chaque effet sur un texte, il écrit en base le texte du coureur et sa progression recomptée (`room_members.bonus_words`, `progress`, pour ce départ seulement, via `keepBonusText` ; remis à null à chaque lancement). Relu avec la course (`resume[].words`), le coureur reprend sur ce texte. Les bonus déjà reçus ne sont pas gardés (BONUS-01) ; seuls les textes le sont, avec la longueur de la course et la leur comme longueurs connues.
+
+## Thèmes : par défaut et « couleurs adaptées » (DES-05)
+
+Décision du 2026-11-20 : pas de thème clair. La direction artistique reste sombre (mono-thème ; sa justification ira dans `docs/DEMARCHE-CREATIVE.md`, document à rédiger par l'équipe, pas encore présent) ; le second thème, `cvd`, sert les personnes daltoniennes (protanopie, deutéranopie, tritanopie). Il reste sombre et ne change que les couleurs qui portent un sens.
+
+| | Thème par défaut | `cvd` (couleurs adaptées) |
+|---|---|---|
+| Accent (moi, erreurs, lettres fausses, curseur, tampons) | rouge `#e0574a`, aplats `#9e1f17` / `#b4261c` | orange Okabe-Ito `#e69f00`, aplats `#a35400` / `#b35c00` (texte blanc ≥ 4,5:1) |
+| Courbes du graphique de course `--color-chart-1..8` | blanc, bleu, ocre, vert, mauve, cyan, rose, gris | blanc, bleu ciel, bleu, gris, lavande, vert bleuté, lavande claire, menthe (Okabe-Ito et voisins), dans un ordre où deux voisines restent distinctes |
+
+- **Tokens** : `src/styles/base/tokens.css`. Le thème par défaut est le bloc `@theme static` ; `:root[data-theme="cvd"]` le surcharge. Les autres tokens (fonds, lignes, texte atténué) sont communs.
+- **Indices non colorés, dans les deux thèmes** : une faute de frappe (lettre fausse, lettre en trop, mot raté) est soulignée (`src/views/game/TypingText.tsx`) ; chaque courbe a son pointillé, le joueur local un trait plein et plus épais, la vitesse brute du profil des tirets ; la légende redessine le même trait (`LineSwatch`, `src/views/profile/StatBlock.tsx`). Mon couloir a une barre plus épaisse et le badge VOUS ; les badges (bonus, BOT, hôte, record) portent leur texte.
+- **Sélecteur** : `src/components/tabs/ThemeToggle.tsx`, un onglet suspendu à bascule (`aria-pressed`) posé avant les langues par `LanguageSwitcher`, donc sur chaque page. La largeur de la rangée d'onglets, `HANGING_ROW_WIDTH`, se déduit du nombre d'onglets ; l'en-tête de la salle s'en écarte (`RoomPage`). Libellé « CVD » / « DAL », nom accessible traduit (`nav.theme.*`). Un vrai `<button>` : Tab, Entrée, Espace.
+- **Persistance et aucun flash** : le choix est gardé un an dans le cookie `orion-theme` (`src/theme/theme.ts`). Le serveur le lit (`src/theme/request.ts`) et `app/layout.tsx` rend `<html data-theme>` dès le premier octet : les couleurs dépendent de cet attribut seul, sans script inline ni lecture de `localStorage`. Valeur inconnue ou falsifiée : thème par défaut. Au clic, `applyTheme` réécrit le cookie et l'attribut : le changement est immédiat, sans rechargement.
+- **Préférences du système, comportement par défaut** : aucune préférence système ne dit « daltonien », donc sans choix mémorisé on garde le thème par défaut. Deux préférences s'appliquent par-dessus les deux thèmes : `prefers-contrast: more` densifie le texte atténué et les lignes (`--color-muted` .75, `--color-line-soft` .6, `--color-line-faint` .35) ; `forced-colors: active` laisse la palette système remplacer la nôtre, et ce qui est peint par un fond (barres de progression, curseur) passe en `CanvasText` ; l'onglet ou le lien actif, marqué par une ombre effacée dans ce mode, est souligné. `prefers-color-scheme` n'est pas suivi : il n'y a pas de thème clair.
+- **Vérifications** : `src/styles/cvd.test.ts` simule les trois dichromaties (matrices de Machado 2009, RGB linéaire) et exige un ΔE CIE76 ≥ 20 entre chaque paire qui porte un sens dans le thème `cvd` (lettre juste / fausse, texte à taper / faute, ma barre / les autres, ma courbe / chaque autre, courbes voisines, les quatre premières entre elles) ; le thème par défaut y échoue, d'où le thème `cvd`. `src/styles/contrast.test.ts` vérifie le contraste AA des deux thèmes (texte 4,5:1, courbes 3:1) ; `tests/e2e/contrast.e2e.ts` rejoue tout le parcours axe dans chacun (salle vue par l'hôte et par un membre, valeurs des réglages désactivés comprises) et vérifie le sélecteur (clavier, HTML du serveur, 360 px) et qu'aucun onglet ne recouvre un titre.

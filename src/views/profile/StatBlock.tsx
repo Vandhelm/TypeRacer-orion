@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { STAT_LABEL, SWATCH } from "./styles";
+import { DASH, LINE, STAT_LABEL, SWATCH } from "./styles";
 
 type Props = { label: string; marker?: ReactNode; value: ReactNode; notes?: ReactNode[]; hero?: boolean };
 
@@ -17,5 +17,12 @@ export function StatBlock({ label, marker, value, notes = [], hero = false }: Pr
 /** A unit kept on the number, smaller: 96 %, 42 s. */
 export const Unit = ({ children }: { children: string }) => <span className="ml-[.12em] text-[.5em] text-muted">{children}</span>;
 
+/** DES-05: a legend marker drawn with the line's own stroke and dash, so it matches without relying on its colour. */
+export const LineSwatch = ({ line, dash }: { line: string; dash?: string }) => (
+  <svg className={SWATCH} viewBox="0 0 22 4" aria-hidden="true">
+    <line className={line} x1={1} x2={21} y1={2} y2={2} strokeDasharray={dash} />
+  </svg>
+);
+
 /** The marker of a chart line, repeated before the number it draws. */
-export const Swatch = ({ series }: { series: "wpm" | "raw" }) => <i className={SWATCH[series]} />;
+export const Swatch = ({ series }: { series: "wpm" | "raw" }) => <LineSwatch line={LINE[series]} dash={DASH[series]} />;

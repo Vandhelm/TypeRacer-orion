@@ -267,6 +267,13 @@
       "when": 1795204694646,
       "tag": "0037_received_bonuses",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1795232670703,
+      "tag": "0038_race_ended_at",
+      "breakpoints": true
     }
   ]
 }

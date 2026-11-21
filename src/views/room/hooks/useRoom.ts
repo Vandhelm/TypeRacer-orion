@@ -137,6 +137,7 @@ export function useRoom(page: "room" | "game" = "room") {
         else setError(error);
       },
       WAITING_POLL_MS, // COURSE-03 : sans temps réel, le lancement est appris à temps pour voir le décompte
+      true, // SALLE-09 : même socket ouverte, une annonce perdue ne bloque pas les invités au salon
     );
   }, [code, page]);
 
