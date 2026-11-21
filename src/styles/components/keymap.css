@@ -1,5 +1,6 @@
 /* Heatmap du clavier (src/views/profile/KeyboardHeatmap.tsx), sur le profil et sur le podium (RES-03).
-   La couleur d'une touche suit son taux d'erreur (--heat, de 0 à 100 %).
+   La couleur d'une touche suit son taux d'erreur, sur l'échelle du thème (DES-05 : --heat-bg et --heat-ink, posés par
+   src/views/profile/heat.ts à partir des tokens --color-heat-N) ; les touches les plus ratées écrivent aussi leur taux.
    Le clavier se range en rangées décalées ; les lettres changent avec une petite animation. */
 .keymap-head .view-tabs{ gap: 8px; border: 0; animation: none; }
 .keymap-head .view-tab{ height: 32px; min-height: 32px; padding: 0 18px; border: 1px solid var(--color-line); font-size: 11px; letter-spacing: .2em; }
@@ -13,14 +14,24 @@
     align-items: center;
     justify-content: center;
     border: 1px solid var(--color-line-faint);
-    background: color-mix(in srgb, var(--color-red-solid) var(--heat, 0%), var(--color-face-front-b));
-    color: #fff;
+    position: relative;
+    background: var(--heat-bg, var(--color-heat-0));
+    color: var(--heat-ink, var(--color-heat-ink-low));
     font: 400 clamp(9px, 1.6vw, 13px)/1 var(--font-mono);
     transition: background .35s ease, color .35s ease;
 }
 .keymap-cap{ display: inline-block; animation: keymap-swap .34s calc(var(--i, 0) * 12ms) cubic-bezier(.2,.8,.2,1) both; }
 @keyframes keymap-swap{
     from{ opacity: 0; transform: translateY(-45%) scale(.7); }
+}
+/* le taux d'une touche parmi les plus ratées, dans son coin, à l'encre de la touche */
+.keymap-rate{
+    position: absolute;
+    right: 2px;
+    bottom: 1px;
+    font-size: max(8px, .62em);
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
 }
 .keymap-key.is-wide{ flex: 0 0 50%; aspect-ratio: auto; height: clamp(22px, 4vw, 36px); }
 .keymap-key.is-empty{ color: var(--color-muted); background: transparent; }

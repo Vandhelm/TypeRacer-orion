@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { SEAT_COLORS } from "../rooms/seats";
+import { heatBand, heatInk, HEAT_STEPS } from "../views/profile/heat";
 import { contrastRatio, parseCssColor, themeTokens, type Theme } from "./contrast";
 import { CVD_TYPES, deltaE, simulate } from "./cvd";
 
@@ -142,5 +143,62 @@ describe("DES-05 — the accent of the canvas scenes (lanterns, noren, lacquer, 
   test("on the belt, a red-rimmed plate stays apart from a white-rimmed one in cvd, for each dichromacy", () => {
     const tk = themeTokens(CSS, "cvd");
     for (const type of CVD_TYPES) expect(deltaE(simulate(color(tk["red-rim"]!), type), simulate(color(tk["line"]!), type))).toBeGreaterThanOrEqual(DISTINCT);
+  });
+});
+
+/** Relative luminance (WCAG) of an opaque colour. */
+const luminanceOf = (c: { r: number; g: number; b: number }) => {
+  const ch = (v: number) => ((v / 255) <= 0.04045 ? v / 255 / 12.92 : ((v / 255 + 0.055) / 1.055) ** 2.4);
+  return 0.2126 * ch(c.r) + 0.7152 * ch(c.g) + 0.0722 * ch(c.b);
+};
+
+/** The key colour at `level`, mixed like the browser does from heatBackground (color-mix in sRGB). */
+function heatAt(theme: Theme, level: number) {
+  const tk = themeTokens(CSS, theme);
+  const { from, to, share } = heatBand(level);
+  const [a, b] = [color(tk[`heat-${from}`]!), color(tk[`heat-${to}`]!)];
+  const mix = (k: "r" | "g" | "b") => a[k] + ((b[k] - a[k]) * share) / 100;
+  return { r: mix("r"), g: mix("g"), b: mix("b"), a: 1 };
+}
+const LEVELS = Array.from({ length: 41 }, (_, i) => i / 40);
+
+describe("DES-05 — the keyboard heat map scale", () => {
+  test("the default theme keeps its ramp from the key face to the red, stop by stop on the same line", () => {
+    const tk = themeTokens(CSS, "default");
+    expect([tk["heat-0"], tk[`heat-${HEAT_STEPS}`]]).toEqual([tk["face-front-b"], tk["red-solid"]]);
+    const [lo, hi] = [color(tk["face-front-b"]!), color(tk["red-solid"]!)];
+    for (let k = 1; k < HEAT_STEPS; k++) {
+      const stop = color(tk[`heat-${k}`]!);
+      for (const c of ["r", "g", "b"] as const) expect(Math.abs(stop[c] - (lo[c] + ((hi[c] - lo[c]) * k) / HEAT_STEPS))).toBeLessThanOrEqual(0.5);
+    }
+  });
+
+  test("cvd: the luminance rises all the way, for normal vision and each dichromacy (a sequential scale)", () => {
+    for (const vision of ["normal", ...CVD_TYPES] as const) {
+      const seen = LEVELS.map((level) => luminanceOf(vision === "normal" ? heatAt("cvd", level) : simulate(heatAt("cvd", level), vision)));
+      seen.slice(1).forEach((value, i) => expect(`${vision} ${LEVELS[i + 1]}: ${value > seen[i]!}`).toBe(`${vision} ${LEVELS[i + 1]}: true`));
+    }
+  });
+
+  test("cvd: each quarter of the scale stays ΔE 15 from the next, for each dichromacy", () => {
+    const tk = themeTokens(CSS, "cvd");
+    for (let k = 0; k < HEAT_STEPS; k++) {
+      for (const type of CVD_TYPES) expect(deltaE(simulate(color(tk[`heat-${k}`]!), type), simulate(color(tk[`heat-${k + 1}`]!), type))).toBeGreaterThanOrEqual(15);
+    }
+  });
+
+  test("in both themes, the letter on a key reaches 4.5:1 at every level", () => {
+    for (const theme of ["default", "cvd"] as const) {
+      const tk = themeTokens(CSS, theme);
+      for (const level of LEVELS) {
+        const ink = color(tk[heatInk(level).slice("var(--color-".length, -1)]!);
+        expect(`${theme} ${level}: ${contrastRatio(ink, heatAt(theme, level)) >= 4.5}`).toBe(`${theme} ${level}: true`);
+      }
+    }
+  });
+
+  test("the default ramp is not safe: for protanopia, its first quarter is under ΔE 10", () => {
+    const tk = themeTokens(CSS, "default");
+    expect(deltaE(simulate(color(tk["heat-0"]!), "protanopia"), simulate(color(tk["heat-1"]!), "protanopia"))).toBeLessThan(10);
   });
 });

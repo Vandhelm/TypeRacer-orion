@@ -42,6 +42,16 @@
     --color-seat-7: hsl(220, 85%, 65%);
     --color-seat-8: hsl(0, 0%, 72%);
 
+    /* DES-05 : the keyboard heat map (src/views/profile/heat.ts), from no error (0) to RATE_MAX or more (4): the
+       key face to the red, stops on the same line as the former two-colour mix; white letters all along */
+    --color-heat-0: #141414;
+    --color-heat-1: #371715;
+    --color-heat-2: #591a16;
+    --color-heat-3: #7c1c16;
+    --color-heat-4: #9e1f17;
+    --color-heat-ink-low: #fff;
+    --color-heat-ink-high: #fff;
+
     --color-face-front-a: #070707;
     --color-face-front-b: #141414;
     --color-face-side: #2a2a2a;
@@ -102,6 +112,16 @@
     --seat-wrap-6: var(--color-seat-6);
     --seat-wrap-7: var(--color-seat-7);
     --seat-wrap-8: var(--color-seat-8);
+
+    /* heat map: a cividis-like sequential scale, dark blue to yellow, whose luminance rises for every dichromacy;
+       the middle stop is the one grey where white and black letters both reach 4.5:1, so the ink flips there */
+    --color-heat-0: #00204d;
+    --color-heat-1: #414d6b;
+    --color-heat-2: #757570;
+    --color-heat-3: #b8a96f;
+    --color-heat-4: #ffea46;
+    --color-heat-ink-low: #fff;
+    --color-heat-ink-high: #000;
 }
 
 /* DES-05 : in both themes, the system preferences come first. More contrast: the translucent text and lines get
