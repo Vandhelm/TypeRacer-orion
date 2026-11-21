@@ -40,3 +40,11 @@ describe("COURSE-04 — the typing panel shows WPM and accuracy live", () => {
     expect(render({ ...racing(), phase: "countdown" })).toContain('disabled=""');
   });
 });
+
+describe("DES-05 — the clock's status carries its shape, not only the red", () => {
+  test("eliminated: a cross before the word; finished: a check; racing: none", () => {
+    expect(render({ ...racing(), eliminated: true })).toMatch(/<span data-cue="eliminated">Éliminé · <\/span>/);
+    expect(render({ ...racing(), finishedAt: 3000 })).toMatch(/<span data-cue="finished">Terminé · <\/span>/);
+    expect(render(racing())).not.toContain("data-cue");
+  });
+});

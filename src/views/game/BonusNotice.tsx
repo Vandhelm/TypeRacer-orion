@@ -21,7 +21,7 @@ export function BonusNotice({ announcements }: { announcements: readonly BonusAn
     <div data-part="bonus-notice" role="status" className="flex max-w-full flex-col gap-1">
       {mine.map((a) => (
         <p key={a.key} className={`flex flex-wrap items-center justify-center gap-x-[1.2ch] gap-y-1 border border-red-text bg-[rgba(0,0,0,.86)] px-4 py-2.5 text-center font-mono text-[max(12px,1.4vh)] leading-[1.5] tracking-[.08em] text-white ${BONUS_HIT}`}>
-          <b className="bg-red-solid px-[.6ch] font-medium whitespace-nowrap">{bonusBadge(t, a)}</b>
+          <b className="bg-red-solid px-[.6ch] font-medium whitespace-nowrap" data-cue={a.kind}>{bonusBadge(t, a)}</b>
           <span>{bonusSentence(t, a, "mine")}</span>
         </p>
       ))}

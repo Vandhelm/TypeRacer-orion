@@ -64,7 +64,11 @@ export function TypingPanel({ race, onInput, lang }: { race: Race; onInput: (val
         <p className={STAT}><span className={STAT_LABEL}>{t("game.wpm")}</span><b className={STAT_VALUE}>{formatNumber(i18n.language, myWpm(race))}</b></p>
         <p className={STAT}><span className={STAT_LABEL}>{t("game.accuracy")}</span><b className={STAT_VALUE}>{formatNumber(i18n.language, myAccuracy(race))} %</b></p>
       </div>
-      <p className="col-start-1 row-start-1 font-mono text-[max(18px,2.6vh)] leading-none font-normal text-red-text tabular-nums" role="timer" aria-label={`${t(unlimited ? "game.elapsed" : "game.time")} ${seconds} s`}>{timerPrefix}{seconds}</p>
+      <p className="col-start-1 row-start-1 font-mono text-[max(18px,2.6vh)] leading-none font-normal text-red-text tabular-nums" role="timer" aria-label={`${t(unlimited ? "game.elapsed" : "game.time")} ${seconds} s`}>
+        {/* DES-05 : data-cue adds a cross or a check before the status word (styles/components/cues.css) */}
+        {timerPrefix && <span data-cue={race.eliminated ? "eliminated" : "finished"}>{timerPrefix}</span>}
+        {seconds}
+      </p>
       {/* COURSE-03 : le texte n'est révélé qu'au début du décompte (3, 2, 1) : rien dans la page pendant « Prêts ? » */}
       <TypingText words={race.count === READY ? [] : myCourse(race).words} wordIndex={race.wordIndex} typed={race.typed} missed={race.missedWords} active={racing} lang={lang} fog={fogged(race)} />
       <div className="absolute inset-0 z-2">

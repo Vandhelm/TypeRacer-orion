@@ -1,0 +1,30 @@
+/* DES-05 : la forme qui double la couleur d'un statut (tableau du podium, chrono de la course), d'un badge de bonus
+   et du marqueur BOT, dans les deux thèmes. Posée par data-cue="<statut, bonus ou bot>" ; dessinée par ::before, un
+   masque peint à la couleur du texte : aucun texte ajouté, un lecteur d'écran entend la même chose qu'avant.
+   Les formes : coche (arrivé), sablier (temps écoulé), drapeau (abandon), croix (éliminé), plus et moins (mots
+   ajoutés ou retirés), vagues (brouillard), tête de robot (bot). Vérifié par src/styles/cues.test.tsx. */
+[data-cue]::before{
+    content: "";
+    display: inline-block;
+    flex: none;
+    width: .95em;
+    height: .95em;
+    margin-right: .4em;
+    vertical-align: -.12em;
+    background: currentColor;
+    -webkit-mask: var(--cue) center / contain no-repeat;
+            mask: var(--cue) center / contain no-repeat;
+}
+[data-cue="finished"]{ --cue: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path d='M2.5 8.5l3.5 3.5 7.5-8' fill='none' stroke='black' stroke-width='2.2'/></svg>"); }
+[data-cue="timeout"]{ --cue: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path d='M3 1.5h10M3 14.5h10M4 2l8 12M12 2L4 14' fill='none' stroke='black' stroke-width='1.8'/></svg>"); }
+[data-cue="abandoned"]{ --cue: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path d='M3.5 15V1.5' stroke='black' stroke-width='1.8'/><path d='M4.5 2h9l-2.5 3.5 2.5 3.5h-9z'/></svg>"); }
+[data-cue="eliminated"]{ --cue: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path d='M3 3l10 10M13 3L3 13' fill='none' stroke='black' stroke-width='2.4'/></svg>"); }
+[data-cue="extra_words"]{ --cue: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path d='M8 2v12M2 8h12' fill='none' stroke='black' stroke-width='2.6'/></svg>"); }
+[data-cue="fewer_words"]{ --cue: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path d='M2 8h12' fill='none' stroke='black' stroke-width='2.6'/><path d='M2 3.5h12M2 12.5h12' fill='none' stroke='black' stroke-width='1' stroke-dasharray='2 2'/></svg>"); }
+[data-cue="fog"]{ --cue: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path d='M1 4q2.5-2 5 0t5 0 4 0M1 8.5q2.5-2 5 0t5 0 4 0M1 13q2.5-2 5 0t5 0 4 0' fill='none' stroke='black' stroke-width='1.6'/></svg>"); }
+[data-cue="bot"]{ --cue: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path d='M8 1v3' stroke='black' stroke-width='1.6'/><rect x='2.5' y='4.5' width='11' height='9' rx='1.5' fill='none' stroke='black' stroke-width='1.6'/><rect x='5' y='7.5' width='2' height='2'/><rect x='9' y='7.5' width='2' height='2'/></svg>"); }
+
+/* Couleurs forcées : un fond est remplacé par celui du système ; la forme prend la couleur du texte système. */
+@media (forced-colors: active) {
+    [data-cue]::before{ forced-color-adjust: none; background: CanvasText; }
+}
