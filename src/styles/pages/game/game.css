@@ -1,7 +1,8 @@
 /* Game page: what stays in CSS. The layout is Tailwind in src/views/game (compact = narrow or short screens). */
 
 /* The "Leave" sign hangs over the top-left corner, or sits beside the header on compact screens */
-.hanging-button.game-leave{ position: absolute; top: 30px; left: 3vw; }
+/* below the fixed navbar, level with the header row */
+.hanging-button.game-leave{ position: absolute; top: calc(var(--navbar-height) + 30px); left: 3vw; }
 .hanging-button.game-leave::before, .hanging-button.game-leave::after{ height: 30px; }
 
 @keyframes game-count-hit{
