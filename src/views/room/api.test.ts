@@ -106,3 +106,39 @@ describe("COURSE-03 — each room read measures the clock offset with the server
     }
   });
 });
+
+describe("SALLE-09 — a guest learns the launch even when the realtime push is lost", () => {
+  test("realtime open but silent: the waiting room still re-reads the room and sees it racing", async () => {
+    const browser = globalThis as unknown as { window?: unknown; WebSocket: unknown };
+    const hadWindow = "window" in browser;
+    browser.window ??= globalThis;
+    const RealSocket = browser.WebSocket;
+    // un serveur temps réel joignable, qui ouvre la présence mais ne pousse jamais le salon (NOTIFY perdu)
+    browser.WebSocket = class {
+      static OPEN = 1;
+      readyState = 1;
+      onmessage: ((event: { data: string }) => void) | null = null;
+      constructor() {
+        setTimeout(() => this.onmessage?.({ data: JSON.stringify({ type: "welcome", you: { id: "g:2", name: "Racer", guest: true } }) }), 0);
+      }
+      send(raw: string) {
+        if (JSON.parse(raw).type === "join") setTimeout(() => this.onmessage?.({ data: JSON.stringify({ type: "presence", room: "ABC234", players: [] }) }), 0);
+      }
+      close() {}
+    };
+    let status = "waiting";
+    globalThis.fetch = (async (url: string) => {
+      if (String(url).includes("/realtime/ticket")) return Response.json({ ticket: "t", url: "ws://localhost:3001" });
+      return Response.json({ room: { code: "ABC234", status }, you: "player:2" });
+    }) as unknown as typeof fetch;
+    const seen: string[] = [];
+    const stop = watchRoom("ABC234", (room) => seen.push(room.status), () => {}, WAITING_POLL_MS, true);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    status = "racing"; // l'hôte lance ; l'annonce n'arrive pas par la socket
+    await new Promise((resolve) => setTimeout(resolve, WAITING_POLL_MS * 2 + 200));
+    stop();
+    browser.WebSocket = RealSocket;
+    if (!hadWindow) delete browser.window;
+    expect(seen).toContain("racing");
+  }, 10_000);
+});

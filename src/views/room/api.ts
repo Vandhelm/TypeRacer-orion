@@ -101,9 +101,11 @@ export function liveRoomView(room: Record<string, unknown>): RoomView {
 /**
  * Suit un salon en direct : par le serveur temps réel (TECH-06, follow) quand il répond, sinon relecture HTTP régulière.
  * SALLE-07 : quand le serveur dit que l'on n'est plus membre, la page relit le salon par HTTP et apprend pourquoi (« kicked »).
+ * SALLE-09 : `keepPolling` (salle d'attente) relit aussi quand la socket est ouverte : une annonce perdue (NOTIFY sans
+ * LISTEN, pooler…) ne laisse pas un invité bloqué au salon pendant que l'hôte court.
  * Renvoie la fonction qui arrête de suivre.
  */
-export function watchRoom(code: string, onRoom: (room: RoomView) => void, onError: (error: RoomError) => void, pollMs = POLL_MS): () => void {
+export function watchRoom(code: string, onRoom: (room: RoomView) => void, onError: (error: RoomError) => void, pollMs = POLL_MS, keepPolling = false): () => void {
   let stopped = false;
   let poll = 0;
   const reread = async () => {
@@ -123,7 +125,7 @@ export function watchRoom(code: string, onRoom: (room: RoomView) => void, onErro
   startPolling();
   const connection = connectRealtime({
     room: code,
-    onChange: (state) => (state.status === "open" ? stopPolling() : startPolling()),
+    onChange: (state) => (state.status === "open" && !keepPolling ? stopPolling() : startPolling()),
     onRoom: (event) => {
       if (stopped) return;
       // le serveur pousse la même vue que GET /api/rooms/:code (roomView), validée par le protocole
