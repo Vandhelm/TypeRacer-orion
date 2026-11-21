@@ -113,7 +113,8 @@ export function TextEditorDialog({ text, onUse, ref }: TextEditorDialogProps) {
             className="unset box-border h-10 min-w-0 flex-[1_1_180px] border-b border-b-line-soft [border-bottom-style:dashed] font-mono text-[14px] leading-none font-normal text-white placeholder:text-muted focus:border-b-white"
             type="text" maxLength={40} autoComplete="off" placeholder={t("room.textName")} value={saveName} onChange={(e) => setSaveName(e.target.value)} />
           <SmallButton onClick={save}>{t("room.save")}</SmallButton>
-          <label className={`${SMALL_BUTTON} relative overflow-hidden`}>
+          {/* A11Y-04 : le champ de fichier, transparent, a le focus ; c'est le bouton qui le montre */}
+          <label className={`${SMALL_BUTTON} relative overflow-hidden has-focus-visible:outline has-focus-visible:outline-offset-3 has-focus-visible:outline-white`}>
             <span>{t("room.import")}</span>
             <input className="absolute inset-0 size-full cursor-pointer opacity-0" type="file" accept=".txt,text/plain" onChange={importFile} />
           </label>
