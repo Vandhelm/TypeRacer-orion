@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from "react";
+import { useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { SmallButton } from "../../components/buttons/SmallButton";
@@ -33,19 +33,37 @@ const SHORT_INPUT =
   "unset box-border h-[34px] w-[9em] border-b border-b-line-soft [border-bottom-style:dashed] font-mono text-[max(15px,1.9vh)] leading-none font-normal tracking-[.3em] text-white caret-red-text " +
   "focus:border-b-white focus:[border-bottom-style:solid] placeholder:tracking-[.04em] placeholder:text-muted";
 
-/** One setting: its name on the left, its choices on the right. */
-function Row({ id, label, help, role = "radiogroup", inactive, children }: RowProps) {
+// The help note: one short line under the choices, indented behind a hairline; opened by the "i".
+const NOTE = "col-start-2 m-0 mb-1.5 max-w-[44ch] border-l border-l-line-soft pl-2.5 font-mono text-[11px] leading-normal text-white/70 narrow:col-start-1";
+
+/** Open state of a row's help note; Escape closes it. */
+function useHelp() {
+  const [open, setOpen] = useState(false);
+  const onKeyDown = (e: KeyboardEvent) => { if (e.key === "Escape" && open) setOpen(false); };
+  return { open, toggle: () => setOpen(!open), onKeyDown };
+}
+
+/** The setting's name, then its "i" when it has help. */
+function Label({ id, label, help, open, toggle, htmlFor }: { id: string; label: string; help?: string; open: boolean; toggle: () => void; htmlFor?: string }) {
+  const { t } = useTranslation();
+  const name = htmlFor ? <label className={LABEL} htmlFor={htmlFor}>{label}</label> : <span className={LABEL} id={id}>{label}</span>;
+  if (!help) return <span className="inline-flex items-center self-center">{name}</span>;
   return (
-    <div className={ROW} role={role} aria-labelledby={id}>
-      {help ? (
-        <span className="inline-flex items-center gap-2.5">
-          <span className={LABEL} id={id}>{label}</span>
-          <InfoTip text={help} />
-        </span>
-      ) : (
-        <span className={`${LABEL} self-center`} id={id}>{label}</span>
-      )}
+    <span className="inline-flex items-center gap-2.5">
+      {name}
+      <InfoTip label={t("room.helpFor", { name: label })} controls={`help-${id}`} open={open} onToggle={toggle} />
+    </span>
+  );
+}
+
+/** One setting: its name on the left, its choices on the right, its help note under the choices. */
+function Row({ id, label, help, role = "radiogroup", inactive, children }: RowProps) {
+  const { open, toggle, onKeyDown } = useHelp();
+  return (
+    <div className={ROW} role={role} aria-labelledby={id} aria-describedby={help ? `help-${id}` : undefined} onKeyDown={onKeyDown}>
+      <Label id={id} label={label} help={help} open={open} toggle={toggle} />
       <div className={inactive ? `${CHOICES} opacity-35` : CHOICES}>{children}</div>
+      {help && <p className={NOTE} id={`help-${id}`} hidden={!open}>{help}</p>}
     </div>
   );
 }
@@ -55,16 +73,15 @@ function ExcludedRow({ room, host, update }: Pick<RoomState, "room" | "host" | "
   const [draft, setDraft] = useState(room.excluded);
   // CONF-07 : seulement pour les mots aléatoires ; un passage ou une citation reste entier (CONF-04)
   const inactive = !excludedApplies(room.textType);
+  const { open, toggle, onKeyDown } = useHelp();
   return (
-    <div className={ROW}>
-      <span className="inline-flex items-center gap-2.5">
-        <label className={LABEL} htmlFor="room-excluded">{t("room.excluded")}</label>
-        <InfoTip text={t("room.helpExcluded")} />
-      </span>
+    <div className={ROW} onKeyDown={onKeyDown}>
+      <Label id="label-excluded" label={t("room.excluded")} help={t("room.helpExcluded")} open={open} toggle={toggle} htmlFor="room-excluded" />
       <div className={inactive ? `${CHOICES} opacity-35` : CHOICES}>
         <input
           className={`${SHORT_INPUT} ${inactive ? "opacity-35" : ""}`.trim()}
           id="room-excluded"
+          aria-describedby="help-label-excluded"
           name="excluded"
           type="text"
           maxLength={20}
@@ -79,6 +96,7 @@ function ExcludedRow({ room, host, update }: Pick<RoomState, "room" | "host" | "
           onBlur={() => setDraft(room.excluded)}
         />
       </div>
+      <p className={NOTE} id="help-label-excluded" hidden={!open}>{t("room.helpExcluded")}</p>
     </div>
   );
 }
@@ -157,13 +175,13 @@ export function RoomSettings({ state, onEditText, action }: RoomSettingsProps) {
           {radios("visibility", [["private", "private"], ["semi", "semiPrivate"], ["public", "public"]])}
         </Row>
         {host && (
-          <Row id="label-role" label={t("room.role")} help={t("room.helpRole")}>
+          <Row id="label-role" label={t("room.role")}>
             {ROLES.map((role) => (
               <TextChoice key={role} type="radio" name="role" value={role} label={t(`room.role_${role}`)} checked={state.role === role} onChange={() => state.setRole(role)} />
             ))}
           </Row>
         )}
-        <Row id="label-duration" label={t("room.raceLength")} help={t("room.helpRaceTime")}>
+        <Row id="label-duration" label={t("room.raceLength")} help={t(room.duration === null && checkedDuration !== "other" ? "room.helpNoLimit" : "room.helpRaceLength")}>
           {host ? (
             <>
               {DURATION_PRESETS.map((value) => (
@@ -193,7 +211,7 @@ export function RoomSettings({ state, onEditText, action }: RoomSettingsProps) {
           {host && <SmallButton onClick={() => setBots(withBotAdded(room.botList))} disabled={!canAddBot(room, humans)}>{t("room.addBot")}</SmallButton>}
         </Row>
         {room.botList.map((bot) => (
-          <Row key={bot.name} id={`label-bot-${bot.name}`} label={bot.name} help={t("room.helpBotLevels")}>
+          <Row key={bot.name} id={`label-bot-${bot.name}`} label={bot.name} help={t(`room.helpLevel_${bot.level}`)}>
             {BOT_LEVELS.map((level) => (
               <TextChoice key={level} type="radio" name={`bot-level-${bot.name}`} value={level} label={t(`room.level_${level}`)} checked={bot.level === level} disabled={!host} inactive={!seated.has(bot.name)} hidden={!host && bot.level !== level} onChange={() => setBots(withBotLevel(room.botList, bot.name, level))} />
             ))}

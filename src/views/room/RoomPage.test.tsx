@@ -126,6 +126,7 @@ describe("CONF-10 — the bots tab lists each bot with its level", () => {
     expect(radios.map((radio) => radio.match(/value="([^"]+)"/)?.[1])).toEqual(["noob", "beginner", "intermediate", "expert", "impossible"]);
     expect(radios.filter((radio) => /checked=""/.test(radio)).map((radio) => radio.match(/value="([^"]+)"/)?.[1])).toEqual(["expert"]);
     for (const label of ["Noob", "Débutant", "Intermédiaire", "Expert", "Impossible"]) expect(html).toContain(label);
-    expect(html).toContain("Impossible : 140 MPM et plus");
+    // the help note describes the level the bot has, here Expert
+    expect(html).toContain("70 à 100 MPM, 2 % de fautes.");
   });
 });
