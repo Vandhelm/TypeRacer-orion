@@ -1,5 +1,7 @@
 // A11Y-01 : rapport de contraste WCAG 2.x entre deux couleurs CSS, pour tester les tokens (contrast.test.ts) et les
 // placeholders, qu'axe-core ne mesure pas (tests/e2e/contrast.e2e.ts). Sans dépendance : tourne sous Bun et Node.
+import { THEMES, type Theme } from "../theme/theme";
+
 export type Rgba = { r: number; g: number; b: number; a: number };
 
 /** `#rgb`, `#rrggbb`, `rgb(r, g, b)` ou `rgba(r, g, b, a)` ; toute autre écriture lève une erreur. */
@@ -35,7 +37,7 @@ export function tokensOf(css: string): Record<string, string> {
   return Object.fromEntries([...css.matchAll(/--color-([\w-]+):\s*([^;]+);/g)].map((m) => [m[1]!, m[2]!.trim()]));
 }
 
-export type Theme = "default" | "cvd";
+export type { Theme };
 
 /** Les déclarations du premier bloc ouvert par `start` (qui finit par « { », sans accolade imbriquée) ; vide s'il manque. */
 const block = (css: string, start: RegExp) => {
@@ -51,7 +53,7 @@ const block = (css: string, start: RegExp) => {
  * `@media (prefers-contrast: more)`, commun aux deux thèmes.
  */
 export function themeTokens(css: string, theme: Theme, { moreContrast = false } = {}): Record<string, string> {
-  if (theme !== "default" && theme !== "cvd") throw new Error(`DES-05 : thème inconnu « ${String(theme)} »`);
+  if (!THEMES.includes(theme)) throw new Error(`DES-05 : thème inconnu « ${String(theme)} »`);
   const tokens = tokensOf(block(css, /@theme static\s*\{/));
   if (theme === "cvd") Object.assign(tokens, tokensOf(block(css, /:root\[data-theme="cvd"\]\s*\{/)));
   if (moreContrast) Object.assign(tokens, tokensOf(block(css, /@media \(prefers-contrast: more\)\s*\{\s*:root\s*\{/)));
