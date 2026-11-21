@@ -79,6 +79,13 @@ describe("DES-05 — on the ticket, a seat is told apart by its number, not only
     const rows = ticket("fr");
     rows.forEach((row, i) => expect(row).toMatch(new RegExp(`data-part="seat-number"[^>]*>${i + 1}<`)));
   });
+
+  test("a free seat after a bot keeps its own number, not the bot's", () => {
+    const seats = [...SEATS, { free: true }];
+    const html = renderTicket({ ...ticketState(true, { guests: 4 }), seats, players: seats });
+    const numbers = [...html.matchAll(/data-part="seat-number"[^>]*>(\d+)</g)].map((m) => m[1]).sort();
+    expect(numbers).toEqual(["1", "2", "3", "4"]);
+  });
 });
 
 describe("COURSE-03 — before the launch, a member is told the custom text comes at the launch", () => {

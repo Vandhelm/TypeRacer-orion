@@ -38,6 +38,8 @@ function BotsPart({ state }: { state: RoomState }) {
   // CONF-10 : les humains assis comptent dans la capacité ; un bot sans place attend qu'une place se libère
   const humans = seats.filter((seat) => isPlayer(seat) && !seat.bot).length;
   const colors = new Map(seats.filter(isPlayer).filter((seat) => seat.bot).map((seat) => [seat.name, seat.color]));
+  // DES-05 : un bot assis porte son numéro de place, le même que sur l'étang et la piste
+  const numbers = new Map(seats.flatMap((seat, i) => (isPlayer(seat) && seat.bot ? [[seat.name, seatNumber(i)] as const] : [])));
   // le serveur garde la case « Autorisés » telle quelle (resolveBots) : on n'envoie que la liste
   const setBots = (botList: RoomBot[]) => update({ botList });
   const accuracyOf = (bot: RoomBot) => bot.accuracy ?? room.botAccuracy;
@@ -62,9 +64,11 @@ function BotsPart({ state }: { state: RoomState }) {
         <ul className={LIST}>
           {room.botList.map((bot) => {
             const color = colors.get(bot.name);
+            const number = numbers.get(bot.name);
             return (
               <li key={bot.name} className="grid gap-1">
                 <p className={`${SEAT} font-normal text-[rgba(255,255,255,.75)]`}>
+                  <span data-part="seat-number" className={`${NUMBER} text-muted`}>{number}</span>
                   <i className={`${DIAMOND} ${color ? "border-white" : "border-[rgba(255,255,255,.35)]"}`} style={color ? { background: color } : undefined} />
                   <span className={NAME}>{bot.name}</span>
                   {color ? <BotTag className="ml-auto text-[10px]" /> : <span className="ml-auto flex-none text-[10px] text-muted">{t("room.botWaiting")}</span>}
@@ -73,7 +77,7 @@ function BotsPart({ state }: { state: RoomState }) {
                   )}
                 </p>
                 {host ? (
-                  <span className="flex gap-2 pl-[15px]">
+                  <span className="flex gap-2 pl-[34px]">
                     <select className={PICK} aria-label={t("room.botLevelLabel", { name: bot.name })} value={bot.level} onChange={(e) => setBots(withBotLevel(room.botList, bot.name, e.target.value as RoomBot["level"]))}>
                       {BOT_LEVELS.map((level) => <option key={level} value={level}>{t(`room.level_${level}`)}</option>)}
                     </select>
@@ -82,7 +86,7 @@ function BotsPart({ state }: { state: RoomState }) {
                     </select>
                   </span>
                 ) : (
-                  <span className="pl-[15px] font-mono text-[10px] leading-[1.3] tracking-[.04em] text-muted">{`${t(`room.level_${bot.level}`)} · ${t(`room.${accuracyOf(bot)}`)}`}</span>
+                  <span className="pl-[34px] font-mono text-[10px] leading-[1.3] tracking-[.04em] text-muted">{`${t(`room.level_${bot.level}`)} · ${t(`room.${accuracyOf(bot)}`)}`}</span>
                 )}
               </li>
             );
@@ -139,12 +143,12 @@ export function RoomTicket({ state }: { state: RoomState }) {
           <ul className={`${LIST} phone:grid-cols-[repeat(2,minmax(0,1fr))] phone:gap-x-[14px]`}>
             {people.map((seat, i) => {
               if (!isPlayer(seat)) {
-                return <li key={i} className={`${SEAT} font-normal text-muted`}><span data-part="seat-number" className={NUMBER}>{seatNumber(i)}</span><i className={`${DIAMOND} border-[rgba(255,255,255,.35)]`} /><span className={NAME}>{t("room.freeSeat")}</span></li>;
+                return <li key={i} className={`${SEAT} font-normal text-muted`}><span data-part="seat-number" className={NUMBER}>{seatNumber(seats.indexOf(seat))}</span><i className={`${DIAMOND} border-[rgba(255,255,255,.35)]`} /><span className={NAME}>{t("room.freeSeat")}</span></li>;
               }
               const tag = [seat.host ? t("room.host").toUpperCase() : "", seat.me ? t("room.you") : ""].filter(Boolean).join(" · ");
               return (
                 <li key={i} className={`${SEAT} ${seat.me ? "font-medium text-white" : "font-normal text-[rgba(255,255,255,.75)]"}`}>
-                  <span data-part="seat-number" className={`${NUMBER} text-muted`}>{seatNumber(i)}</span>
+                  <span data-part="seat-number" className={`${NUMBER} text-muted`}>{seatNumber(seats.indexOf(seat))}</span>
                   <i className={`${DIAMOND} border-white`} style={{ background: seat.color }} />
                   <span className={NAME}>{seat.name}</span>
                   {tag && <span className={`ml-auto flex-none text-[10px] tracking-[.06em] ${seat.host ? "text-red-text" : "text-muted"}`}>{tag}</span>}
