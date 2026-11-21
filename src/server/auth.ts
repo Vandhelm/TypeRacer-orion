@@ -7,6 +7,7 @@ import { username } from "better-auth/plugins";
 import type { Db } from "../../db/client";
 import * as schema from "../../db/schema";
 import { isValidUsername, PASSWORD_MIN, USERNAME_MAX, USERNAME_MIN } from "../accounts/username";
+import { isBotName } from "../players/bots";
 
 const https = (host?: string) => (host ? `https://${host}` : undefined);
 const { VERCEL_ENV, VERCEL_URL, VERCEL_BRANCH_URL, VERCEL_PROJECT_PRODUCTION_URL } = process.env;
@@ -21,7 +22,20 @@ const baseURL = process.env.BETTER_AUTH_URL || (VERCEL_ENV === "production" ? ht
 /** Toutes les adresses d'où le site peut appeler l'API (domaines, alias Vercel, prévisualisation). */
 const trustedOrigins = ["https://vandhelm.com", "https://www.vandhelm.com", https(VERCEL_URL), https(VERCEL_BRANCH_URL), https(VERCEL_PROJECT_PRODUCTION_URL)].filter((origin): origin is string => !!origin);
 
-const { GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, DISCORD_CLIENT_ID, DISCORD_CLIENT_SECRET } = process.env;
+type Env = Record<string, string | undefined>;
+
+/** Valeur non vide : des espaces seuls ne configurent rien. */
+const filled = (value?: string) => value?.trim() || undefined;
+
+/** AUTH-01 : les variables OAuth, lues par leur nom (tests/tech/tech-10.test.ts les cherche dans le code). */
+function oauthVariables(env: Env) {
+  return {
+    GITHUB_CLIENT_ID: filled(env.GITHUB_CLIENT_ID),
+    GITHUB_CLIENT_SECRET: filled(env.GITHUB_CLIENT_SECRET),
+    DISCORD_CLIENT_ID: filled(env.DISCORD_CLIENT_ID),
+    DISCORD_CLIENT_SECRET: filled(env.DISCORD_CLIENT_SECRET),
+  };
+}
 
 /** Pseudo GitHub ou Discord ramené à la règle des pseudonymes : « octo-cat » ou « octo.cat » devient « octo_cat ». */
 export function usernameFromLogin(login: string) {
@@ -36,7 +50,39 @@ function withSuffix(name: string, n: number) {
   return name.slice(0, USERNAME_MAX - suffix.length) + suffix;
 }
 
-export function createAuth(db: Db) {
+/** La photo (AUTH-04) ne s'écrit que par /api/account/avatar, qui la vérifie et la réduit. */
+const imageNotAllowed = () => new APIError("BAD_REQUEST", { code: "IMAGE_NOT_ALLOWED", message: "Use /api/account/avatar to change the profile picture." });
+
+const invalidDisplayUsername = () => new APIError("BAD_REQUEST", { code: "INVALID_DISPLAY_USERNAME", message: "Display username is invalid." });
+
+/**
+ * AUTH-01 : chaque fournisseur n'est activé que si son application OAuth est configurée (identifiant et secret).
+ * Pas de « username » dans mapProfileToUser : le plugin refuserait un nom pris. Le hook de createAuth choisit le nom libre.
+ */
+export function socialProviders(env: Env = process.env) {
+  const { GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, DISCORD_CLIENT_ID, DISCORD_CLIENT_SECRET } = oauthVariables(env);
+  return {
+    ...(GITHUB_CLIENT_ID && GITHUB_CLIENT_SECRET && {
+      github: { clientId: GITHUB_CLIENT_ID, clientSecret: GITHUB_CLIENT_SECRET, mapProfileToUser: (profile: { login: string }) => ({ displayUsername: usernameFromLogin(profile.login) }) },
+    }),
+    ...(DISCORD_CLIENT_ID && DISCORD_CLIENT_SECRET && {
+      discord: { clientId: DISCORD_CLIENT_ID, clientSecret: DISCORD_CLIENT_SECRET, mapProfileToUser: (profile: { username: string }) => ({ displayUsername: usernameFromLogin(profile.username) }) },
+    }),
+  };
+}
+
+/**
+ * AUTH-01 : en production, un fournisseur sans ses variables disparaîtrait sans bruit ; on le signale au démarrage.
+ * En développement local et en test, l'absence est normale : rien n'est signalé.
+ */
+export function warnMissingProviders(env: Env = process.env, warn: (message: string) => void = console.warn) {
+  if (env.NODE_ENV !== "production") return;
+  const missing = Object.entries(oauthVariables(env)).filter(([, value]) => !value).map(([name]) => name);
+  if (missing.length) warn(`[auth] AUTH-01: OAuth sign-in incomplete in production, missing variables: ${missing.join(", ")}`);
+}
+
+export function createAuth(db: Db, env: Env = process.env) {
+  warnMissingProviders(env);
   return betterAuth({
     secret: process.env.BETTER_AUTH_SECRET,
     baseURL,
@@ -48,16 +94,7 @@ export function createAuth(db: Db) {
       // Hash natif de Bun (argon2id) ; verify reconnaît aussi le bcrypt des données de démo.
       password: { hash: (password) => Bun.password.hash(password), verify: ({ hash, password }) => Bun.password.verify(password, hash) },
     },
-    // Chaque fournisseur n'est activé que si son application OAuth est configurée.
-    // Pas de « username » dans mapProfileToUser : le plugin refuserait un nom pris. Le hook plus bas choisit le nom libre.
-    socialProviders: {
-      ...(GITHUB_CLIENT_ID && GITHUB_CLIENT_SECRET && {
-        github: { clientId: GITHUB_CLIENT_ID, clientSecret: GITHUB_CLIENT_SECRET, mapProfileToUser: (profile) => ({ displayUsername: usernameFromLogin(profile.login) }) },
-      }),
-      ...(DISCORD_CLIENT_ID && DISCORD_CLIENT_SECRET && {
-        discord: { clientId: DISCORD_CLIENT_ID, clientSecret: DISCORD_CLIENT_SECRET, mapProfileToUser: (profile) => ({ displayUsername: usernameFromLogin(profile.username) }) },
-      }),
-    },
+    socialProviders: socialProviders(env),
     // Un compte peut lier GitHub ou Discord même si son e-mail (interne, pour les comptes par identifiants) diffère.
     account: { accountLinking: { enabled: true, allowDifferentEmails: true } },
     user: {
@@ -67,7 +104,7 @@ export function createAuth(db: Db) {
         needsUsername: { type: "boolean", required: false, input: false, defaultValue: false },
       },
     },
-    plugins: [username({ minUsernameLength: USERNAME_MIN, maxUsernameLength: USERNAME_MAX, usernameValidator: isValidUsername })],
+    plugins: [username({ minUsernameLength: USERNAME_MIN, maxUsernameLength: USERNAME_MAX, usernameValidator: isValidUsername, displayUsernameValidator: isValidUsername })],
     databaseHooks: {
       user: {
         create: {
@@ -79,23 +116,42 @@ export function createAuth(db: Db) {
             const wanted = String(data.displayUsername || data.username || data.name);
             for (let n = 1; n <= (external ? 50 : 1); n++) {
               const name = withSuffix(wanted, n);
+              if (isBotName(name)) continue; // COURSE-06 : les noms des bots sont réservés au serveur
               const [player] = await db.insert(schema.players).values({ name }).onConflictDoNothing().returning({ id: schema.players.id });
               if (!player) continue;
               const chosen = external && { username: name.toLowerCase(), displayUsername: name, needsUsername: n > 1 };
-              return { data: { ...data, ...chosen, playerId: player.id } };
+              // Ni l'image envoyée à l'inscription ni l'avatar externe de GitHub ou Discord : rien de vérifié ni de réduit (AUTH-04).
+              return { data: { ...data, ...chosen, image: null, playerId: player.id } };
             }
             throw new APIError("BAD_REQUEST", { message: "Username is already taken." });
           },
         },
         update: {
           // Changer de pseudo renomme aussi le joueur : le nom en jeu suit le compte.
+          // Le pseudo affiché n'est que le pseudo avec sa casse : sans pseudo, il reprend le pseudo ; autre chose est refusé.
           before: async (data, ctx) => {
-            const name = data.displayUsername ?? data.username;
-            const playerId = (ctx?.context.session?.user as { playerId?: number } | undefined)?.playerId;
-            if (typeof name !== "string" || !playerId) return;
+            // AUTH-04 : POST /api/auth/update-user écrirait `image` tel quel, il est refusé.
+            // Les autres mises à jour (liaison GitHub ou Discord) ne touchent jamais la photo.
+            // Better Auth fusionne le résultat avec `data` : seul `image: undefined` retire la photo de la mise à jour.
+            if (data.image !== undefined && ctx?.path === "/update-user") throw imageNotAllowed();
+            const noImage = { image: undefined };
+            const sessionUser = ctx?.context.session?.user as { playerId?: number; username?: string | null } | undefined;
+            const playerId = sessionUser?.playerId;
+            // La route accepte n'importe quel JSON et le plugin ne vérifie que les chaînes : null ou 42 sont refusés ici.
+            if ("displayUsername" in data && typeof data.displayUsername !== "string") {
+              throw invalidDisplayUsername();
+            }
+            // Le plugin a déjà mis `username` en minuscules : la casse saisie se retrouve dans la requête.
+            const typed = (ctx?.body as { username?: unknown } | undefined)?.username;
+            const name = data.displayUsername ?? (typeof typed === "string" && typed.toLowerCase() === data.username ? typed : data.username);
+            if (typeof name !== "string" || !playerId) return { data: { ...data, ...noImage } };
+            const usernameAfter = typeof data.username === "string" ? data.username : sessionUser?.username;
+            if (!isValidUsername(name) || name.toLowerCase() !== usernameAfter?.toLowerCase()) {
+              throw invalidDisplayUsername();
+            }
             const renamed = await db.update(schema.players).set({ name }).where(eq(schema.players.id, playerId)).returning({ id: schema.players.id }).catch(() => []);
             if (!renamed.length) throw new APIError("BAD_REQUEST", { code: "USERNAME_IS_ALREADY_TAKEN", message: "Username is already taken." });
-            return { data: { ...data, needsUsername: false } };
+            return { data: { ...data, ...noImage, displayUsername: name, needsUsername: false } };
           },
         },
       },

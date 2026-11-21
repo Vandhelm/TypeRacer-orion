@@ -6,8 +6,21 @@ export const CODE_LENGTH = 6;
 /** La même règle, pour la contrainte de la base. */
 export const CODE_PATTERN = `^[${CODE_ALPHABET}]{${CODE_LENGTH}}$`;
 
-export function newRoomCode(random: () => number = Math.random) {
-  return Array.from({ length: CODE_LENGTH }, () => CODE_ALPHABET[Math.floor(random() * CODE_ALPHABET.length)]).join("");
+/** Des octets aléatoires : crypto.getRandomValues par défaut, imprévisible contrairement à Math.random. */
+export type RandomBytes = (count: number) => Uint8Array;
+const cryptoBytes: RandomBytes = (count) => crypto.getRandomValues(new Uint8Array(count));
+/** Le plus grand multiple de la taille de l'alphabet sous 256 : au-delà, un octet favoriserait les premières lettres. */
+const UNBIASED_LIMIT = 256 - (256 % CODE_ALPHABET.length);
+
+/** Un code de salon tiré au hasard (SALLE-02). L'unicité est garantie par la base : en cas de collision, on retire. */
+export function newRoomCode(random: RandomBytes = cryptoBytes) {
+  let code = "";
+  while (code.length < CODE_LENGTH) {
+    for (const byte of random(CODE_LENGTH)) {
+      if (byte < UNBIASED_LIMIT && code.length < CODE_LENGTH) code += CODE_ALPHABET[byte % CODE_ALPHABET.length];
+    }
+  }
+  return code;
 }
 
 /** Nettoie une saisie : majuscules, caractères hors alphabet retirés, 6 au plus. */
@@ -19,9 +32,37 @@ export function isRoomCode(value: string) {
   return new RegExp(CODE_PATTERN).test(value);
 }
 
-/** Jeton du lien d'invitation : long, pour qu'on ne puisse pas le deviner. */
-export function newInviteToken() {
-  return crypto.randomUUID().replaceAll("-", "");
+/**
+ * JOIN-01 : où mène le champ « Tu as un code ? » de l'accueil. Null : la saisie ne fait pas un code (trop courte, trop
+ * longue, caractères ambigus) ; l'accueil le dit au lieu d'ouvrir une salle. Le serveur décide ensuite si le salon existe.
+ */
+export function joinByCodeHref(input: string): string | null {
+  const code = [...input.toUpperCase()].filter((c) => CODE_ALPHABET.includes(c)).join("");
+  return isRoomCode(code) ? `/room?code=${code}` : null;
+}
+
+/** SALLE-04 : octets d'aléa d'un jeton d'invitation, 256 bits (le minimum exigé est 128). */
+export const INVITE_TOKEN_BYTES = 32;
+
+/** SALLE-04 : jeton du lien d'invitation, tiré par crypto, en base64url (43 caractères) : impossible à deviner. */
+export function newInviteToken(random: RandomBytes = cryptoBytes) {
+  // btoa plutôt que Buffer : ce fichier est aussi chargé par le navigateur
+  return btoa(String.fromCharCode(...random(INVITE_TOKEN_BYTES))).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
+}
+
+/** SALLE-04 : un jeton d'invitation bien formé, tel que newInviteToken le tire (43 caractères base64url). */
+export const isInviteToken = (value: string) => /^[A-Za-z0-9_-]{43}$/.test(value);
+
+/** SALLE-04 : sans session, /room?invite=T renvoie choisir un pseudonyme à l'accueil en gardant le jeton. */
+export function inviteDetour(query: URLSearchParams): string {
+  const token = query.get("invite");
+  return token && isInviteToken(token) ? `/?invite=${token}` : "/";
+}
+
+/** SALLE-04 : une fois le pseudonyme choisi ou le compte ouvert, l'accueil ramène au lien gardé, s'il y en a un. */
+export function inviteReturn(query: URLSearchParams): string | null {
+  const token = query.get("invite");
+  return token && isInviteToken(token) ? `/room?invite=${token}` : null;
 }
 
 export const VISIBILITIES = ["private", "semi", "public"] as const;
@@ -42,4 +83,11 @@ export function allows(visibility: Visibility, access: Access) {
 /** Apparaît dans l'explorateur et dans « Faire une course ». */
 export function isListed(visibility: Visibility) {
   return allows(visibility, "listed");
+}
+
+export type RoomStatus = "waiting" | "racing" | "results" | "closed";
+
+/** SALLE-09 : on rejoint un salon en attente ou sur l'écran des résultats, jamais pendant une course. */
+export function canJoin(status: RoomStatus) {
+  return status === "waiting" || status === "results";
 }

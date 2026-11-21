@@ -1,13 +1,21 @@
-/* Podium page entry (podium.html). */
+/* Podium page entry. */
 @layer theme, base, components, utilities;
 @import "tailwindcss/theme.css" layer(theme);
 @import "tailwindcss/utilities.css" layer(utilities);
-@source "../../../../podium.html";
-@source "../../../pages/podium";
+@source "../../../views/podium";
+@source "../../../components";
+/* RES-03 : the charts of the results reuse the profile's chart and keyboard heatmap */
+@source "../../../views/profile/SpeedChart.tsx";
+@source "../../../views/profile/KeyboardHeatmap.tsx";
+@source "../../../views/profile/styles.ts";
+@source "../../../players/BotTag.tsx";
 
 @import "../../base/tokens.css";
 @import "../../base/reset.css" layer(base);
-@import "../../base/utilities.css";
+@import "../../base/animations.css";
+@import "../../components/cues.css";
+
+@import "../../components/keymap.css";
 
 @import "./scene.css";
 @import "./board.css";

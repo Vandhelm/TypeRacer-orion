@@ -1,6 +1,7 @@
 // Client Better Auth du navigateur : parle à /api/auth sur la même origine.
 import { usernameClient } from "better-auth/client/plugins";
 import { createAuthClient } from "better-auth/react";
+import { socialCallbacks } from "./callbacks";
 import { placeholderEmail } from "./username";
 
 export const authClient = createAuthClient({ plugins: [usernameClient()] });
@@ -18,8 +19,9 @@ export type SocialProvider = (typeof SOCIAL_PROVIDERS)[number];
 export const isProvider = (value: string | null): value is SocialProvider => SOCIAL_PROVIDERS.includes(value as SocialProvider);
 export const PROVIDER_NAMES: Record<SocialProvider, string> = { github: "GitHub", discord: "Discord" };
 
-export function signInWith(provider: SocialProvider) {
-  return authClient.signIn.social({ provider, callbackURL: "/", errorCallbackURL: `/?authError=${provider}` });
+/** search : location.search de l'accueil, pour revenir au lien d'invitation après la connexion (SALLE-04). */
+export function signInWith(provider: SocialProvider, search = "") {
+  return authClient.signIn.social({ provider, ...socialCallbacks(provider, search) });
 }
 
 /** Relie GitHub ou Discord au compte connecté : ensuite, « Continuer avec … » ouvre ce même compte. back : la page où revenir. */

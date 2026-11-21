@@ -1,16 +1,12 @@
-/** Logo mark (red diamond) next to an overline and a title (styles: components/brand/logo-title.css). */
-export function LogoTitle({ overline, name }: { overline: string; name: string }) {
+/** A11Y-02 : un h2, sous le h1 de la page. Logo mark (public/logo.png) next to a title (Tailwind; keyframes rise and trace in base/animations.css). */
+export function LogoTitle({ name }: { name: string }) {
   return (
-    <header className="logo-title">
-      <div className="logo-title-mark" aria-hidden="true">
-        <svg viewBox="0 0 100 100">
-          <polygon className="logo-title-diamond" points="50,4 96,50 50,96 4,50" />
-          <polygon className="logo-title-edge" points="50,12 92,46 50,88 8,54" />
-        </svg>
+    <header className="flex animate-[rise_.7s_.35s_cubic-bezier(.2,.8,.2,1)_both] items-center gap-[2.4vh] motion-reduce:animate-none">
+      <div className="relative size-[9vh] min-h-[60px] min-w-[60px] flex-none phone:size-[60px]" aria-hidden="true">
+        <img className="size-full object-contain" src="/logo.png" alt="" />
       </div>
       <div>
-        <p className="logo-title-overline">{overline}</p>
-        <h1 className="logo-title-name">{name}</h1>
+        <h2 className="font-sans text-[max(26px,5vh)] leading-[1.1] font-light tracking-[.12em]">{name}</h2>
       </div>
     </header>
   );

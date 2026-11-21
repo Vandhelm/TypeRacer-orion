@@ -1,0 +1,316 @@
+// BOT-05 : le moteur des bots, pur et déterministe à partir d'une graine. Partagé par la page de course (affichage,
+// src/views/game/race.ts) et le serveur (fin de course et classement, src/server/bot-course.ts) : avec la graine du
+// salon (rooms.text_seed), le même texte, le même bot et le même mode d'erreur, tous calculent la même trajectoire.
+// Aucun Math.random ni Date.now ici : le temps est donné en ticks de BOT_TICK_MS depuis le départ.
+// BOT-01 : cinq niveaux (vitesse, taux d'erreur). BOT-02 : rythme variable (accélérations, hésitations, mots
+// difficiles plus lents). BOT-03 : des fautes qui coûtent du temps, selon le mode d'erreur du salon (CONF-08).
+// Valeurs retenues : docs/ARCHITECTURE.md, « Niveaux et comportement des bots ».
+// BOT-04 : les bonus reçus par un bot (liste datée, décidée par le serveur temps réel) sont rejoués ici, tick par tick :
+// +3 / -3 mots changent son texte, le brouillard le ralentit (BOT_FOG_SPEED). Voir « Bots et bonus (BOT-04) ».
+import { editWords, type BonusEffect } from "./bonus-effects";
+import type { RoomSettings } from "./settings";
+import { seededRandom } from "./text";
+
+export const BOT_TICK_MS = 200;
+/** Au-delà de 24 h de course, un bot n'avance plus : garde-fou de la simulation sans limite de temps. */
+const MAX_TICKS = (24 * 3600 * 1000) / BOT_TICK_MS;
+
+/** BOT-01 : les cinq niveaux, du plus lent au plus rapide. */
+export const BOT_LEVELS = ["noob", "beginner", "intermediate", "expert", "impossible"] as const;
+export type BotLevel = (typeof BOT_LEVELS)[number];
+
+type LevelSpec = {
+  /** MPM net visé, plage où la vitesse d'un bot est tirée. */
+  wpm: [number, number];
+  /** Taux d'erreur visé : fautes ÷ frappes, sur un texte courant, précision du salon « correcte ». */
+  errorRate: number;
+  /** BOT-03 : temps de réaction avant de corriger une faute (puis effacement et nouvelle frappe). */
+  correctionMs: number;
+  /** BOT-02 : chance d'hésiter avant un mot, et durée moyenne de l'hésitation. */
+  hesitation: { chance: number; ms: number };
+};
+
+export const BOT_LEVEL_SPECS: Record<BotLevel, LevelSpec> = {
+  noob: { wpm: [10, 20], errorRate: 0.12, correctionMs: 700, hesitation: { chance: 0.3, ms: 700 } },
+  beginner: { wpm: [20, 35], errorRate: 0.08, correctionMs: 550, hesitation: { chance: 0.22, ms: 550 } },
+  intermediate: { wpm: [35, 60], errorRate: 0.05, correctionMs: 400, hesitation: { chance: 0.15, ms: 450 } },
+  expert: { wpm: [70, 100], errorRate: 0.02, correctionMs: 300, hesitation: { chance: 0.1, ms: 350 } },
+  impossible: { wpm: [140, 170], errorRate: 0.005, correctionMs: 200, hesitation: { chance: 0.05, ms: 250 } },
+};
+
+/** La précision du salon (CONF-10, onglet Bots) multiplie le taux d'erreur du niveau. */
+export const BOT_ACCURACY_FACTOR: Record<RoomSettings["botAccuracy"], number> = { shaky: 2, decent: 1, high: 0.5 };
+
+/** L'ancienne vitesse de salon (bots ajoutés d'un coup, bot sans niveau) : le niveau qui lui correspond. */
+export function levelOfSpeed(speed: RoomSettings["botSpeed"]): BotLevel {
+  return ({ slow: "beginner", medium: "intermediate", fast: "expert", mixed: "intermediate" } as const)[speed];
+}
+
+/** Un bot : son niveau, sa vitesse visée (MPM net) et sa précision (%, frappes justes ÷ frappes). */
+export type BotProfile = { level: BotLevel; wpm: number; accuracy: number };
+
+/** La graine d'un bot dans une course : celle de la course mêlée à son nom (sans la casse), FNV-1a. */
+export function botSeed(raceSeed: number, name: string): number {
+  let hash = 0x811c9dc5 ^ raceSeed;
+  for (const char of name.toLowerCase()) {
+    hash ^= char.codePointAt(0)!;
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return hash | 0;
+}
+
+/** Vitesse (MPM) et précision (%) d'un bot, tirées de sa graine : la plage de son niveau, ±20 % autour de son taux. */
+export function botProfile(seed: number, level: BotLevel, accuracy: RoomSettings["botAccuracy"]): BotProfile {
+  const spec = BOT_LEVEL_SPECS[level];
+  if (!spec) throw new Error(`unknown bot level: ${String(level)}`);
+  const random = seededRandom(seed);
+  const [low, high] = spec.wpm;
+  const wpm = Math.round(low + random() * (high - low));
+  const rate = spec.errorRate * BOT_ACCURACY_FACTOR[accuracy] * (0.8 + random() * 0.4);
+  return { level, wpm, accuracy: 100 * (1 - rate) };
+}
+
+/** L'aléa du tick `tick` (à partir de 1) d'un bot, entre 0 et 1 : ne dépend que de sa graine et du tick. */
+export function botJitter(seed: number, tick: number): number {
+  return seededRandom(seed ^ Math.imul(tick, 0x9e3779b1))();
+}
+
+/** Un tirage entre 0 et 1 lié à la graine, à un usage (`salt`) et à un indice (caractère, mot) : rien d'autre. */
+function draw(seed: number, salt: number, index: number): number {
+  return seededRandom(seed ^ Math.imul(index + 1, salt))();
+}
+const ERROR_SALT = 0x85ebca6b;
+const HESITATE_SALT = 0xc2b2ae35;
+const PAUSE_SALT = 0x27d4eb2f;
+const RHYTHM_SALT = 0x165667b1;
+
+const easyChar = (char: string) => /[a-z ]/.test(char);
+
+/**
+ * BOT-02 : difficulté d'un mot, de 0 à 1 : 0,1 par lettre au-delà de 6, 0,25 par caractère hors a-z (majuscule,
+ * accent, chiffre, ponctuation). Un mot difficile est tapé plus lentement et fait hésiter plus souvent.
+ */
+export function wordDifficulty(word: string): number {
+  const chars = Array.from(word);
+  const specials = chars.filter((char) => !easyChar(char)).length;
+  return Math.min(1, Math.max(0, chars.length - 6) * 0.1 + specials * 0.25);
+}
+/** Un mot de difficulté 1 se tape à 55 % de la vitesse. */
+const HARD_SLOWDOWN = 0.45;
+/** Une faute sur un caractère hors a-z est 1,5 fois plus probable. */
+const HARD_CHAR_ERRORS = 1.5;
+/** Mode libre : la faute n'est pas corrigée, le bot marque seulement un temps (un tiers de sa correction). */
+const FALTER_SHARE = 1 / 3;
+
+export type BotMode = RoomSettings["mistakes"];
+
+/**
+ * Le texte d'une course pour le moteur : ses mots, les caractères cumulés après chaque mot (espaces comprises), la
+ * difficulté de chaque mot, le mode d'erreur, et sa charge (ce qui ralentit un bot sur ce texte, pour basePace) :
+ * caractères pondérés par le ralentissement de leur mot, caractères faciles et difficiles (fautes), hésitations
+ * attendues (somme de 1 + difficulté sur les mots après le premier).
+ */
+export type BotText = {
+  words: readonly string[];
+  marks: number[];
+  difficulty: number[];
+  mistakes: BotMode;
+  load: { slowed: number; easy: number; hard: number; hesitations: number };
+};
+
+export function botText(words: readonly string[], mistakes: BotMode): BotText {
+  const marks = [0];
+  words.forEach((word, i) => marks.push(marks[i]! + word.length + 1));
+  const difficulty = words.map(wordDifficulty);
+  const load = { slowed: 0, easy: 0, hard: 0, hesitations: 0 };
+  words.forEach((word, i) => {
+    load.slowed += (word.length + 1) / (1 - HARD_SLOWDOWN * difficulty[i]!);
+    for (const char of word + " ") load[easyChar(char) ? "easy" : "hard"] += 1;
+    if (i > 0) load.hesitations += 1 + difficulty[i]!;
+  });
+  return { words, marks, difficulty, mistakes, load };
+}
+
+/**
+ * La vitesse de frappe de base (caractères par seconde) d'un bot sur ce texte : plus rapide que sa vitesse visée, pour
+ * que le temps moyen du texte, en mode « corriger » au taux de son niveau, soit celui de sa vitesse visée
+ * (caractères × 12 / MPM s), quelle que soit la difficulté du texte. Temps attendu = A / v + B, avec
+ * A = 0,992 × caractères pondérés par le ralentissement de leur mot (0,992 : moyenne de 1 / rythme sur 0,8–1,25)
+ *   + 2 × fautes attendues (effacer et retaper), fautes = p × (faciles + 1,5 × difficiles), p = r / (1 - r) ;
+ * B = fautes × réaction + hésitations attendues × chance × durée moyenne.
+ */
+function basePace(profile: BotProfile, text: BotText): number {
+  const spec = BOT_LEVEL_SPECS[profile.level];
+  const total = text.marks.at(-1)!;
+  if (!total) return 1;
+  const p = spec.errorRate / (1 - spec.errorRate);
+  const { slowed, easy, hard, hesitations } = text.load;
+  const errors = p * (easy + HARD_CHAR_ERRORS * hard);
+  const a = 0.992 * slowed + 2 * errors;
+  const b = (errors * spec.correctionMs + hesitations * spec.hesitation.chance * spec.hesitation.ms) / 1000;
+  const target = (total * 12) / Math.max(1, profile.wpm);
+  return a / Math.max(target - b, total * 0.001);
+}
+
+/** BOT-03 : la chance qu'une frappe de ce caractère soit fausse, selon la précision du bot et le mode d'erreur. */
+export function botErrorChance(bot: Pick<BotProfile, "accuracy">, mistakes: BotMode, char: string): number {
+  const rate = Math.min(0.9, Math.max(0, (100 - bot.accuracy) / 100));
+  return (mistakes === "fix" ? rate / (1 - rate) : rate) * (easyChar(char) ? 1 : HARD_CHAR_ERRORS);
+}
+
+/**
+ * L'état d'un bot : caractères du texte validés (fractionnaire en cours de frappe), frappes et fautes, caractères des
+ * mots laissés faux (mode libre), attente restante (hésitation ou correction), éliminé (mode fatal).
+ */
+export type BotState = { chars: number; typed: number; errors: number; missed: number; missedWord: number; waitMs: number; out: boolean };
+export const BOT_START: BotState = { chars: 0, typed: 0, errors: 0, missed: 0, missedWord: -1, waitMs: 0, out: false };
+
+/** Le mot où en est le caractère `chars` (la longueur du texte une fois tout tapé). */
+function wordAt(marks: number[], chars: number): number {
+  let low = 0;
+  let high = marks.length - 1;
+  while (low < high) {
+    const mid = (low + high + 1) >> 1;
+    if (marks[mid]! <= chars) low = mid;
+    else high = mid - 1;
+  }
+  return low;
+}
+
+/** La position en mots (fractionnaire) du caractère `chars`. */
+export function botPosition(text: BotText, chars: number): number {
+  const word = wordAt(text.marks, chars);
+  if (word >= text.words.length) return text.words.length;
+  return word + (chars - text.marks[word]!) / (text.marks[word + 1]! - text.marks[word]!);
+}
+
+export const botArrived = (text: BotText, state: BotState) => state.chars >= text.marks.at(-1)! && state.waitMs <= 0;
+
+/**
+ * Un tick : l'état après BOT_TICK_MS. Le bot attend d'abord (hésitation, correction), puis tape caractère par
+ * caractère à sa vitesse de base × `jitter` (60 % à 140 %, l'aléa du tick) × son rythme du mot (80 % à 125 %, tiré par
+ * mot) × la difficulté du mot. Chaque frappe peut être fausse (tirage lié au caractère) : selon le mode, le bot corrige
+ * (réaction, effacement, nouvelle frappe), continue en laissant le mot faux, ou s'arrête (fatal). Avant chaque mot, il
+ * peut hésiter, plus souvent avant un mot difficile. BOT-04 : `slow` multiplie sa vitesse de frappe (brouillard).
+ */
+export function botStep(text: BotText, state: BotState, bot: BotProfile & { seed: number }, jitter: number, slow = 1): BotState {
+  if (state.out || botArrived(text, state)) return state;
+  const { marks, words, difficulty, mistakes } = text;
+  const total = marks.at(-1)!;
+  const spec = BOT_LEVEL_SPECS[bot.level];
+  const pace = basePace(bot, text);
+  const s = { ...state };
+  let time = BOT_TICK_MS;
+  const wait = () => {
+    const spent = Math.min(s.waitMs, time);
+    s.waitMs -= spent;
+    time -= spent;
+  };
+  wait();
+  while (time > 0 && s.chars < total) {
+    const word = wordAt(marks, s.chars);
+    const speed = slow * pace * (0.6 + 0.8 * jitter) * (0.8 + 0.45 * draw(bot.seed, RHYTHM_SALT, word)) * (1 - HARD_SLOWDOWN * difficulty[word]!);
+    const next = Math.min(Math.floor(s.chars) + 1, total);
+    const need = ((next - s.chars) / speed) * 1000;
+    if (need > time) {
+      const moved = s.chars + (speed * time) / 1000;
+      if (moved < next) {
+        s.chars = moved;
+        break;
+      }
+    }
+    time = Math.max(0, time - need);
+    const key = next - 1;
+    const char = words[word]![key - marks[word]!] ?? " ";
+    s.typed += 1;
+    if (draw(bot.seed, ERROR_SALT, key) < botErrorChance(bot, mistakes, char)) {
+      s.errors += 1;
+      if (mistakes === "fatal") {
+        s.chars = key;
+        s.out = true;
+        return s;
+      }
+      if (mistakes === "fix") {
+        // la faute, puis effacer et retaper le bon caractère
+        s.typed += 1;
+        s.waitMs += spec.correctionMs + (2 * 1000) / pace;
+      } else {
+        s.waitMs += spec.correctionMs * FALTER_SHARE;
+        if (s.missedWord !== word) {
+          s.missed += words[word]!.length + 1;
+          s.missedWord = word;
+        }
+      }
+    }
+    s.chars = next;
+    if (next === marks[word + 1] && word + 1 < words.length && draw(bot.seed, HESITATE_SALT, word + 1) < spec.hesitation.chance * (1 + difficulty[word + 1]!)) {
+      s.waitMs += spec.hesitation.ms * (0.5 + draw(bot.seed, PAUSE_SALT, word + 1));
+    }
+    wait();
+  }
+  return s;
+}
+
+/**
+ * BOT-04 : un effet de bonus reçu par un bot, daté de `at` (ms depuis le départ, heure du serveur temps réel qui l'a
+ * décidé). Il s'applique après le tick où tombe `at` (floor(at / BOT_TICK_MS)), sur l'état du bot à cet instant : celui
+ * que le serveur a vu en le décidant. `seq` : son rang dans les effets de la course sur les bots (0, 1, 2…), donné par
+ * le serveur temps réel ; deux effets au même `at` s'appliquent dans cet ordre partout (orderBotBonuses). `from` : le bot
+ * qui a reçu ce bonus, quand c'en est un (son effet peut viser un autre coureur, même humain) ; un serveur redémarré et le
+ * podium en relisent le compte. Le moteur ne rejoue que les effets dont la cible est le bot (filtrés par l'appelant).
+ */
+export type BotBonus = { at: number; seq?: number; from?: string; effect: BonusEffect };
+
+/** BOT-04 : les effets dans l'ordre où le serveur les a décidés, (at, seq) ; sans seq (gardés avant lui), l'ordre reçu. */
+export const orderBotBonuses = <T extends BotBonus>(list: readonly T[]): T[] => [...list].sort((a, b) => a.at - b.at || (a.seq ?? 0) - (b.seq ?? 0));
+/** BOT-04 : dans le brouillard, un bot tape à 60 % de sa vitesse (il ne voit plus que le mot en cours). */
+export const BOT_FOG_SPEED = 0.6;
+
+const dueTick = (at: number) => Math.max(0, Math.floor(at / BOT_TICK_MS));
+
+/**
+ * BOT-04 : le tick `tick` (à partir de 1) d'un bot avec ses bonus. Les effets sur le texte dus avant ce tick s'appliquent
+ * d'abord, dans l'ordre de la liste (editWords, mots validés = mots finis du bot) ; un brouillard en cours le ralentit
+ * pendant ceil(durée / BOT_TICK_MS) ticks. Renvoie son texte (le même objet s'il n'a pas changé) et son état.
+ */
+export function botBonusTick(text: BotText, state: BotState, bot: BotProfile & { seed: number }, tick: number, bonuses: readonly BotBonus[]): { text: BotText; state: BotState } {
+  let current = text;
+  let slow = 1;
+  for (const { at, effect } of bonuses) {
+    const due = dueTick(at);
+    if (effect.kind === "fog") {
+      if (tick > due && tick <= due + Math.ceil(effect.durationMs / BOT_TICK_MS)) slow = BOT_FOG_SPEED;
+    } else if (due === tick - 1) {
+      current = botText(editWords(current.words, effect, wordAt(current.marks, state.chars)), current.mistakes);
+    }
+  }
+  return { text: current, state: botStep(current, state, bot, botJitter(bot.seed, tick), slow) };
+}
+
+/**
+ * La course d'un bot `elapsedMs` après le départ : sa position (en mots), sa part du texte (0 à 1), son arrivée et
+ * son élimination (ms depuis le départ, un nombre entier de ticks ; null sinon), ses frappes, fautes et caractères
+ * manqués. Une course limitée l'arrête à sa durée. BOT-04 : `bonuses`, les effets qu'il a reçus, rejoués à leur
+ * heure ; `words`, son texte à cet instant (celui de la course, changé par ses bonus).
+ */
+export type BotRun = { position: number; progress: number; arrivedMs: number | null; eliminatedMs: number | null; typed: number; errors: number; missed: number; words: readonly string[] };
+
+export function simulateBot(course: { words: readonly string[]; durationMs: number | null; mistakes: BotMode }, bot: BotProfile & { seed: number }, elapsedMs: number, bonuses: readonly BotBonus[] = []): BotRun {
+  const { words, durationMs } = course;
+  const until = Math.min(elapsedMs, durationMs ?? Infinity);
+  const ticks = Number.isNaN(until) ? 0 : Math.min(MAX_TICKS, Math.max(0, Math.floor(until / BOT_TICK_MS)));
+  if (!words.length) return { position: 0, progress: 1, arrivedMs: 0, eliminatedMs: null, typed: 0, errors: 0, missed: 0, words };
+  let text = botText(words, course.mistakes);
+  let state = BOT_START;
+  const ordered = orderBotBonuses(bonuses);
+  const run = (arrivedMs: number | null, eliminatedMs: number | null): BotRun => {
+    const position = botPosition(text, state.chars);
+    return { position, progress: arrivedMs === null ? position / text.words.length : 1, arrivedMs, eliminatedMs, typed: state.typed, errors: state.errors, missed: state.missed, words: text.words };
+  };
+  for (let tick = 1; tick <= ticks; tick++) {
+    ({ text, state } = botBonusTick(text, state, bot, tick, ordered));
+    if (state.out) return run(null, tick * BOT_TICK_MS);
+    if (botArrived(text, state)) return run(tick * BOT_TICK_MS, null);
+  }
+  return run(null, null);
+}

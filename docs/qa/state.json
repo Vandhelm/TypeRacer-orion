@@ -1,0 +1,452 @@
+{
+  "TECH-01": {
+    "commit": "2acdffe",
+    "date": "2026-11-19",
+    "scope": "suivi (light)"
+  },
+  "TECH-02": {
+    "commit": "b436148",
+    "date": "2026-11-18",
+    "scope": "voir notes de la matrice"
+  },
+  "TECH-03": {
+    "commit": "7b6f39a",
+    "date": "2026-11-18",
+    "scope": "critère"
+  },
+  "TECH-04": {
+    "commit": "2acdffe",
+    "date": "2026-11-19",
+    "scope": "suivi (light)"
+  },
+  "TECH-05": {
+    "commit": "b7615e5",
+    "date": "2026-11-20",
+    "scope": "critère, production"
+  },
+  "TECH-06": {
+    "commit": "b7615e5",
+    "date": "2026-11-20",
+    "scope": "critère, production"
+  },
+  "TECH-07": {
+    "commit": "2acdffe",
+    "date": "2026-11-19",
+    "scope": "suivi (light)"
+  },
+  "TECH-08": {
+    "commit": "b7615e5",
+    "date": "2026-11-20",
+    "scope": "critère, production"
+  },
+  "TECH-09": {
+    "commit": "2acdffe",
+    "date": "2026-11-19",
+    "scope": "suivi (light)"
+  },
+  "TECH-10": {
+    "commit": "b1bd5b4",
+    "date": "2026-11-19",
+    "scope": "critère TECH-10 (light)"
+  },
+  "DES-01": {
+    "commit": "5eecf41",
+    "date": "2026-11-20",
+    "scope": "critère (light)"
+  },
+  "DES-02": {
+    "commit": "5eecf41",
+    "date": "2026-11-20",
+    "scope": "critère (light)"
+  },
+  "DES-03": {
+    "commit": "5eecf41",
+    "date": "2026-11-20",
+    "scope": "critère (light)"
+  },
+  "DES-04": {
+    "commit": "8106c20",
+    "date": "2026-11-19",
+    "scope": "critère (medium)"
+  },
+  "DES-05": {
+    "commit": "5eecf41",
+    "date": "2026-11-20",
+    "scope": "critère (light)"
+  },
+  "DES-06": {
+    "commit": "7494ef2",
+    "date": "2026-11-19",
+    "scope": "critère feature/game/des-06 (medium, rendu)"
+  },
+  "AUTH-01": {
+    "commit": "b7615e5",
+    "date": "2026-11-20",
+    "scope": "critère, production"
+  },
+  "AUTH-02": {
+    "commit": "2acdffe",
+    "date": "2026-11-19",
+    "scope": "suivi (light)"
+  },
+  "AUTH-03": {
+    "commit": "258594d",
+    "date": "2026-11-19",
+    "scope": "critère (light)"
+  },
+  "AUTH-04": {
+    "commit": "2acdffe",
+    "date": "2026-11-19",
+    "scope": "suivi (light)"
+  },
+  "AUTH-05": {
+    "commit": "2acdffe",
+    "date": "2026-11-19",
+    "scope": "suivi (light)"
+  },
+  "AUTH-06": {
+    "commit": "2acdffe",
+    "date": "2026-11-19",
+    "scope": "suivi (light)"
+  },
+  "SALLE-01": {
+    "commit": "808f024",
+    "date": "2026-11-19",
+    "scope": "section 5.3 (light, feature/room/salle-integration)"
+  },
+  "SALLE-02": {
+    "commit": "808f024",
+    "date": "2026-11-19",
+    "scope": "section 5.3 (light, feature/room/salle-integration)"
+  },
+  "SALLE-03": {
+    "commit": "808f024",
+    "date": "2026-11-19",
+    "scope": "section 5.3 (light, feature/room/salle-integration)"
+  },
+  "SALLE-04": {
+    "commit": "ac67d2c",
+    "date": "2026-11-19",
+    "scope": "critère (light, fix/home/salle-04)"
+  },
+  "SALLE-05": {
+    "commit": "808f024",
+    "date": "2026-11-19",
+    "scope": "section 5.3 (light, feature/room/salle-integration)"
+  },
+  "SALLE-06": {
+    "commit": "808f024",
+    "date": "2026-11-19",
+    "scope": "section 5.3 (light, feature/room/salle-integration)"
+  },
+  "SALLE-07": {
+    "commit": "1c8c316",
+    "date": "2026-11-19",
+    "scope": "critère (light, feature/room/salle-integration)"
+  },
+  "SALLE-08": {
+    "commit": "808f024",
+    "date": "2026-11-19",
+    "scope": "section 5.3 (light, feature/room/salle-integration)"
+  },
+  "SALLE-09": {
+    "commit": "808f024",
+    "date": "2026-11-19",
+    "scope": "section 5.3 (light, feature/room/salle-integration)"
+  },
+  "SALLE-10": {
+    "commit": "808f024",
+    "date": "2026-11-19",
+    "scope": "section 5.3 (light, feature/room/salle-integration)"
+  },
+  "JOIN-01": {
+    "commit": "a97ab02",
+    "date": "2026-11-19",
+    "scope": "critère feature/home/join-01 (medium)"
+  },
+  "JOIN-02": {
+    "commit": "253d6d1",
+    "date": "2026-11-19",
+    "scope": "critère (medium)"
+  },
+  "JOIN-03": {
+    "commit": "e9ef8fd",
+    "date": "2026-11-19",
+    "scope": "critère feature/home/join-03 (medium)"
+  },
+  "CONF-01": {
+    "commit": "455ae18",
+    "date": "2026-11-19",
+    "scope": "critère (medium)"
+  },
+  "CONF-02": {
+    "commit": "2acdffe",
+    "date": "2026-11-19",
+    "scope": "suivi (light)"
+  },
+  "CONF-03": {
+    "commit": "c307192",
+    "date": "2026-11-19",
+    "scope": "critère feature/game/conf-03"
+  },
+  "CONF-04": {
+    "commit": "bb500b5",
+    "date": "2026-11-19",
+    "scope": "critère"
+  },
+  "CONF-05": {
+    "commit": "ba152aa",
+    "date": "2026-11-19",
+    "scope": "critère feature/game/conf-05 (medium)"
+  },
+  "CONF-06": {
+    "commit": "71c2fe9",
+    "date": "2026-11-19",
+    "scope": "critère (2e passage, medium)"
+  },
+  "CONF-07": {
+    "commit": "3eb82d6",
+    "date": "2026-11-19",
+    "scope": "critère"
+  },
+  "CONF-08": {
+    "commit": "2acdffe",
+    "date": "2026-11-19",
+    "scope": "suivi (light)"
+  },
+  "CONF-09": {
+    "commit": "a48ca23",
+    "date": "2026-11-19",
+    "scope": "critère (medium)"
+  },
+  "CONF-10": {
+    "commit": "b698cab",
+    "date": "2026-11-20",
+    "scope": "critère (medium)"
+  },
+  "CONF-11": {
+    "commit": "4ca2db9",
+    "date": "2026-11-19",
+    "scope": "critère"
+  },
+  "CONF-12": {
+    "commit": "4ca2db9",
+    "date": "2026-11-19",
+    "scope": "critère"
+  },
+  "COURSE-01": {
+    "commit": "d6eb6b4",
+    "date": "2026-11-19",
+    "scope": "critère feature/game/course-01 (light)"
+  },
+  "COURSE-02": {
+    "commit": "d160638",
+    "date": "2026-11-19",
+    "scope": "critère"
+  },
+  "COURSE-03": {
+    "commit": "9563da0",
+    "date": "2026-11-20",
+    "scope": "critère feature/game/course-03"
+  },
+  "COURSE-04": {
+    "commit": "3bd4163",
+    "date": "2026-11-19",
+    "scope": "critère (medium)"
+  },
+  "COURSE-05": {
+    "commit": "552231d",
+    "date": "2026-11-19",
+    "scope": "critère feature/game/course-05 (rendu 8 couloirs 630/800/1280)"
+  },
+  "COURSE-06": {
+    "commit": "7ab3a26",
+    "date": "2026-11-20",
+    "scope": "critère (fix/game/course-06-times + fix/game/bot-bonus-followups)"
+  },
+  "COURSE-07": {
+    "commit": "8ac9e3d",
+    "date": "2026-11-20",
+    "scope": "critère (medium, branche feature/game/course-07)"
+  },
+  "COURSE-08": {
+    "commit": "bef44cd",
+    "date": "2026-11-20",
+    "scope": "critère feature/game/course-08 (medium, 4e passage)"
+  },
+  "COURSE-09": {
+    "commit": "f18a91d",
+    "date": "2026-11-20",
+    "scope": "critère (feature/game/course-09) + BOT-05"
+  },
+  "COURSE-10": {
+    "commit": "c08156f",
+    "date": "2026-11-20",
+    "scope": "critère (dev)"
+  },
+  "COURSE-11": {
+    "commit": "1b42ca7",
+    "date": "2026-11-19",
+    "scope": "critère (medium)"
+  },
+  "BOT-01": {
+    "commit": "664b859",
+    "date": "2026-11-20",
+    "scope": "critère (feature/game/bot-levels)"
+  },
+  "BOT-02": {
+    "commit": "664b859",
+    "date": "2026-11-20",
+    "scope": "critère (feature/game/bot-levels)"
+  },
+  "BOT-03": {
+    "commit": "664b859",
+    "date": "2026-11-20",
+    "scope": "critère (feature/game/bot-levels)"
+  },
+  "BOT-04": {
+    "commit": "7ab3a26",
+    "date": "2026-11-20",
+    "scope": "critère (fix/game/bot-bonus-followups)"
+  },
+  "BOT-05": {
+    "commit": "649bda8",
+    "date": "2026-11-20",
+    "scope": "critère (feature/game/bot-05)"
+  },
+  "BONUS-01": {
+    "commit": "742f253",
+    "date": "2026-11-20",
+    "scope": "critère (feature/game/bonus-01)"
+  },
+  "BONUS-02": {
+    "commit": "8903d73",
+    "date": "2026-11-20",
+    "scope": "critère (feature/game/bonus-02)"
+  },
+  "BONUS-03": {
+    "commit": "f91bfa0",
+    "date": "2026-11-20",
+    "scope": "critère et rendu (fix/game/bonus-batch)"
+  },
+  "BONUS-04": {
+    "commit": "c9d0ba1",
+    "date": "2026-11-20",
+    "scope": "critère (feature/game/bonus-04)"
+  },
+  "RES-01": {
+    "commit": "2acdffe",
+    "date": "2026-11-19",
+    "scope": "suivi (light)"
+  },
+  "RES-02": {
+    "commit": "58e2132",
+    "date": "2026-11-20",
+    "scope": "critère (fix/podium/res-02-guests)"
+  },
+  "RES-03": {
+    "commit": "ff84eaf",
+    "date": "2026-11-20",
+    "scope": "critère (feature/profile/res-03 + fix/podium/res-03-scroll)"
+  },
+  "RES-04": {
+    "commit": "c095102",
+    "date": "2026-11-20",
+    "scope": "critère (feature/podium/res-04)"
+  },
+  "RES-05": {
+    "commit": "5f62fa5",
+    "date": "2026-11-20",
+    "scope": "critère (fix/server/res-05-status)"
+  },
+  "HIST-01": {
+    "commit": "2acdffe",
+    "date": "2026-11-19",
+    "scope": "suivi (light)"
+  },
+  "HIST-02": {
+    "commit": "33f65fb",
+    "date": "2026-11-20",
+    "scope": "critère (fix/server/hist-02-rerank, rendu vu)"
+  },
+  "I18N-01": {
+    "commit": "2acdffe",
+    "date": "2026-11-19",
+    "scope": "suivi (light)"
+  },
+  "I18N-02": {
+    "commit": "2acdffe",
+    "date": "2026-11-19",
+    "scope": "suivi (light)"
+  },
+  "I18N-03": {
+    "commit": "f8dd6de",
+    "date": "2026-11-18",
+    "scope": "voir notes de la matrice"
+  },
+  "TEST-01": {
+    "commit": "2acdffe",
+    "date": "2026-11-19",
+    "scope": "suivi (light)"
+  },
+  "TEST-02": {
+    "commit": "dfd69dd",
+    "date": "2026-11-20",
+    "scope": "critère (test/e2e/test-02)"
+  },
+  "TEST-03": {
+    "commit": "dfd69dd",
+    "date": "2026-11-20",
+    "scope": "critère (test/e2e/test-02)"
+  },
+  "PERF-01": {
+    "commit": "f617e0b",
+    "date": "2026-11-20",
+    "scope": "critère (feature/home/perf-01)"
+  },
+  "PERF-02": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "PERF-03": {
+    "commit": "0ad1d7c",
+    "date": "2026-11-20",
+    "scope": "critère (feature/game/perf-03)"
+  },
+  "A11Y-01": {
+    "commit": "3c5791a",
+    "date": "2026-11-20",
+    "scope": "critère (feature/design/des-05)"
+  },
+  "A11Y-02": {
+    "commit": "6980ac7",
+    "date": "2026-11-20",
+    "scope": "critère (fix/design/a11y-02)"
+  },
+  "A11Y-03": {
+    "commit": "58506c8",
+    "date": "2026-11-20",
+    "scope": "critère (fix/design/a11y-03)"
+  },
+  "A11Y-04": {
+    "commit": "efa1c65",
+    "date": "2026-11-20",
+    "scope": "critère (fix/design/a11y-04)"
+  },
+  "SEC-01": {
+    "commit": "40409e0",
+    "date": "2026-11-20",
+    "scope": "critère (fix/server/sec-01-invites)"
+  },
+  "SEC-02": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  },
+  "SEC-03": {
+    "commit": "1fba673",
+    "date": "2026-11-18",
+    "scope": "site (light)"
+  }
+}

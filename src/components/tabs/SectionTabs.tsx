@@ -9,7 +9,12 @@ type SectionTabsProps<T extends string> = {
   ariaLabel?: string;
 };
 
-/** Accessible tablist, arrow keys move between tabs (styles: components/tabs/section-tabs.css). */
+const TAB =
+  "unset box-border flex min-h-[42px] items-center gap-2.5 px-[clamp(12px,1.6vw,22px)] font-sans text-[max(11px,1.3vh)] leading-none font-medium tracking-[.24em] " +
+  "transition-[background,color] duration-200 ease-[ease] focus-visible:outline focus-visible:outline-offset-3 focus-visible:outline-white " +
+  "phone:flex-1 phone:px-1.5 narrow:min-h-[44px] narrow:justify-center narrow:tracking-[.14em]";
+
+/** Accessible tablist, arrow keys move between tabs (Tailwind). Two columns of tabs on narrow screens. */
 export function SectionTabs<T extends string>({ options, value, onChange, ariaLabel }: SectionTabsProps<T>) {
   const tabs = useRef<(HTMLButtonElement | null)[]>([]);
 
@@ -23,14 +28,14 @@ export function SectionTabs<T extends string>({ options, value, onChange, ariaLa
   }
 
   return (
-    <div className="section-tabs" role="tablist" aria-label={ariaLabel}>
+    <div className="flex border border-line bg-black phone:w-full narrow:grid narrow:grid-cols-[repeat(2,minmax(0,1fr))]" role="tablist" aria-label={ariaLabel}>
       {options.map((option, i) => {
         const selected = option.value === value;
         return (
           <button
             key={option.value}
             ref={(node) => { tabs.current[i] = node; }}
-            className="section-tab"
+            className={`${TAB} ${i > 0 ? `border-l border-l-line ${i % 2 === 0 ? "narrow:[border-left:0]" : ""}` : ""} ${i >= 2 ? "narrow:border-t narrow:border-t-line" : ""} ${selected ? "cursor-default bg-[#f2f2f2] text-black" : "cursor-pointer text-muted hover:bg-[rgba(255,255,255,.06)] hover:text-white"}`}
             type="button"
             role="tab"
             id={option.id}
@@ -40,7 +45,7 @@ export function SectionTabs<T extends string>({ options, value, onChange, ariaLa
             onClick={() => onChange(option.value)}
             onKeyDown={(e) => onKeyDown(e, i)}
           >
-            {option.num && <span className="n">{option.num}</span>}
+            {option.num && <span className="font-mono tracking-[0] opacity-90">{option.num}</span>}
             <span>{option.label}</span>
           </button>
         );

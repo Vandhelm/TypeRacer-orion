@@ -1,0 +1,158 @@
+"use client";
+// TECH-01 : rendu côté serveur par app/podium/page.tsx, qui lui passe la course de l'historique (?race=N) déjà lue.
+import { useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { SiteNavbar } from "../../components/navigation/SiteNavbar";
+import { useAfterRace } from "./hooks/useAfterRace";
+import { useRaceResults, type ResultsState } from "./hooks/useRaceResults";
+import { PodiumBoard } from "./PodiumBoard";
+import { PodiumScene } from "./PodiumScene";
+import { RaceCharts } from "./RaceCharts";
+import { awaitingMeasures, withMeasures } from "./board";
+import type { PersonalRecord } from "../../players/records";
+import { podiumRecord, readRecord } from "./record";
+import { backToRoomHref, fetchRoomResults, finalRanking, raceErrorKey, saveResults, submitFailed, withRoomResults, type RaceResults } from "./results";
+
+/** COURSE-10 : relecture des résultats finaux, après un abandon suivi d'un rechargement. */
+const REFRESH_MS = 3000;
+/** RES-02 : au plus une minute d’attente des courses des autres humains. */
+const MEASURE_READS = 20;
+
+/** Une course de l'historique lue par le serveur : ses résultats, ou le code du refus. */
+export type ServerRace = { raceId: number; results: RaceResults } | { raceId: number; error: string };
+
+const stateOf = (race: ServerRace): ResultsState =>
+  "results" in race ? { status: "ready", results: race.results, raceId: race.raceId } : { status: "error", code: race.error, raceId: race.raceId };
+
+/**
+ * After the race, or for a race of the history (?race=N, HIST-02): the top three on the podium, then every player.
+ * race : la course de l'historique déjà lue par le serveur ; sans elle, la course jouée dans l'onglet (sessionStorage), après le montage.
+ */
+export function PodiumPage({ race }: { race?: ServerRace }) {
+  const { t } = useTranslation();
+  const loaded = useRaceResults(race ? `?race=${race.raceId}` : undefined, race && stateOf(race));
+  // le hash et le sessionStorage ne se lisent que dans le navigateur. useLayoutEffect : avant la première image,
+  // pour que le travelling ne démarre pas quand on revient d'un profil (#arrived).
+  const [arrived, setArrived] = useState(false);
+  const [notSaved, setNotSaved] = useState(false); // le serveur a refusé la course jouée dans cet onglet
+  const [record, setRecord] = useState<PersonalRecord | null>(null); // RES-04 : le record battu par la course jouée dans cet onglet
+  useLayoutEffect(() => {
+    setArrived(location.hash === "#arrived");
+    setNotSaved(submitFailed());
+    setRecord(readRecord());
+  }, []);
+
+  useEffect(() => {
+    // pas de course jouée dans cet onglet, ni de course de l'historique : rien à classer
+    if (loaded.status === "missing") location.replace("/home");
+    else if (loaded.status === "ready") history.replaceState(null, "", `${location.pathname}${location.search}#arrived`);
+  }, [loaded.status]);
+
+  useEffect(() => {
+    document.title = t("podium.pageTitle");
+  }, [t]);
+
+  // SALLE-08 : sur le podium d'une course jouée, le membre reste présent dans son salon (sans signe de vie, il en serait retiré).
+  // COURSE-11 : la même relecture dit qui est hôte, suit une relance et une fermeture de la salle.
+  const roomCode = loaded.status === "ready" && loaded.raceId === null ? loaded.results.room : undefined;
+  const after = useAfterRace(roomCode);
+
+  // COURSE-10 : la course jouée dans l'onglet est reclassée (terminés, non terminés, abandons), avec les abandons notés
+  // par le serveur ; une course de l'historique garde les rangs enregistrés par le serveur. Le classement est gardé pour
+  // que le profil ouvert depuis le tableau (?player=N) montre le même joueur.
+  // Des résultats gardés à l'abandon (provisional, après un rechargement) : une fois la course finie, la dernière course
+  // enregistrée pour ce lancement les remplace (état final des autres).
+  const [refreshed, setRefreshed] = useState<RaceResults | null>(null);
+  const stored = loaded.status === "ready" && loaded.raceId === null ? loaded.results : null;
+  const tabResults = refreshed ?? stored;
+  const provisional = !!tabResults?.provisional && after.over;
+  useEffect(() => {
+    if (!provisional || !stored?.room) return;
+    let live = true;
+    const code = stored.room;
+    const read = async () => {
+      const recorded = await fetchRoomResults(code);
+      if (live && recorded) setRefreshed(withRoomResults(stored, recorded));
+    };
+    void read();
+    const timer = setInterval(() => void read(), REFRESH_MS);
+    return () => {
+      live = false;
+      clearInterval(timer);
+    };
+  }, [provisional, stored]);
+  // RES-02 : les autres humains n'envoient en direct que leur MPM ; leur MPM brut, leur précision et leurs erreurs
+  // arrivent avec leur propre course enregistrée, relue ici quelques fois (« — » tant qu'elle ne l'est pas)
+  const waiting = !!tabResults && !tabResults.provisional && !!tabResults.room && awaitingMeasures(tabResults.players);
+  useEffect(() => {
+    const code = stored?.room;
+    if (!waiting || !code) return;
+    let live = true;
+    let reads = 0;
+    const read = async () => {
+      reads += 1;
+      const recorded = await fetchRoomResults(code);
+      if (!live || !recorded) return;
+      setRefreshed((current) => {
+        const base = current ?? stored;
+        const players = withMeasures(base.players, recorded.players);
+        return players === base.players ? current : { ...base, players };
+      });
+    };
+    void read();
+    const timer = setInterval(() => {
+      if (reads >= MEASURE_READS) clearInterval(timer);
+      else void read();
+    }, REFRESH_MS);
+    return () => {
+      live = false;
+      clearInterval(timer);
+    };
+  }, [waiting, stored]);
+  const ranked = useMemo(() => (tabResults ? finalRanking(tabResults.players, after.abandoned) : null), [tabResults, after.abandoned]);
+  useEffect(() => {
+    if (tabResults && ranked) saveResults({ ...tabResults, players: ranked });
+  }, [tabResults, ranked]);
+
+  // A11Y-02 : chaque état a son <main> et son <h1> (sr-only : à l'écran, le titre est le podium lui-même)
+  const heading = <h1 className="sr-only">{t("podium.pageTitle")}</h1>;
+  if (loaded.status === "loading") {
+    return (
+      <>
+        <SiteNavbar current="podium" />
+        <main className="grid min-h-screen place-content-center justify-items-center gap-5 p-6 text-center font-mono text-[13px] leading-[1.6] font-normal text-muted">
+        {heading}
+        <p role="status">{t("podium.loading")}</p>
+        </main>
+      </>
+    );
+  }
+  if (loaded.status === "error") {
+    return (
+      <>
+        <SiteNavbar current="podium" />
+        <main className="grid min-h-screen place-content-center justify-items-center gap-5 p-6 text-center font-mono text-[13px] leading-[1.6] font-normal text-muted">
+        {heading}
+        <p role="alert">{t(raceErrorKey(loaded.code))}</p>
+        <a className="border-b border-b-red-text tracking-[.2em] text-white uppercase no-underline hover:text-red-text focus-visible:outline focus-visible:outline-offset-4 focus-visible:outline-white" href="/profile#stats">{t("podium.backToHistory")}</a>
+        </main>
+      </>
+    );
+  }
+  if (loaded.status !== "ready") return null;
+  const { results, raceId } = loaded;
+  const players = ranked ?? results.players;
+
+  return (
+    <>
+      {/* A11Y-02 : en-tête et contenu principal sans style ; leurs enfants sont fixes, la scène plein écran ne change pas */}
+      <SiteNavbar current="podium" />
+      <main>
+        {heading}
+        {raceId === null && notSaved ? <p className="fixed top-4 left-1/2 z-20 m-0 w-max max-w-[calc(100vw-32px)] border border-red-text bg-black px-3.5 py-2 text-center font-mono text-[12px] leading-[1.5] font-normal text-white [transform:translateX(-50%)]" role="alert">{t("podium.notSaved")}</p> : null}
+        <PodiumScene players={players} arrived={arrived} raceId={raceId} roomHref={backToRoomHref(results.room)} after={after} />
+        <PodiumBoard players={players} showPlace arrived={arrived} raceId={raceId} charts={<RaceCharts players={players} />} record={podiumRecord(record, players, raceId)} />
+      </main>
+    </>
+  );
+}

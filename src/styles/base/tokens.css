@@ -13,8 +13,44 @@
     --color-red-solid: #9e1f17;
     --color-red-hover: #b4261c;
     --color-red-text: #e0574a;
+    /* the accent of the canvas scenes (lanterns, noren, lacquer, plate rims) and the rosy edge of the red buttons,
+       used with an opacity (Tailwind border-red-glow/45, color-mix in the CSS files, withAlpha in the canvases) */
+    --color-red-hi: #c0342a;
+    --color-red-lo: #5c120d;
+    --color-red-rim: #d23c30;
+    --color-red-glow: rgb(255,140,120);
 
     --color-chart-raw: #9a9a9a;
+    /* RES-03 : one color per participant on the race chart (the local player keeps the red) */
+    --color-chart-1: #f2f2f2;
+    --color-chart-2: #5b9bd5;
+    --color-chart-3: #e3b23c;
+    --color-chart-4: #6cc28a;
+    --color-chart-5: #b48ee0;
+    --color-chart-6: #4fc1c9;
+    --color-chart-7: #e48ab8;
+    --color-chart-8: #9a9a9a;
+
+    /* SALLE-05 : one colour per seat (fish in the pond, chip on the ticket), the ones the server assigns
+       (src/rooms/seats.ts); seats 9 to 30 turn on the colour wheel there. */
+    --color-seat-1: hsl(6, 71%, 58%);
+    --color-seat-2: hsl(266, 85%, 59%);
+    --color-seat-3: hsl(54, 100%, 74%);
+    --color-seat-4: hsl(25, 100%, 63%);
+    --color-seat-5: hsl(326, 47%, 47%);
+    --color-seat-6: hsl(161, 65%, 60%);
+    --color-seat-7: hsl(220, 85%, 65%);
+    --color-seat-8: hsl(0, 0%, 72%);
+
+    /* DES-05 : the keyboard heat map (src/views/profile/heat.ts), from no error (0) to RATE_MAX or more (4): the
+       key face to the red, stops on the same line as the former two-colour mix; white letters all along */
+    --color-heat-0: #141414;
+    --color-heat-1: #371715;
+    --color-heat-2: #591a16;
+    --color-heat-3: #7c1c16;
+    --color-heat-4: #9e1f17;
+    --color-heat-ink-low: #fff;
+    --color-heat-ink-high: #fff;
 
     --color-face-front-a: #070707;
     --color-face-front-b: #141414;
@@ -27,9 +63,100 @@
 
 :root{
     color-scheme: dark;
-    --navbar-height: 48px;   /* see components/navigation/navbar.css */
+    --navbar-height: 48px;   /* see components/navigation/Navbar.tsx */
+}
+
+/* DES-05 : second theme, « couleurs adaptées » (data-theme="cvd" on <html>, set by the server from the orion-theme
+   cookie: src/theme). Still dark: only the colours that carry a meaning change. No pair of them relies on red / green:
+   - accent (me, errors, wrong letters, cursor, stamps): Okabe-Ito orange #e69f00 for text, the same hue darkened for
+     the solid fills under white text (#a35400 5.5:1, hover #b35c00 4.7:1);
+   - race chart series: Okabe-Ito sky blue, blue and bluish green, a neutral grey and two lavenders, ordered so that
+     neighbours stay apart; each series also has its own dash pattern (src/views/podium/race-charts.ts).
+   Checked by src/styles/cvd.test.ts: ΔE ≥ 20 for every meaningful pair under protanopia, deuteranopia and
+   tritanopia (Machado 2009 simulation), and by src/styles/contrast.test.ts for WCAG AA. */
+:root[data-theme="cvd"]{
+    --color-red: rgba(163,84,0,.88);
+    --color-red-dark: rgba(120,62,0,.88);
+    --color-red-solid: #a35400;
+    --color-red-hover: #b35c00;
+    --color-red-text: #e69f00;
+    --color-red-hi: #c86b00;
+    --color-red-lo: #4a2600;
+    --color-red-rim: #e69f00;
+    --color-red-glow: rgb(255,190,120);
+
+    --color-chart-1: #f2f2f2;
+    --color-chart-2: #56b4e9;
+    --color-chart-3: #0072b2;
+    --color-chart-4: #9a9a9a;
+    --color-chart-5: #7b7bf0;
+    --color-chart-6: #009e73;
+    --color-chart-7: #b8a2f0;
+    --color-chart-8: #8fd9c4;
+
+    /* seats: eight colours ΔE ≥ 20 apart pair by pair, each 3:1 on black; from seat 9 on, they come round again
+       (--seat-wrap-N, read by src/rooms/seats.ts), and the seat number tells two players apart */
+    --color-seat-1: #f9924d;
+    --color-seat-2: #505cbe;
+    --color-seat-3: #ffce00;
+    --color-seat-4: #b43b2c;
+    --color-seat-5: #98608e;
+    --color-seat-6: #8daf8c;
+    --color-seat-7: #39cffc;
+    --color-seat-8: #f2f2f2;
+    --seat-wrap-1: var(--color-seat-1);
+    --seat-wrap-2: var(--color-seat-2);
+    --seat-wrap-3: var(--color-seat-3);
+    --seat-wrap-4: var(--color-seat-4);
+    --seat-wrap-5: var(--color-seat-5);
+    --seat-wrap-6: var(--color-seat-6);
+    --seat-wrap-7: var(--color-seat-7);
+    --seat-wrap-8: var(--color-seat-8);
+
+    /* heat map: a cividis-like sequential scale, dark blue to yellow, whose luminance rises for every dichromacy;
+       the middle stop is the one grey where white and black letters both reach 4.5:1, so the ink flips there */
+    --color-heat-0: #00204d;
+    --color-heat-1: #414d6b;
+    --color-heat-2: #757570;
+    --color-heat-3: #b8a96f;
+    --color-heat-4: #ffea46;
+    --color-heat-ink-low: #fff;
+    --color-heat-ink-high: #000;
+}
+
+/* DES-05 : the generated avatar (src/views/profile/ProfileAvatar.tsx). By default a fish at the hue of the name
+   (--avatar-hue); in cvd, at one of the eight safe seat colours (--avatar-safe), the initial in white. */
+.generated-avatar{
+    --avatar-bg: hsl(var(--avatar-hue) 45% 16%);
+    --avatar-fish: hsl(var(--avatar-hue) 70% 58%);
+    --avatar-ink: hsl(var(--avatar-hue) 85% 82%);
+}
+:root[data-theme="cvd"] .generated-avatar{
+    --avatar-bg: color-mix(in srgb, var(--avatar-safe) 22%, #000);
+    --avatar-fish: var(--avatar-safe);
+    --avatar-ink: #fff;
+}
+
+/* DES-05 : in both themes, the system preferences come first. More contrast: the translucent text and lines get
+   denser. Forced colours (Windows contrast themes): the system palette replaces ours, so every meaning keeps a cue
+   that is not a colour (underlines, dash patterns, thicker bars), and the few marks drawn with a background or a
+   shadow fall back to system colours. */
+@media (prefers-contrast: more) {
+    :root{
+        --color-line-soft: rgba(255,255,255,.6);
+        --color-line-faint: rgba(255,255,255,.35);
+        --color-muted: rgba(255,255,255,.75);
+    }
+}
+@media (forced-colors: active) {
+    [aria-current="page"], [aria-pressed="true"]{ text-decoration: underline; text-underline-offset: .35em; }
 }
 
 /* Breakpoints used by this page (inclusive, like the original max-width queries) */
+/* Declared from widest to narrowest: Tailwind emits them in this order, so a narrower one wins. */
+@custom-variant laptop (@media (max-width: 1100px));
+@custom-variant tablet (@media (max-width: 1000px));
 @custom-variant phone (@media (max-width: 700px));
 @custom-variant narrow (@media (max-width: 760px));
+@custom-variant tiny (@media (max-width: 420px));
+@custom-variant compact (@media (max-width: 760px) or (max-height: 600px));

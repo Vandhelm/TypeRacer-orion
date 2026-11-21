@@ -1,0 +1,364 @@
+// Résultats d'une course, confiés par le jeu au podium et aux profils : tout vient de ce que chaque couloir a vraiment tapé pendant la course.
+import { CHARS_PER_WORD, laneElapsedMs, laneProgress, laneWpm, myAccuracy, type Race, type Sample } from "../game/race";
+import { parseKeys, roundKeys, type KeyCounts } from "../../players/keys";
+import type { TFunction } from "i18next";
+import { isRoomCode } from "../../rooms/access";
+import { effectiveComposition } from "../../rooms/text";
+import type { Player, Room } from "../room/room";
+import { formatNumber } from "../../i18n/format";
+import { forgetRecord, rememberRaceAnswer } from "./record";
+import { parseBonuses, type ReceivedBonuses } from "./board";
+
+export type PlayerResult = {
+  name: string;
+  /** Place à l'arrivée, à partir de 1. */
+  rank: number;
+  me: boolean;
+  /** Un bot du jeu : ses courses sont enregistrées et son profil est public. */
+  bot: boolean;
+  wpm: number;
+  raw: number;
+  accuracy: number;
+  seconds: number;
+  /** justes, fausses, en trop, manquées */
+  chars: [number, number, number, number];
+  consistency: number;
+  /** Part des secondes sans frappe, en %. */
+  idle: number;
+  finished: boolean;
+  eliminated: boolean;
+  /** COURSE-07 : ce joueur a abandonné la course (jamais « finished ») ; absent d'un résultat gardé avant l'abandon. */
+  abandoned?: boolean;
+  /** COURSE-10 : part du texte faite, de 0 à 1, à la fin de sa course (ou à l'abandon) ; absente d'un résultat d'avant. */
+  progress?: number;
+  wpmSeries: number[];
+  rawSeries: number[];
+  errorSeries: number[];
+  /** Frappes et fautes par touche (heatmap du clavier). */
+  keys: KeyCounts;
+  /** RES-02 : bonus reçus ; absent si les bonus sont désactivés ou inconnus (HIST-02 : une course de l'historique les garde depuis 0037). */
+  bonuses?: ReceivedBonuses;
+};
+export type RaceSummary = Pick<Room, "textType" | "language" | "duration" | "level" | "punctuation" | "numbers" | "specials" | "accents" | "excluded" | "mistakes" | "botSpeed" | "botAccuracy" | "length"> & {
+  /** CONF-06 : absent d'un résultat gardé avant l'option (le texte avait alors ses majuscules). */
+  capitals?: boolean;
+  wordCount: number;
+  sessionSeconds: number;
+};
+/** `room` : le code du salon de la course, pour y revenir depuis le podium (SALLE-09) ; envoyé à /api/races, qui vérifie que le serveur l'a lancé (COURSE-06). */
+/** provisional (COURSE-10) : gardés à l'abandon, avant la fin de la course ; le podium relit ensuite l'état final. */
+export type RaceResults = { players: PlayerResult[]; summary: RaceSummary; room?: string; provisional?: boolean };
+
+const RESULTS_KEY = "orion-results";
+const SESSION_KEY = "orion-session-start";
+const SUBMIT_KEY = "orion-submit-failed";
+
+const sum = (values: number[]) => values.reduce((total, value) => total + value, 0);
+
+function consistencyOf(raw: number[]) {
+  const mean = sum(raw) / (raw.length || 1);
+  if (!mean) return 0;
+  const deviation = Math.sqrt(sum(raw.map((value) => (value - mean) ** 2)) / raw.length);
+  return Math.max(0, Math.round(100 * (1 - deviation / mean)));
+}
+
+const deltas = (samples: Sample[], pick: (sample: Sample) => number) => samples.map((sample, i) => pick(sample) - (i ? pick(samples[i - 1]!) : 0));
+
+/** Frappes et fautes cumulées d'un couloir, à la fin de sa course. */
+function totalsOf(race: Race, lane: number) {
+  if (lane === race.myLane) return { typed: race.keystrokes, wrong: race.wrongChars, extra: race.extraChars, missed: race.missedChars };
+  const bot = race.bots.find((candidate) => candidate.lane === lane);
+  // BOT-03 : en mode libre, les mots qu'un bot a laissés faux comptent comme manqués
+  return { typed: bot?.typed ?? 0, wrong: bot?.errors ?? 0, extra: 0, missed: bot?.missed ?? 0 };
+}
+
+function accuracyOf(race: Race, lane: number) {
+  if (lane === race.myLane) return myAccuracy(race);
+  const { typed, wrong } = totalsOf(race, lane);
+  return typed > 0 ? Math.round((100 * (typed - wrong)) / typed) : 100;
+}
+
+function detailOf(race: Race, lane: number) {
+  const samples = race.samples[lane] ?? [];
+  const typedPerSecond = deltas(samples, (sample) => sample.typed);
+  const { typed, wrong, extra, missed } = totalsOf(race, lane);
+  const minutes = laneElapsedMs(race, lane) / 60000;
+  return {
+    raw: minutes > 0.02 ? Math.round(typed / CHARS_PER_WORD / minutes) : 0,
+    chars: [Math.round(typed - wrong - extra), Math.round(wrong), Math.round(extra), Math.round(missed)] as PlayerResult["chars"],
+    consistency: consistencyOf(typedPerSecond),
+    idle: samples.length ? Math.round((1000 * typedPerSecond.filter((value) => value === 0).length) / samples.length) / 10 : 0,
+    wpmSeries: samples.map((sample, i) => Math.round((sample.chars / CHARS_PER_WORD) * (60 / (i + 1)))),
+    rawSeries: typedPerSecond.map((value) => Math.round((value * 60) / CHARS_PER_WORD)),
+    errorSeries: deltas(samples, (sample) => sample.errors).map(Math.round),
+    keys: roundKeys(lane === race.myLane ? race.keys : (race.bots.find((bot) => bot.lane === lane)?.keys ?? {})),
+  };
+}
+
+/** Les joueurs dans l'ordre final : les arrivées, puis les autres selon leur avancée. `bonuses` : par couloir (RES-02, laneBonuses). */
+export function buildResults(race: Race, players: Player[], bonuses?: ReceivedBonuses[]): PlayerResult[] {
+  const others = players
+    .map((_, lane) => lane)
+    .filter((lane) => !race.arrivals.includes(lane))
+    .sort((a, b) => laneProgress(race, b) - laneProgress(race, a));
+  return [...race.arrivals, ...others].map((lane, index) => {
+    const mine = lane === race.myLane;
+    return {
+      name: players[lane]!.name,
+      rank: index + 1,
+      me: !!players[lane]!.me,
+      bot: !!players[lane]!.bot,
+      wpm: laneWpm(race, lane),
+      accuracy: accuracyOf(race, lane),
+      seconds: Math.round(laneElapsedMs(race, lane) / 1000),
+      finished: race.arrivals.includes(lane),
+      // BOT-03 : un bot éliminé en mode fatal l'est aussi
+      eliminated: mine ? race.eliminated : !!race.bots.find((bot) => bot.lane === lane)?.out,
+      progress: Math.min(1, Math.max(0, laneProgress(race, lane))),
+      ...detailOf(race, lane),
+      ...(bonuses?.[lane] ? { bonuses: bonuses[lane] } : {}),
+    };
+  });
+}
+
+/** COURSE-10 : un abandon connu du serveur, avec la progression qu'il a gardée s'il est parti du salon. */
+export type KnownAbandon = { name: string; progress?: number };
+
+const absentPlayer = ({ name, progress }: KnownAbandon): PlayerResult => ({
+  name, rank: 0, me: false, bot: false, wpm: 0, raw: 0, accuracy: 0, seconds: 0, chars: [0, 0, 0, 0], consistency: 0, idle: 0,
+  finished: false, eliminated: false, abandoned: true, ...(progress === undefined ? {} : { progress }), wpmSeries: [], rawSeries: [], errorSeries: [], keys: {},
+});
+
+/**
+ * COURSE-10 : la course enregistrée plus tard pour ce lancement (GET /api/rooms/:code/results) remplace l'instantané
+ * gardé à l'abandon : l'ordre et les rangs du serveur, avec ma propre ligne (figée à l'abandon) à ma place. Les
+ * progressions sont retirées : l'ordre du serveur fait foi.
+ */
+export function withRoomResults(stored: RaceResults, recorded: RaceResults): RaceResults {
+  const mine = stored.players.find((p) => p.me);
+  const players = recorded.players.map(({ progress: _progress, ...p }) => {
+    if (!mine || p.name.toLowerCase() !== mine.name.toLowerCase()) return { ...p, me: false };
+    const { progress: _mine, ...frozen } = mine;
+    return { ...frozen, rank: p.rank, me: true, abandoned: p.abandoned || mine.abandoned };
+  });
+  const { provisional: _provisional, ...rest } = stored;
+  return { ...rest, players };
+}
+
+/** COURSE-10 : la dernière course enregistrée du lancement en cours de ce salon, ou null (rien encore, refus, réseau). */
+export async function fetchRoomResults(code: string): Promise<RaceResults | null> {
+  try {
+    const response = await fetch(`/api/rooms/${code}/results`);
+    return response.ok ? toResults(await response.json()) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** À progression égale, l'ordre reçu (celui des couloirs) : un tri stable. Sans progression (résultat d'avant COURSE-10), 0. */
+const byProgress = (players: PlayerResult[]) => [...players].sort((a, b) => (b.progress ?? 0) - (a.progress ?? 0));
+
+/**
+ * COURSE-10 : le classement final affiché. D'abord les terminés, dans l'ordre reçu (l'ordre d'arrivée, buildResults) ;
+ * puis les non terminés, par progression ; enfin les abandons, par progression au moment de l'abandon. Égalité : l'ordre
+ * reçu. `abandoned` : les membres dont le serveur a noté l'abandon (members[].abandoned, room.abandoned), pour le podium
+ * des autres membres ; un bot n'abandonne jamais. Un abandon absent des couloirs (parti avant que la page de course ne se
+ * construise) reçoit une ligne sans mesures, à sa progression gardée par le serveur. Les rangs sont renumérotés.
+ */
+export function finalRanking(players: PlayerResult[], abandoned: (string | KnownAbandon)[] = []): PlayerResult[] {
+  const known = abandoned.map((entry) => (typeof entry === "string" ? { name: entry } : entry));
+  const left = new Set(known.map((a) => a.name.toLowerCase()));
+  const present = new Set(players.map((p) => p.name.toLowerCase()));
+  const absent = known.filter((a) => !present.has(a.name.toLowerCase())).map((a) => absentPlayer(a));
+  const marked = [...players, ...absent].map((p) => (!p.bot && left.has(p.name.toLowerCase()) ? { ...p, abandoned: true, finished: false } : p));
+  const gaveUp = (p: PlayerResult) => !p.bot && !!p.abandoned;
+  const finished = marked.filter((p) => p.finished && !gaveUp(p));
+  // mode fatal : un éliminé est sorti de la course, il passe derrière tous ceux qui courent encore, quelle que soit son avancée
+  const racing = marked.filter((p) => !p.finished && !gaveUp(p) && !p.eliminated);
+  const eliminated = marked.filter((p) => !p.finished && !gaveUp(p) && p.eliminated);
+  return [...finished, ...byProgress(racing), ...byProgress(eliminated), ...byProgress(marked.filter(gaveUp))].map((p, index) => ({ ...p, rank: index + 1 }));
+}
+
+export function buildSummary(race: Race, room: Room, sessionSeconds: number): RaceSummary {
+  const { textType, language, duration, level, punctuation, numbers, specials, capitals, accents, excluded, mistakes, botSpeed, botAccuracy, length } = room;
+  // CONF-07 : une option restée cochée sans effet (chiffres en cohérent…) n'est pas enregistrée
+  return effectiveComposition({ textType, language, duration, level, punctuation, numbers, specials, capitals, accents, excluded, mistakes, botSpeed, botAccuracy, length, wordCount: race.course.words.length, sessionSeconds });
+}
+
+const numbersOf = (value: unknown) => (Array.isArray(value) ? value.map(Number) : []);
+
+export function parseResults(raw: string | null): RaceResults | null {
+  try {
+    return toResults(JSON.parse(raw ?? "null"));
+  } catch {
+    return null;
+  }
+}
+
+/** Ordre d'arrivée : le rang enregistré s'il y en a un (une course de l'historique), sinon l'ordre reçu. */
+const byRank = (players: Record<string, unknown>[]) =>
+  players.map((p, index) => ({ p, rank: Number.isInteger(p.rank) && Number(p.rank) >= 1 ? Number(p.rank) : index + 1 })).sort((a, b) => a.rank - b.rank);
+
+const withBonuses = (value: unknown) => {
+  const bonuses = parseBonuses(value);
+  return bonuses ? { bonuses } : {};
+};
+
+/** Des résultats confiés par le jeu (sessionStorage) ou relus sur le serveur (HIST-02), vérifiés champ par champ. */
+export function toResults(value: unknown): RaceResults | null {
+  try {
+    const stored = value as { summary?: unknown; players?: unknown; room?: unknown; provisional?: unknown } | null;
+    if (!stored || !stored.summary || !Array.isArray(stored.players) || !stored.players.length) return null;
+    const players = byRank(stored.players).map(({ p, rank }): PlayerResult => {
+      const [correct = 0, wrong = 0, extra = 0, missed = 0] = numbersOf(p.chars);
+      return {
+        name: String(p.name),
+        rank,
+        me: !!p.me,
+        bot: !!p.bot,
+        wpm: Number(p.wpm) || 0,
+        raw: Number(p.raw) || 0,
+        accuracy: Number(p.accuracy) || 0,
+        seconds: Number(p.seconds) || 0,
+        chars: [correct, wrong, extra, missed],
+        consistency: Number(p.consistency) || 0,
+        idle: Number(p.idle) || 0,
+        finished: !!p.finished,
+        eliminated: !!p.eliminated,
+        ...(p.abandoned ? { abandoned: true } : {}),
+        ...(typeof p.progress === "number" && p.progress >= 0 && p.progress <= 1 ? { progress: p.progress } : {}),
+        wpmSeries: numbersOf(p.wpmSeries),
+        rawSeries: numbersOf(p.rawSeries),
+        errorSeries: numbersOf(p.errorSeries),
+        keys: parseKeys(p.keys),
+        ...withBonuses(p.bonuses),
+      };
+    });
+    const room = typeof stored.room === "string" && isRoomCode(stored.room) ? stored.room : undefined;
+    return { players, summary: stored.summary as RaceSummary, ...(room ? { room } : {}), ...(stored.provisional === true ? { provisional: true } : {}) };
+  } catch {
+    return null;
+  }
+}
+
+export function saveResults(results: RaceResults) {
+  try { sessionStorage.setItem(RESULTS_KEY, JSON.stringify(results)); } catch { /* stockage indisponible */ }
+}
+
+/** Le corps envoyé au serveur : la course et son identifiant unique, pour que le serveur refuse un rejeu (AUTH-06). */
+export function raceBody(results: RaceResults, content: string) {
+  return { id: crypto.randomUUID(), ...results, content };
+}
+
+/** Retour au salon de la course ; sans code, l'accueil (un /room nu créerait un nouveau salon). */
+export function backToRoomHref(room: string | undefined) {
+  return room ? `/room?code=${room}` : "/home";
+}
+
+/** Les navigateurs refusent un corps keepalive de plus de 64 Kio : une longue course à 8 joueurs le dépasse. */
+export const KEEPALIVE_LIMIT = 65_536;
+/** Un envoi keepalive survit au passage au podium : le jeu n'attend sa réponse qu'un instant, pour signaler un refus. */
+const KEEPALIVE_WAIT_MS = 1_500;
+/** Au-delà de la limite, le jeu attend la réponse avant de passer au podium, mais pas plus longtemps que ceci. */
+const SUBMIT_WAIT_MS = 10_000;
+
+/** Ce qu'est devenu l'envoi : enregistré, refusé (400, hors ligne…), ou sans réponse à temps. */
+export type SubmitOutcome = "saved" | "failed" | "unconfirmed";
+
+/**
+ * Envoie la course au serveur, qui garde l'historique des bots et du compte connecté (sa session, pas le corps).
+ * Un petit corps part en keepalive (l'envoi survit au passage au podium) ; un gros part sans, et la promesse
+ * attend sa réponse : quitter la page avant couperait l'envoi.
+ * Limite connue : sans réponse au bout de SUBMIT_WAIT_MS, le passage au podium coupe un gros envoi, qui peut se perdre
+ * ("unconfirmed") ; aucune API du navigateur ne garde un corps de plus de 64 Kio en vie après la page.
+ */
+export function submitRace(results: RaceResults, content: string): Promise<SubmitOutcome> {
+  const body = JSON.stringify(raceBody(results, content));
+  const keepalive = new TextEncoder().encode(body).length <= KEEPALIVE_LIMIT;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<SubmitOutcome>((resolve) => (timer = setTimeout(resolve, keepalive ? KEEPALIVE_WAIT_MS : SUBMIT_WAIT_MS, "unconfirmed")));
+  forgetRecord(); // RES-04 : le record de la course d'avant ne passe pas à celle-ci
+  const sent = fetch("/api/races", { method: "POST", keepalive, headers: { "content-type": "application/json" }, body }).then(
+    async (response): Promise<SubmitOutcome> => {
+      if (!response.ok) return "failed";
+      rememberRaceAnswer(await response.json().catch(() => null)); // RES-04 : record battu, d'après le serveur
+      return "saved";
+    },
+    (): SubmitOutcome => "failed", // hors ligne : la course n'entre pas dans l'historique
+  );
+  return Promise.race([sent, late]).finally(() => clearTimeout(timer));
+}
+
+/** Un refus de la course jouée dans cet onglet, gardé pour que le podium le dise ; un envoi suivant l'efface. */
+export function rememberSubmit(outcome: SubmitOutcome) {
+  try {
+    if (outcome === "failed") sessionStorage.setItem(SUBMIT_KEY, "1");
+    else sessionStorage.removeItem(SUBMIT_KEY);
+  } catch { /* stockage indisponible */ }
+}
+
+export function submitFailed() {
+  try { return sessionStorage.getItem(SUBMIT_KEY) === "1"; } catch { return false; }
+}
+
+/** DES-06 : a player who watched the race from the mobile notice has no results of their own. */
+export function clearResults() {
+  try { sessionStorage.removeItem(RESULTS_KEY); } catch { /* stockage indisponible */ }
+}
+
+export function readResults() {
+  try { return parseResults(sessionStorage.getItem(RESULTS_KEY)); } catch { return null; }
+}
+
+/** La session commence à la première course de cet onglet. */
+export function markSessionStart() {
+  try { if (!sessionStorage.getItem(SESSION_KEY)) sessionStorage.setItem(SESSION_KEY, String(Date.now())); } catch { /* stockage indisponible */ }
+}
+
+export function sessionSeconds() {
+  try { return Math.round((Date.now() - Number(sessionStorage.getItem(SESSION_KEY))) / 1000) || 0; } catch { return 0; }
+}
+
+/** Le N-ième joueur de la course affichée ; d'une course de l'historique, raceId la garde (HIST-02). */
+export const profileHref = (index: number, raceId?: number | null) => (raceId ? `/profile?race=${raceId}&player=${index}` : `/profile?player=${index}`);
+
+/** Retour au podium de la course affichée, sans nouveau travelling. */
+export const podiumHref = (raceId: number | null) => (raceId ? `/podium?race=${raceId}#arrived` : "/podium#arrived");
+
+/** HIST-02 : une course de l'historique s'ouvre sur sa page de résultats. */
+export const historyHref = (raceId: number) => `/podium?race=${raceId}`;
+export const raceResultsUrl = (raceId: number) => `/api/history/${raceId}`;
+
+/** La course de l'historique demandée par l'adresse (?race=N), ou null : les résultats de la course jouée dans cet onglet. */
+export function historyRaceOf(search: string): number | null {
+  const value = new URLSearchParams(search).get("race");
+  return value && /^[1-9]\d{0,9}$/.test(value) ? Number(value) : null;
+}
+
+/** Erreur de chargement d'une course de l'historique : le code du serveur (not_found, unauthorized…) ou "network". */
+export class RaceLoadError extends Error {
+  constructor(readonly code: string) {
+    super(code);
+  }
+}
+
+export const RACE_ERRORS = ["not_found", "unauthorized", "account_required", "invalid_race", "network"] as const;
+/** Le message traduit d'un refus ; un code inconnu devient une erreur réseau. */
+export const raceErrorKey = (code: string) => `podium.errors.${(RACE_ERRORS as readonly string[]).includes(code) ? code : "network"}`;
+
+/** Les résultats d'une course de l'historique, relus sur le serveur (HIST-02). */
+export async function fetchRaceResults(raceId: number, signal?: AbortSignal): Promise<RaceResults> {
+  const response = await fetch(raceResultsUrl(raceId), { signal });
+  const body: unknown = await response.json().catch(() => null);
+  if (!response.ok) throw new RaceLoadError(String((body as { error?: unknown } | null)?.error ?? "network"));
+  const results = toResults(body);
+  if (!results) throw new RaceLoadError("network");
+  return results;
+}
+
+export const oneDecimal = (language: string, value: number) => formatNumber(language, value, 1);
+/** Le joueur classé à ce rang, s'il est connu : une marche du podium reste vide plutôt que d'y monter le suivant. */
+export const playerAt = (players: PlayerResult[], rank: number) => players.find((player) => player.rank === rank);
+
+/** Un rang en ordinal traduit (1re, 2e… / 1st, 2nd…), quelle que soit la taille de la salle. */
+export const rankLabel = (t: TFunction, rank: number) => t("podium.rank", { count: rank, ordinal: true });

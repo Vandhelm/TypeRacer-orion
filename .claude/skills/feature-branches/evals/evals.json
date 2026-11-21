@@ -1,0 +1,23 @@
+{
+  "skill_name": "feature-branches",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Je commence le critère AUTH-06 sur la page profile-stats : ajoute dans src/pages/profile/stats.ts une fonction bestWpm(wpms: number[]) qui renvoie le meilleur WPM (0 si la liste est vide), et commit.",
+      "expected_output": "Nouvelle branche feature/profile-stats/AUTH-06 depuis dev ; l'ancienne feature/profile-stats renommée en feature/profile-stats/base ; un commit feat(profile) sans co-auteur ; rien de poussé.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "Petit fix pour AUTH-03 sur la home : dans src/pages/home/HomePanel.tsx, mets marginBottom à 24 pour avoir la même marge partout. Commit-le.",
+      "expected_output": "Branche fix/home/AUTH-03 créée depuis dev (pas depuis feature/room/SALLE-02) ; le travail room non commité reste sur la branche room / n'est pas dans le commit ; commit fix(home) ou style(home).",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "AUTH-03 c'est bon, la feature est finie. Pousse et merge.",
+      "expected_output": "fix/home/AUTH-03 poussée sur origin ; mergée --no-ff dans dev ; dev non poussé ; main inchangé.",
+      "files": []
+    }
+  ]
+}

@@ -1,0 +1,80 @@
+// BOT-05 / COURSE-09 / COURSE-10 : la course des bots d'un salon, calculée par le serveur avec le moteur partagé
+// (src/rooms/bot-engine.ts) : la graine du lancement (rooms.text_seed), les mots tirés comme la page de course et les
+// bots assis (seatedBots, CONF-10). Les navigateurs calculent la même trajectoire : le serveur n'a besoin de rien
+// d'eux pour savoir où en est un bot. Mesuré à l'heure de la base, borné à la fin de la course (endsAt).
+import { eq, sql } from "drizzle-orm";
+import type { Db } from "../../db/client";
+import { raceConfigs, rooms } from "../../db/schema";
+import { receivedOf, type ReceivedBonuses } from "../rooms/bonus";
+import { botProfile, botSeed, simulateBot } from "../rooms/bot-engine";
+import { botRunnerId, seatedBots } from "../rooms/bots";
+import { courseWords } from "../rooms/course-words";
+import { raceClock } from "../rooms/race-clock";
+import { wordTarget } from "../rooms/text";
+import { composePassage } from "./corpus";
+
+/**
+ * Où en est un bot : son arrivée (heure de la base) s'il est arrivé, sa part du texte (0 à 1). COURSE-06 : `seconds` et
+ * `wpm`, le temps et le MPM net de sa course calculée (annexe A, comme la page : caractères justes ÷ 5 ÷ minutes), jusqu'à
+ * son arrivée, son élimination, ou maintenant (au plus la fin de la course). RES-05 : `eliminatedAt`, son élimination (mode fatal).
+ * HIST-02 : `bonuses`, les bonus qu'il a reçus (rooms.bot_bonuses, `from`).
+ */
+export type BotStanding = { finishedAt: Date | null; progress: number; seat: null; seconds: number; wpm: number; eliminatedAt: Date | null; bonuses: ReceivedBonuses };
+
+/** COURSE-06 : le texte de la course tiré par le serveur (vide sans graine), son départ, sa fin et l'heure de la base, en ms. */
+export type LaunchCourse = { words: string[]; startsAt: number; endsAt: number | null; now: number };
+
+/** Caractères cumulés (espaces comprises) après chaque mot, comme la page (createCourse) et l'arbitre (raceCourseOf). */
+export function marksOf(words: readonly string[]): number[] {
+  const marks = [0];
+  for (const word of words) marks.push(marks.at(-1)! + word.length + 1);
+  return marks;
+}
+
+/** MPM net (annexe A) : caractères justes ÷ 5 ÷ minutes ; 0 sous 1,2 s, comme la page (myWpm). */
+export const netWpm = (chars: number, seconds: number) => (seconds > 1.2 ? Math.round(Math.max(0, chars) / 5 / (seconds / 60)) : 0);
+
+/**
+ * Les bots assis du lancement en cours, par nom en minuscules, à l'heure de la base (au plus la fin de la course).
+ * `humans` : les coureurs humains du lancement, pour savoir quels bots ont une place. `running` : au moins un bot court
+ * encore (ni arrivé, ni arrêté par la fin de la course). Rien sans lancement ni graine (salon lancé avant CONF-03).
+ * COURSE-06 : avec `withText`, `course` est le texte tiré par le serveur, même sans bot (null sans lancement).
+ */
+export async function launchBots(db: Db, roomId: number, humans: number, withText = false): Promise<{ standings: Map<string, BotStanding>; running: boolean; course: LaunchCourse | null }> {
+  const [row] = await db
+    .select({ rooms, config: raceConfigs, now: sql<number>`extract(epoch from now()) * 1000`.mapWith(Number) })
+    .from(rooms)
+    .innerJoin(raceConfigs, eq(raceConfigs.id, rooms.configId))
+    .where(eq(rooms.id, roomId));
+  const standings = new Map<string, BotStanding>();
+  const { startsAt, endsAt } = raceClock(row?.rooms.launchedAt ?? null, row?.config.duration ?? null);
+  if (!row || startsAt === null) return { standings, running: false, course: null };
+  const bots = row.rooms.textSeed === null ? [] : seatedBots(row.rooms, humans);
+  const none = { standings, running: false, course: { words: [], startsAt, endsAt, now: row.now } };
+  if (!bots.length && (!withText || row.rooms.textSeed === null)) return none;
+  const { config } = row;
+  const passage = row.rooms.textId === null ? null : await composePassage(db, { language: config.language, words: wordTarget(config), startId: row.rooms.textId });
+  const words = courseWords({ settings: { ...config, text: config.customText }, seed: row.rooms.textSeed, passage }) ?? [];
+  // BOT-03 : le mode d'erreur du lancement, comme la page (createCourse)
+  const course = { words, durationMs: endsAt === null ? null : endsAt - startsAt, mistakes: config.mistakes };
+  // COURSE-09 : une course arrêtée avant ses bots (rooms.ended_at) les arrête à cette heure
+  const now = row.rooms.endedAt ? Math.min(row.now, row.rooms.endedAt.getTime()) : row.now;
+  const elapsed = Math.max(0, Math.min(now, endsAt ?? Infinity) - startsAt);
+  let running = false;
+  // HIST-02 : les bonus reçus par un bot, gardés par le serveur temps réel avec `from` (BOT-04)
+  const received = (name: string) => row.rooms.botBonuses.filter((bonus) => bonus.from === botRunnerId(name)).map((bonus) => bonus.effect.kind);
+  for (const bot of bots) {
+    const seed = botSeed(row.rooms.textSeed!, bot.name);
+    // BOT-04 : avec les bonus qu'il a reçus (rooms.bot_bonuses), rejoués par le moteur comme sur la page
+    const bonuses = row.rooms.botBonuses.filter((bonus) => bonus.effect.target === botRunnerId(bot.name));
+    const run = simulateBot(course, { seed, ...botProfile(seed, bot.level, bot.accuracy ?? config.botAccuracy) }, now - startsAt, bonuses);
+    // un bot éliminé (mode fatal) ne court plus : il ne retient pas la course
+    if (run.arrivedMs === null && run.eliminatedMs === null) running = true;
+    // COURSE-06 : son temps et son MPM, ceux de sa course calculée ; en mode libre, les mots laissés faux ne comptent pas (BOT-03).
+    // Comptés comme la page (laneWpm) : les mots finis du texte qu'il a couru (BOT-04 : changé par ses bonus).
+    const seconds = (run.arrivedMs ?? run.eliminatedMs ?? elapsed) / 1000;
+    const wpm = netWpm(marksOf(run.words)[Math.floor(run.position)]! - run.missed, seconds);
+    standings.set(bot.name.toLowerCase(), { finishedAt: run.arrivedMs === null ? null : new Date(startsAt + run.arrivedMs), progress: run.progress, seat: null, seconds, wpm, eliminatedAt: run.eliminatedMs === null ? null : new Date(startsAt + run.eliminatedMs), bonuses: receivedOf(received(bot.name)) });
+  }
+  return { standings, running: running && !row.rooms.endedAt && (endsAt === null || row.now < endsAt), course: { words, startsAt, endsAt, now: row.now } };
+}

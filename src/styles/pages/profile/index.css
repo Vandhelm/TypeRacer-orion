@@ -1,15 +1,15 @@
-/* Player profile page entry (profile.html). */
+/* Player profile page entry. */
 @layer theme, base, components, utilities;
 @import "tailwindcss/theme.css" layer(theme);
 @import "tailwindcss/utilities.css" layer(utilities);
-@source "../../../../profile.html";
-@source "../../../pages/profile";
+@source "../../../views/profile";
+@source "../../../components";
 
 @import "../../base/tokens.css";
 @import "../../base/reset.css" layer(base);
 @import "../../base/animations.css";
+@import "../../components/cues.css";
 
-@import "../../components/buttons/hanging-button.css";
-@import "../../components/tabs/view-tabs.css";
+@import "../../components/keymap.css";
 
 @import "./profile.css";

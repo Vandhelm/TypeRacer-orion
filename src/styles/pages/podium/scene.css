@@ -10,7 +10,7 @@
     position: absolute;
     inset: 0;
     transform-origin: 50% 70%;
-    will-change: transform, opacity;
+    /* no will-change: a promoted layer is rasterized once then stretched, so text blurs while zooming */
     pointer-events: none;
 }
 .podium-layer--pyramid{ display: flex; justify-content: center; }
@@ -21,7 +21,7 @@
     width: 70vmax;
     height: 70vmax;
     background: linear-gradient(135deg, var(--color-red) 50%, var(--color-red-dark) 100%);
-    border: 1px solid rgba(255,140,120,.25);
+    border: 1px solid color-mix(in srgb, var(--color-red-glow) 25%, transparent);
     transform: rotate(45deg);
 }
 .podium-pyramid::after{
@@ -100,7 +100,7 @@
     padding: 1.4vh .6vw 0;
     background: linear-gradient(90deg, var(--color-face-front-a) 0%, var(--color-face-front-b) 100%);
     border: 1px solid var(--color-line);
-    color: var(--color-line-soft);
+    color: var(--color-muted);
     font: 300 1.2vw/1 var(--font-mono);
     text-align: center;
     pointer-events: auto;
@@ -125,7 +125,7 @@
 .podium-block:hover{ border-color: #fff; }
 .podium-block:hover .podium-name{ text-decoration: underline; text-underline-offset: .2em; }
 .podium-name:focus-visible{ outline: 1px solid #fff; outline-offset: 2px; }
-.podium-speed{ color: var(--color-line-soft); font: 300 .8vw/1 var(--font-mono); }
+.podium-speed{ color: var(--color-muted); font: 300 .8vw/1 var(--font-mono); }
 .podium-block--1 .podium-name{ text-decoration: none; }
 .podium-name::before{ content: ''; position: absolute; inset: 0; z-index: 3; }   /* the whole block opens the profile */
 .podium-block:hover{ border-color: #fff; }
@@ -157,11 +157,12 @@
     text-decoration: none;
     transition: background .2s, color .2s, border-color .2s;
 }
-.podium-play{ background: var(--color-red-solid); border: 1px solid rgba(255,140,120,.45); }
+.podium-play{ background: var(--color-red-solid); border: 1px solid color-mix(in srgb, var(--color-red-glow) 45%, transparent); }
 .podium-play:hover{ background: var(--color-red-hover); }
 .podium-back{ background: #000; border: 1px solid var(--color-line-soft); }
 .podium-back:hover{ background: #f2f2f2; border-color: #f2f2f2; color: #000; }
-.podium-actions a:focus-visible{ outline: 1px solid #fff; outline-offset: 1px; }
+.podium-play, .podium-back{ cursor: pointer; }
+.podium-actions :is(a, button):focus-visible{ outline: 1px solid #fff; outline-offset: 1px; }
 
 .podium-reflection{
     position: absolute;

@@ -1,5 +1,5 @@
 /* The pool: the room drawn as a wireframe, one lane per player.
-   Lane elements are created by pool/createRacePool.js. */
+   Lane elements are created by pool/createRacePool.ts. */
 .race-pool{
     position: relative;
     min-height: 0;
@@ -112,37 +112,6 @@
     100%{ opacity: 1; transform: translateX(-50%) scale(1) rotate(-12deg); }
 }
 
-/* Names under the lanes */
-.game-names{ display: grid; grid-template-columns: repeat(var(--lanes), minmax(0, 1fr)); }
-.game-name{
-    container-type: inline-size;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: .5vh;
-    padding: 0 .6vh;
-    text-align: center;
-}
-.game-name-line{
-    max-width: 100%;
-    display: flex;
-    align-items: center;
-    overflow: hidden;
-    white-space: nowrap;
-    font: 400 max(10px, 1.2vh)/1.2 var(--font-mono);
-    letter-spacing: .1em;
-    color: var(--color-muted);
-}
-.game-name-line span{ min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.game-name.is-me .game-name-line{ color: #fff; font-weight: 500; }
-.game-progress{ display: block; width: 70%; height: 1px; background: var(--color-line-faint); }
-.game-progress i{ display: block; width: calc(var(--progress) * 100%); height: 100%; background: var(--color-line); transition: width .5s; }
-.game-name.is-me .game-progress{ height: 2px; }
-.game-name.is-me .game-progress i{ background: var(--color-red-text); }
-@container (max-width: 56px){ .game-name-line span{ display: none; } }
-
 @media (prefers-reduced-motion: reduce){
     .race-pool, .race-rank{ animation: none; }
-    .game-progress i{ transition: none; }
 }

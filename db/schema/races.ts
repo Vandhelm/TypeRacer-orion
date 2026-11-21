@@ -1,8 +1,35 @@
 import { sql } from "drizzle-orm";
-import { boolean, check, foreignKey, index, integer, jsonb, pgTable, primaryKey, real, text, timestamp, unique } from "drizzle-orm/pg-core";
+import { boolean, check, foreignKey, index, integer, jsonb, pgTable, primaryKey, real, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
+import type { ReceivedBonuses } from "../../src/rooms/bonus";
 import { players } from "./players";
 import { raceConfigs, rooms } from "./rooms";
 import { corpusTexts } from "./texts";
+
+/** Le bilan d'un participant sans joueur enregistré, tel que reçu après la course. */
+export type RaceOther = {
+  name: string;
+  rank: number;
+  wpm: number;
+  raw: number;
+  accuracy: number;
+  seconds: number;
+  correctChars: number;
+  wrongChars: number;
+  extraChars: number;
+  missedChars: number;
+  consistency: number;
+  idle: number;
+  finished: boolean;
+  eliminated: boolean;
+  /** COURSE-07 : absent d'une course gardée avant l'abandon. */
+  abandoned?: boolean;
+  /** HIST-02 : les bonus reçus, d'après le serveur ; absent : bonus désactivés, ou coureur dont le serveur ne sait rien. */
+  bonuses?: ReceivedBonuses;
+  wpmSeries: number[];
+  rawSeries: number[];
+  errorSeries: number[];
+  keys: Record<string, [number, number]>;
+};
 
 /** L'historique survit à la fermeture du salon. `content` garde le texte joué, même s'il sort du corpus. */
 export const races = pgTable(
@@ -15,6 +42,12 @@ export const races = pgTable(
     content: text("content").notNull(),
     startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
     finishedAt: timestamp("finished_at", { withTimezone: true }),
+    // Identifiant tiré par le navigateur pour chaque course envoyée : la même course renvoyée est refusée (AUTH-06).
+    clientId: uuid("client_id").unique("races_client_id_unique"),
+    // Les participants sans historique (invités, autres humains) : de quoi réafficher toute la course, chacun à son rang (HIST-02).
+    others: jsonb("others").$type<RaceOther[]>().notNull().default([]),
+    // RES-02 : le pseudo de l'invité qui a envoyé cette course (cookie signé) ; null pour un compte. Seule sa ligne le mesure.
+    guest: text("guest"),
   },
   (table) => [index("races_room").on(table.roomId)],
 );
@@ -38,7 +71,13 @@ export const raceResults = pgTable(
     idle: real("idle").notNull(),
     finished: boolean("finished").notNull(),
     eliminated: boolean("eliminated").notNull().default(false),
+    /** COURSE-07 : le joueur a abandonné (finished vaut alors false) ; classé par sa progression à l'abandon (COURSE-10). */
+    abandoned: boolean("abandoned").notNull().default(false),
+    /** COURSE-10 : la progression d'un bot (0 à 1) envoyée par le navigateur, pour le reclasser à la fin de la course ; null sinon. */
+    progress: real("progress"),
     sessionSeconds: integer("session_seconds").notNull().default(0),
+    /** HIST-02 : les bonus reçus, d'après le serveur (temps réel, ou rooms.bot_bonuses pour un bot) ; null : désactivés ou inconnus. */
+    bonuses: jsonb("bonuses").$type<ReceivedBonuses>(),
     /** caractère → [frappes, fautes] */
     keys: jsonb("keys").$type<Record<string, [number, number]>>().notNull().default({}),
   },

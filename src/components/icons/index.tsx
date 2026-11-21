@@ -1,8 +1,9 @@
-// Inline SVG icons. They take the current text color.
+// Inline SVG icons. They take the current text color. A11Y-03 : all decorative (aria-hidden), the button or link
+// around them carries the name.
 
-export function ArrowIcon(props: { "aria-hidden"?: boolean }) {
+export function ArrowIcon() {
   return (
-    <svg width="24" height="14" viewBox="0 0 24 14" {...props}>
+    <svg width="24" height="14" viewBox="0 0 24 14" aria-hidden="true">
       <path d="M0 7h22M16 1l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="2" />
     </svg>
   );
@@ -85,8 +86,59 @@ export function CheckIcon() {
 
 export function ChevronIcon({ direction }: { direction: "up" | "down" }) {
   return (
-    <svg viewBox="0 0 12 12">
+    <svg viewBox="0 0 12 12" aria-hidden="true">
       <path d={direction === "up" ? "M2 7l4-4 4 4" : "M2 5l4 4 4-4"} fill="none" stroke="currentColor" strokeWidth="1.4" />
+    </svg>
+  );
+}
+
+/* Navbar sections (SiteNavbar) */
+export function HomeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 11l8-7 8 7v9H4z" />
+    </svg>
+  );
+}
+
+export function RoomsIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="4" y="5" width="16" height="14" />
+      <path d="M4 10h16" />
+    </svg>
+  );
+}
+
+export function RoomIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M3 9h18M5 9v10M19 9v10M8 5h8" />
+    </svg>
+  );
+}
+
+export function RaceIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="2" y="6" width="20" height="12" />
+      <path d="M6 10h1M10 10h1M14 10h1M17 10h1M7 14h10" />
+    </svg>
+  );
+}
+
+export function PodiumIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M3 20h18M6 20v-6h4v6M10 20V8h4v12M14 20v-9h4v9" />
+    </svg>
+  );
+}
+
+export function PlayIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M7 4l13 8-13 8z" />
     </svg>
   );
 }

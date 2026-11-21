@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, test } from "bun:test";
 import { eq, isNull, sql } from "drizzle-orm";
-import { account, corpusTexts, players, raceConfigs, raceResults, races, raceSamples, roomMembers, rooms } from "../schema";
+import { account, corpusTexts, players, raceConfigs, raceResults, races, raceSamples, roomInvites, roomMembers, rooms } from "../schema";
 import { CORPUS } from "./corpus";
 import { DEFAULT_CONFIG, DEMO_PASSWORD, PLAYERS, RACES, ROOMS } from "./data";
 import { seed } from "./seed";
@@ -17,7 +17,7 @@ describe("schema", () => {
 
   test("creates every table", async () => {
     const { rows } = await db.execute<{ table_name: string }>(sql`SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name`);
-    expect(rows.map((row) => row.table_name)).toEqual(["account", "corpus_texts", "players", "race_configs", "race_results", "race_samples", "races", "room_members", "rooms", "saved_texts", "session", "user", "verification"]);
+    expect(rows.map((row) => row.table_name)).toEqual(["account", "corpus_texts", "players", "race_configs", "race_results", "race_samples", "races", "rate_limits", "room_bans", "room_invites", "room_members", "rooms", "saved_texts", "session", "user", "verification"]);
   });
 
   test("enforces foreign keys", async () => {
@@ -32,10 +32,13 @@ describe("schema", () => {
     const [host] = await db.insert(players).values({ name: "Code_Host" }).returning({ id: players.id });
     const [config] = await db.insert(raceConfigs).values(DEFAULT_CONFIG).returning({ id: raceConfigs.id });
     const room = { name: "x", visibility: "public" as const, guests: 4, bots: true, hostId: host!.id, configId: config!.id };
-    await fails(db.insert(rooms).values({ ...room, code: "CORAIL", inviteToken: "a" }));
-    await fails(db.insert(rooms).values({ ...room, code: "ABC23", inviteToken: "b" }));
-    await db.insert(rooms).values({ ...room, code: "ABC234", inviteToken: "c" });
-    await fails(db.insert(rooms).values({ ...room, code: "ABC235", inviteToken: "c" }));
+    await fails(db.insert(rooms).values({ ...room, code: "CORAIL" }));
+    await fails(db.insert(rooms).values({ ...room, code: "ABC23" }));
+    const [created] = await db.insert(rooms).values({ ...room, code: "ABC234" }).returning({ id: rooms.id });
+    await fails(db.insert(rooms).values({ ...room, code: "ABC234" }));
+    // SALLE-04 : un jeton d'invitation n'ouvre qu'un seul lien
+    await db.insert(roomInvites).values({ roomId: created!.id, token: "c" });
+    await fails(db.insert(roomInvites).values({ roomId: created!.id, token: "c" }));
   });
 
   test("treats player names as case-insensitive", async () => {
@@ -52,7 +55,9 @@ describe("demo data", () => {
 
   test("fills the corpus, the users and the history", async () => {
     expect(await db.$count(players)).toBe(PLAYERS.length);
-    expect(await db.$count(corpusTexts)).toBe(CORPUS.length);
+    // CONF-03 : les migrations chargent déjà les passages du domaine public ; le seed y ajoute exactement CORPUS
+    const migrated = await (await createEmptyDatabase()).$count(corpusTexts);
+    expect(await db.$count(corpusTexts)).toBe(migrated + CORPUS.length);
     expect(await db.$count(rooms)).toBe(ROOMS.length);
     expect(await db.$count(races)).toBe(RACES.length);
     expect(await db.$count(raceResults)).toBe(entries.length);
@@ -82,7 +87,7 @@ describe("demo data", () => {
   test("refuses two players on one seat", async () => {
     const [member] = await db.select().from(roomMembers).limit(1);
     const [stranger] = await db.select().from(players).where(eq(players.name, "Saba_Sensei"));
-    await fails(db.insert(roomMembers).values({ roomId: member!.roomId, playerId: stranger!.id, seat: member!.seat, color: "red" }));
+    await fails(db.insert(roomMembers).values({ roomId: member!.roomId, memberKey: `player:${stranger!.id}`, playerId: stranger!.id, seat: member!.seat, color: "red" }));
   });
 });
 

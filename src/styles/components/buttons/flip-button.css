@@ -36,12 +36,12 @@
 .flip-button-front{
     transform: translateZ(calc(var(--h) / 2));
     background: var(--color-red-solid);
-    border: 1px solid rgba(255,140,120,.45);
+    border: 1px solid color-mix(in srgb, var(--color-red-glow) 45%, transparent);
     color: #fff;
 }
 .flip-button-bottom{
     transform: rotateX(-90deg) translateZ(calc(var(--h) / 2));
-    background: linear-gradient(90deg, var(--color-face-front-a), var(--color-face-side));
+    background: linear-gradient(90deg, var(--color-face-front-a), var(--color-face-front-b));
     border: 1px solid var(--color-line);
     color: var(--color-red-text);
 }

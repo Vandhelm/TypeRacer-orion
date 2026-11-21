@@ -14,7 +14,7 @@ export function FlipButton({ label, backLabel, className = "", type = "button", 
       <span className="flip-button-inner">
         <span className="flip-button-face flip-button-front">
           <span>{label}</span>
-          <ArrowIcon aria-hidden />
+          <ArrowIcon />
         </span>
         <span className="flip-button-face flip-button-bottom" aria-hidden="true">
           <span>{backLabel}</span>

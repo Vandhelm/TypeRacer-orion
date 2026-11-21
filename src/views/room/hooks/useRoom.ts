@@ -1,0 +1,260 @@
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { usePlayer } from "../../../players/PlayerProvider";
+import { inviteDetour } from "../../../rooms/access";
+import { DEFAULT_SETTINGS, type Role, type RoomSettings } from "../../../rooms/settings";
+import type { RoomResult } from "../../../server/rooms";
+import { afterRace } from "../../podium/after-race";
+import { arrivalRequest, roomApi, serverClockOffset, WAITING_POLL_MS, watchRoom, type Answer, type RoomError } from "../api";
+import { keepPresence, PRESENCE_MS, RACE_PRESENCE_MS } from "../presence";
+import { arrivalOf, isPlayer, roomOf, seatsOf, type Arrival, type Room, type RoomView } from "../room";
+
+/** Le temps d'attendre la fin d'une saisie avant d'envoyer les réglages au serveur. */
+const SAVE_DELAY_MS = 400;
+/** COURSE-03 : les relectures de /game qui affinent le décalage d'horloge, après l'arrivée. */
+const CLOCK_REFINE_MS = [250, 700];
+const EMPTY_VIEW: RoomView = { code: "", status: "waiting", host: "", settings: DEFAULT_SETTINGS, members: [], passage: null, seed: null, startsAt: null, endsAt: null, textHash: null, serverNow: 0 };
+
+/**
+ * The room shown on this page, as the server knows it: its settings, its members, who we are in it.
+ * The host's changes are sent to the server (which checks they come from the host); nothing is kept in this browser.
+ * On /game (`page: "game"`), the launched room is only read back, never created or joined (SALLE-09).
+ */
+export function useRoom(page: "room" | "game" = "room") {
+  const { t } = useTranslation();
+  const player = usePlayer();
+  // TECH-01 : l'adresse ne se lit que dans le navigateur ; undefined pendant le rendu du serveur
+  const [arrival, setArrival] = useState<Arrival | null | undefined>(undefined);
+  useLayoutEffect(() => setArrival(arrivalOf(location.search, page, player.guest)), [page, player.guest]);
+  const [view, setView] = useState<RoomView>(EMPTY_VIEW);
+  const [you, setYou] = useState("");
+  const [room, setRoom] = useState<Room>(() => roomOf(EMPTY_VIEW));
+  const [error, setError] = useState<RoomError | null>(null);
+  const [ready, setReady] = useState(false);
+  /** SALLE-05 : un salon complet s'ouvre encore comme spectateur, à la demande. */
+  const [joinRole, setJoinRole] = useState<Role | undefined>();
+  /** SALLE-06 : le salon où l'on est déjà, quand le serveur refuse d'en ouvrir un deuxième ; `attempt` relance l'arrivée. */
+  const [current, setCurrent] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  /** SALLE-06 : la demande d'arrivée en cours, pour ne pas l'envoyer deux fois (StrictMode). */
+  const sent = useRef<{ key: string; request: Promise<Answer> } | null>(null);
+  const pending = useRef<Partial<RoomSettings>>({});
+  const timer = useRef(0);
+  const code = view.code;
+
+  const apply = useCallback((result: RoomResult) => {
+    setView(result.room);
+    setYou(result.you);
+    setRoom(roomOf(result.room));
+    setReady(true);
+  }, []);
+
+  /**
+   * COURSE-03 : heure du serveur − heure du navigateur, la meilleure mesure des réponses HTTP du salon (api.ts), y compris
+   * celles prises au salon avant d'arriver ici (sessionStorage) ; 0 tant qu'aucune.
+   */
+  const [clockOffset, setClockOffset] = useState(serverClockOffset);
+
+  const answer = useCallback(
+    (reply: Answer) => {
+      if (reply.ok && reply.offset !== undefined) setClockOffset(reply.offset);
+      if (reply.ok) apply(reply.result);
+      else if (reply.error === "unauthorized") location.replace(inviteDetour(new URLSearchParams(location.search)));
+      else {
+        setCurrent(reply.current ?? null);
+        setError(reply.error);
+      }
+    },
+    [apply],
+  );
+
+  // Arrivée : créer son salon (hôte), retrouver celui de l'adresse, ou relire le salon lancé (/game).
+  // AUTH-03 : un invité sans salon repart.
+  useEffect(() => {
+    if (arrival === undefined) return;
+    if (!arrival) {
+      location.replace(page === "game" ? "/home" : "/home#rooms");
+      return;
+    }
+    // JOIN-01 : un code mal formé s'affiche comme une erreur, sans demande au serveur
+    if (arrival.action === "refused") {
+      setError(arrival.error);
+      return;
+    }
+    let live = true;
+    // SALLE-03 : le serveur décide si ce code ou ce lien ouvre le salon ; un membre qui revient le retrouve
+    const request = arrivalRequest(sent, `${attempt}|${joinRole ?? ""}`, () =>
+      arrival.action === "create" ? roomApi.create("player") : arrival.action === "join" ? roomApi.join({ ...arrival.via, ...(joinRole ? { role: joinRole } : {}) }) : roomApi.read(arrival.code),
+    );
+    request.then((reply) => {
+      if (!live) return;
+      answer(reply);
+      // recharger la page retrouve le même salon, par son code
+      if (reply.ok) history.replaceState(null, "", `${location.pathname}?code=${reply.result.room.code}`);
+    });
+    return () => {
+      live = false;
+    };
+  }, [arrival, page, answer, joinRole, attempt]);
+
+  useEffect(() => () => clearTimeout(timer.current), []);
+
+  // SALLE-08 : sur /room comme sur /game, la page donne signe de vie, socket ou pas
+  // COURSE-08 : sur /game plus souvent, la règle des 30 s compte depuis le dernier signe de vie
+  useEffect(() => (code ? keepPresence(code, page === "game" ? RACE_PRESENCE_MS : PRESENCE_MS) : undefined), [code, page]);
+
+  // COURSE-03 : sur /game, deux relectures de plus pendant la préparation affinent le décalage (meilleure des mesures)
+  useEffect(() => {
+    if (!code || page !== "game") return;
+    let live = true;
+    const timers = CLOCK_REFINE_MS.map((ms) =>
+      setTimeout(() => {
+        void roomApi.read(code).then((reply) => {
+          if (live && reply.ok && reply.offset !== undefined) setClockOffset(reply.offset);
+        });
+      }, ms),
+    );
+    return () => {
+      live = false;
+      timers.forEach(clearTimeout);
+    };
+  }, [code, page]);
+
+  // En direct : les arrivées, les départs et les réglages de l'hôte.
+  // /game ne suit pas le salon : sa socket fermée hors course ferait sortir le joueur (leaveAfterDisconnect)
+  useEffect(() => {
+    if (!code || page === "game") return;
+    return watchRoom(
+      code,
+      (next) => {
+        setView(next);
+        if (!Object.keys(pending.current).length) setRoom(roomOf(next));
+      },
+      (error) => {
+        // COURSE-11 : la salle où l'on était a été fermée par l'hôte : retour à l'accueil, avec le message
+        const gone = afterRace({ ok: false, error }, true).go;
+        if (gone) location.replace(gone);
+        else setError(error);
+      },
+      WAITING_POLL_MS, // COURSE-03 : sans temps réel, le lancement est appris à temps pour voir le décompte
+      true, // SALLE-09 : même socket ouverte, une annonce perdue ne bloque pas les invités au salon
+    );
+  }, [code, page]);
+
+  /** Quitter le salon (bouton « Quitter ») : le serveur retire le membre et prévient les autres. */
+  const leave = useCallback(() => {
+    if (code) void roomApi.leave(code);
+  }, [code]);
+
+  const host = ready && view.host === you;
+
+  /** SALLE-06 : on accepte de quitter le salon actuel, puis on refait l'arrivée (création ou entrée) ici. */
+  const leaveCurrent = useCallback(async () => {
+    if (!current) return;
+    await roomApi.leave(current);
+    setCurrent(null);
+    setError(null);
+    setAttempt((n) => n + 1);
+  }, [current]);
+
+  /** SALLE-05 : le salon est complet ; on y entre comme spectateur, sans place. */
+  const watchInstead = useCallback(() => {
+    setError(null);
+    setJoinRole("spectator");
+  }, []);
+
+  const flush = useCallback(async () => {
+    const settings = pending.current;
+    pending.current = {};
+    const reply = await roomApi.update(code, { settings });
+    // une saisie plus récente part bientôt : on garde l'affichage local jusqu'à sa réponse
+    if (!reply.ok || !Object.keys(pending.current).length) answer(reply);
+  }, [code, answer]);
+
+  const update = useCallback(
+    (patch: Partial<Room>) => {
+      setRoom((current) => ({ ...current, ...patch }));
+      if (!host) return;
+      const { code: _code, ...settings } = patch;
+      Object.assign(pending.current, settings);
+      clearTimeout(timer.current);
+      timer.current = window.setTimeout(flush, SAVE_DELAY_MS);
+    },
+    [host, flush],
+  );
+
+  /** SALLE-07 : l'hôte expulse un participant ou un spectateur ; la réponse est le salon sans lui. */
+  // un refus (personne déjà partie) ne remplace pas la page : la relecture suivante montre la liste à jour
+  const kick = useCallback(
+    async (member: string) => {
+      const reply = await roomApi.kick(code, member);
+      if (reply.ok) apply(reply.result);
+    },
+    [code, apply],
+  );
+
+  /** SALLE-01 : l'hôte court (participant) ou regarde (spectateur). */
+  const setRole = useCallback(async (role: Role) => answer(await roomApi.update(code, { role })), [code, answer]);
+
+  /** SALLE-09 : la course est finie ; le serveur passe le salon aux résultats. keepalive : la page part au podium juste après. */
+  const finish = useCallback(() => {
+    if (code) void roomApi.finish(code);
+  }, [code]);
+
+  /** SALLE-09 : le serveur passe le salon en course (hôte seulement) ; un refus s'affiche comme les autres. */
+  const launch = useCallback(async () => {
+    const reply = await roomApi.launch(code);
+    if (!reply.ok) answer(reply);
+    return reply.ok;
+  }, [code, answer]);
+
+  const seats = useMemo(() => seatsOf({ guests: room.guests, bots: room.bots, botList: room.botList }, view.members, you), [room.guests, room.bots, room.botList, view.members, you]);
+  const players = useMemo(() => seats.filter(isPlayer), [seats]);
+  const me = view.members.find((m) => m.key === you);
+
+  return {
+    ready: ready && !error,
+    error,
+    /** SALLE-05 : entrer comme spectateur quand le salon est complet ; null sinon. */
+    watchInstead: error === "full" && arrival?.action === "join" && !joinRole ? watchInstead : null,
+    /** SALLE-06 : le salon où l'on est déjà, et de quoi le quitter pour entrer ici ; null sans ce refus. */
+    elsewhere: error === "already_in_room" && current ? { code: current, leave: leaveCurrent } : null,
+    leave,
+    finish,
+    /** waiting, racing, results, closed : l'état du salon selon le serveur. */
+    status: view.status,
+    /** CONF-03 : le passage de la course en cours, tiré par le serveur (mode cohérent). */
+    passage: view.passage?.body ?? null,
+    /** CONF-03 : la graine des mots tirés au hasard, la même pour tous les membres. */
+    seed: view.seed,
+    /** BOT-04 : les bonus déjà reçus par les bots de la course, que la page rejoue en montant. */
+    botBonuses: view.botBonuses,
+    /** COURSE-03 / COURSE-06 : départ et fin de la course, heure du serveur (ms epoch) ; null avant le lancement. */
+    startsAt: view.startsAt,
+    endsAt: view.endsAt,
+    /** COURSE-03 : à ajouter à Date.now() pour lire l'heure du serveur. */
+    clockOffset,
+    room,
+    update,
+    host,
+    role: me?.role ?? "player",
+    /** SALLE-09 : ce membre a déjà fini la course en cours. */
+    finished: me?.finished ?? false,
+    /** COURSE-07 : ce membre a abandonné la course en cours, selon le serveur. */
+    abandoned: me?.abandoned ?? false,
+    setRole,
+    launch,
+    kick,
+    /** SALLE-07 : les autres personnes du salon (participants et spectateurs, sans les bots), que l'hôte peut expulser. */
+    others: view.members.filter((m) => m.key !== you),
+    seats,
+    players,
+    /** Les membres par ordre d'arrivée ; une arrivée met à jour le statut des liens d'invitation (SALLE-04). */
+    members: view.members,
+    spectators: view.members.filter((m) => m.role === "spectator"),
+    humans: view.members.filter((m) => m.role === "player").length,
+    displayName: room.autoName ? t("room.defaultName") : room.name,
+  };
+}
+
+export type RoomState = ReturnType<typeof useRoom>;
