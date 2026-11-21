@@ -64,6 +64,8 @@ export const rooms = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     /** SALLE-09 : départ de la course en cours ; elle prend fin d'elle-même à raceDeadlineMs(durée) (src/server/rooms.ts). */
     launchedAt: timestamp("launched_at", { withTimezone: true }),
+    /** COURSE-09 : fin de la course avant les bots (plus aucun humain en course, aucun arrivé) ; les bots s'arrêtent là. Remis à null au lancement. */
+    endedAt: timestamp("ended_at", { withTimezone: true }),
     /** CONF-03 : le passage du corpus tiré par le serveur au lancement, en mode cohérent ; null sinon. */
     textId: integer("text_id").references(() => corpusTexts.id, { onDelete: "set null" }),
     /** CONF-03 : la graine des mots tirés au hasard (mode aléatoire, chiffres, caractères spéciaux), la même pour tous. */
