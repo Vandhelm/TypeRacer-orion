@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { BotTag } from "../../players/BotTag";
+import { seatNumber } from "../../rooms/seats";
 import type { RoomState } from "./hooks/useRoom";
 import { isPlayer } from "./room";
 import { TEXT_TYPE_KEY, useRoomLabels } from "./useRoomLabels";
@@ -13,6 +14,8 @@ const PAPER =
 const SEAT = "flex min-w-0 items-center gap-[7px] font-mono text-[11px] leading-[1.2]";
 const DIAMOND = "size-2 flex-none border [transform:rotate(45deg)]";
 const NAME = "min-w-0 truncate";
+// DES-05 : the seat number, the cue that is not a colour (the same number on the pond and the race track)
+const NUMBER = "w-[2ch] flex-none text-right text-[10px] tabular-nums";
 
 export function RoomTicket({ state }: { state: RoomState }) {
   const { t } = useTranslation();
@@ -51,11 +54,12 @@ export function RoomTicket({ state }: { state: RoomState }) {
           <ul className="grid list-none gap-1.5 pb-[14px] phone:grid-cols-[repeat(2,minmax(0,1fr))] phone:gap-x-[14px]">
             {seats.map((seat, i) => {
               if (!isPlayer(seat)) {
-                return <li key={i} className={`${SEAT} font-normal text-muted`}><i className={`${DIAMOND} border-[rgba(255,255,255,.35)]`} /><span className={NAME}>{t("room.freeSeat")}</span></li>;
+                return <li key={i} className={`${SEAT} font-normal text-muted`}><span data-part="seat-number" className={NUMBER}>{seatNumber(i)}</span><i className={`${DIAMOND} border-[rgba(255,255,255,.35)]`} /><span className={NAME}>{t("room.freeSeat")}</span></li>;
               }
               const tag = [seat.host ? t("room.host").toUpperCase() : "", seat.me ? t("room.you") : ""].filter(Boolean).join(" · ");
               return (
                 <li key={i} className={`${SEAT} ${seat.me ? "font-medium text-white" : "font-normal text-[rgba(255,255,255,.75)]"}`}>
+                  <span data-part="seat-number" className={`${NUMBER} text-muted`}>{seatNumber(i)}</span>
                   <i className={`${DIAMOND} border-white`} style={{ background: seat.color }} />
                   <span className={NAME}>{seat.name}</span>
                   {tag && <span className={`ml-auto flex-none text-[10px] tracking-[.06em] ${seat.host ? "text-red-text" : "text-muted"}`}>{tag}</span>}

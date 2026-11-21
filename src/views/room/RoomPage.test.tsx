@@ -74,6 +74,13 @@ describe("BOT-04 — the waiting room marks a bot as such, and only bots", () =>
   });
 });
 
+describe("DES-05 — on the ticket, a seat is told apart by its number, not only its colour", () => {
+  test("each player row shows its seat number beside the colour chip", () => {
+    const rows = ticket("fr");
+    rows.forEach((row, i) => expect(row).toMatch(new RegExp(`data-part="seat-number"[^>]*>${i + 1}<`)));
+  });
+});
+
 describe("COURSE-03 — before the launch, a member is told the custom text comes at the launch", () => {
   const settings = (host: boolean, text: string, language: "fr" | "en" = "fr") => {
     const state = { room: { ...DEFAULT_SETTINGS, textType: "custom", text }, host, seats: [], update: () => {} } as unknown as RoomState;
