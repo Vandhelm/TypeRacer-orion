@@ -3,7 +3,7 @@ import { cleanRoomCode, isRoomCode, joinByCodeHref, type Visibility } from "../.
 import { MAX_GUESTS, MIN_GUESTS, MAX_TEXT_LENGTH, type Role, type RoomSettings } from "../../rooms/settings";
 import type { MemberView, RoomView } from "../../server/rooms";
 import { defaultBots, nextBotName, seatedBots, type BotLevel, type RoomBot } from "../../rooms/bots";
-import { seatColor } from "../../rooms/seats";
+import { seatFill, themedSeatColor } from "../../rooms/seats";
 import { launchBlocker } from "../../rooms/launch";
 import { additionsApply } from "../../rooms/text";
 import type { TFunction } from "i18next";
@@ -150,11 +150,11 @@ export function seatsOf(room: Pick<Room, "guests" | "bots"> & { botList?: readon
   const seats: Seat[] = members
     .filter((m) => m.role === "player" && m.seat !== null)
     .sort((a, b) => a.seat! - b.seat!)
-    .map((m) => ({ name: m.name, color: m.color ?? seatColor(m.seat!), host: m.host || undefined, me: m.key === you || undefined, ...(m.image ? { image: m.image } : {}) }));
+    .map((m) => ({ name: m.name, color: themedSeatColor(m.color, m.seat!), host: m.host || undefined, me: m.key === you || undefined, ...(m.image ? { image: m.image } : {}) }));
   // SALLE-05 : un bot par nom de la liste fermée (le serveur ne reconnaît qu'elle) ; au-delà, des places libres
   const humans = seats.length;
   for (const bot of seatedBots({ ...room, botList: room.botList ?? defaultBots(room.guests - humans, "medium") }, humans)) {
-    seats.push({ name: bot.name, color: seatColor(seats.length), bot: true, ...(room.botList ? { level: bot.level } : {}) });
+    seats.push({ name: bot.name, color: seatFill(seats.length), bot: true, ...(room.botList ? { level: bot.level } : {}) });
   }
   while (seats.length < room.guests) seats.push({ free: true });
   return seats;

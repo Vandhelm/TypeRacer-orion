@@ -25,6 +25,17 @@
     --color-chart-7: #e48ab8;
     --color-chart-8: #9a9a9a;
 
+    /* SALLE-05 : one colour per seat (fish in the pond, chip on the ticket), the ones the server assigns
+       (src/rooms/seats.ts); seats 9 to 30 turn on the colour wheel there. */
+    --color-seat-1: hsl(6, 71%, 58%);
+    --color-seat-2: hsl(266, 85%, 59%);
+    --color-seat-3: hsl(54, 100%, 74%);
+    --color-seat-4: hsl(25, 100%, 63%);
+    --color-seat-5: hsl(326, 47%, 47%);
+    --color-seat-6: hsl(161, 65%, 60%);
+    --color-seat-7: hsl(220, 85%, 65%);
+    --color-seat-8: hsl(0, 0%, 72%);
+
     --color-face-front-a: #070707;
     --color-face-front-b: #141414;
     --color-face-side: #2a2a2a;
@@ -62,6 +73,25 @@
     --color-chart-6: #009e73;
     --color-chart-7: #b8a2f0;
     --color-chart-8: #8fd9c4;
+
+    /* seats: eight colours ΔE ≥ 20 apart pair by pair, each 3:1 on black; from seat 9 on, they come round again
+       (--seat-wrap-N, read by src/rooms/seats.ts), and the seat number tells two players apart */
+    --color-seat-1: #f9924d;
+    --color-seat-2: #505cbe;
+    --color-seat-3: #ffce00;
+    --color-seat-4: #b43b2c;
+    --color-seat-5: #98608e;
+    --color-seat-6: #8daf8c;
+    --color-seat-7: #39cffc;
+    --color-seat-8: #f2f2f2;
+    --seat-wrap-1: var(--color-seat-1);
+    --seat-wrap-2: var(--color-seat-2);
+    --seat-wrap-3: var(--color-seat-3);
+    --seat-wrap-4: var(--color-seat-4);
+    --seat-wrap-5: var(--color-seat-5);
+    --seat-wrap-6: var(--color-seat-6);
+    --seat-wrap-7: var(--color-seat-7);
+    --seat-wrap-8: var(--color-seat-8);
 }
 
 /* DES-05 : in both themes, the system preferences come first. More contrast: the translucent text and lines get

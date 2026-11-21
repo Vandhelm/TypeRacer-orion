@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import { parseCssColor, themeTokens, type Theme } from "./contrast";
+import { SEAT_COLORS } from "../rooms/seats";
+import { contrastRatio, parseCssColor, themeTokens, type Theme } from "./contrast";
 import { CVD_TYPES, deltaE, simulate } from "./cvd";
 
 const color = (value: string) => parseCssColor(value);
@@ -77,5 +78,39 @@ describe("DES-05 — the colour-adapted theme keeps every meaningful pair of col
 
   test("the default theme does not, which is why the cvd theme exists (its pink and grey series merge)", () => {
     expect(tooClose("default").some((line) => line.startsWith("race chart: chart-7 / chart-8, side by side in the legend — deuteranopia"))).toBe(true);
+  });
+});
+
+/** ΔE le plus faible de chaque paire de `colors`, en vision normale et pour chaque dichromatie, sous ce seuil. */
+function closePairs(colors: string[], threshold: number, background = color("#000")): string[] {
+  const visions = ["normal", ...CVD_TYPES] as const;
+  const seen = (c: string, v: (typeof visions)[number]) => (v === "normal" ? color(c) : simulate(color(c), v, background));
+  return colors.flatMap((a, i) =>
+    colors.slice(i + 1).flatMap((b, j) =>
+      visions
+        .map((v) => ({ v, value: deltaE(seen(a, v), seen(b, v)) }))
+        .filter(({ value }) => value < threshold)
+        .map(({ v, value }) => `seat ${i + 1} / seat ${i + j + 2} — ${v}: ΔE ${value.toFixed(1)}`),
+    ),
+  );
+}
+
+const seats = (theme: Theme) => Array.from({ length: 8 }, (_, i) => themeTokens(CSS, theme)[`seat-${i + 1}`]!);
+
+describe("DES-05 — seat colours (fish in the pond, chip on the ticket)", () => {
+  test("the default theme keeps the colours the server assigns to each seat", () => {
+    expect(seats("default")).toEqual([...SEAT_COLORS]);
+  });
+
+  test("the cvd theme gives eight seats that stay ΔE 20 apart, pair by pair, for normal vision and each dichromacy", () => {
+    expect(closePairs(seats("cvd"), DISTINCT)).toEqual([]);
+  });
+
+  test("each cvd seat reaches 3:1 on the black pond (a graphic, WCAG 1.4.11)", () => {
+    for (const seat of seats("cvd")) expect(contrastRatio(color(seat), color("#000"))).toBeGreaterThanOrEqual(3);
+  });
+
+  test("the default seats do not: the teal and the grey merge for deuteranopia", () => {
+    expect(closePairs(seats("default"), DISTINCT)).toContain("seat 6 / seat 8 — deuteranopia: ΔE 6.6");
   });
 });
