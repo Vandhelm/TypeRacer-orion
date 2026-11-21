@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { InfoTip } from "../../components/InfoTip";
 import { BotTag } from "../../players/BotTag";
 import { BOT_ACCURACIES, BOT_LEVELS, canAddBot, type RoomBot } from "../../rooms/bots";
 import type { RoomState } from "./hooks/useRoom";
@@ -32,11 +33,19 @@ function BotsPart({ state }: { state: RoomState }) {
   // CONF-10 : les humains assis comptent dans la capacité ; un bot sans place attend qu'une place se libère
   const humans = seats.filter((seat) => isPlayer(seat) && !seat.bot).length;
   const colors = new Map(seats.filter(isPlayer).filter((seat) => seat.bot).map((seat) => [seat.name, seat.color]));
-  const setBots = (botList: RoomBot[]) => update({ botList, bots: botList.length > 0 });
+  // le serveur garde la case « Autorisés » telle quelle (resolveBots) : on n'envoie que la liste
+  const setBots = (botList: RoomBot[]) => update({ botList });
   const accuracyOf = (bot: RoomBot) => bot.accuracy ?? room.botAccuracy;
   return (
     <section aria-labelledby="ticket-bots">
-      <h2 className={HEAD}><span id="ticket-bots">{t("room.bots")}</span><span aria-hidden="true">{room.bots ? room.botList.length : "—"}</span></h2>
+      <h2 className={HEAD}>
+        <span className="inline-flex items-center gap-2">
+          <span id="ticket-bots">{t("room.bots")}</span>
+          {/* BOT-01 : les plages de vitesse des niveaux et l'effet de chaque précision */}
+          <InfoTip text={`${t("room.helpBotLevels")} ${t("room.helpBotAccuracy")}`} />
+        </span>
+        <span aria-hidden="true">{room.bots ? room.botList.length : "—"}</span>
+      </h2>
       {!room.bots || !room.botList.length ? (
         <p className={EMPTY}>{t(room.bots ? "room.noBots" : "room.botsOff")}</p>
       ) : (
@@ -50,7 +59,7 @@ function BotsPart({ state }: { state: RoomState }) {
                   <span className={NAME}>{bot.name}</span>
                   {color ? <BotTag className="ml-auto text-[10px]" /> : <span className="ml-auto flex-none text-[10px] text-muted">{t("room.botWaiting")}</span>}
                   {host && (
-                    <button type="button" className={`${TICKET_BUTTON} flex-none px-1.5`} aria-label={t("room.removeBotLabel", { name: bot.name })} onClick={() => setBots(withoutBot(room.botList, bot.name))}>×</button>
+                    <button type="button" className={`${TICKET_BUTTON} inline-flex size-6 flex-none items-center justify-center px-0 py-0 text-[13px]`} aria-label={t("room.removeBotLabel", { name: bot.name })} onClick={() => setBots(withoutBot(room.botList, bot.name))}>×</button>
                   )}
                 </p>
                 {host ? (

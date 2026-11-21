@@ -66,7 +66,8 @@ describe("CONF-10 — the server resolves a change of the bots", () => {
   const current = { ...DEFAULT_SETTINGS, guests: 4, bots: true, botList: [{ name: "Wasabi99" as const, level: "beginner" as const }] };
 
   test("a new list replaces the old one, and bots are on exactly when it is not empty", () => {
-    expect(resolveBots(current, { botList: [] }, 1)).toEqual({ bots: false, botList: [] });
+    // retirer le dernier bot laisse les bots autorisés : l'hôte peut en rajouter sans recocher la case
+    expect(resolveBots(current, { botList: [] }, 1)).toEqual({ bots: true, botList: [] });
     expect(resolveBots(current, { botList: [{ name: "Ebi_Fry", level: "expert" }] }, 1)).toEqual({ bots: true, botList: [{ name: "Ebi_Fry", level: "expert" }] });
   });
 
