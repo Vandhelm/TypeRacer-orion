@@ -150,7 +150,6 @@ export function RoomSettings({ state, onEditText, action }: RoomSettingsProps) {
           onChange={setSection}
           options={SECTIONS.map((s) => ({ value: s.value, num: s.num, label: t(`room.${s.key}`), id: `tab-${s.value}`, panelId: `panel-${s.value}` }))}
         />
-        {action}
       </div>
 
       <div className={PANEL} role="tabpanel" id="panel-room" aria-labelledby="tab-room" hidden={section !== "room"}>
@@ -256,6 +255,8 @@ export function RoomSettings({ state, onEditText, action }: RoomSettingsProps) {
         </Row>
         <ExcludedRow room={room} host={host} update={update} />
       </div>
+      {/* A11Y-04 : le départ, fixé en bas de l'écran, vient au clavier après les réglages de l'onglet ouvert */}
+      {action}
     </div>
   );
 }
