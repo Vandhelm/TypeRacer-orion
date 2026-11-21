@@ -36,7 +36,7 @@
 .flip-button-front{
     transform: translateZ(calc(var(--h) / 2));
     background: var(--color-red-solid);
-    border: 1px solid rgba(255,140,120,.45);
+    border: 1px solid color-mix(in srgb, var(--color-red-glow) 45%, transparent);
     color: #fff;
 }
 .flip-button-bottom{

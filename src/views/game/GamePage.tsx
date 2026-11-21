@@ -36,7 +36,7 @@ const ROOT =
 // The room name, centered, after a red diamond
 const TITLE =
   "absolute top-1/2 left-1/2 flex items-center gap-3 font-sans text-[clamp(15px,2.2vh,20px)] leading-[1.1] font-light tracking-[.14em] whitespace-nowrap uppercase [transform:translate(-50%,-50%)] narrow:hidden " +
-  "before:size-[.72em] before:flex-none before:border before:border-[rgba(255,140,120,.4)] before:bg-red before:[transform:rotate(45deg)]";
+  "before:size-[.72em] before:flex-none before:border before:border-red-glow/40 before:bg-red before:[transform:rotate(45deg)]";
 // The countdown hits like a stamp (keyframe game-count-hit in styles/pages/game/game.css)
 /** COURSE-10 : après un abandon, la relecture du salon qui guette la fin de la course. */
 const ROOM_FOLLOW_MS = 3000;

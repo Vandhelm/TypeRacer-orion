@@ -21,7 +21,7 @@
     width: 70vmax;
     height: 70vmax;
     background: linear-gradient(135deg, var(--color-red) 50%, var(--color-red-dark) 100%);
-    border: 1px solid rgba(255,140,120,.25);
+    border: 1px solid color-mix(in srgb, var(--color-red-glow) 25%, transparent);
     transform: rotate(45deg);
 }
 .podium-pyramid::after{
@@ -157,7 +157,7 @@
     text-decoration: none;
     transition: background .2s, color .2s, border-color .2s;
 }
-.podium-play{ background: var(--color-red-solid); border: 1px solid rgba(255,140,120,.45); }
+.podium-play{ background: var(--color-red-solid); border: 1px solid color-mix(in srgb, var(--color-red-glow) 45%, transparent); }
 .podium-play:hover{ background: var(--color-red-hover); }
 .podium-back{ background: #000; border: 1px solid var(--color-line-soft); }
 .podium-back:hover{ background: #f2f2f2; border-color: #f2f2f2; color: #000; }

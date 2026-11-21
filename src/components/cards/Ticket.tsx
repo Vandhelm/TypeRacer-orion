@@ -17,7 +17,7 @@ type TicketStubProps = {
 
 // Sizes scale with --u and --hang, set by the parent (e.g. the tickets grid of the rooms view).
 const BUTTON =
-  "ticket-button unset box-border flex h-[max(30px,calc(9.5*var(--u)))] cursor-pointer items-center justify-center border border-[rgba(255,140,120,.45)] bg-red-solid " +
+  "ticket-button unset box-border flex h-[max(30px,calc(9.5*var(--u)))] cursor-pointer items-center justify-center border border-red-glow/45 bg-red-solid " +
   "pr-[calc(4*var(--u))] pl-[calc(4*var(--u)+.3em)] font-sans text-[max(10px,calc(3.8*var(--u)))] leading-none font-medium tracking-[.3em] text-white " +
   "transition-[background,color,border-color] duration-200 ease-[ease] hover:bg-red-hover disabled:cursor-not-allowed disabled:border-line disabled:bg-transparent disabled:text-line-soft focus-visible:outline focus-visible:outline-offset-3 focus-visible:outline-white";
 // The paper (its hover motion is a damped spring computed in JS), with an inner frame
