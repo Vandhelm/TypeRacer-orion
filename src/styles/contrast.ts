@@ -34,3 +34,26 @@ export function contrastRatio(text: Rgba, background: Rgba): number {
 export function tokensOf(css: string): Record<string, string> {
   return Object.fromEntries([...css.matchAll(/--color-([\w-]+):\s*([^;]+);/g)].map((m) => [m[1]!, m[2]!.trim()]));
 }
+
+export type Theme = "default" | "cvd";
+
+/** Les déclarations du premier bloc ouvert par `start` (qui finit par « { », sans accolade imbriquée) ; vide s'il manque. */
+const block = (css: string, start: RegExp) => {
+  const match = start.exec(css);
+  if (!match) return "";
+  const open = match.index + match[0].length;
+  return css.slice(open, css.indexOf("}", open));
+};
+
+/**
+ * DES-05 : les couleurs d'un thème, telles que le navigateur les résout. Le thème par défaut est le bloc
+ * `@theme static`, le thème `cvd` le surcharge par `:root[data-theme="cvd"]` ; `moreContrast` ajoute le bloc
+ * `@media (prefers-contrast: more)`, commun aux deux thèmes.
+ */
+export function themeTokens(css: string, theme: Theme, { moreContrast = false } = {}): Record<string, string> {
+  if (theme !== "default" && theme !== "cvd") throw new Error(`DES-05 : thème inconnu « ${String(theme)} »`);
+  const tokens = tokensOf(block(css, /@theme static\s*\{/));
+  if (theme === "cvd") Object.assign(tokens, tokensOf(block(css, /:root\[data-theme="cvd"\]\s*\{/)));
+  if (moreContrast) Object.assign(tokens, tokensOf(block(css, /@media \(prefers-contrast: more\)\s*\{\s*:root\s*\{/)));
+  return tokens;
+}
