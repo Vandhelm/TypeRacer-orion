@@ -81,8 +81,8 @@ describe("DES-05 — on the ticket, a seat is told apart by its number, not only
   });
 
   test("a free seat after a bot keeps its own number, not the bot's", () => {
-    const seats = [...SEATS, { free: true }];
-    const html = renderTicket({ ...ticketState(true, { guests: 4 }), seats, players: seats });
+    const seats: Seat[] = [...SEATS, { free: true }];
+    const html = renderTicket({ ...ticketState(true, { guests: 4 }), seats });
     const numbers = [...html.matchAll(/data-part="seat-number"[^>]*>(\d+)</g)].map((m) => m[1]).sort();
     expect(numbers).toEqual(["1", "2", "3", "4"]);
   });
