@@ -230,7 +230,7 @@ export function HomePanel({ ref, initialMe = null }: { ref?: Ref<HTMLElement>; i
     <section ref={ref} className={PANEL}>
       <Stamp label={stamp.key ? t(`home.${stamp.key}`) : ""} visible={stamp.on} playKey={stamp.play} />
 
-      <LogoTitle overline={t("home.overline")} name="O.R.I.O.N" />
+      <LogoTitle name="O.R.I.O.N" />
 
       <div className="flex w-full max-w-[45vh] min-w-[min(100%,300px)] flex-col gap-[2.6vh] phone:max-w-none phone:gap-[22px]">
         <ViewTabs
