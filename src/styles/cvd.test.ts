@@ -114,3 +114,33 @@ describe("DES-05 — seat colours (fish in the pond, chip on the ticket)", () =>
     expect(closePairs(seats("default"), DISTINCT)).toContain("seat 6 / seat 8 — deuteranopia: ΔE 6.6");
   });
 });
+
+/** La teinte (0–360°) d'une couleur opaque. */
+function hue(value: string): number {
+  const { r, g, b } = color(value);
+  const [max, min] = [Math.max(r, g, b), Math.min(r, g, b)];
+  if (max === min) return 0;
+  const h = max === r ? (g - b) / (max - min) : max === g ? 2 + (b - r) / (max - min) : 4 + (r - g) / (max - min);
+  return (h * 60 + 360) % 360;
+}
+
+describe("DES-05 — the accent of the canvas scenes (lanterns, noren, lacquer, plate rims, button edges) follows the theme", () => {
+  const ACCENTS = ["red-hi", "red-lo", "red-rim", "red-glow"];
+
+  test("each one has the hue of the theme's accent: red by default, the cvd orange in cvd", () => {
+    for (const theme of ["default", "cvd"] as const) {
+      const tk = themeTokens(CSS, theme);
+      for (const name of ACCENTS) expect(`${name} ${theme}: ${Math.abs(hue(tk[name]!) - hue(tk["red-solid"]!)) <= 12}`).toBe(`${name} ${theme}: true`);
+    }
+  });
+
+  test("the default values are the ones the scenes used to write by hand", () => {
+    const tk = themeTokens(CSS, "default");
+    expect([tk["red-hi"], tk["red-lo"], tk["red-rim"], tk["red-glow"]]).toEqual(["#c0342a", "#5c120d", "#d23c30", "rgb(255,140,120)"]);
+  });
+
+  test("on the belt, a red-rimmed plate stays apart from a white-rimmed one in cvd, for each dichromacy", () => {
+    const tk = themeTokens(CSS, "cvd");
+    for (const type of CVD_TYPES) expect(deltaE(simulate(color(tk["red-rim"]!), type), simulate(color(tk["line"]!), type))).toBeGreaterThanOrEqual(DISTINCT);
+  });
+});

@@ -13,6 +13,12 @@
     --color-red-solid: #9e1f17;
     --color-red-hover: #b4261c;
     --color-red-text: #e0574a;
+    /* the accent of the canvas scenes (lanterns, noren, lacquer, plate rims) and the rosy edge of the red buttons,
+       used with an opacity (Tailwind border-red-glow/45, color-mix in the CSS files, withAlpha in the canvases) */
+    --color-red-hi: #c0342a;
+    --color-red-lo: #5c120d;
+    --color-red-rim: #d23c30;
+    --color-red-glow: rgb(255,140,120);
 
     --color-chart-raw: #9a9a9a;
     /* RES-03 : one color per participant on the race chart (the local player keeps the red) */
@@ -64,6 +70,10 @@
     --color-red-solid: #a35400;
     --color-red-hover: #b35c00;
     --color-red-text: #e69f00;
+    --color-red-hi: #c86b00;
+    --color-red-lo: #4a2600;
+    --color-red-rim: #e69f00;
+    --color-red-glow: rgb(255,190,120);
 
     --color-chart-1: #f2f2f2;
     --color-chart-2: #56b4e9;
