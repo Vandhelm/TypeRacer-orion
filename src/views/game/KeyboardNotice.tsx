@@ -1,7 +1,6 @@
 "use client";
 import { useTranslation } from "react-i18next";
 import { HangingButton } from "../../components/buttons/HangingButton";
-import { FLOATING_TABS, LanguageSwitcher } from "../../components/tabs/LanguageSwitcher";
 import type { RoomState } from "../room/hooks/useRoom";
 import { useMobileRaceEnd } from "./mobileRace";
 
@@ -15,7 +14,6 @@ export function KeyboardNotice({ state }: { state: Pick<RoomState, "room" | "dis
   const onLeave = state.leave;
   return (
     <main className="grid min-h-screen place-content-center justify-items-center gap-6 bg-black px-6 py-24 text-center font-sans text-white">
-      <LanguageSwitcher className={FLOATING_TABS} />
       <HangingButton href="/home" onClick={onLeave}>{t("room.leave")}</HangingButton>
       <p className="flex items-center gap-3 font-mono text-[11px] leading-none tracking-[.22em] text-muted uppercase before:size-[.72em] before:flex-none before:border before:border-red-glow/40 before:bg-red before:[transform:rotate(45deg)]">
         {room}

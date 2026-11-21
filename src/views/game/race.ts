@@ -126,12 +126,12 @@ export function createRace(course: Course, players: Player[], botSpeed: BotSpeed
     const start = { lane, name: player.name, tick: 0, words: 0, keys: {}, finishedAt: 0, ...BOT_START };
     if (typeof source === "number") {
       const seed = botSeed(source, player.name);
-      bots.push({ ...start, seed, ...botProfile(seed, level, botAccuracy) });
+      bots.push({ ...start, seed, ...botProfile(seed, level, player.accuracy ?? botAccuracy) });
       return;
     }
     const { wpm: [low, high], errorRate } = BOT_LEVEL_SPECS[level];
     const wpm = Math.round(low + source() * (high - low));
-    const accuracy = 100 * (1 - errorRate * BOT_ACCURACY_FACTOR[botAccuracy] * (0.8 + source() * 0.4));
+    const accuracy = 100 * (1 - errorRate * BOT_ACCURACY_FACTOR[player.accuracy ?? botAccuracy] * (0.8 + source() * 0.4));
     bots.push({ ...start, level, wpm, accuracy, seed: Math.floor(source() * 2 ** 32) | 0 });
   });
   return {
@@ -384,10 +384,13 @@ function recordSamples(race: Race) {
   });
 }
 
-/** Un joueur attend ses bots ; un spectateur (aucun couloir à lui) attend aussi chaque humain. */
+/**
+ * Un joueur attend ses bots ; un spectateur (aucun couloir à lui) attend aussi chaque humain. Mode fatal : un éliminé
+ * reste sur la course et attend aussi chaque humain (sinon la page suit le salon jusqu'à sa fin, comme un abandon).
+ */
 export const everyoneDone = (race: Race) =>
-  race.myLane < 0
-    ? race.bots.every((bot) => bot.finishedAt > 0) && race.remotes.every((remote) => remote.finishedAt > 0)
+  race.myLane < 0 || race.eliminated
+    ? (race.myLane < 0 || race.finishedAt > 0) && race.bots.every((bot) => bot.finishedAt > 0) && race.remotes.every((remote) => remote.finishedAt > 0)
     : race.finishedAt > 0 && race.bots.every((bot) => bot.finishedAt > 0);
 
 /** Un temps de course borné à sa durée : la fin n'est vue qu'au tick, parfois en retard (onglet en arrière-plan). */

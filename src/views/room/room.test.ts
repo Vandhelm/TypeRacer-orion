@@ -4,7 +4,7 @@ import type { TFunction } from "i18next";
 import { createI18n } from "../../i18n";
 import { BOT_NAMES } from "../../players/bots";
 import { seatColor } from "../../rooms/seats";
-import { arrivalOf, compositionOptions, DURATION_PRESETS, durationChoice, guestComposition, launchHint, raceHref, readSession, roomHrefOutsideRace, seatSpoken, seatsOf, withBotAdded, withBotLevel, withoutBot, type Player } from "./room";
+import { arrivalOf, compositionOptions, DURATION_PRESETS, durationChoice, guestComposition, launchHint, raceHref, readSession, roomHrefOutsideRace, seatSpoken, seatsOf, withBotAccuracy, withBotAdded, withBotLevel, withoutBot, type Player } from "./room";
 
 const t = ((key: string) => key) as unknown as TFunction;
 
@@ -330,8 +330,12 @@ describe("CONF-10 — the seats show the bots of the room's list, each with its 
 describe("CONF-10 — the host edits the bot list one bot at a time", () => {
   const list = [{ name: "Thon_Rouge", level: "beginner" }, { name: "Saba_Sensei", level: "expert" }] as const;
 
-  test("adding a bot takes the next free name, at the medium level", () => {
-    expect(withBotAdded([...list])).toEqual([...list, { name: "Wasabi99", level: "intermediate" }]);
+  test("adding a bot takes the next free name, at the medium level and decent accuracy", () => {
+    expect(withBotAdded([...list])).toEqual([...list, { name: "Wasabi99", level: "intermediate", accuracy: "decent" }]);
+  });
+
+  test("changing one bot's accuracy leaves the others as they are", () => {
+    expect(withBotAccuracy([...list], "Saba_Sensei", "shaky")).toEqual([list[0], { ...list[1], accuracy: "shaky" }]);
   });
 
   test("adding when every name is taken changes nothing", () => {

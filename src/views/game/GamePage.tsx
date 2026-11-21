@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import { HangingButton } from "../../components/buttons/HangingButton";
-import { FLOATING_TABS, LanguageSwitcher } from "../../components/tabs/LanguageSwitcher";
+import { SiteNavbar } from "../../components/navigation/SiteNavbar";
 import { knownAbandons } from "../podium/after-race";
 import { laneBonuses, type ReceivedBonuses } from "../podium/board";
 import { buildResults, buildSummary, clearResults, markSessionStart, rememberSubmit, saveResults, sessionSeconds, submitRace, type PlayerResult, type SubmitOutcome } from "../podium/results";
@@ -66,16 +66,24 @@ export function GamePage() {
   // la course part des réglages et des joueurs du salon : rien à lancer tant que le serveur n'a pas répondu
   if (!state.ready || elsewhere) {
     return (
-      <main className="grid min-h-screen place-content-center justify-items-center gap-5 bg-black p-6 text-center font-mono text-[13px] leading-[1.6] text-muted">
+      <>
+        <SiteNavbar current="game" />
+        <main className="grid min-h-screen place-content-center justify-items-center gap-5 bg-black p-6 text-center font-mono text-[13px] leading-[1.6] text-muted">
         <h1 className="sr-only">{t("game.pageTitle")}</h1>
         <div className="grid justify-items-center gap-5" role={state.error ? "alert" : "status"}>
           <p>{t(state.error ? `room.errors.${state.error}` : "room.loading")}</p>
           {state.error && <HangingButton className="game-leave" href="/home">{t("room.leave")}</HangingButton>}
         </div>
-      </main>
+        </main>
+      </>
     );
   }
-  return <GameScreen state={state} mobile={mobile} onHandOver={setHandOver} />;
+  return (
+    <>
+      <SiteNavbar current="game" />
+      <GameScreen state={state} mobile={mobile} onHandOver={setHandOver} />
+    </>
+  );
 }
 
 /** DES-06 : on mobile the race is never mounted (no pool, no typing field): a notice recommends a physical keyboard. */
@@ -189,8 +197,10 @@ function GameRace({ state, onHandOver }: { state: RoomState; onHandOver?: (sendi
   }, [abandoned, race, players, room, finish]);
   // /game ne suit pas le salon (useRoom) : après l'abandon, la page relit son état pour voir la course finir
   const [roomStatus, setRoomStatus] = useState(state.status);
+  // mode fatal : un éliminé suit aussi le salon, jusqu'à la fin de la course des autres
+  const following = abandoned || (!watching && race.eliminated);
   useEffect(() => {
-    if (!abandoned || !room.code) return;
+    if (!following || !room.code) return;
     let live = true;
     const read = async () => {
       const reply = await roomApi.read(room.code);
@@ -202,8 +212,8 @@ function GameRace({ state, onHandOver }: { state: RoomState; onHandOver?: (sendi
       live = false;
       clearInterval(timer);
     };
-  }, [abandoned, room.code]);
-  const over = showResults || (abandoned && abandonOver(race, roomStatus));
+  }, [following, room.code]);
+  const over = showResults || (following && abandonOver(race, roomStatus));
 
   const submitted = useRef(false);
   useEffect(() => {
@@ -238,7 +248,6 @@ function GameRace({ state, onHandOver }: { state: RoomState; onHandOver?: (sendi
   return (
     // A11Y-02 : la course est le contenu principal de la page ; les éléments fixes (langue, « Quitter ») y restent placés pareil
     <main className={ROOT} style={{ "--lanes": players.length } as CSSProperties}>
-      <LanguageSwitcher className={FLOATING_TABS} />
       {/* quitter la course quitte le salon ; /room sans code créerait un nouveau salon */}
       <HangingButton className="game-leave" href="/home" onClick={leave}>{t("room.leave")}</HangingButton>
       <header className="relative flex min-h-[42px] items-center justify-end compact:col-start-2 compact:row-start-1">

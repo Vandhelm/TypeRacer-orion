@@ -79,6 +79,12 @@ test("everyoneDone waits for me and for every bot", () => {
   expect(everyoneDone({ ...race, finishedAt: 5, bots: race.bots.map((bot) => ({ ...bot, finishedAt: 5 })) })).toBe(true);
 });
 
+test("fatal: an eliminated player stays on the race until every other human is done", () => {
+  const race = { ...racing("fatal", [ME, { name: "autre", color: "blue" }]), eliminated: true, finishedAt: 5 };
+  expect(everyoneDone(race)).toBe(false);
+  expect(everyoneDone({ ...race, remotes: race.remotes.map((remote) => ({ ...remote, finishedAt: 9 })) })).toBe(true);
+});
+
 test("stats follow valid characters and keystrokes", () => {
   const race = { ...type(racing("carry-on"), "x", "x ", "r", "ri", "riz", "riz "), now: 61000, startedAt: 1000 };
   expect(myWpm(race)).toBe(1); // 7 caractères cumulés - 3 ratés, sur 5 par mot et 1 minute
@@ -256,6 +262,11 @@ describe("BOT-05 — the race bots come from the room seed, the same in every br
     // un autre ordre des places (un humain de plus devant) ne change pas les bots
     const other = seeded(4242, [{ name: "rival", color: "pink" }, ME, WASABI, EBI]);
     expect(other.bots.map((b) => b.wpm)).toEqual(race.bots.map((b) => b.wpm));
+  });
+
+  test("CONF-10 — a bot with its own accuracy runs with it; one without keeps the room's", () => {
+    const race = seeded(4242, [ME, { ...WASABI, accuracy: "high" }, EBI]);
+    expect(race.bots.map(({ level, wpm, accuracy }) => ({ level, wpm, accuracy }))).toEqual([botProfile(botSeed(4242, "Wasabi99"), "beginner", "high"), botProfile(botSeed(4242, "Ebi_Fry"), "expert", "decent")]);
   });
 
   test("without jitters, the bots are where the engine puts them at that time, however the ticks fall", () => {

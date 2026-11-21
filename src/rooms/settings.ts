@@ -2,7 +2,7 @@
 // et par la page du salon pour ses types et ses valeurs par défaut.
 import { z } from "zod";
 import { isRoomCode, VISIBILITIES } from "./access";
-import { BotListSchema } from "./bots";
+import { BOT_ACCURACIES, BotListSchema } from "./bots";
 
 export const MIN_GUESTS = 2;
 /** SALLE-05 : capacité en participants (les spectateurs n'y comptent pas) ; rooms_guests_range et les places suivent. */
@@ -17,7 +17,7 @@ export const DurationSchema = z.number().int().min(MIN_DURATION).max(MAX_DURATIO
 
 export const LANGUAGES = ["fr", "en"] as const;
 export const BOT_SPEEDS = ["slow", "medium", "fast", "mixed"] as const;
-export const BOT_ACCURACIES = ["shaky", "decent", "high"] as const;
+export { BOT_ACCURACIES };
 export const TEXT_TYPES = ["coherent", "quote", "words", "custom"] as const;
 export const TEXT_LENGTHS = ["very-short", "short", "medium", "long", "other"] as const;
 export const LEVELS = ["common", "rich", "expert"] as const;

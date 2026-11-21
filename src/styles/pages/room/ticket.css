@@ -2,6 +2,8 @@
    The paper and its content are Tailwind in src/views/room/RoomTicket.tsx. */
 .room-ticket{ position: relative; transform-origin: 50% calc(-1 * var(--hang)); animation: room-ticket-sway 6s ease-in-out infinite; }
 .room-ticket::before{ content: ''; position: absolute; z-index: 3; left: 50%; bottom: calc(100% - 12px); width: 1px; height: calc(var(--hang) + 12px); transform: translateX(-50%); background: var(--color-line-soft); }
+/* CONF-10 : le ticket porte les réglages des bots ; il s'arrête de balancer quand on s'en sert */
+.room-ticket:hover, .room-ticket:focus-within{ animation-play-state: paused; }
 @keyframes room-ticket-sway{ 0%, 100%{ transform: rotate(-.8deg); } 50%{ transform: rotate(.8deg); } }
 
 .room-ticket-perforation{ position: relative; z-index: 3; margin: 2px -18px 0; border-top: 1px dashed var(--color-line-soft); }

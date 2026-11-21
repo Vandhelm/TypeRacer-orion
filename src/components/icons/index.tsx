@@ -91,3 +91,54 @@ export function ChevronIcon({ direction }: { direction: "up" | "down" }) {
     </svg>
   );
 }
+
+/* Navbar sections (SiteNavbar) */
+export function HomeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 11l8-7 8 7v9H4z" />
+    </svg>
+  );
+}
+
+export function RoomsIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="4" y="5" width="16" height="14" />
+      <path d="M4 10h16" />
+    </svg>
+  );
+}
+
+export function RoomIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M3 9h18M5 9v10M19 9v10M8 5h8" />
+    </svg>
+  );
+}
+
+export function RaceIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="2" y="6" width="20" height="12" />
+      <path d="M6 10h1M10 10h1M14 10h1M17 10h1M7 14h10" />
+    </svg>
+  );
+}
+
+export function PodiumIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M3 20h18M6 20v-6h4v6M10 20V8h4v12M14 20v-9h4v9" />
+    </svg>
+  );
+}
+
+export function PlayIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M7 4l13 8-13 8z" />
+    </svg>
+  );
+}
