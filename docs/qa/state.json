@@ -70,9 +70,9 @@
     "scope": "critère (medium)"
   },
   "DES-05": {
-    "commit": "2acdffe",
-    "date": "2026-11-19",
-    "scope": "suivi (light)"
+    "commit": "3c5791a",
+    "date": "2026-11-20",
+    "scope": "critère (feature/design/des-05)"
   },
   "DES-06": {
     "commit": "7494ef2",
@@ -415,9 +415,9 @@
     "scope": "critère (feature/game/perf-03)"
   },
   "A11Y-01": {
-    "commit": "305b6d1",
+    "commit": "3c5791a",
     "date": "2026-11-20",
-    "scope": "critère (feature/design/a11y-01)"
+    "scope": "critère (feature/design/des-05)"
   },
   "A11Y-02": {
     "commit": "6980ac7",
@@ -430,9 +430,9 @@
     "scope": "critère (fix/design/a11y-03)"
   },
   "A11Y-04": {
-    "commit": "2acdffe",
-    "date": "2026-11-19",
-    "scope": "suivi (light)"
+    "commit": "efa1c65",
+    "date": "2026-11-20",
+    "scope": "critère (fix/design/a11y-04)"
   },
   "SEC-01": {
     "commit": "40409e0",

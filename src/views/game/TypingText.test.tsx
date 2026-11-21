@@ -22,7 +22,7 @@ describe("COURSE-04 — every letter is marked as it is typed, with the cursor r
   });
 
   test("a wrong letter is marked incorrect at once", () => {
-    expect(current(render("x"))).toEqual(["l:text-red-text", "|", "e:"]);
+    expect(current(render("x"))).toEqual(["l:text-red-text underline decoration-1 underline-offset-[.2em]", "|", "e:"]);
   });
 
   test("letters past the end of the word are marked incorrect, the cursor after them", () => {
@@ -57,5 +57,20 @@ describe("BONUS-02 — fog blurs the next words, not the word being typed nor th
 
   test("without fog, nothing is blurred", () => {
     expect(fogged(false)).not.toContain("blur-");
+  });
+});
+
+describe("DES-05 — a mistake is never shown by its colour alone (colour-blind players, forced colours)", () => {
+  const marks = (html: string) => [...html.matchAll(/class="([^"]*text-red-text[^"]*)"/g)].map((m) => m[1]!);
+
+  test("wrong letters, extra letters and missed words are all underlined", () => {
+    const html = render("lxz", 0) + render("", 1, [0]);
+    expect(marks(html).length).toBe(3);
+    for (const classes of marks(html)) expect(classes.split(" ")).toContain("underline");
+  });
+
+  test("right letters and words done are not underlined", () => {
+    expect(render("le", 0)).not.toContain("underline");
+    expect(render("", 1)).not.toContain("underline");
   });
 });

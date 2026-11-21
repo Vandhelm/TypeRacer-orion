@@ -101,6 +101,10 @@
     "main": "Main navigation",
     "home": "O.R.I.O.N, home",
     "profile": "Profile",
+    "theme": {
+      "label": "CVD",
+      "name": "CVD, colour-blind friendly colours"
+    },
     "homeLink": "Home",
     "rooms": "Rooms",
     "room": "Room",

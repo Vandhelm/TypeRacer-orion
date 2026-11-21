@@ -101,6 +101,10 @@
     "main": "Navigation principale",
     "home": "O.R.I.O.N, accueil",
     "profile": "Profil",
+    "theme": {
+      "label": "DAL",
+      "name": "DAL, couleurs adaptées au daltonisme"
+    },
     "homeLink": "Accueil",
     "rooms": "Salons",
     "room": "Salon",

@@ -39,6 +39,46 @@
     --navbar-height: 48px;   /* see components/navigation/Navbar.tsx */
 }
 
+/* DES-05 : second theme, « couleurs adaptées » (data-theme="cvd" on <html>, set by the server from the orion-theme
+   cookie: src/theme). Still dark: only the colours that carry a meaning change. No pair of them relies on red / green:
+   - accent (me, errors, wrong letters, cursor, stamps): Okabe-Ito orange #e69f00 for text, the same hue darkened for
+     the solid fills under white text (#a35400 5.5:1, hover #b35c00 4.7:1);
+   - race chart series: Okabe-Ito sky blue, blue and bluish green, a neutral grey and two lavenders, ordered so that
+     neighbours stay apart; each series also has its own dash pattern (src/views/podium/race-charts.ts).
+   Checked by src/styles/cvd.test.ts: ΔE ≥ 20 for every meaningful pair under protanopia, deuteranopia and
+   tritanopia (Machado 2009 simulation), and by src/styles/contrast.test.ts for WCAG AA. */
+:root[data-theme="cvd"]{
+    --color-red: rgba(163,84,0,.88);
+    --color-red-dark: rgba(120,62,0,.88);
+    --color-red-solid: #a35400;
+    --color-red-hover: #b35c00;
+    --color-red-text: #e69f00;
+
+    --color-chart-1: #f2f2f2;
+    --color-chart-2: #56b4e9;
+    --color-chart-3: #0072b2;
+    --color-chart-4: #9a9a9a;
+    --color-chart-5: #7b7bf0;
+    --color-chart-6: #009e73;
+    --color-chart-7: #b8a2f0;
+    --color-chart-8: #8fd9c4;
+}
+
+/* DES-05 : in both themes, the system preferences come first. More contrast: the translucent text and lines get
+   denser. Forced colours (Windows contrast themes): the system palette replaces ours, so every meaning keeps a cue
+   that is not a colour (underlines, dash patterns, thicker bars), and the few marks drawn with a background or a
+   shadow fall back to system colours. */
+@media (prefers-contrast: more) {
+    :root{
+        --color-line-soft: rgba(255,255,255,.6);
+        --color-line-faint: rgba(255,255,255,.35);
+        --color-muted: rgba(255,255,255,.75);
+    }
+}
+@media (forced-colors: active) {
+    [aria-current="page"], [aria-pressed="true"]{ text-decoration: underline; text-underline-offset: .35em; }
+}
+
 /* Breakpoints used by this page (inclusive, like the original max-width queries) */
 /* Declared from widest to narrowest: Tailwind emits them in this order, so a narrower one wins. */
 @custom-variant laptop (@media (max-width: 1100px));

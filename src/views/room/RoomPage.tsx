@@ -92,7 +92,7 @@ export function RoomPage() {
 
       {navbar}
       <div>
-        <div className="relative z-1 isolate mb-[clamp(20px,4vh,40px)] flex flex-wrap items-center justify-between gap-x-6 gap-y-3 pr-[124px] phone:mb-[14px] phone:pr-0">
+        <div className="relative z-1 isolate mb-[clamp(20px,4vh,40px)] flex flex-wrap items-center justify-between gap-x-6 gap-y-3 phone:mb-[14px]">
           <HangingButton className="room-leave" href={host ? "/home" : "/home#rooms"} onClick={leave}>
             {t("room.leave")}
           </HangingButton>

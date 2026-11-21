@@ -5,7 +5,8 @@ import { BotTag } from "../../players/BotTag";
 import type { PlayerResult } from "../podium/results";
 import { buildSeriesChart, type ChartLine } from "./chart";
 import { useChartSize } from "./hooks/useChartSize";
-import { CHART, CROSS, CURSOR, DOT, ERROR_MARK, GRID_LINE, LEGEND, LINE, PLOT, SWATCH, TIP } from "./styles";
+import { LineSwatch } from "./StatBlock";
+import { CHART, CROSS, CURSOR, DASH, DOT, ERROR_MARK, GRID_LINE, LEGEND, LINE, PLOT, TIP } from "./styles";
 
 const TIP_MARGIN = 12;
 
@@ -13,8 +14,8 @@ const TIP_MARGIN = 12;
 export function SpeedChart({ player }: { player: PlayerResult }) {
   const { t } = useTranslation();
   const lines: ChartLine[] = [
-    { key: "wpm", label: t("game.wpm"), values: player.wpmSeries, line: LINE.wpm, dot: DOT.wpm, swatch: SWATCH.wpm },
-    { key: "raw", label: t("profile.raw"), values: player.rawSeries, line: LINE.raw, dot: DOT.raw, swatch: SWATCH.raw },
+    { key: "wpm", label: t("game.wpm"), values: player.wpmSeries, line: LINE.wpm, dot: DOT.wpm, dash: DASH.wpm },
+    { key: "raw", label: t("profile.raw"), values: player.rawSeries, line: LINE.raw, dot: DOT.raw, dash: DASH.raw },
   ];
   return <SeriesChart lines={lines} errors={player.errorSeries} label={`${t("game.wpm")} / ${t("profile.second")}`} />;
 }
@@ -56,7 +57,7 @@ export function SeriesChart({ lines, errors, label }: SeriesProps) {
   return (
     <div ref={root} className={CHART}>
       <div className={LEGEND}>
-        {lines.map((line) => <span key={line.key}><i className={line.swatch} />{nameOf(line)}</span>)}
+        {lines.map((line) => <span key={line.key}><LineSwatch line={line.line} dash={line.dash} />{nameOf(line)}</span>)}
         {errors && <span><i className={CROSS}>×</i>{labels.errors}</span>}
       </div>
 
@@ -72,7 +73,7 @@ export function SeriesChart({ lines, errors, label }: SeriesProps) {
           <text x={chart.left} y={chart.axisLabel}>{labels.wpm}</text>
           {errors?.map((count, i) => count > 0 && <text key={i} className={ERROR_MARK} x={chart.x(i)} y={chart.bandCenter + 5} textAnchor="middle">×</text>)}
           {chart.count > 1
-            ? drawn.map((line) => <path key={line.key} className={line.line} d={chart.path(line.values)} />)
+            ? drawn.map((line) => <path key={line.key} className={line.line} d={chart.path(line.values)} strokeDasharray={line.dash} />)
             : chart.count === 1 && drawn.map((line) => line.values.length > 0 && <circle key={line.key} className={line.dot} cx={chart.x(0)} cy={chart.y(line.values[0]!)} r={4} />)}
           {hover !== null && (
             <g>

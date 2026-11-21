@@ -5,7 +5,7 @@
 | `bun test` | tests unitaires et de régression (`*.test.ts`) | PGlite en mémoire, sans Docker |
 | `bun run test:smoke` | l'application démarre et répond (`tests/smoke/app.smoke.ts`) | `<base>_smoke` jetable |
 | `bun run test:e2e` | parcours de bout en bout dans Chromium, avec Playwright (TEST-02) | `<base>_e2e` jetable |
-| `bun run test:a11y` | contraste des textes (WCAG AA) sur chaque page, axe-core dans Chromium (A11Y-01) ; hors de `bun test` | `<base>_e2e` jetable |
+| `bun run test:a11y` | contraste des textes (WCAG AA) sur chaque page, axe-core dans Chromium (A11Y-01), balises et noms (A11Y-02, A11Y-03), parcours au clavier et focus visible (A11Y-04) ; hors de `bun test` | `<base>_e2e` jetable |
 | `bun run test:perf` | fluidité de la piste à 30 participants, seuil 55 FPS (PERF-03) ; hors de `bun test` et de `test:e2e` | `<base>_e2e` jetable |
 | `bun run lighthouse [url]` | Lighthouse sur l'accueil, mobile et desktop, seuil 90 par catégorie (PERF-01) ; hors de `bun test` | celle du serveur mesuré |
 
@@ -89,6 +89,13 @@ Un seul thème existe (sombre). Le critère demande les deux thèmes : le thème
 - `tests/e2e/a11y.e2e.ts` (`bun run test:a11y`) : axe-core avec `landmark-one-main`, `page-has-heading-one`, `heading-order`, `region`, `list`, `listitem`, `button-name` et `nested-interactive` (avec les règles d'A11Y-03), sur toutes les pages et leurs états, 404, profil déconnecté, podium refusé et salle fermée compris ; plus un décompte (un `<main>`, un `<h1>`, un `<footer>`), car axe ne voit pas un second `<main>` ou `<h1>` caché. Attendu : 0 violation.
 
 Choix : le pied de page (`src/components/navigation/SiteFooter.tsx`) est réservé aux lecteurs d'écran (`sr-only`). Toutes les pages sont des scènes plein écran (bassin, podium 3D, course en `h-screen`) où une bande visible casserait la mise en page. Les pages sans barre de navigation ont un `<header>` sans style autour de leurs onglets de langue (fixes) : il ne prend pas de place. Le `<h1>` de l'accueil, du podium, de la course en attente et du compte est `sr-only` quand le titre visible n'en tient pas lieu. Les graphiques du profil suivent le pointeur sur un `<div>` (`onPointerDown`, survol) : ce n'est pas une action, et leurs données sont aussi dans un `<table>`.
+
+## Parcours au clavier et indicateur de focus (A11Y-04)
+
+- `tests/e2e/focus.test.ts` (dans `bun test`, `bun test -t A11Y-04`) : le jugement d'un élément qui a le focus (`tests/e2e/focus.ts`) : indicateur trouvé (contour, ombre, ligne d'un champ texte qui change au focus, curseur de la course, contour du libellé d'un champ caché) et mesuré à 3:1 au moins sur le fond adjacent ; élément visible, dans l'écran, interactif, sans `tabindex` positif.
+- `tests/e2e/focus.e2e.ts` (`bun run test:a11y`), dans les deux thèmes : chaque page et chaque état est parcouru à la touche Tab jusqu'à revenir au début (accueil et chacun de ses volets, liste des salons, salle vue par l'hôte et par un membre avec chaque onglet, dialogue du texte, course, question d'abandon, podium, graphiques, profil et chaque onglet, pseudo refusé). Chaque arrêt passe le jugement ci-dessus ; le tour doit revenir à son début (aucun piège), passer par les éléments clés de la page, et dans la salle suivre l'ordre de lecture. Les dialogues reçoivent le focus, le gardent, se ferment par Échap et le rendent au bouton qui les a ouverts. Le tour de chaque page est écrit dans la sortie.
+
+Choix : un champ texte souligné montre son focus par sa ligne (blanche au focus, ou rouge et plus épaisse si la valeur est refusée), comme dans le design system, plutôt que par un contour. Pas de lien « aller au contenu » : avant le contenu, il y a au plus cinq arrêts (marque, profil, thème, langues).
 
 ## Lighthouse sur la page d'accueil (PERF-01)
 

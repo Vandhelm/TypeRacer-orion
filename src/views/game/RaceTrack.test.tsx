@@ -192,3 +192,21 @@ describe("PERF-03 — the progress bar moves without restyling its lane", () => 
     });
   });
 });
+
+describe("DES-05 — my lane is told apart without its colour, even in forced colours", () => {
+  const bar = (row: string) => row.match(/<i[^>]*data-part="bar"[^>]*>/)?.[0] ?? "";
+  const track = (row: string) => row.match(/<span class="([^"]*)" aria-hidden="true"><i[^>]*data-part="bar"/)?.[1] ?? "";
+
+  test("my progress track is thicker than the others'", () => {
+    const [mine, other] = lanes(render(state("player")));
+    expect(track(mine!)).toContain("h-[3px]");
+    expect(track(other!)).toContain("h-px");
+  });
+
+  test("the bars, drawn as backgrounds, switch to the system text colour when colours are forced", () => {
+    for (const row of lanes(render(state("player")))) {
+      expect(bar(row)).toContain("forced-colors:forced-color-adjust-none");
+      expect(bar(row)).toContain("forced-colors:bg-[CanvasText]");
+    }
+  });
+});
