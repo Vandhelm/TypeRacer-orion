@@ -4,7 +4,8 @@ import { beforeAll, describe, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 import { roomMembers, rooms } from "../../db/schema";
 import { COUNTDOWN_MS } from "../rooms/race-clock";
-import { botsDone } from "./finish.fixture";
+import { botsDone, finishAsServer } from "./finish.fixture";
+import { launchStandings } from "./ranking";
 import { roomsFixture, type Joined, type Refused } from "./rooms.fixture";
 import { recordProgress, refreshRoom } from "./rooms";
 
@@ -90,12 +91,46 @@ describe("COURSE-07 — a runner abandons the race, recorded by the server", () 
     expect(res.body.room.status).toBe("results");
   });
 
-  // BOT-05 : la fin « tous arrivés ou abandonnés » attend aussi les bots, dont le serveur calcule la course
-  test("a lone human with bots who abandons ends the race once the bots are done", async () => {
-    const { room, host } = await t.open("Abandon_Seul", { bots: true, guests: 3 });
+  // BOT-05 / COURSE-09 : plus aucun humain en course et aucun arrivé, les bots ne retiennent pas la course : ils s'arrêtent là
+  const slowBots = { bots: true, guests: 3, duration: null, textType: "words", length: "long", botList: [{ name: "Saba_Sensei", level: "beginner" }] } as const;
+  const botOf = async (code: string) => {
+    const [room] = await t.db.select({ id: rooms.id }).from(rooms).where(eq(rooms.code, code));
+    return (await launchStandings(t.db, room!.id)).standings.get("saba_sensei")!;
+  };
+  test("a lone human with bots who abandons ends the race at once, the bots stopped where they were", async () => {
+    const { room, host } = await t.open("Abandon_Seul", slowBots);
     await launch(room.code, host.cookie);
     await started(room.code);
-    expect((await abandon(room.code, host.cookie)).body.room.status).toBe("racing");
+    expect((await abandon(room.code, host.cookie)).body.room.status).toBe("results");
+    const [stored] = await t.db.select({ endedAt: rooms.endedAt }).from(rooms).where(eq(rooms.code, room.code));
+    expect(stored!.endedAt).not.toBeNull();
+    const before = await botOf(room.code);
+    expect(before.finishedAt).toBeNull();
+    // 6 h plus tard (départ et fin reculés ensemble) : le bot n'a pas avancé
+    await t.db.update(rooms).set({ launchedAt: sql`${rooms.launchedAt} - interval '6 hours'`, endedAt: sql`${rooms.endedAt} - interval '6 hours'` }).where(eq(rooms.code, room.code));
+    const after = await botOf(room.code);
+    expect(after.finishedAt).toBeNull();
+    expect(after.progress).toBeCloseTo(before.progress);
+  });
+
+  test("a relaunch clears the end time of the previous race", async () => {
+    const { room, host } = await t.open("Abandon_FinRelance", slowBots);
+    await launch(room.code, host.cookie);
+    await started(room.code);
+    await abandon(room.code, host.cookie);
+    await launch(room.code, host.cookie);
+    const [stored] = await t.db.select({ endedAt: rooms.endedAt }).from(rooms).where(eq(rooms.code, room.code));
+    expect(stored!.endedAt).toBeNull();
+  });
+
+  test("a human already arrived still waits for the bots when the last runner abandons", async () => {
+    const { room, host } = await t.open("Abandon_Arrive", slowBots);
+    const cookie = t.guest("Abandon_Arrive_Inv");
+    expect((await t.join(cookie, { code: room.code })).status).toBe(200);
+    await launch(room.code, host.cookie);
+    await started(room.code);
+    expect((await finishAsServer(t.db, t.call, room.code, host.cookie)).status).toBe(200);
+    expect((await abandon(room.code, cookie)).body.room.status).toBe("racing");
     await botsDone(t.db, room.code);
     expect(await refreshRoom(t.db, room.code)).toBe(true);
     expect((await t.read(host.cookie, room.code)).body.room.status).toBe("results");

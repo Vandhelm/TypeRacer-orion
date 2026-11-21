@@ -52,16 +52,16 @@ describe("TECH-01 — /room et /game rendus côté serveur", () => {
 const SEATS: Seat[] = [
   { name: "Corail_418", color: "#e05a4a", host: true, me: true },
   { name: "Maki_Test", color: "#4a7ae0" },
-  { name: "Thon_Rouge", color: "#4ae07a", bot: true },
+  { name: "Thon_Rouge", color: "#4ae07a", bot: true, level: "intermediate" },
 ];
-const ticket = (language: "fr" | "en") => {
-  const state = { room: { ...DEFAULT_SETTINGS, bots: true }, seats: SEATS, players: SEATS, humans: 2, displayName: "Salon test" } as unknown as RoomState;
-  const html = renderToString(createElement(I18nextProvider, { i18n: createI18n(language) }, createElement(RoomTicket, { state })));
-  return html.match(/<li[\s\S]*?<\/li>/g) ?? [];
-};
+const renderTicket = (state: Partial<RoomState>, language: "fr" | "en" = "fr") =>
+  renderToString(createElement(I18nextProvider, { i18n: createI18n(language) }, createElement(RoomTicket, { state: state as RoomState })));
+const ticketState = (host: boolean, extra: Record<string, unknown> = {}) =>
+  ({ room: { ...DEFAULT_SETTINGS, guests: 3, bots: true, botList: [{ name: "Thon_Rouge", level: "intermediate" }], ...extra }, seats: SEATS, players: SEATS, humans: 2, host, update: () => {}, displayName: "Salon test" }) as unknown as RoomState;
+const ticket = (language: "fr" | "en") => renderTicket(ticketState(true), language).match(/<li[\s\S]*?<\/li>/g) ?? [];
 
 describe("BOT-04 — the waiting room marks a bot as such, and only bots", () => {
-  test("on the ticket, the bot seat carries the BOT marker; the human seats do not", () => {
+  test("on the ticket, the bot (in its own section) carries the BOT marker; the human seats do not", () => {
     const [host, guest, bot] = ticket("fr");
     expect(bot).toContain('data-part="bot"');
     expect(bot).toContain("BOT");
@@ -92,17 +92,18 @@ describe("COURSE-03 — before the launch, a member is told the custom text come
   });
 });
 
-describe("CONF-10 — the bots tab lists each bot with its level", () => {
-  const botList = [{ name: "Ebi_Fry", level: "expert" }, { name: "Uni_Kun", level: "beginner" }];
+describe("CONF-10 — the bots are set up in the ticket, each with its level and accuracy", () => {
+  const botList = [{ name: "Ebi_Fry", level: "expert", accuracy: "high" }, { name: "Uni_Kun", level: "beginner" }];
   const seats: Seat[] = [{ name: "Corail_418", color: "red", host: true }, { name: "Ebi_Fry", color: "blue", bot: true, level: "expert" }];
-  const panel = (host: boolean) => {
-    const state = { room: { ...DEFAULT_SETTINGS, guests: 2, bots: true, botList }, host, seats, update: () => {} } as unknown as RoomState;
-    const html = renderToString(createElement(I18nextProvider, { i18n: createI18n("fr") }, createElement(RoomSettings, { state, onEditText: () => {}, action: null })));
-    return html.match(/id="panel-bots"[\s\S]*?id="panel-content"/)?.[0] ?? html;
+  const part = (host: boolean, bots = true) => {
+    const html = renderTicket({ room: { ...DEFAULT_SETTINGS, guests: 2, bots, botList: bots ? botList : [] }, host, seats, humans: 1, update: () => {}, displayName: "Salon" } as unknown as RoomState);
+    return html.match(/aria-labelledby="ticket-bots"[\s\S]*?<\/section>/)?.[0] ?? html;
   };
+  const settings = (host: boolean) =>
+    renderToString(createElement(I18nextProvider, { i18n: createI18n("fr") }, createElement(RoomSettings, { state: { room: { ...DEFAULT_SETTINGS, bots: true }, host, seats: [], update: () => {} } as unknown as RoomState, onEditText: () => {}, action: null })));
 
-  test("the host sees every bot, its level, a remove button each, and no add button once the room is full", () => {
-    const html = panel(true);
+  test("the host sees every bot, a remove button each, and no add button once the room is full", () => {
+    const html = part(true);
     expect(html).toContain("Ebi_Fry");
     expect(html).toContain("Uni_Kun");
     expect(html.match(/Retirer Ebi_Fry|Retirer Uni_Kun/g)).toHaveLength(2);
@@ -110,22 +111,59 @@ describe("CONF-10 — the bots tab lists each bot with its level", () => {
   });
 
   test("a bot without a seat is marked as waiting for one", () => {
-    expect(panel(true)).toContain("En attente d&#x27;une place");
+    expect(part(true)).toContain("En attente d&#x27;une place");
   });
 
-  test("a member sees only each bot's level, without buttons", () => {
-    const html = panel(false);
-    expect(html).toContain("Ebi_Fry");
+  test("BOT-01 — the host picks each bot's level among the five and its accuracy among three, the current ones selected", () => {
+    const html = part(true);
+    const level = html.match(/<select[^>]*aria-label="Niveau de Ebi_Fry"[\s\S]*?<\/select>/)?.[0] ?? "";
+    expect([...level.matchAll(/value="([^"]+)"/g)].map((m) => m[1])).toEqual(["noob", "beginner", "intermediate", "expert", "impossible"]);
+    expect(level).toMatch(/<option value="expert" selected="">/);
+    const accuracy = html.match(/<select[^>]*aria-label="Précision de Ebi_Fry"[\s\S]*?<\/select>/)?.[0] ?? "";
+    expect([...accuracy.matchAll(/value="([^"]+)"/g)].map((m) => m[1])).toEqual(["shaky", "decent", "high"]);
+    expect(accuracy).toMatch(/<option value="high" selected="">/);
+    // sans précision propre, celle du salon
+    expect(html).toMatch(/aria-label="Précision de Uni_Kun"[\s\S]*?<option value="decent" selected="">/);
+  });
+
+  test("a member reads each bot's level and accuracy, without controls", () => {
+    const html = part(false);
+    expect(html).toContain("Expert · Haute");
+    expect(html).not.toContain("<select");
     expect(html).not.toContain("Retirer");
     expect(html).not.toContain("Un bot de plus");
   });
 
-  test("BOT-01 — the host picks each bot's level among the five, the current one checked", () => {
-    const html = panel(true);
-    const radios = html.match(/<input[^>]*name="bot-level-Ebi_Fry"[^>]*>/g) ?? [];
-    expect(radios.map((radio) => radio.match(/value="([^"]+)"/)?.[1])).toEqual(["noob", "beginner", "intermediate", "expert", "impossible"]);
-    expect(radios.filter((radio) => /checked=""/.test(radio)).map((radio) => radio.match(/value="([^"]+)"/)?.[1])).toEqual(["expert"]);
-    for (const label of ["Noob", "Débutant", "Intermédiaire", "Expert", "Impossible"]) expect(html).toContain(label);
-    expect(html).toContain("Impossible : 140 MPM et plus");
+  test("BOT-01 — the ticket's note gives each level's speed and what each accuracy does", () => {
+    const html = part(true);
+    expect(html).toContain('aria-controls="help-ticket-bots"');
+    expect(html).toContain("Expert : 70 à 100 MPM, 2 % de fautes.");
+    expect(html).toContain("Hésitante ×2");
+  });
+
+  test("bots turned off: the ticket says so and offers no add button", () => {
+    const html = part(true, false);
+    expect(html).toContain("Bots désactivés");
+    expect(html).not.toContain("Un bot de plus");
+  });
+
+  test("the settings keep only an on/off checkbox, and no bots tab", () => {
+    const html = settings(true);
+    expect(html).not.toContain('id="tab-bots"');
+    const box = (h: string) => h.match(/<input[^>]*name="bots"[^>]*>/)?.[0] ?? "";
+    expect(box(html)).toContain('type="checkbox"');
+    expect(box(html)).toContain('checked=""');
+    expect(box(settings(false))).toContain('disabled=""');
+  });
+});
+
+describe("SALLE-01 — the ticket lists the spectators in their own section", () => {
+  test("each spectator by name, the host marked", () => {
+    const html = renderTicket({ ...ticketState(true), spectators: [{ key: "guest:a", name: "Nori", host: true, role: "spectator" }] } as unknown as RoomState);
+    expect(html).toMatch(/Spectateurs[\s\S]*Nori[\s\S]*HÔTE/);
+  });
+
+  test("none: the section says so", () => {
+    expect(renderTicket(ticketState(true))).toContain("Aucun spectateur");
   });
 });

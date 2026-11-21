@@ -20,14 +20,14 @@
     "scope": "suivi (light)"
   },
   "TECH-05": {
-    "commit": "8106c20",
-    "date": "2026-11-19",
-    "scope": "critère (production, déploiement CLI au commit inconnu)"
+    "commit": "b7615e5",
+    "date": "2026-11-20",
+    "scope": "critère, production"
   },
   "TECH-06": {
-    "commit": "c6a19e6",
-    "date": "2026-11-19",
-    "scope": "critère feature/room/tech-06 (light)"
+    "commit": "b7615e5",
+    "date": "2026-11-20",
+    "scope": "critère, production"
   },
   "TECH-07": {
     "commit": "2acdffe",
@@ -35,9 +35,9 @@
     "scope": "suivi (light)"
   },
   "TECH-08": {
-    "commit": "b436148",
-    "date": "2026-11-18",
-    "scope": "voir notes de la matrice"
+    "commit": "b7615e5",
+    "date": "2026-11-20",
+    "scope": "critère, production"
   },
   "TECH-09": {
     "commit": "2acdffe",
@@ -80,9 +80,9 @@
     "scope": "critère feature/game/des-06 (medium, rendu)"
   },
   "AUTH-01": {
-    "commit": "bfdcb34",
-    "date": "2026-11-19",
-    "scope": "critère feature/home/auth-01"
+    "commit": "b7615e5",
+    "date": "2026-11-20",
+    "scope": "critère, production"
   },
   "AUTH-02": {
     "commit": "2acdffe",

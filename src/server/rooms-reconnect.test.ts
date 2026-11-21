@@ -5,7 +5,6 @@ import { and, eq, sql } from "drizzle-orm";
 import { roomMembers, rooms } from "../../db/schema";
 import { COUNTDOWN_MS } from "../rooms/race-clock";
 import { raceExit } from "../views/game/abandon";
-import { botsDone } from "./finish.fixture";
 import { roomsFixture, type Joined } from "./rooms.fixture";
 import { RACE_PRESENCE_MS } from "../rooms/reconnect";
 import { ABANDON_AFTER_MS, MEMBER_AWAY_MS, RECONNECT_MS, recordProgress, refreshRoom } from "./rooms";
@@ -117,18 +116,16 @@ describe("COURSE-08 — a runner who comes back within 30 s resumes, after that 
     expect(raceExit(back.body.room.status as "racing", code, me.abandoned!)).toBe("/podium");
   });
 
-  // BOT-05 : la fin attend aussi les bots, dont le serveur calcule la course
-  test("the last runner timing out ends the race (counts as a finish) once the bots are done", async () => {
+  // COURSE-09 : aucun humain arrivé, les bots ne retiennent pas la course
+  test("the last runner timing out ends the race (counts as a finish), even with bots still racing", async () => {
     // contre un bot lent sur un long texte : il n'a pas fini en 60 s, quelle que soit la graine
     const { room, host } = await t.open("Seul_Absent", { length: "long", botList: [{ name: "Saba_Sensei", level: "beginner" }] });
     expect((await t.call("POST", `/api/rooms/${room.code}/launch`, host.cookie)).status).toBe(200);
     await startedFor(room.code, 60_000);
     await cutFor(host.key, 36_000);
     const back = await t.read(host.cookie, room.code);
-    expect(back.body.room.status).toBe("racing");
+    expect(back.body.room.status).toBe("results");
     expect(meIn(back.body, host.key).abandoned).toBe(true);
-    await botsDone(t.db, room.code);
-    expect((await t.read(host.cookie, room.code)).body.room.status).toBe("results");
   });
 
   test("the 30 s count starts at the race start at the earliest: silent since before the launch, 10 s into the race, still racing", async () => {

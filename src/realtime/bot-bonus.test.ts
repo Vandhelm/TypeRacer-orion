@@ -119,6 +119,18 @@ describe("BOT-04 — bots get and suffer the catch-up bonuses like humans", () =
     expect(read.botBonuses).toEqual([{ at: 1_000, effect: { kind: "fog", target: BOT_ID, durationMs: 5_000 } }]);
   });
 
+  test("CONF-10 — a bot with its own accuracy runs with it; one without keeps the room's", () => {
+    const view = {
+      code: ROOM, status: "racing", startsAt: 1, endsAt: null, seed: 77, passage: null, textHash: null,
+      members: [{ key: "g:alpha", role: "player", seat: 0 }],
+      settings: { ...DEFAULT_SETTINGS, catchUpBonus: true, bots: true, guests: 3, botAccuracy: "decent", botList: [{ name: BOT, level: "noob", accuracy: "high" }, { name: "Wasabi99", level: "expert" }] },
+      botBonuses: [],
+    } as unknown as Parameters<typeof raceCourseOf>[0];
+    const [own, room] = raceCourseOf(view)!.bots!;
+    expect(own!.profile).toEqual(botProfile(botSeed(77, BOT), "noob", "high"));
+    expect(room!.profile).toEqual(botProfile(botSeed(77, "Wasabi99"), "expert", "decent"));
+  });
+
   test("a bot in last place gets the bonus when the leader passes the checkpoint", async () => {
     const { tab } = await race({ words: WORDS, bots: [raceBot("noob")], seed: 3 }, 30_000);
     await step(tab, 0.3);

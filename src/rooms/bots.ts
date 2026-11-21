@@ -11,8 +11,15 @@ export { BOT_LEVELS, type BotLevel };
 const MIXED_LEVELS: readonly BotLevel[] = ["beginner", "intermediate", "expert"];
 export type BotName = (typeof BOT_NAMES)[number];
 
-/** Un bot du salon : un nom de la liste fermée (COURSE-06 : le serveur ne reconnaît qu'elle) et son niveau. */
-export const RoomBotSchema = z.object({ name: z.enum(BOT_NAMES), level: z.enum(BOT_LEVELS) }).strict();
+/** La précision d'un bot : facteur sur le taux de fautes de son niveau (BOT_ACCURACY_FACTOR). */
+export const BOT_ACCURACIES = ["shaky", "decent", "high"] as const;
+export type BotAccuracy = (typeof BOT_ACCURACIES)[number];
+
+/**
+ * Un bot du salon : un nom de la liste fermée (COURSE-06 : le serveur ne reconnaît qu'elle), son niveau et sa
+ * précision. Sans précision (liste plus ancienne), celle du salon.
+ */
+export const RoomBotSchema = z.object({ name: z.enum(BOT_NAMES), level: z.enum(BOT_LEVELS), accuracy: z.enum(BOT_ACCURACIES).optional() }).strict();
 export type RoomBot = z.infer<typeof RoomBotSchema>;
 
 /**
@@ -60,17 +67,20 @@ export function seatedBots(room: { guests: number; bots: boolean; botList: reado
  * si elle s'allonge au-delà des places libres ; retirer un bot ou changer un niveau passe toujours). L'ancien
  * interrupteur reste compris : « non » vide la liste, « oui » avec une liste vide (ou sans liste, quand la liste
  * actuelle est vide) remplit les places libres.
- * Les bots sont activés exactement quand la liste n'est pas vide.
+ * L'interrupteur dit si les bots sont autorisés : une liste envoyée non vide l'allume, retirer le dernier bot le laisse
+ * tel quel (la case « Autorisés » ne se décoche pas toute seule).
  */
 export function resolveBots(current: RoomSettings, patch: Partial<RoomSettings>, humans: number): Pick<RoomSettings, "bots" | "botList"> | "full" {
   const guests = patch.guests ?? current.guests;
   const filled = () => defaultBots(guests - humans, patch.botSpeed ?? current.botSpeed);
   let botList = current.botList;
+  let bots = patch.bots ?? current.bots;
   if (patch.bots === false) botList = [];
   else if (patch.botList?.length) {
     if (patch.botList.length > current.botList.length && patch.botList.length + humans > guests) return "full";
     botList = patch.botList;
+    bots = true;
   } else if (patch.botList) botList = patch.bots ? filled() : [];
   else if (patch.bots && !botList.length) botList = filled();
-  return { bots: botList.length > 0, botList };
+  return { bots, botList };
 }
