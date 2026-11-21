@@ -1,6 +1,7 @@
 import { memo, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { BotTag } from "../../players/BotTag";
+import { seatNumber } from "../../rooms/seats";
 import { GeneratedAvatar } from "../profile/ProfileAvatar";
 import { latestBatch, type BonusAnnouncement } from "./announce";
 import { BONUS_HIT, bonusBadge, bonusSentence } from "./BonusNotice";
@@ -98,6 +99,8 @@ const LaneItem = memo(function LaneItem({ lane, bonuses, shown, bars }: LaneItem
         >
           {lane.photo ? <img className="block size-full object-cover" src={lane.photo} alt="" /> : <GeneratedAvatar name={lane.name} />}
         </span>
+        {/* DES-05 : le numéro de place, celui du billet et du bassin de la salle (les couloirs suivent seatsOf) */}
+        <span data-part="seat" aria-hidden="true" className="flex-none tabular-nums text-muted [@container(max-width:44px)]:hidden">{seatNumber(lane.lane)}</span>
         <span data-part="label" className={NAME_LABEL}>{lane.name}</span>
       </p>
       <p data-part="stats" className={`${STATS_LINE} ${lane.me ? "text-red-text" : ""}`}>
