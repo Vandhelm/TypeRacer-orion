@@ -102,6 +102,9 @@
     "home": "O.R.I.O.N, home",
     "profile": "Profile"
   },
+  "footer": {
+    "text": "O.R.I.O.N — multiplayer typing race, session project."
+  },
   "room": {
     "pageTitle": "O.R.I.O.N — The room",
     "leave": "← Leave",

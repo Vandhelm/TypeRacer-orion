@@ -102,6 +102,9 @@
     "home": "O.R.I.O.N, accueil",
     "profile": "Profil"
   },
+  "footer": {
+    "text": "O.R.I.O.N — course de frappe multijoueur, travail de session."
+  },
   "room": {
     "pageTitle": "O.R.I.O.N — Le salon",
     "leave": "← Quitter",
