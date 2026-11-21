@@ -60,7 +60,8 @@ describe("TECH-01 — /home rendu côté serveur", () => {
     const html = render({ me: null });
     expect(html).toContain("O.R.I.O.N");
     expect(html).toContain('id="decor"');
-    expect(html).toContain('href="/profile"');
+    expect(html).toContain('href="#play"'); // navbar: quick race
+    expect(html).toContain('href="/home#login"'); // navbar, signed out: the sign-in link
     expect(html).toContain("ticket");
   });
 

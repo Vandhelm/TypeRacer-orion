@@ -8,6 +8,7 @@ import { readResults } from "../podium/results";
 import { LinksSection } from "./account/LinksSection";
 import { NameSection } from "./account/NameSection";
 import { PhotoSection } from "./account/PhotoSection";
+import { SignOutSection } from "./account/SignOutSection";
 import { CareerStats } from "./CareerStats";
 import { useKeyboardLayout } from "./hooks/useKeyboardLayout";
 import { usePlayerStats } from "./hooks/usePlayerStats";
@@ -93,6 +94,7 @@ export function OwnProfile({ me, stats: preloaded }: { me: Me; stats?: PlayerSta
             <PhotoSection name={name} image={image} onChange={setImage} />
             <NameSection name={name} onChange={setName} />
             <LinksSection notice={notice} />
+            <SignOutSection />
           </div>
         ) : (
           <>

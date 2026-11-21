@@ -104,7 +104,15 @@
     "theme": {
       "label": "CVD",
       "name": "CVD, colour-blind friendly colours"
-    }
+    },
+    "homeLink": "Home",
+    "rooms": "Rooms",
+    "room": "Room",
+    "game": "Race",
+    "podium": "Podium",
+    "quickRace": "Quick race",
+    "signIn": "Log in",
+    "playerProfile": "{{name}}'s profile"
   },
   "footer": {
     "text": "O.R.I.O.N — multiplayer typing race, session project."
@@ -615,6 +623,11 @@
       "failed": "Could not link this {{provider}} account: it may already belong to another account.",
       "last": "This is your only way to sign in: {{provider}} can't be unlinked.",
       "unlinkFailed": "{{provider}} could not be unlinked. Try again."
+    },
+    "signOut": {
+      "title": "Session",
+      "help": "Log out of this browser. Your races and profile stay saved.",
+      "button": "Log out"
     }
   }
 }

@@ -59,6 +59,27 @@ export function HomePanel({ ref, initialMe = null }: { ref?: Ref<HTMLElement>; i
   const [noRoom, setNoRoom] = useState<{ canCreate: boolean } | null>(null);
 
   useEffect(() => () => clearTimeout(stampTimer.current), []);
+  // Navbar links: #login opens the sign-in form, #play the quick race, #explore the rooms (JOIN-02). The hash goes back to #home,
+  // so a second click on the same link opens it again.
+  useEffect(() => {
+    const open = () => {
+      if (location.hash === "#explore") {
+        history.replaceState(null, "", `${location.pathname}${location.search}#home`);
+        setPane("play"); // a guest without a nickname sees why the explorer did not open
+        void openExplorer(() => latestEnsurePlayer.current(), () => { location.hash = "rooms"; });
+        return;
+      }
+      const target = location.hash === "#login" ? "account" : location.hash === "#play" ? "play" : null;
+      if (!target) return;
+      setPane(target);
+      history.replaceState(null, "", `${location.pathname}${location.search}#home`);
+      const field = target === "account" ? document.querySelector<HTMLInputElement>("input#username") : nicknameInput.current;
+      setTimeout(() => field?.focus({ preventScroll: true }), 50);
+    };
+    open();
+    addEventListener("hashchange", open);
+    return () => removeEventListener("hashchange", open);
+  }, []);
   // sessionStorage : lu seulement dans le navigateur, après le montage (le serveur rend le champ vide)
   useEffect(() => {
     const stored = storedNickname();
@@ -109,6 +130,9 @@ export function HomePanel({ ref, initialMe = null }: { ref?: Ref<HTMLElement>; i
     }
     return ok;
   }
+  // the navbar effect runs once: it reads the latest ensurePlayer (current nickname) through this ref
+  const latestEnsurePlayer = useRef(ensurePlayer);
+  latestEnsurePlayer.current = ensurePlayer;
   async function play(e: FormEvent) {
     e.preventDefault();
     if (racing) return;

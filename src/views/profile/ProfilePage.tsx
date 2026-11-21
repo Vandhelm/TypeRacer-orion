@@ -4,7 +4,7 @@ import { useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { BotTag } from "../../players/BotTag";
 import { HangingButton } from "../../components/buttons/HangingButton";
-import { FLOATING_TABS, LanguageSwitcher } from "../../components/tabs/LanguageSwitcher";
+import { SiteNavbar } from "../../components/navigation/SiteNavbar";
 import { useRaceResults } from "../podium/hooks/useRaceResults";
 import { podiumHref, raceErrorKey, rankLabel, type PlayerResult, type RaceResults } from "../podium/results";
 import { CareerStats } from "./CareerStats";
@@ -50,13 +50,11 @@ type Props = { me: Me | null; query: ProfileQuery; stats?: PlayerStats | null };
 
 export function ProfilePage({ me, query, stats }: Props) {
   const own = query.player === null && query.name === null;
-  // I18N-02 : le sélecteur est ici, donc présent sur chaque variante de la page (profil propre, profil d'un joueur)
+  // I18N-02 : la navbar porte le sélecteur ; elle est ici, donc présente sur chaque variante de la page
   return (
     <>
-      {/* A11Y-02 : les onglets de langue (fixes) forment l'en-tête de la page, sans style : la mise en page ne change pas */}
-      <header>
-        <LanguageSwitcher className={FLOATING_TABS} />
-      </header>
+      {/* A11Y-02 : la navbar (langue comprise) forme l'en-tête de la page */}
+      <SiteNavbar current={own && me ? "profile" : undefined} me={me} />
       {own && me ? <OwnProfile me={me} stats={stats} />
         : <PlayerProfile session={me ? "signed-in" : "signed-out"} query={query} stats={stats} />}
     </>

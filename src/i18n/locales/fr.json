@@ -104,7 +104,15 @@
     "theme": {
       "label": "DAL",
       "name": "DAL, couleurs adaptées au daltonisme"
-    }
+    },
+    "homeLink": "Accueil",
+    "rooms": "Salons",
+    "room": "Salon",
+    "game": "Course",
+    "podium": "Podium",
+    "quickRace": "Course rapide",
+    "signIn": "Se connecter",
+    "playerProfile": "Profil de {{name}}"
   },
   "footer": {
     "text": "O.R.I.O.N — course de frappe multijoueur, travail de session."
@@ -615,6 +623,11 @@
       "failed": "Impossible de lier ce compte {{provider}} : il est peut-être déjà utilisé par un autre compte.",
       "last": "C'est ton seul moyen de connexion : impossible de délier {{provider}}.",
       "unlinkFailed": "{{provider}} n'a pas pu être délié. Réessaie."
+    },
+    "signOut": {
+      "title": "Session",
+      "help": "Te déconnecter de ce navigateur. Tes courses et ton profil restent enregistrés.",
+      "button": "Se déconnecter"
     }
   }
 }
