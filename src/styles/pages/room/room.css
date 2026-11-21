@@ -2,7 +2,8 @@
 
 /* Unlike the home page, this page scrolls. */
 html{ height: auto; background: #000; }
-body{ height: auto; min-height: 100vh; overflow: visible; font-size: 16px; padding: 30px clamp(16px, 4vw, 56px) 32px; }
+/* the navbar is fixed: the page starts below it */
+body{ height: auto; min-height: 100vh; overflow: visible; font-size: 16px; padding: calc(var(--navbar-height) + 30px) clamp(16px, 4vw, 56px) 32px; }
 
 .hanging-tab{ animation: none; }
 

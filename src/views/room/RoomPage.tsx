@@ -90,7 +90,8 @@ export function RoomPage() {
       <Stamp className="room-stamp" label={t("home.stampPlay")} visible={stampOn} playKey={0} />
 
       {navbar}
-      <div>
+
+      <main className="relative z-1 isolate">
         <div className="relative z-1 isolate mb-[clamp(20px,4vh,40px)] flex flex-wrap items-center justify-between gap-x-6 gap-y-3 phone:mb-[14px]">
           <HangingButton className="room-leave" href={host ? "/home" : "/home#rooms"} onClick={leave}>
             {t("room.leave")}
@@ -100,9 +101,6 @@ export function RoomPage() {
             <p className="mt-2 font-mono text-[max(11px,1.3vh)] leading-none font-normal tracking-[.2em] text-muted uppercase">{`${t(host ? "room.host" : "room.guest")} · ${t(`room.${VISIBILITY_KEY[room.visibility]}`)}`}</p>
           </div>
         </div>
-      </div>
-
-      <main className="relative z-1 isolate">
         <form
           className="grid grid-cols-[minmax(0,1fr)_minmax(240px,280px)] grid-rows-[auto_1fr] [align-items:start] gap-x-[clamp(20px,3vw,48px)] [grid-template-areas:'left_preview'_'settings_preview'] phone:grid-cols-[minmax(0,1fr)] phone:grid-rows-none phone:[grid-template-areas:'left'_'settings'_'preview']"
           noValidate

@@ -276,7 +276,7 @@ for (const theme of THEMES) test.describe(`A11Y-04 — every page can be walked 
 
     await createRoom(page);
     // les onglets de réglages, puis le contenu de l'onglet ouvert, puis le départ (fixé en bas, mais lu en dernier)
-    await tour(page, all, "room, host", ["START THE GAME", "New link"], ["Leave", "New link", "01 ROOM", "Not in the explorer", "START THE GAME"]);
+    await tour(page, all, "room, host", ["START THE GAME", "New link"], ["Leave", "New link", "01 ROOM", "Help: Visibility", "START THE GAME"]);
     await tourTabs(page, all, "room, host");
 
     const context = await browser.newContext();
